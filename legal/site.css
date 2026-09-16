@@ -1,0 +1,329 @@
+/* Tiny Tempo legal pages. Palette matches the game shell in src/config/theme.ts. */
+:root {
+  --paper: #eee8d8;
+  --cream: #fff4dc;
+  --ink: #243e35;
+  --muted: #4e5a52;
+  --coral: #cf5134;
+  --wood: #d98a48;
+  --rope: #6b4a2e;
+  --bench: #e6dcc4;
+  --line: rgba(36, 62, 53, 0.14);
+  --shadow: 0 18px 40px rgba(36, 62, 53, 0.1);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  background:
+    radial-gradient(1200px 520px at 50% -80px, rgba(223, 195, 127, 0.28), transparent 70%),
+    var(--paper);
+  color: var(--ink);
+  font-family: Nunito, system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1.65;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--coral);
+  text-underline-offset: 0.18em;
+}
+
+a:hover {
+  color: var(--ink);
+}
+
+.skip {
+  position: absolute;
+  left: 1rem;
+  top: 0.75rem;
+  z-index: 2;
+  padding: 0.4rem 0.75rem;
+  background: var(--cream);
+  color: var(--ink);
+  border-radius: 999px;
+  transform: translateY(-140%);
+}
+
+.skip:focus {
+  transform: none;
+}
+
+.wrap {
+  width: min(760px, calc(100% - 2rem));
+  margin: 0 auto;
+  padding: calc(var(--safe-top) + 1.25rem) var(--safe-right) calc(var(--safe-bottom) + 3rem) var(--safe-left);
+}
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.75rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-mark {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  border-radius: 0.85rem;
+  background: var(--coral);
+  box-shadow: 0 6px 0 rgba(107, 74, 46, 0.28);
+}
+
+.brand-name {
+  display: block;
+  font-family: Fredoka, system-ui, sans-serif;
+  font-size: 1.2rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.brand-tag {
+  display: block;
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+nav {
+  display: flex;
+  gap: 0.35rem;
+}
+
+nav a {
+  padding: 0.45rem 0.8rem;
+  color: var(--ink);
+  font-weight: 700;
+  text-decoration: none;
+  border-radius: 999px;
+}
+
+nav a:hover,
+nav a[aria-current="page"] {
+  background: rgba(207, 81, 52, 0.12);
+  color: var(--coral);
+}
+
+.panel {
+  background: var(--cream);
+  border: 4px solid var(--ink);
+  border-radius: 1.35rem;
+  box-shadow: var(--shadow), 0 8px 0 rgba(36, 62, 53, 0.18);
+  overflow: hidden;
+}
+
+.hero {
+  padding: 1.6rem 1.5rem 1.35rem;
+  border-bottom: 4px solid var(--ink);
+  background:
+    linear-gradient(180deg, rgba(207, 81, 52, 0.08), transparent 70%),
+    var(--cream);
+}
+
+.kicker {
+  margin: 0 0 0.4rem;
+  color: var(--coral);
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 0.55rem;
+  font-family: Fredoka, system-ui, sans-serif;
+  font-size: clamp(1.8rem, 5vw, 2.5rem);
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.lede,
+.meta {
+  margin: 0;
+  color: var(--muted);
+}
+
+.meta {
+  margin-top: 0.7rem;
+  font-size: 0.92rem;
+}
+
+.document {
+  padding: 0.4rem 1.5rem 1.7rem;
+}
+
+h2 {
+  margin: 1.7rem 0 0.55rem;
+  font-family: Fredoka, system-ui, sans-serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+h3 {
+  margin: 1.1rem 0 0.35rem;
+  font-size: 1.02rem;
+}
+
+p,
+ul {
+  margin: 0 0 0.85rem;
+}
+
+ul {
+  padding-left: 1.2rem;
+}
+
+li {
+  margin: 0 0 0.4rem;
+}
+
+.toc {
+  margin: 1.1rem 0 0.2rem;
+  padding: 0.9rem 1rem 0.55rem;
+  background: rgba(36, 62, 53, 0.05);
+  border-radius: 0.9rem;
+  list-style: none;
+}
+
+.toc li {
+  margin: 0 0 0.45rem;
+}
+
+.cards {
+  display: grid;
+  gap: 1rem;
+  padding: 1.35rem;
+}
+
+@media (min-width: 640px) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  padding: 1.2rem 1.15rem 1.15rem;
+  color: inherit;
+  text-decoration: none;
+  background: var(--cream);
+  border: 4px solid var(--ink);
+  border-radius: 1.15rem;
+  box-shadow: 0 6px 0 rgba(36, 62, 53, 0.16);
+}
+
+.card:hover {
+  color: inherit;
+  transform: translateY(-2px);
+}
+
+.card h2 {
+  margin: 0;
+}
+
+.card p {
+  margin: 0;
+  color: var(--muted);
+  flex: 1;
+}
+
+.card span {
+  font-weight: 800;
+  color: var(--coral);
+}
+
+.notice {
+  margin: 0 1.35rem 1.35rem;
+  padding: 0.9rem 1rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  background: rgba(36, 62, 53, 0.05);
+  border-radius: 0.9rem;
+}
+
+.site-footer {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.5rem 1.25rem;
+  margin-top: 1.5rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.site-footer a {
+  color: inherit;
+}
+
+@media (max-width: 560px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  nav {
+    margin-left: -0.4rem;
+  }
+
+  .hero,
+  .document {
+    padding-left: 1.1rem;
+    padding-right: 1.1rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .card:hover {
+    transform: none;
+  }
+}
+
+@media print {
+  body {
+    background: white;
+  }
+
+  .skip,
+  nav,
+  .site-footer {
+    display: none;
+  }
+
+  .panel,
+  .card {
+    border-width: 1px;
+    box-shadow: none;
+  }
+}
