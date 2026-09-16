@@ -25,6 +25,12 @@ import { DoorbellVignette } from './DoorbellVignette';
 import { createHouseholdSounds } from '@/audio/householdSounds';
 import { HOME_INK } from './householdArt';
 import { HOUSEHOLD_REVEAL_SEC } from './householdMotion';
+import { PaintRollerVignette } from './PaintRollerVignette';
+import { HotelBellVignette } from './HotelBellVignette';
+import { BalloonPumpVignette } from './BalloonPumpVignette';
+import { StaplerVignette } from './StaplerVignette';
+import { createErrandSounds } from '@/audio/errandSounds';
+import { ERRAND_REVEAL_SEC } from './errandMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -109,5 +115,30 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     success: ['Come\non in.', 'Someone was expecting you.'], rough: ['Nobody\nhome.', 'Try that rhythm again.'],
     endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
     create: scene => new DoorbellVignette(scene), sounds: context => createHouseholdSounds(context, 'doorbell'),
+  },
+  // Acts 14 to 17, appended at request: the first thirteen levels keep their acts.
+  {
+    id: 'roller', title: 'Paint roller', intro: 'Roll it\non.', ink: HOME_INK,
+    success: ['Bold as\nbrass.', 'One wall, one picture.'], rough: ['A little\npatchy.', 'It will want a second coat.'],
+    endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new PaintRollerVignette(scene), sounds: context => createErrandSounds(context, 'roller'),
+  },
+  {
+    id: 'bell', title: 'Hotel bell', intro: 'Ring for\nservice.', ink: HOME_INK,
+    success: ['Right\naway.', 'Someone heard you.'], rough: ['Nobody\nabout.', 'Perhaps try the bell again.'],
+    endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new HotelBellVignette(scene), sounds: context => createErrandSounds(context, 'bell'),
+  },
+  {
+    id: 'balloon', title: 'Balloon pump', intro: 'Pump it\nup.', ink: HOME_INK,
+    success: ['Up and\naway.', 'Tied off and floating.'], rough: ['Oh.\nPop.', 'That one had a weak spot.'],
+    endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new BalloonPumpVignette(scene), sounds: context => createErrandSounds(context, 'balloon'),
+  },
+  {
+    id: 'stapler', title: 'Stapler', intro: 'Bind it\nup.', ink: HOME_INK,
+    success: ['Neatly\nbound.', 'One pile, one piece.'], rough: ['Jammed\nagain.', 'A pile of loose ends.'],
+    endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new StaplerVignette(scene), sounds: context => createErrandSounds(context, 'stapler'),
   },
 ];

@@ -10,10 +10,11 @@ import { Backdrop } from '@/ui/backdrop';
 import { shade } from '@/ui/colour';
 import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
+import { fillContour, paintedContour, traceContour } from '@/ui/illustration';
 import type { Vignette } from './Vignette';
 import {
-  advanceBite, acceptDemoBeat, bladeVisibleDepth, clamp01, drawBack, dustFall,
-  easeOut, kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawTiming, strokeTravel,
+  advanceBite, acceptDemoBeat, bladeVisibleDepth, clamp01, drawBack, dustFall, dustPile,
+  easeOut, kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from './sawMotion';
 import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
 
@@ -21,6 +22,8 @@ import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
 export const TIMBER = {
   paper: 0xe6e9e4, ink: 0x22303a, sapwood: 0xcbb999, lit: 0xe4d8c0,
   grain: 0xa89070, kerf: 0x544a39, steel: 0xaab6bd, grip: 0x3f5a63, sawdust: 0xd8a24a,
+  /** The hand on the saw: a canvas work glove and a rolled shirt sleeve, both in the cool range. */
+  glove: 0x6b7f88, sleeve: 0x2f4650, pencil: 0x4d5257,
 } as const;
 
 // The board crosses the frame at about -6.5 degrees. Both sawhorses sit left of the
@@ -46,7 +49,9 @@ function grainTile(scene: Phaser.Scene, x: number, y: number, width: number, hei
 // Half the blade reaches past the kerf at the bite; the rest carries the handle.
 const BLADE_BACK = 430;
 const BLADE_TIP = -170;
-const TOOTH_STEP = 22;
+const TOOTH_STEP = 18;
+/** Where the offcut lands in the successful coda, in stage space; the puff of dust rises here. */
+const LANDING = { x: TIMBER_X + (CUT_X + 180) * Math.cos(TILT), y: GROUND_Y - 2 } as const;
 // Graphics re-tessellate every frame, so the dust plume is a fixed small budget.
 const DUST_MOTES = 9;
 
@@ -98,6 +103,8 @@ export class SawTimberVignette implements Vignette {
   private finishAt: number | null = null;
   private finished = false;
   private successful = false;
+  /** The dropped offcut has hit the floor and thrown its one puff of dust. */
+  private landed = false;
   private lastNow = 0;
   private baseX = 0;
   private baseY = 0;
@@ -196,9 +203,16 @@ export class SawTimberVignette implements Vignette {
       h.lineBetween(x - 58, y + 4, x - 86, GROUND_Y);
       h.lineBetween(x + 58, y + 4, x + 86, GROUND_Y);
       h.lineStyle(9, slate.shade, 0.85).lineBetween(x - 72, y + 96, x + 72, y + 96);
+      // A diagonal brace, so the trestle reads as joinery rather than two propped sticks.
+      h.lineStyle(7, slate.shade, 0.8).lineBetween(x - 64, y + 30, x + 74, y + 96);
       if (line > 0) h.lineStyle(line, slate.edge, 1).strokeRoundedRect(x - 78, y - 9, 156, 18, 5);
       h.fillStyle(slate.face).fillRoundedRect(x - 78, y - 9, 156, 18, 5);
       h.fillStyle(slate.lit).fillRoundedRect(x - 78, y - 9, 156, 7, 5);
+      // A sacrificial timber cap under the board, the one place the trestle borrows the board's colour.
+      const cap = faces(TIMBER.sapwood);
+      if (line > 0) h.lineStyle(line * 0.7, shade(TIMBER.sapwood, -0.6), 1).strokeRoundedRect(x - 84, y - 20, 168, 12, 3);
+      h.fillStyle(cap.face).fillRoundedRect(x - 84, y - 20, 168, 12, 3);
+      h.fillStyle(cap.lit).fillRoundedRect(x - 84, y - 20, 168, 4, 2);
     }
   }
 
@@ -217,6 +231,7 @@ export class SawTimberVignette implements Vignette {
     this.finishAt = null;
     this.finished = false;
     this.successful = false;
+    this.landed = false;
   }
 
   public onPhase(phase: Phase, now: number): void {
@@ -360,7 +375,60 @@ export class SawTimberVignette implements Vignette {
     const slide = parked ? -0.55 * SAW_MOTION.travel : this.offset(now);
     const judder = now - this.judderAt < 0.22 && !this.finished
       ? Math.sin((now - this.judderAt) * 96) * Math.exp(-(now - this.judderAt) * 14) * 5 : 0;
+    // The saw rocks about the teeth in the kerf, so the pivot is the bite point, not the
+    // container's origin: move the graphics so that point stays put under the rotation.
+    const rock = this.reducedMotion || parked ? 0 : sawRock(slide);
+    this.sawG.setRotation(rock);
+    this.sawG.setPosition(CUT_X - CUT_X * Math.cos(rock), -lift - CUT_X * Math.sin(rock));
     this.drawSaw(slide + judder);
+  }
+
+  /** Points authored along and off the blade, mapped into the saw's frame as one flat list. */
+  private along(points: readonly (readonly [number, number])[]): number[] {
+    const out: number[] = [];
+    for (const [axis, off] of points) out.push(...this.blade(axis, off));
+    return out;
+  }
+
+  /** The closed D-grip, its bolts, and the gloved hand and sleeve that carry the saw off frame. */
+  private drawHandle(g: Phaser.GameObjects.Graphics, heel: number, line: number): void {
+    const grip = faces(TIMBER.grip);
+    const h = heel + 6;
+    // Grip plate bolted over the heel, then the closed loop the hand goes through.
+    const outer = this.along([
+      [h - 14, 4], [h + 30, 2], [h + 70, 10], [h + 102, 30], [h + 118, 56], [h + 112, 84],
+      [h + 92, 100], [h + 62, 100], [h + 34, 90], [h + 14, 66], [h - 6, 40],
+    ]);
+    paintedContour(g, outer, grip.face, grip.edge, line);
+    g.fillStyle(grip.shade);
+    fillContour(g, this.along([[h + 62, 100], [h + 92, 100], [h + 112, 84], [h + 118, 56], [h + 108, 60], [h + 100, 82], [h + 84, 94]]));
+    g.fillStyle(grip.lit, 0.8);
+    fillContour(g, this.along([[h + 8, 12], [h + 30, 8], [h + 70, 16], [h + 98, 34], [h + 92, 40], [h + 66, 24], [h + 30, 16], [h + 10, 18]]));
+    // The hole is the paper behind the saw: the grip is a loop, not a slab.
+    paintedContour(g, this.along([[h + 40, 34], [h + 70, 30], [h + 92, 48], [h + 90, 72], [h + 68, 84], [h + 44, 74], [h + 34, 54]]), TIMBER.paper, grip.edge, line * 0.7);
+    g.fillStyle(TIMBER.sawdust);
+    for (const [u, v] of [[heel - 22, 22], [heel - 62, 34]] as const) { const [x, y] = this.blade(u, v); g.fillCircle(x, y, 6); }
+    // The glove wraps the far side of the loop: four fingers over the bar, thumb on top.
+    const glove = faces(TIMBER.glove);
+    paintedContour(g, this.along([
+      [h + 48, 26], [h + 84, 22], [h + 112, 40], [h + 126, 66], [h + 118, 96], [h + 92, 112],
+      [h + 60, 108], [h + 40, 92], [h + 36, 66], [h + 40, 44],
+    ]), glove.face, glove.edge, line);
+    g.fillStyle(glove.shade, 0.7);
+    fillContour(g, this.along([[h + 40, 92], [h + 60, 108], [h + 92, 112], [h + 118, 96], [h + 110, 92], [h + 88, 102], [h + 62, 98], [h + 46, 86]]));
+    g.lineStyle(3, glove.edge, 0.7);
+    for (let i = 0; i < 3; i++) {
+      const u = h + 58 + i * 16;
+      const [ax, ay] = this.blade(u, 50), [bx, by] = this.blade(u + 4, 100);
+      g.lineBetween(ax, ay, bx, by);
+    }
+    paintedContour(g, this.along([[h + 44, 30], [h + 70, 18], [h + 96, 22], [h + 100, 34], [h + 76, 36], [h + 52, 44]]), glove.lit, glove.edge, line * 0.8);
+    // Cuff and sleeve: the arm runs along the blade's line and leaves the frame on the right.
+    paintedContour(g, this.along([[h + 108, 32], [h + 136, 30], [h + 140, 100], [h + 114, 104]]), TIMBER.lit, shade(TIMBER.lit, -0.5), line * 0.8);
+    const sleeve = faces(TIMBER.sleeve);
+    paintedContour(g, this.along([[h + 132, 34], [h + 520, 20], [h + 520, 118], [h + 136, 100]]), sleeve.face, sleeve.edge, line);
+    g.fillStyle(sleeve.lit, 0.6);
+    fillContour(g, this.along([[h + 136, 40], [h + 520, 26], [h + 520, 40], [h + 138, 52]]));
   }
 
   private drawSaw(slide: number): void {
@@ -370,8 +438,8 @@ export class SawTimberVignette implements Vignette {
     if (heel - tip < 40) return;
     const [tx, ty] = this.blade(tip, 0);
     const [hx, hy] = this.blade(heel, 0);
-    const [hbx, hby] = this.blade(heel, 58);
-    const [tbx, tby] = this.blade(tip, 34);
+    const [hbx, hby] = this.blade(heel, 64);
+    const [tbx, tby] = this.blade(tip, 26);
     const steel = faces(TIMBER.steel);
     const line = STYLE.current.outline * 1.4;
     const drop = castShadow(8);
@@ -384,30 +452,27 @@ export class SawTimberVignette implements Vignette {
     g.fillStyle(steel.face);
     quad(g, tx, ty, hx, hy, hbx, hby, tbx, tby);
     // A lit line down the blade's back keeps a flat polygon reading as sheet steel.
-    const [l1x, l1y] = this.blade(tip, 40);
-    const [l2x, l2y] = this.blade(heel, 50);
+    const [l1x, l1y] = this.blade(tip, 20);
+    const [l2x, l2y] = this.blade(heel, 56);
     g.lineStyle(3, 0xd6dee2, 0.75).lineBetween(l1x, l1y, l2x, l2y);
+    // A maker's etch mid-blade, faint, so the sheet reads as steel rather than a grey polygon.
+    const mid = (tip + heel) / 2;
+    g.lineStyle(1.5, TIMBER.ink, 0.22);
+    traceContour(g, this.along([[mid - 60, 26], [mid - 20, 36], [mid + 40, 36], [mid + 70, 24], [mid + 40, 14], [mid - 20, 14]]));
+    g.closePath().strokePath();
+    const [e1x, e1y] = this.blade(mid - 40, 25), [e2x, e2y] = this.blade(mid + 50, 25);
+    g.lineBetween(e1x, e1y, e2x, e2y);
     g.lineStyle(2, TIMBER.ink, 0.35).lineBetween(tx, ty, hx, hy);
-    g.fillStyle(TIMBER.ink, 0.8);
-    for (let a = tip + 4; a < heel - 30; a += TOOTH_STEP) {
+    // Set teeth: alternate teeth lean opposite ways, as a real crosscut saw's do.
+    g.fillStyle(TIMBER.ink, 0.85);
+    let parity = 0;
+    for (let a = tip + 4; a < heel - 30; a += TOOTH_STEP, parity ^= 1) {
       const [ax, ay] = this.blade(a, 0);
-      const [bx, by] = this.blade(a + TOOTH_STEP * 0.55, 0);
-      const [cx, cy] = this.blade(a + TOOTH_STEP * 0.28, -7);
+      const [bx, by] = this.blade(a + TOOTH_STEP * 0.6, 0);
+      const [cx, cy] = this.blade(a + TOOTH_STEP * (parity ? 0.42 : 0.18), -9);
       g.fillTriangle(ax, ay, bx, by, cx, cy);
     }
-    // Handle: a slate grip with two brass nuts, the only warm note besides the dust.
-    const [gx, gy] = this.blade(heel + 42, 30);
-    const grip = faces(TIMBER.grip);
-    if (line > 0) g.lineStyle(line, grip.edge, 1).strokeRoundedRect(gx - 46, gy - 52, 96, 104, 26);
-    g.fillStyle(grip.shade).fillRoundedRect(gx - 46, gy - 52, 96, 104, 26);
-    g.fillStyle(grip.face).fillRoundedRect(gx - 46, gy - 52, 96, 92, 26);
-    g.fillStyle(grip.lit, 0.8).fillRoundedRect(gx - 36, gy - 48, 72, 10, 5);
-    g.fillStyle(TIMBER.paper, 0.14).fillRoundedRect(gx - 34, gy - 40, 70, 22, 11);
-    g.fillStyle(TIMBER.paper).fillRoundedRect(gx - 22, gy - 26, 42, 52, 15);
-    g.fillStyle(TIMBER.sawdust);
-    const [n1x, n1y] = this.blade(heel - 26, 26);
-    const [n2x, n2y] = this.blade(heel - 70, 34);
-    g.fillCircle(n1x, n1y, 6).fillCircle(n2x, n2y, 6);
+    this.drawHandle(g, heel, line);
   }
 
   private drawKerf(): void {
@@ -419,10 +484,21 @@ export class SawTimberVignette implements Vignette {
       g.fillStyle(TIMBER.sapwood).fillRect(CUT_X - KERF_HALF, depth, KERF_HALF * 2, THICK - depth);
       g.fillStyle(TIMBER.ink, 0.14).fillRect(CUT_X - KERF_HALF, THICK - 6, KERF_HALF * 2, 6);
     }
+    // The pencilled line the cut is meant to follow, still showing below the kerf.
+    if (depth < THICK - 6) {
+      g.lineStyle(2, TIMBER.pencil, 0.55);
+      for (let y = Math.max(4, depth + 4); y < THICK - 6; y += 12) g.lineBetween(CUT_X, y, CUT_X, Math.min(THICK - 6, y + 7));
+    }
     if (depth <= 0) {
       g.fillStyle(TIMBER.lit).fillRect(CUT_X - KERF_HALF, 0, KERF_HALF * 2, 7);
+      g.lineStyle(2, TIMBER.pencil, 0.7).lineBetween(CUT_X - 12, -6, CUT_X + 12, -6);
       return;
     }
+    // Torn fibres at the mouth of the kerf, where the teeth break the top edge.
+    g.fillStyle(TIMBER.grain, 0.9);
+    g.fillTriangle(CUT_X - KERF_HALF - 6, 0, CUT_X - KERF_HALF, 0, CUT_X - KERF_HALF - 2, 5);
+    g.fillTriangle(CUT_X + KERF_HALF, 0, CUT_X + KERF_HALF + 7, 0, CUT_X + KERF_HALF + 3, 6);
+    g.fillTriangle(CUT_X - KERF_HALF - 2, 0, CUT_X - KERF_HALF + 2, 0, CUT_X - KERF_HALF - 1, -4);
     // The cut wanders off the line as off strokes accumulate; the kerf stays vertical.
     const skew = this.drift * (depth / THICK);
     g.fillStyle(TIMBER.kerf);
@@ -452,18 +528,27 @@ export class SawTimberVignette implements Vignette {
 
   private drawDust(now: number, bite: number): void {
     const g = this.dust.clear();
-    if (bite <= 0 || this.kerf <= 0) return;
-    const age = now - this.strokeAt;
-    const beat = this.beat();
-    const fall = dustFall(age, beat);
-    const spread = easeOut(age / sawTiming(beat).dustSec) * 96;
-    const dir = sawDirection(this.strokes - 1);
     const c = Math.cos(TILT);
     const s = Math.sin(TILT);
     // The plume is thrown in stage space, so it keeps falling straight down while
     // the board itself is tilted.
     const ox = TIMBER_X + CUT_X * c;
     const oy = TIMBER_Y + CUT_X * s;
+    // What has fallen so far lies in a heap on the floor under the cut. It follows the
+    // kerf, so the demonstration's strokes leave the floor as clean as the board.
+    const pile = dustPile(this.kerf);
+    if (pile.height > 0) {
+      g.fillStyle(TIMBER.ink, 0.1).fillEllipse(ox + 6, GROUND_Y + 4, pile.width * 1.1, pile.height * 0.5);
+      g.fillStyle(shade(TIMBER.sawdust, -0.2)).fillEllipse(ox, GROUND_Y - pile.height / 2 + 2, pile.width, pile.height);
+      g.fillStyle(TIMBER.sawdust).fillEllipse(ox - pile.width * 0.08, GROUND_Y - pile.height / 2 - 1, pile.width * 0.7, pile.height * 0.7);
+      g.fillStyle(TIMBER.lit, 0.7).fillEllipse(ox - pile.width * 0.12, GROUND_Y - pile.height * 0.7, pile.width * 0.3, pile.height * 0.25);
+    }
+    if (bite <= 0 || this.kerf <= 0) return;
+    const age = now - this.strokeAt;
+    const beat = this.beat();
+    const fall = dustFall(age, beat);
+    const spread = easeOut(age / sawTiming(beat).dustSec) * 96;
+    const dir = sawDirection(this.strokes - 1);
     for (let i = 0; i < DUST_MOTES; i++) {
       const seed = (i * 37 + 11) % 23;
       const x = ox + dir * (10 + seed * 3) + Math.cos(i * 1.7) * spread * 0.5;
@@ -485,6 +570,10 @@ export class SawTimberVignette implements Vignette {
       const rock = Math.sin(age * 13) * Math.exp(-age * 5) * 0.03;
       this.offcut.setPosition(CUT_X + KERF_HALF + drop * 16, THICK + drop * 330);
       this.offcut.setRotation(age > 0.42 ? rock : -TILT * drop);
+      if (age >= 0.42 && !this.landed) {
+        this.landed = true;
+        if (!this.reducedMotion) this.bursts.burst('dust', LANDING.x, LANDING.y, [TIMBER.sawdust, TIMBER.lit, TIMBER.grain], 9);
+      }
     } else {
       // A splintered hinge takes the weight and the offcut swings from it.
       const swing = Math.sin(age * 5.4) * Math.exp(-age * 1.5) * 0.36 + easeOut(age / 0.5) * 0.3;

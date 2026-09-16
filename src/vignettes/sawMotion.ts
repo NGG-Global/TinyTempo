@@ -19,6 +19,11 @@ export const SAW_MOTION = {
   bladeTiltRad: Math.PI / 6,
   /** A flawless response stops short of severing; the unscored coda finishes the cut. */
   kerfAtFullResponse: 0.86,
+  /** How far the saw rocks about the bite at the end of a stroke, in radians. */
+  rockRad: 0.04,
+  /** The heap of sawdust under the cut when the board is sawn through, in board units. */
+  pileWidth: 150,
+  pileHeight: 22,
 } as const;
 
 export interface SawTiming {
@@ -91,4 +96,20 @@ export function dustFall(age: number, beat = REFERENCE_BEAT): number {
  */
 export function advanceBite(bites: number, kind: Judgement['kind']): number {
   return advanceOnHit(bites, kind);
+}
+
+/**
+ * A hand saw is not pushed flat: the heel dips into the push and the toe lifts on the
+ * pull, pivoting about the teeth in the kerf. `slide` is the blade's travel in board
+ * units, so the rock follows the stroke exactly and is zero at the bite.
+ */
+export function sawRock(slide: number): number {
+  const travel = Math.max(-1, Math.min(1, slide / SAW_MOTION.travel));
+  return 0 - travel * SAW_MOTION.rockRad;
+}
+
+/** The sawdust heap on the floor grows with the kerf, so the demonstration leaves none. */
+export function dustPile(kerf: number): { readonly width: number; readonly height: number } {
+  const k = clamp01(kerf);
+  return { width: SAW_MOTION.pileWidth * Math.sqrt(k), height: SAW_MOTION.pileHeight * k };
 }
