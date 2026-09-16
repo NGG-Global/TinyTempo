@@ -14,6 +14,12 @@ export const HEALTH = {
   protectedThrough: 5,
 } as const;
 
+/** Shown when the bar is empty: replays stay free, the frontier still costs a heart. */
+export const HEALTH_COPY = {
+  restNote: 'Finished levels stay open. Hearts are for the next one.',
+  playNote: 'Finished levels stay open on the map.',
+} as const;
+
 export interface Health {
   readonly hearts: number;
   /**
@@ -57,6 +63,10 @@ const KEY = 'tiny-tempo.health.v1';
 /** Persist refill transaction ids so a replayed purchase after a restart cannot fill twice. */
 const FILLS_KEY = 'tiny-tempo.fills.v1';
 const FILLS_KEEP = 64;
+/** Local calendar day of the last free heart, so a reload cannot claim twice today. */
+const DAILY_KEY = 'tiny-tempo.daily-heart.v1';
+/** Session days already claimed, so a failed persist cannot grant twice before reload. */
+const claimedDays = new Set<string>();
 /** Written but not required on read, so a future migration has something to branch on. */
 const VERSION = 1;
 const FULL: Health = Object.freeze({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null });
@@ -147,9 +157,18 @@ export function isMastered(progress: Progress, level: number): boolean {
   return starsFor(best, levelSpec(level)) === 3;
 }
 
-/** A normal challenge attempt: not a free early level and not a 3-star replay. */
+/** Cleared at least once: `best` is only written when a run earns a star. */
+export function isCleared(progress: Progress, level: number): boolean {
+  const best = progress.best[level];
+  return typeof best === 'number' && Number.isFinite(best);
+}
+
+/**
+ * Hearts gate the unfinished frontier. Early levels and any previously cleared
+ * level can be played at zero hearts; they never spend one.
+ */
 export function attemptCostsHeart(progress: Progress, level: number): boolean {
-  return !isProtectedLevel(level) && !isMastered(progress, level);
+  return !isProtectedLevel(level) && !isCleared(progress, level);
 }
 
 export function canBeginAttempt(
@@ -159,14 +178,23 @@ export function canBeginAttempt(
   return reconcile(health, now).hearts > 0;
 }
 
-export function practiceLevel(progress: Progress): number | null {
-  let highest: number | null = null;
-  for (const key of Object.keys(progress.best)) {
-    const level = Number(key);
-    if (!Number.isInteger(level) || !isMastered(progress, level)) continue;
-    if (highest === null || level > highest) highest = level;
-  }
-  return highest;
+/** Local `YYYY-MM-DD`, so a daily heart resets at the player's midnight, not UTC. */
+export function calendarDay(now: number): string {
+  const date = new Date(now);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+export function canClaimDailyHeart(
+  health: Health, now: number = Date.now(), storage: Storage | null = safeStorage(),
+): boolean {
+  const live = reconcile(health, now);
+  if (live.hearts > 0) return false;
+  const day = calendarDay(now);
+  if (claimedDays.has(day)) return false;
+  return readDailyDay(storage) !== day;
 }
 
 /**
@@ -239,6 +267,31 @@ export function grantHeart(health: Health, now: number = Date.now()): GrantHeart
       spentAttempt: live.spentAttempt,
     }),
   };
+}
+
+/**
+ * One free heart per local calendar day, and only while the bar is empty.
+ * The day is recorded even if persist fails, so a double tap cannot grant two.
+ */
+export function claimDailyHeart(
+  health: Health, now: number = Date.now(), storage: Storage | null = safeStorage(),
+): GrantHeartResult {
+  const live = reconcile(health, now);
+  if (!canClaimDailyHeart(live, now, storage)) return { granted: false, health: live };
+  const result = grantHeart(live, now);
+  if (!result.granted) return result;
+  const day = calendarDay(now);
+  claimedDays.add(day);
+  writeDailyDay(storage, day);
+  return result;
+}
+
+/** Load, claim today's heart, persist. Scenes call this from the empty-heart sheet. */
+export function redeemDailyHeart(now: number = Date.now()): GrantHeartResult {
+  const storage = safeStorage();
+  const result = claimDailyHeart(loadHealth(storage, now), now, storage);
+  if (result.granted) saveHealth(result.health, storage);
+  return result;
 }
 
 /**
@@ -344,9 +397,11 @@ export function saveHealth(health: Health, storage: Storage | null = safeStorage
 export function clearHealth(storage: Storage | null = safeStorage()): boolean {
   claimedIds.clear();
   filledIds.clear();
+  claimedDays.clear();
   try {
     storage?.removeItem(KEY);
     storage?.removeItem(FILLS_KEY);
+    storage?.removeItem(DAILY_KEY);
     return storage !== null;
   } catch {
     return false;
@@ -374,6 +429,27 @@ function writeFillIds(storage: Storage | null, ids: Set<string>): void {
   if (!storage) return;
   try {
     storage.setItem(FILLS_KEY, JSON.stringify([...ids].slice(-FILLS_KEEP)));
+  } catch { /* private windows, blocked storage */ }
+}
+
+function readDailyDay(storage: Storage | null): string | null {
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(DAILY_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const claimedOn = (parsed as { claimedOn?: unknown }).claimedOn;
+    return typeof claimedOn === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(claimedOn) ? claimedOn : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeDailyDay(storage: Storage | null, day: string): void {
+  if (!storage) return;
+  try {
+    storage.setItem(DAILY_KEY, JSON.stringify({ version: VERSION, claimedOn: day }));
   } catch { /* private windows, blocked storage */ }
 }
 

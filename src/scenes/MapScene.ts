@@ -8,8 +8,8 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { areaOf, levelSpec, mapLastLevel, mapLevelState, starsFor, type Area } from '@/game/levels';
 import {
-  canBeginAttempt, formatCountdown, healthHud, loadHealth, practiceLevel, reconcile, redeemFill,
-  redeemHeart, viewHealth, type Health,
+  canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH_COPY, healthHud, loadHealth,
+  reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, track } from '@/monetization';
 import { loadProgress, type Progress } from '@/game/progress';
@@ -95,18 +95,20 @@ export class MapScene extends BaseScene {
   private restRefillHint!: Phaser.GameObjects.Text;
   private restRefillPrice!: Phaser.GameObjects.Text;
   private restRefillMark!: Phaser.GameObjects.Graphics;
-  private restAction!: Phaser.GameObjects.Graphics;
-  private restActionLabel!: Phaser.GameObjects.Text;
+  private restDaily!: Phaser.GameObjects.Graphics;
+  private restDailyLabel!: Phaser.GameObjects.Text;
+  private restDailyHint!: Phaser.GameObjects.Text;
+  private restDailyMark!: Phaser.GameObjects.Graphics;
   private restRect = new Phaser.Geom.Rectangle();
   private restWatchRect = new Phaser.Geom.Rectangle();
   private restRefillRect = new Phaser.Geom.Rectangle();
-  private restActionRect = new Phaser.Geom.Rectangle();
+  private restDailyRect = new Phaser.Geom.Rectangle();
   private restShown = false;
-  private restPractice: number | null = null;
+  private restDailyOpen = false;
   private restAt = -Infinity;
   private restPressDirty = false;
   private restPressedAt = -Infinity;
-  private restPressed: 'watch' | 'refill' | 'practice' | null = null;
+  private restPressed: 'watch' | 'refill' | 'daily' | null = null;
   private restBusy = false;
   private watchClaims = 0;
   private curtain!: SceneCurtain;
@@ -162,7 +164,7 @@ export class MapScene extends BaseScene {
     this.progress = loadProgress();
     this.health = loadHealth();
     this.restShown = false;
-    this.restPractice = null;
+    this.restDailyOpen = false;
     this.restAt = this.restPressedAt = -Infinity;
     this.restPressed = null;
     this.restBusy = false;
@@ -198,7 +200,7 @@ export class MapScene extends BaseScene {
     this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(20);
     this.restTitle = display(this, 'No hearts', { size: 44, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
     this.restWait = body(this, '', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restNote = body(this, 'Early levels stay open.', { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+    this.restNote = body(this, HEALTH_COPY.restNote, { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(21);
     this.restWatch = this.add.graphics().setScrollFactor(0).setDepth(20);
     this.restWatchLabel = label(this, 'Watch', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
     this.restWatchHint = label(this, '+1', { size: 22, colour: SHELL.cream, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
@@ -208,8 +210,10 @@ export class MapScene extends BaseScene {
     this.restRefillHint = label(this, 'restore 5', { size: 20, colour: PALETTE.ink, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
     this.restRefillPrice = body(this, '', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
     this.restRefillMark = this.add.graphics().setScrollFactor(0).setDepth(21);
-    this.restAction = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.restActionLabel = label(this, 'Practice', { size: 26, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+    this.restDaily = this.add.graphics().setScrollFactor(0).setDepth(20);
+    this.restDailyLabel = label(this, 'Today', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
+    this.restDailyHint = label(this, '+1', { size: 22, colour: PALETTE.ink, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
+    this.restDailyMark = this.add.graphics().setScrollFactor(0).setDepth(21);
     this.enteredAt = performance.now() / 1000;
     this.curtain = new SceneCurtain(this);
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
@@ -795,12 +799,12 @@ export class MapScene extends BaseScene {
   }
 
   /**
-   * Empty hearts, the natural wait, a rewarded watch, a store refill, and a way back
-   * into a 3-starred level. WATCH is the coral action; refill and practice stay cream.
+   * Empty hearts: a daily free heart when it is still available, a rewarded watch,
+   * a store refill, and a reminder that finished levels stay open. No practice mode.
    */
   private drawRest(s: number, press: number): void {
     const shown = this.restShown;
-    const hasPractice = shown && this.restPractice !== null;
+    const hasDaily = shown && this.restDailyOpen;
     this.restPlate.setVisible(shown);
     this.restSurface.setVisible(shown);
     this.restTitle.setVisible(shown);
@@ -815,15 +819,18 @@ export class MapScene extends BaseScene {
     this.restRefillHint.setVisible(shown);
     this.restRefillPrice.setVisible(shown);
     this.restRefillMark.setVisible(shown);
-    this.restAction.setVisible(hasPractice);
-    this.restActionLabel.setVisible(hasPractice);
+    this.restDaily.setVisible(hasDaily);
+    this.restDailyLabel.setVisible(hasDaily);
+    this.restDailyHint.setVisible(hasDaily);
+    this.restDailyMark.setVisible(hasDaily);
     if (!shown) {
       this.restPlate.clear();
       this.restWatch.clear();
       this.restWatchMark.clear();
       this.restRefill.clear();
       this.restRefillMark.clear();
-      this.restAction.clear();
+      this.restDaily.clear();
+      this.restDailyMark.clear();
       return;
     }
     const { safe } = this.viewport;
@@ -833,11 +840,12 @@ export class MapScene extends BaseScene {
     const control = Math.max(88 * s, 48 * this.viewport.unitScale);
     const watchH = Math.max(110 * s, control);
     const refillH = Math.max(96 * s, control);
-    const practiceH = hasPractice ? Math.max(88 * s, control) : 0;
+    const dailyH = hasDaily ? Math.max(96 * s, control) : 0;
     const gap = 12 * s;
     const width = Math.min(560 * s, safe.width - 48 * s);
-    const buttons = watchH + gap + refillH + (hasPractice ? gap + practiceH : 0);
-    const height = 176 * s + buttons + 24 * s;
+    const buttons = watchH + gap + refillH + (hasDaily ? gap + dailyH : 0);
+    const noteH = 56 * s;
+    const height = 152 * s + noteH + buttons + 24 * s;
     const y = (this.hudHeight + this.footerTop) / 2 - height / 2;
     this.restRect.setTo(safe.centerX - width / 2, y, width, height);
     const g = this.restPlate.clear();
@@ -847,14 +855,16 @@ export class MapScene extends BaseScene {
     this.restTitle.setPosition(this.restRect.centerX, this.restRect.y + 44 * s);
     this.restWait.setText(wait === null ? 'Hearts are full.' : `Next heart ${wait}`);
     resize(this.restWait, 26 * s, PALETTE.ink, STYLE.current, false);
-    this.restWait.setPosition(this.restRect.centerX, this.restRect.y + 96 * s);
+    this.restWait.setPosition(this.restRect.centerX, this.restRect.y + 90 * s);
+    this.restNote.setText(HEALTH_COPY.restNote);
+    this.restNote.setWordWrapWidth(width - 56 * s, false);
     resize(this.restNote, 22 * s, PALETTE.muted, STYLE.current, false);
-    this.restNote.setPosition(this.restRect.centerX, this.restRect.y + 136 * s);
+    this.restNote.setPosition(this.restRect.centerX, this.restRect.y + 118 * s);
     const bottom = this.restRect.bottom - 24 * s;
     let cursor = bottom;
-    if (hasPractice) {
-      this.restActionRect.setTo(this.restRect.centerX - 180 * s, cursor - practiceH, 360 * s, practiceH);
-      cursor -= practiceH + gap;
+    if (hasDaily) {
+      this.restDailyRect.setTo(this.restRect.centerX - 180 * s, cursor - dailyH, 360 * s, dailyH);
+      cursor -= dailyH + gap;
     }
     this.restRefillRect.setTo(this.restRect.centerX - 180 * s, cursor - refillH, 360 * s, refillH);
     cursor -= refillH + gap;
@@ -889,23 +899,28 @@ export class MapScene extends BaseScene {
     resize(this.restRefillPrice, 18 * s, PALETTE.muted, STYLE.current, false);
     this.restRefillPrice.setPosition(this.restRefillRect.centerX + 70 * s, this.restRefillRect.centerY + 20 * s + refillSink);
     this.restRefillPrice.setVisible(priceText.length > 0);
-    const action = this.restAction.clear();
-    if (!hasPractice) return;
-    const practicePress = this.restPressed === 'practice' ? press : 0;
-    drawPanel(action, this.restActionRect, s, { fill: SHELL.bench, depth: 12, press: practicePress });
-    const practiceSink = 12 * s * practicePress * 0.8;
-    this.restActionLabel.setText('PRACTICE');
-    resize(this.restActionLabel, 26 * s, PALETTE.ink);
-    this.restActionLabel.setPosition(this.restActionRect.centerX, this.restActionRect.centerY + practiceSink);
+    const daily = this.restDaily.clear();
+    this.restDailyMark.clear();
+    if (!hasDaily) return;
+    const dailyPress = this.restPressed === 'daily' ? press : 0;
+    drawPanel(daily, this.restDailyRect, s, { fill: SHELL.bench, depth: 12, press: dailyPress });
+    const dailySink = 12 * s * dailyPress * 0.8;
+    this.restDailyLabel.setText('TODAY');
+    resize(this.restDailyLabel, 26 * s, PALETTE.ink);
+    this.restDailyLabel.setPosition(this.restDailyRect.centerX, this.restDailyRect.centerY - 14 * s + dailySink);
+    this.restDailyHint.setText('+1');
+    resize(this.restDailyHint, 22 * s, PALETTE.ink, STYLE.current, false);
+    this.restDailyHint.setPosition(this.restDailyRect.centerX - 4 * s, this.restDailyRect.centerY + 20 * s + dailySink);
+    drawHeart(this.restDailyMark, this.restDailyRect.centerX + 18 * s, this.restDailyRect.centerY + 20 * s + dailySink, 10 * s, PALETTE.coral);
   }
 
   private showRest(level: number): void {
     if (monetization().premium()) return;
     const first = !this.restShown;
     this.restShown = true;
-    this.restPractice = practiceLevel(this.progress);
+    this.restDailyOpen = canClaimDailyHeart(this.health);
     this.restPressed = null;
-    this.restNote.setText('Early levels stay open.');
+    this.restNote.setText(HEALTH_COPY.restNote);
     this.restAt = performance.now() / 1000;
     this.drawRest(this.uiScale, 0);
     this.restPressDirty = true;
@@ -919,7 +934,7 @@ export class MapScene extends BaseScene {
   private hideRest(): void {
     if (!this.restShown) return;
     this.restShown = false;
-    this.restPractice = null;
+    this.restDailyOpen = false;
     this.restPressed = null;
     this.drawRest(this.uiScale, 0);
   }
@@ -962,6 +977,29 @@ export class MapScene extends BaseScene {
       }
       if (this.health.hearts <= 0) {
         this.restNote.setText(purchaseFeedback('failed'));
+        return;
+      }
+      this.hideRest();
+      this.drawSign(this.uiScale, 0, 0);
+    } finally {
+      this.restBusy = false;
+    }
+  }
+
+  private claimToday(): void {
+    if (this.restBusy || this.curtain.active) return;
+    this.restBusy = true;
+    this.restPressed = 'daily';
+    this.restPressedAt = performance.now() / 1000;
+    this.restPressDirty = true;
+    try {
+      const result = redeemDailyHeart();
+      this.health = result.health;
+      if (this.disposed) return;
+      if (!result.granted) {
+        this.restDailyOpen = false;
+        this.restNote.setText(HEALTH_COPY.restNote);
+        this.drawRest(this.uiScale, 0);
         return;
       }
       this.hideRest();
@@ -1086,8 +1124,10 @@ export class MapScene extends BaseScene {
       this.restRefillHint.setAlpha(alpha);
       this.restRefillPrice.setAlpha(alpha);
       this.restRefillMark.setAlpha(alpha);
-      this.restAction.setAlpha(alpha);
-      this.restActionLabel.setAlpha(alpha);
+      this.restDaily.setAlpha(alpha);
+      this.restDailyLabel.setAlpha(alpha);
+      this.restDailyHint.setAlpha(alpha);
+      this.restDailyMark.setAlpha(alpha);
     }
   }
 
@@ -1150,13 +1190,8 @@ export class MapScene extends BaseScene {
         void this.buyFill();
         return;
       }
-      if (this.restPractice !== null && this.restActionRect.contains(x, y)) {
-        this.restPressed = 'practice';
-        this.restPressedAt = performance.now() / 1000;
-        this.restPressDirty = true;
-        const level = this.restPractice;
-        this.hideRest();
-        this.openLevel(level);
+      if (this.restDailyOpen && this.restDailyRect.contains(x, y)) {
+        this.claimToday();
         return;
       }
       if (!this.restRect.contains(x, y)) this.hideRest();

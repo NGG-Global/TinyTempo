@@ -17,8 +17,8 @@ import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, markFor, trackGeometry, type Mark } from '@/game/beatTrack';
 import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import {
-  abandonAttempt, beginAttempt, canBeginAttempt, createAttemptId, finishAttempt, healthHud, loadHealth,
-  redeemFill, redeemHeart, saveHealth, viewHealth,
+  abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
+  HEALTH_COPY, healthHud, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, track } from '@/monetization';
 import { loadProgress, recordResult, saveProgress, type LevelOutcome } from '@/game/progress';
@@ -266,6 +266,8 @@ export class PlayScene extends BaseScene {
     this.drawAction(0);
     this.actionPressDirty = true;
     resize(this.accuracy, 34 * s, ink, STYLE.current, false);
+    this.accuracy.setWordWrapWidth(Math.min(560 * s, safe.width - 64 * s), false);
+    this.accuracy.setLineSpacing(-4 * s);
     this.placeWaitCopy();
     resize(this.kept, 22 * s, PALETTE.coral, STYLE.current, false);
     this.kept.setPosition(safe.centerX, this.trackY + 52 * s);
@@ -292,9 +294,9 @@ export class PlayScene extends BaseScene {
    */
   private drawAction(press: number, refillPress = 0): void {
     const shown = this.actionCaption !== '';
-    const watching = shown && this.actionCaption === 'WATCH';
+    const offering = this.offeringHeart();
     this.actionRoot.setVisible(shown);
-    this.refillRoot.setVisible(watching);
+    this.refillRoot.setVisible(offering);
     if (!shown) {
       this.refill.clear();
       this.refillMark.clear();
@@ -306,10 +308,10 @@ export class PlayScene extends BaseScene {
     drawPanel(g, r, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press, hero: true });
     const sink = CHROME.block.depth * s * press * 0.8;
     placeSurface(this.actionSurface, r, s, sink);
-    this.actionHint.setVisible(watching);
-    this.actionHeart.setVisible(watching);
+    this.actionHint.setVisible(offering);
+    this.actionHeart.setVisible(offering);
     this.actionLabel.setText(this.actionCaption);
-    if (watching) {
+    if (offering) {
       resize(this.actionLabel, 32 * s, SHELL.cream);
       this.actionLabel.setPosition(r.centerX, r.centerY - 16 * s + sink);
       this.actionHint.setText('+1');
@@ -352,7 +354,7 @@ export class PlayScene extends BaseScene {
 
   private placeWaitCopy(): void {
     const s = this.uiScale;
-    const y = this.actionCaption === 'WATCH'
+    const y = this.offeringHeart()
       ? this.refillRect.y - 28 * s
       : this.trackY + 28 * s;
     this.accuracy.setPosition(this.viewport.safe.centerX, y);
@@ -494,7 +496,7 @@ export class PlayScene extends BaseScene {
     }
     if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }
     if (near(this.mapAt)) { this.pressPuck('map'); this.leaveForMap(); return; }
-    if (this.actionCaption === 'WATCH' && Phaser.Geom.Rectangle.Contains(this.refillRect, tap.x, tap.y)) {
+    if (this.offeringHeart() && Phaser.Geom.Rectangle.Contains(this.refillRect, tap.x, tap.y)) {
       this.refillPressedAt = performance.now() / 1000;
       this.actionPressDirty = true;
       void this.buyFill();
@@ -503,12 +505,13 @@ export class PlayScene extends BaseScene {
     if (this.actionCaption !== '' && Phaser.Geom.Rectangle.Contains(this.actionRect, tap.x, tap.y)) {
       this.actionPressedAt = performance.now() / 1000;
       this.actionPressDirty = true;
+      if (this.actionCaption === 'TODAY') { this.claimToday(); return; }
       if (this.actionCaption === 'WATCH') { void this.watchAd(); return; }
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
     }
     const phase = this.controller?.phase ?? 'idle';
     if (phase === 'idle' || phase === 'paused') {
-      if (this.actionCaption === 'WATCH') return;
+      if (this.offeringHeart()) return;
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
       if (!this.starting) void this.startRound();
       return;
@@ -646,7 +649,7 @@ export class PlayScene extends BaseScene {
       this.actionRoot.setY(0).setAlpha(1);
       this.refillRoot.setY(0).setAlpha(1);
     }
-    if (this.actionCaption === 'WATCH' && !this.summaryShown) {
+    if (this.offeringHeart() && !this.summaryShown) {
       const wall = Date.now();
       // localStorage parse every frame showed up in the play-scene profile; the
       // countdown is mm:ss, so a quarter-second poll is tighter than the display.
@@ -660,8 +663,9 @@ export class PlayScene extends BaseScene {
           void this.startRound();
           return;
         }
-        const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait ?? '';
-        if (this.accuracy.text !== wait) this.accuracy.setText(wait);
+        const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
+        const copy = wait === null ? HEALTH_COPY.playNote : `${HEALTH_COPY.playNote}\nNext heart ${wait}`;
+        if (this.accuracy.text !== copy) this.accuracy.setText(copy);
       }
     }
     // The verdict word rises and fades; one instance, so a quick double replaces rather
@@ -1024,9 +1028,11 @@ export class PlayScene extends BaseScene {
     if (monetization().premium()) return;
     this.setTurn('none');
     this.changeHeadline('No hearts');
-    const wait = healthHud(viewHealth(loadHealth()), { premium: monetization().premium() }).wait;
-    if (!this.summaryShown) this.accuracy.setText(wait === null ? '' : wait);
-    this.setAction('WATCH');
+    const health = loadHealth();
+    const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
+    const copy = wait === null ? HEALTH_COPY.playNote : `${HEALTH_COPY.playNote}\nNext heart ${wait}`;
+    if (!this.summaryShown) this.accuracy.setText(copy);
+    this.setAction(canClaimDailyHeart(health) ? 'TODAY' : 'WATCH');
     if (!this.emptyTracked) {
       this.emptyTracked = true;
       track('health_empty', { level: this.spec.level });
@@ -1038,6 +1044,27 @@ export class PlayScene extends BaseScene {
     if (!this.purchaseOfferTracked) {
       this.purchaseOfferTracked = true;
       track('purchase_offer_shown', { product: PRODUCT.heartRefill });
+    }
+  }
+
+  private offeringHeart(): boolean {
+    return this.actionCaption === 'WATCH' || this.actionCaption === 'TODAY';
+  }
+
+  private claimToday(): void {
+    if (this.commerceBusy || this.curtain.active) return;
+    this.commerceBusy = true;
+    try {
+      const result = redeemDailyHeart();
+      if (this.disposed) return;
+      if (!result.granted) {
+        this.setAction('WATCH');
+        this.accuracy.setText(HEALTH_COPY.playNote);
+        return;
+      }
+      void this.startRound();
+    } finally {
+      this.commerceBusy = false;
     }
   }
 
