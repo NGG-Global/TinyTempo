@@ -24,6 +24,12 @@ export abstract class HouseholdVignette implements Vignette {
   protected successful = false;
   private respondAt = Infinity;
   private lastNow = 0;
+  /**
+   * Where `layout` put the stage. `translate` is an absolute per-frame offset from this
+   * home, not a step, so `update` has to restore it before the next one lands.
+   */
+  private baseX = 0;
+  private baseY = 0;
   protected get still(): boolean { return reducedMotion(); }
   protected get watching(): boolean { return this.phase === 'prepare' || this.phase === 'demonstrate'; }
   protected get strokes(): number { return this.watching ? this.demoTimes.length : this.taps; }
@@ -40,7 +46,9 @@ export abstract class HouseholdVignette implements Vignette {
     const ui = Math.min(safe.width / 720, safe.height / 1150);
     const top = safe.top + 320 * ui, bottom = safe.bottom - 410 * ui;
     const scale = Math.min(safe.width / 800, (bottom - top) / 520);
-    this.stage.setPosition(safe.centerX, (top + bottom) / 2).setScale(scale);
+    this.baseX = safe.centerX;
+    this.baseY = (top + bottom) / 2;
+    this.stage.setPosition(this.baseX, this.baseY).setScale(scale);
     this.backdrop.layout(viewport);
   }
 
@@ -87,6 +95,9 @@ export abstract class HouseholdVignette implements Vignette {
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow;
     else this.lastNow = now;
+    // PlayScene slides the table by calling `translate` after this, every frame of the
+    // transition. Without this line those offsets compound and the act walks off screen.
+    this.stage.setPosition(this.baseX, this.baseY);
     if (this.watching) {
       for (const cue of this.plan?.cues ?? []) {
         if (cue.kind === 'action' && cue.time <= now) this.onDemonstrationBeat(cue.time);

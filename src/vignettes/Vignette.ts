@@ -16,6 +16,12 @@ export interface Vignette {
   finish(successful: boolean, contactSec: number, accuracy?: number): void;
   pause(): void;
   update(now: number): void;
+  /**
+   * The between-task table slide. PlayScene calls this right after `update`, every frame
+   * of the slide, with an absolute offset from the act's laid-out home — not a step. So
+   * `update` must put the stage back at that home first, or the offsets compound and the
+   * act walks off screen.
+   */
   translate(offset: number): void;
   destroy(): void;
 }
