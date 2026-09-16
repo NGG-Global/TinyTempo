@@ -1,0 +1,45 @@
+name: GitHub Pages
+
+# Publishes the static legal site in legal/ to GitHub Pages. Enable Pages in
+# the repository settings with Source set to GitHub Actions. After the first
+# successful run the public URLs are:
+#   https://ngg-global.github.io/TinyTempo/
+#   https://ngg-global.github.io/TinyTempo/privacy/
+#   https://ngg-global.github.io/TinyTempo/terms/
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'legal/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: legal
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
