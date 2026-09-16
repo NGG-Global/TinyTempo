@@ -35,12 +35,17 @@ export class AudioEngine implements SoundSink {
   private sounds: VignetteSounds | null = null;
   private disposed = false;
   public muted = false;
-  private readonly onSink = (): void => { this.clock.reset(); };
+  /**
+   * A genuine device change should adopt the new output pair. `reset()` would drop the
+   * last audible mapping onto `currentTime` the instant the stamp is missing — and Chrome
+   * on A2DP also fires `sinkchange` when the Bluetooth buffer reconfigures, which is often
+   * the first player voice rather than a new headset. Jumping the clock there expires
+   * every waiting target while the demonstration (already scheduled) still sounds in time.
+   */
+  private readonly onSink = (): void => { this.clock.refresh(); };
 
   public constructor() {
     this.master.connect(this.context.destination);
-    // A Bluetooth route reports a new sink rather than a new context. The last speaker
-    // timestamp would keep mapping taps onto a stream that is no longer playing.
     this.context.addEventListener?.('sinkchange', this.onSink);
   }
   public setSounds(sounds: VignetteSounds): void { this.cancel(); this.sounds = sounds; }
@@ -56,6 +61,15 @@ export class AudioEngine implements SoundSink {
     if (this.context.state !== 'running') throw new Error('Sound is blocked. Tap to try again.');
     this.clock.reset();
   }
+  /**
+   * A Bluetooth route can flip the context to `suspended` for a moment when a new voice
+   * starts. Resume without resetting the audible clock — `unlock()` is the gesture path
+   * and would jump `now()` onto `currentTime`, missing the rest of the response.
+   */
+  public recover(): void {
+    if (this.disposed || this.context.state === 'running' || this.context.state === 'closed') return;
+    void this.context.resume();
+  }
   public get activeSources(): number { return this.sources.size; }
   public play(time: number, kind: SoundKind): void {
     if (this.disposed) return;
@@ -70,8 +84,7 @@ export class AudioEngine implements SoundSink {
     source.connect(envelope).connect(this.master);
     this.sources.set(source, envelope);
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
-    source.start(start);
-    source.stop(start + DURATION);
+    this.startVoice(source, envelope, start, start + DURATION);
   }
   /** A non-scoring coda, scheduled by presentation only after the round is resolved. */
   public playFinish(time: number, successful: boolean): void {
@@ -94,7 +107,29 @@ export class AudioEngine implements SoundSink {
     source.connect(envelope).connect(this.master);
     this.sources.set(source, envelope);
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
-    source.start(Math.max(time, this.context.currentTime));
+    const start = Math.max(time, this.context.currentTime);
+    this.startVoice(source, envelope, start);
+  }
+  /**
+   * Bluetooth A2DP can reject a start that races the hardware callback. Dropping the
+   * voice is fine; throwing out of the tap handler would skip the judgement that already
+   * scored and leave the round looking like input had failed.
+   */
+  private startVoice(
+    source: AudioScheduledSourceNode,
+    envelope: GainNode,
+    start: number,
+    stop?: number,
+  ): void {
+    try {
+      source.start(start);
+      if (stop !== undefined) source.stop(stop);
+    } catch {
+      source.onended = null;
+      source.disconnect();
+      envelope.disconnect();
+      this.sources.delete(source);
+    }
   }
   public toggleMute(): void {
     this.muted = !this.muted;
