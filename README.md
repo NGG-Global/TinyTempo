@@ -40,10 +40,10 @@ judgement rules.
   preparation bar opens the level so the player can find the pulse, and a level
   of six tasks or more gets one four-bar breather at its midpoint with the beat
   kept alive through it.
-- **Nine vignettes** rotate strictly by registry order in
+- **Thirteen vignettes** rotate strictly by registry order in
   `src/vignettes/registry.ts`: Hammer & nail, Window cleaning, Bug & shoe, Saw &
   timber, Knife & tomato, Bicep curl, Knife & cucumber, Knife & banana,
-  Scissors & paper. `levelSpec` picks
+  Scissors & paper, Egg cracking, Bubble wrap, Light switch, Doorbell. `levelSpec` picks
   `VIGNETTES[(level - 1) % length]`, so reordering or inserting an entry
   reassigns every level's vignette. New acts are appended so the earlier levels
   keep theirs.
@@ -52,6 +52,11 @@ judgement rules.
   40–69% produces an uneven, unfinished cutout; below 40% it tears and crumples.
   Its reveal adds one musical bar between tasks, preserving the downbeat.
   See [scissors and paper](docs/SCISSORS_PAPER.md).
+- **The household acts** first appear at levels 10–13. Crack an egg into a glazed
+  bowl, pop a sheet of bubble wrap, discover an elaborate room behind a light
+  switch, or ring a doorbell to be welcomed by a cat. Their successful finales
+  use a five-beat hold, and the door stays fully closed on failure. See
+  [household acts](docs/HOUSEHOLD_ACTS.md).
 - **Difficulty** comes from a single curve, `d(level) = 1 − e^(−(level−1)/25)`,
   in `src/config/progression.ts`. It drives tempo, task count, pattern tier and
   the clear bar together: easy for the first few areas, still climbing at level

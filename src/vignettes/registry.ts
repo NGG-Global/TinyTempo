@@ -18,6 +18,13 @@ import { createBananaSounds } from '@/audio/bananaSounds';
 import { ScissorsPaperVignette, CRAFT } from './ScissorsPaperVignette';
 import { createPaperSounds } from '@/audio/paperSounds';
 import { PAPER_MOTION } from './paperMotion';
+import { EggCrackingVignette } from './EggCrackingVignette';
+import { BubbleWrapVignette } from './BubbleWrapVignette';
+import { LightSwitchVignette } from './LightSwitchVignette';
+import { DoorbellVignette } from './DoorbellVignette';
+import { createHouseholdSounds } from '@/audio/householdSounds';
+import { HOME_INK } from './householdArt';
+import { HOUSEHOLD_REVEAL_SEC } from './householdMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -78,5 +85,29 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     rough: ['A fresh\nsheet?', 'A few snips went astray.'],
     endingSec: 2, endingHoldBeats: 5, successAccuracy: PAPER_MOTION.successAccuracy,
     create: scene => new ScissorsPaperVignette(scene), sounds: createPaperSounds,
+  },
+  {
+    id: 'egg', title: 'Egg cracking', intro: 'A cracking\nlittle rhythm.', ink: HOME_INK,
+    success: ['Sunny\nside up.', 'One clean crack.'], rough: ['A little\nshell-shocked.', 'The bowl can wait.'],
+    endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new EggCrackingVignette(scene), sounds: context => createHouseholdSounds(context, 'egg'),
+  },
+  {
+    id: 'bubble', title: 'Bubble wrap', intro: 'One more\npop.', ink: HOME_INK,
+    success: ['Pop, pop…\nperfect.', 'Could do this all day.'], rough: ['A few\nleft over.', 'Saved for later.'],
+    endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new BubbleWrapVignette(scene), sounds: context => createHouseholdSounds(context, 'bubble'),
+  },
+  {
+    id: 'light', title: 'Light switch', intro: 'Set the\nmood.', ink: HOME_INK,
+    success: ['Oh,\nhello there.', 'Quite a room for one little switch.'], rough: ['Lights\nout.', 'A little more rhythm next time.'],
+    endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new LightSwitchVignette(scene), sounds: context => createHouseholdSounds(context, 'light'),
+  },
+  {
+    id: 'doorbell', title: 'Doorbell', intro: 'Anyone\nhome?', ink: HOME_INK,
+    success: ['Come\non in.', 'Someone was expecting you.'], rough: ['Nobody\nhome.', 'Try that rhythm again.'],
+    endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new DoorbellVignette(scene), sounds: context => createHouseholdSounds(context, 'doorbell'),
   },
 ];

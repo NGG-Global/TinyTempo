@@ -30,9 +30,9 @@ describe('paper cutting presentation', () => {
     const def = VIGNETTES.find(v => v.id === 'paper')!;
     expect(def.successAccuracy).toBe(PAPER_MOTION.successAccuracy);
     expect(def.partial?.minAccuracy).toBe(PAPER_MOTION.partialAccuracy);
-    // Ninth in the registry, so it first falls on level 9 and every ninth level after.
+    // Its introduction stays at level 9; the full registry controls later rotations.
     expect(levelSpec(9).vignette).toBe('paper');
-    expect(levelSpec(18).vignette).toBe('paper');
+    expect(levelSpec(9 + VIGNETTES.length).vignette).toBe('paper');
   });
 
   it('closes on contact and reopens before the next possible fast tap', () => {

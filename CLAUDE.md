@@ -11,7 +11,7 @@ curve. `src/game/progress.ts` owns saved progress and `src/game/settings.ts`
 owns player settings; both validate every field on read, because storage can be
 blocked, stale or tampered with.
 
-Nine vignettes rotate strictly by registry order: `levelSpec` picks
+Thirteen vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -24,6 +24,12 @@ round accuracy passed to `Vignette.finish`. Other acts retain their binary
 endings. Its five-beat reveal hold adds one bar to the default coda; holds must
 complete whole bars with the contact and two slide beats. See
 `docs/SCISSORS_PAPER.md`. In DEV only, `?debug&level=9` opens it directly.
+
+Egg cracking, Bubble wrap, Light switch and Doorbell are acts 10–13. They share
+the lifecycle in `HouseholdVignette.ts`, with independent drawings and material
+voices in `audio/householdSounds.ts`. Their five-beat finale holds preserve the
+downbeat and allow the egg drop, pop cascade, room reveal and door swing to
+complete. See `docs/HOUSEHOLD_ACTS.md`.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
