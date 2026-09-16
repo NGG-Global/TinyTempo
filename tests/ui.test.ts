@@ -125,6 +125,21 @@ describe('workshop contrast', () => {
     expect(contrastRatio(starColour(false, PALETTE.ink, SHELL.puck), SHELL.puck)).toBeGreaterThanOrEqual(3);
   });
 
+  it('keeps preview level numbers readable on every area', () => {
+    const areas = [
+      { name: 'Grass', ground: 0xb0bb91, ink: 0x2c4629, paper: 0xf4f0e2 },
+      { name: 'Pavement', ground: 0xbdb7ae, ink: 0x35322f, paper: 0xf5f2ee },
+      { name: 'Sand', ground: 0xe3c88f, ink: 0x5a4224, paper: 0xfff7e6 },
+      { name: 'Snow', ground: 0xdfe8f0, ink: 0x2d4759, paper: 0xffffff },
+      { name: 'Dusk', ground: 0x433856, ink: 0xf3e7d8, paper: 0x2a2236 },
+    ] as const;
+    for (const area of areas) {
+      const fill = mix(area.paper, area.ground, 0.62);
+      const number = mix(area.ink, area.ground, 0.38);
+      expect(contrastRatio(number, fill), area.name).toBeGreaterThan(3);
+    }
+  });
+
   it('keeps locked level numbers readable on every area', () => {
     // Copied from AREAS so this file never loads the vignette registry (Phaser).
     const areas = [

@@ -145,7 +145,7 @@ export class PlayScene extends BaseScene {
   private turnAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
-  private headlineColour = 0x243e35;
+  private headlineColour = SHELL.cream;
   private sequence: TaskSequence | null = null;
   /** Beat-aligned table slide between tasks; the next task and the music's new tempo both start at `next`. */
   private transition: { slide: number; swap: number; next: number; swapped: boolean } | null = null;
@@ -178,7 +178,7 @@ export class PlayScene extends BaseScene {
     this.fx = new Feedback(this, 5);
     this.starFx = new Feedback(this, 12);
     this.turnSign = this.add.graphics().setDepth(11);
-    this.headline = display(this, this.definition.intro, { size: 88, colour: ink, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
+    this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
     this.kept = label(this, '', { size: 22, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
@@ -678,7 +678,7 @@ export class PlayScene extends BaseScene {
       this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
     }
   }
-  private changeHeadline(text: string, colour = this.definition.ink): void {
+  private changeHeadline(text: string, colour = SHELL.cream): void {
     if (this.headline.text === text && this.headlineColour === colour) return;
     this.headlineAt = this.now();
     this.headlineColour = colour;
@@ -692,7 +692,7 @@ export class PlayScene extends BaseScene {
   }
   private drawTurnSign(): void {
     const g = this.turnSign.clear();
-    if (this.turn === 'none' || this.headline.text === '') {
+    if (this.headline.text === '') {
       this.turnSign.setAlpha(0);
       return;
     }
@@ -709,7 +709,7 @@ export class PlayScene extends BaseScene {
       radius: 22,
       hero: this.turn === 'play',
     });
-    this.turnSign.setAlpha(1);
+    this.turnSign.setAlpha(this.headline.alpha);
   }
   private showPhase(phase: Phase): void {
     this.vignette.onPhase(phase, this.now());

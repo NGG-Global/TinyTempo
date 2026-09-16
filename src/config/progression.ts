@@ -29,6 +29,8 @@ export const PROGRESSION = {
    */
   breatherBars: 4,
   breatherFromTasks: 6,
-  /** Levels shown on the map beyond the highest unlocked one. */
+  /** Locked levels drawn beyond the frontier, still with per-node padlocks. */
   mapLookahead: 12,
+  /** Faded levels past the lock gate, so the road continues instead of cutting off. */
+  mapPreview: 10,
 } as const;

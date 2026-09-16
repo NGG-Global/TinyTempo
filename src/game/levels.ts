@@ -122,3 +122,21 @@ export function meanAccuracy(results: readonly number[]): number {
   const completed = results.filter(Number.isFinite);
   return completed.length ? completed.reduce((sum, accuracy) => sum + accuracy, 0) / completed.length : 0;
 }
+
+/** How a level reads on the map: the gate sits between `locked` and `preview`. */
+export type MapLevelState = 'cleared' | 'frontier' | 'locked' | 'preview';
+
+export function mapLevelState(level: number, unlocked: number): MapLevelState {
+  if (!Number.isInteger(level) || level < 1) throw new Error('Levels start at 1.');
+  if (!Number.isInteger(unlocked) || unlocked < 1) throw new Error('Unlocks start at 1.');
+  if (level < unlocked) return 'cleared';
+  if (level === unlocked) return 'frontier';
+  if (level <= unlocked + PROGRESSION.mapLookahead) return 'locked';
+  return 'preview';
+}
+
+/** Highest level the map window may include for this frontier. */
+export function mapLastLevel(unlocked: number): number {
+  if (!Number.isInteger(unlocked) || unlocked < 1) throw new Error('Unlocks start at 1.');
+  return unlocked + PROGRESSION.mapLookahead + PROGRESSION.mapPreview;
+}

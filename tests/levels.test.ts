@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AREAS, PATTERN_TIERS, areaOf, breatherTask, difficulty, levelSpec, meanAccuracy, starsFor } from '../src/game/levels';
+import { AREAS, PATTERN_TIERS, areaOf, breatherTask, difficulty, levelSpec, mapLastLevel, mapLevelState, meanAccuracy, starsFor } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
 import { RHYTHM } from '../src/config/rhythm';
 import { RoundController, type RoundEvents } from '../src/game/RoundController';
@@ -76,6 +76,14 @@ describe('level progression', () => {
     const spec = levelSpec(1);
     expect(starsFor(39.9, spec)).toBe(0); expect(starsFor(40, spec)).toBe(1); expect(starsFor(60, spec)).toBe(2); expect(starsFor(80, spec)).toBe(3);
     expect(meanAccuracy([100, 70, 40])).toBe(70); expect(meanAccuracy([])).toBe(0);
+  });
+  it('splits the map into cleared, frontier, locked lookahead and faded preview', () => {
+    expect(mapLevelState(1, 5)).toBe('cleared');
+    expect(mapLevelState(5, 5)).toBe('frontier');
+    expect(mapLevelState(6, 5)).toBe('locked');
+    expect(mapLevelState(5 + PROGRESSION.mapLookahead, 5)).toBe('locked');
+    expect(mapLevelState(5 + PROGRESSION.mapLookahead + 1, 5)).toBe('preview');
+    expect(mapLastLevel(5)).toBe(5 + PROGRESSION.mapLookahead + PROGRESSION.mapPreview);
   });
   it.each([1, 12, 19, 45])('plays level %s end to end on one grid with the music tempo changing on task downbeats', level => {
     const spec = levelSpec(level);
