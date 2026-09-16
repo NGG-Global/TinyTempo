@@ -52,6 +52,8 @@ export class WindowCleaningVignette implements Vignette {
   private baseX = 0;
   private baseY = 0;
   private scale = 1;
+  /** Grime is static for the whole demonstration; skip the ~300 ellipses until a wipe. */
+  private dirtDirty = true;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
@@ -191,13 +193,18 @@ export class WindowCleaningVignette implements Vignette {
     this.strokeAt = -100; this.strokes = 0; this.lane = 0; this.lastDemo = -Infinity;
     this.finishAt = null; this.finished = false; this.successful = false;
     this.respondAt = -100;
+    this.dirtDirty = true;
   }
   public onPhase(phase: Phase, now: number): void {
     this.phase = phase;
     // The demonstration wipes without clearing the grime, so the pane the player is given
     // is the one they watched and nothing has to be re-dirtied in the instant before
     // their turn.
-    if (phase === 'respond') { this.cleanAt.fill(Infinity); this.strokes = 0; this.strokeAt = -100; this.respondAt = now; }
+    if (phase === 'respond') {
+      this.cleanAt.fill(Infinity);
+      this.respondAt = now;
+      this.dirtDirty = true;
+    }
   }
   public onDemonstrationBeat(time: number): void {
     if (time <= this.lastDemo) return;
@@ -222,6 +229,7 @@ export class WindowCleaningVignette implements Vignette {
       this.lane = result.index;
       this.cleanAt[this.lane] = now;
       this.positionTool(now);
+      this.dirtDirty = true;
     }
   }
   public finish(successful: boolean, contactSec: number): void { this.successful = successful; this.finishAt = contactSec; }
@@ -261,31 +269,19 @@ export class WindowCleaningVignette implements Vignette {
     if (this.finishAt !== null && now >= this.finishAt && !this.finished) {
       this.finished = true;
       this.stroke(this.finishAt);
-      if (this.successful) this.cleanAt = this.cleanAt.map(time => Math.min(time, this.finishAt!));
-    }
-    this.positionTool(now);
-    const g = this.dirt.clear();
-    const count = this.plan?.targets.length ?? 4;
-    // Fixed deterministic marks, no per-hit objects or texture/mask allocations.
-    for (let row = 0; row < 22; row++) {
-      for (let col = 0; col < 15; col++) {
-        const seed = (row * 43 + col * 29) % 19;
-        const x = -208 + col * 29 + Math.sin(row * 13 + col * 7) * 9;
-        const y = -214 + row * 22 + Math.cos(row * 7 + col * 11) * 6;
-        if ((y < -180 && Math.abs(x) > 177) || (y > 226 && Math.abs(x) > 171)) continue;
-        const lane = Math.min(count - 1, Math.max(0, Math.floor((y + 184) / (430 / count))));
-        const p = strokeProgress(now - (this.cleanAt[lane] ?? Infinity));
-        const covered = p >= 1 || (p > 0 && (lane % 2 ? x > 212 - 424 * p : x < -212 + 424 * p));
-        if (covered) continue;
-        const alpha = 0.11 + seed / 110;
-        g.fillStyle(seed % 3 ? 0x8c9d94 : 0xc0b799, alpha).fillEllipse(x, y, 35 + seed, 23 + seed % 17, GRIME_SEGMENTS);
-        if (seed < 5) {
-          g.fillStyle(GLASS.light, 0.36).fillEllipse(x + 5, y - 3, 5, 9, 6);
-          g.lineStyle(2, GLASS.ink, 0.12).lineBetween(x, y + 5, x - 3, y + 23);
-        }
+      if (this.successful) {
+        this.cleanAt = this.cleanAt.map(time => Math.min(time, this.finishAt!));
+        this.dirtDirty = true;
       }
     }
+    this.positionTool(now);
+    const wiping = this.cleanAt.some(time => Number.isFinite(time) && strokeProgress(now - time) < 1);
+    if (this.dirtDirty || wiping) {
+      this.drawDirt(now);
+      this.dirtDirty = wiping;
+    }
     const shine = this.gleam.clear();
+    const count = this.plan?.targets.length ?? 4;
     const clean = this.cleanAt.reduce((sum, time) => sum + strokeProgress(now - time), 0) / count;
     shine.lineStyle(4, GLASS.light, 0.15 + clean * 0.65).lineBetween(-192, 76, -34, -185);
     shine.lineStyle(12, GLASS.light, clean * 0.3).lineBetween(-169, 82, -12, -179);
@@ -305,6 +301,29 @@ export class WindowCleaningVignette implements Vignette {
       } else {
         shine.lineStyle(5, GLASS.light, 0.75).strokeEllipse(93, 16, 36, 53);
         shine.lineBetween(93, 44, 95, 44 + p * 29);
+      }
+    }
+  }
+  private drawDirt(now: number): void {
+    const g = this.dirt.clear();
+    const count = this.plan?.targets.length ?? 4;
+    // Fixed deterministic marks, no per-hit objects or texture/mask allocations.
+    for (let row = 0; row < 22; row++) {
+      for (let col = 0; col < 15; col++) {
+        const seed = (row * 43 + col * 29) % 19;
+        const x = -208 + col * 29 + Math.sin(row * 13 + col * 7) * 9;
+        const y = -214 + row * 22 + Math.cos(row * 7 + col * 11) * 6;
+        if ((y < -180 && Math.abs(x) > 177) || (y > 226 && Math.abs(x) > 171)) continue;
+        const lane = Math.min(count - 1, Math.max(0, Math.floor((y + 184) / (430 / count))));
+        const p = strokeProgress(now - (this.cleanAt[lane] ?? Infinity));
+        const covered = p >= 1 || (p > 0 && (lane % 2 ? x > 212 - 424 * p : x < -212 + 424 * p));
+        if (covered) continue;
+        const alpha = 0.11 + seed / 110;
+        g.fillStyle(seed % 3 ? 0x8c9d94 : 0xc0b799, alpha).fillEllipse(x, y, 35 + seed, 23 + seed % 17, GRIME_SEGMENTS);
+        if (seed < 5) {
+          g.fillStyle(GLASS.light, 0.36).fillEllipse(x + 5, y - 3, 5, 9, 6);
+          g.lineStyle(2, GLASS.ink, 0.12).lineBetween(x, y + 5, x - 3, y + 23);
+        }
       }
     }
   }

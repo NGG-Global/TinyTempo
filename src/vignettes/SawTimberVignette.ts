@@ -223,7 +223,10 @@ export class SawTimberVignette implements Vignette {
     this.phase = phase;
     // The demonstration strokes the board without cutting it, so the player starts on the
     // board they watched and nothing has to be swapped in the instant before their turn.
-    if (phase === 'respond') { this.strokes = 0; this.strokeAt = -100; this.setKerf(0, now); this.respondAt = now; }
+    // Keep the last demonstration stroke on the blade. Zeroing strokeAt here parked it
+    // at rest in the same instant the player's first bite had to start, and a half-beat
+    // gap is shorter than the follow-through.
+    if (phase === 'respond') { this.setKerf(0, now); this.respondAt = now; }
   }
 
   private setKerf(value: number, now: number): void {

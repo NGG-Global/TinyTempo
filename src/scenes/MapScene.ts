@@ -685,6 +685,21 @@ export class MapScene extends BaseScene {
     }
   }
 
+  /** Re-hang the already-painted sign. The intro swing only needs this, not a redraw. */
+  private poseSign(s: number, angle: number, drop: number): void {
+    const h = this.signRect.height;
+    const inner = STYLE.current.radius * s * 0.7;
+    const waiting = this.healthWait.visible;
+    this.hang(this.signBack, 0, 0, angle, drop);
+    this.hang(this.signSurface, this.signRect.x + inner, this.signRect.y + inner, angle, drop);
+    this.hang(this.status, this.signRect.x + 20 * s, this.signRect.y + h * 0.5, angle, drop);
+    const heartY = this.signRect.y + h * (waiting ? 0.38 : 0.5);
+    const heartX = this.signRect.right - 88 * s;
+    this.hang(this.healthMark, heartX, heartY, angle, drop);
+    this.hang(this.healthCount, this.signRect.right - 16 * s, heartY, angle, drop);
+    if (waiting) this.hang(this.healthWait, this.signRect.right - 16 * s, this.signRect.y + h * 0.72, angle, drop);
+  }
+
   /** Back, settings and mute as pucks at the top right, clear of the sign's swing. */
   private drawPucks(s: number, press: number): void {
     const { safe } = this.viewport;
@@ -970,7 +985,9 @@ export class MapScene extends BaseScene {
     if (age < 2.4) {
       const entry = still ? { rise: 0 } : arrive(age - 0.1, 0.9);
       const swing = still ? 0 : settle(age - 0.3, 5.2, 1.6) * 0.05 * ex;
-      this.drawSign(s, swing, -entry.rise * 200 * s);
+      this.poseSign(s, swing, -entry.rise * 200 * s);
+      const wait = healthHud(viewHealth(this.health), { premium: monetization().premium() }).wait ?? '';
+      if (this.healthWait.text !== wait) this.healthWait.setText(wait);
     } else {
       this.refreshHealthHud();
     }

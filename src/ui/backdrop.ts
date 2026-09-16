@@ -70,8 +70,11 @@ export class Backdrop {
    */
   public open(amount: number): void {
     const t = Math.min(1, Math.max(0, amount));
-    this.opened = t;
     const size = this.base.size * (1 + 0.14 * t);
+    // Every vignette samples this every frame. After the handover the amount is 0 or 1
+    // forever, and rewriting tint/size/alpha on a full-screen quad is fill-rate waste.
+    if (t === this.opened && this.glow.displayWidth === size) return;
+    this.opened = t;
     // Warmed as well as moved: on a pale stage another tenth of alpha on an already-open
     // pool is invisible, and it is the change in colour that reads as a light coming up.
     this.glow.setTint(mix(this.paper, this.glowColour, POOL_TINT + 0.28 * t))

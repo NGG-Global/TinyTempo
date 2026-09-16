@@ -11,8 +11,8 @@ import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
 import {
-  acceptDemoBeat, clamp01, easeOut, PAPER_CONTOURS, paperCutPoint, paperOutcome, paperReveal, paperShape,
-  scissorOpening, type PaperOutcome, type PaperPoint, type PaperShape,
+  acceptDemoBeat, clamp01, easeOut, PAPER_CONTOURS, paperCutPoint, paperHandoff, paperOutcome, paperReveal,
+  paperShape, scissorOpening, type PaperOutcome, type PaperPoint, type PaperShape,
 } from './paperMotion';
 
 export const CRAFT = {
@@ -59,6 +59,8 @@ export class ScissorsPaperVignette implements Vignette {
   private progressAt = -100;
   private hitCount = 0;
   private demoCount = 0;
+  /** Demo travel along the fold, eased back to the start as the player's turn opens. */
+  private handoffFrom = 0;
   private mistakes = 0;
   private lastDemo = -Infinity;
   private strikeAt = -100;
@@ -145,7 +147,7 @@ export class ScissorsPaperVignette implements Vignette {
     this.shape = paperShape(plan.id);
     this.phase = 'prepare';
     this.outcome = 'fail';
-    this.progress = this.progressFrom = this.hitCount = this.demoCount = this.mistakes = 0;
+    this.progress = this.progressFrom = this.hitCount = this.demoCount = this.handoffFrom = this.mistakes = 0;
     this.strikeAt = this.judderAt = this.progressAt = this.respondAt = -100;
     this.lastDemo = -Infinity;
     this.finishAt = null;
@@ -155,7 +157,10 @@ export class ScissorsPaperVignette implements Vignette {
 
   public onPhase(phase: Phase, now: number): void {
     this.phase = phase;
-    if (phase === 'respond') { this.respondAt = now; this.strikeAt = -100; this.demoCount = 0; }
+    if (phase === 'respond') {
+      this.respondAt = now;
+      this.handoffFrom = clamp01(this.demoCount / Math.max(1, this.plan?.targets.length ?? 4)) * CUT_FULL;
+    }
   }
 
   public onDemonstrationBeat(time: number): void {
@@ -207,7 +212,12 @@ export class ScissorsPaperVignette implements Vignette {
       for (let i = 0; i < 6; i++) this.chips.push({ at: this.finishAt!, x: PAPER_OFFSET + 40 + i * 23, y: -150 + i * 53, seed: 41 + i * 17 });
     }
     const reveal = paperReveal(age, this.outcome, this.shape, still);
-    const progress = demo ? clamp01(this.demoCount / Math.max(1, this.plan?.targets.length ?? 4)) * CUT_FULL : this.currentProgress(now);
+    const demoProgress = clamp01(this.demoCount / Math.max(1, this.plan?.targets.length ?? 4)) * CUT_FULL;
+    const progress = demo
+      ? demoProgress
+      : this.hitCount > 0 || this.progress > 0
+        ? this.currentProgress(now)
+        : paperHandoff(this.handoffFrom, now - this.respondAt);
     this.drawPaper(now, age, reveal.open, reveal.crumple);
     const wobble = still ? 0 : Math.sin((now - this.judderAt) * 60) * Math.exp(-Math.max(0, now - this.judderAt) * 15) * 5;
     this.paper.setPosition(PAPER_OFFSET * (1 - reveal.open) + wobble, -reveal.lift + reveal.drop)

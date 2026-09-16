@@ -97,6 +97,30 @@ describe('round lifecycle', () => {
     expect(round.phase).toBe('paused');
     expect(events.interrupted).toHaveBeenCalledTimes(1);
   });
+  it('lands a late last demonstration beat before a held first tap', () => {
+    const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
+    const round = new RoundController({ play: vi.fn(), cancel: vi.fn() }, events);
+    // Last pair is a half beat: at 150 BPM that gap is 200 ms, inside stallMs.
+    round.start(parsePattern('p', 'X - X - - - X X', 0.5), 150, 0, 0, 0);
+    const plan = round.plan!;
+    const lastDemo = plan.cues.filter(cue => cue.kind === 'action').at(-1)!.time;
+    expect(plan.response - lastDemo).toBeLessThan(RHYTHM.stallMs / 1000);
+    let now = 0;
+    const until = lastDemo - 0.01;
+    while (now + 0.02 < until) { now += 0.02; round.tick(now, now * 1000); }
+    now = until; round.tick(now, now * 1000);
+    expect(round.phase).toBe('demonstrate');
+    const early = plan.response - 0.05;
+    expect(round.tap(early, early, early * 1000)?.kind).toBe('hit');
+    expect(events.tap).not.toHaveBeenCalled();
+    round.tick(plan.response + 0.02, (plan.response + 0.02) * 1000);
+    expect(round.phase).toBe('respond');
+    const lastDemoOrder = vi.mocked(events.cue).mock.calls.findIndex(call => call[0].kind === 'action' && call[0].time === lastDemo);
+    expect(lastDemoOrder).toBeGreaterThanOrEqual(0);
+    const cueOrder = vi.mocked(events.cue).mock.invocationCallOrder[lastDemoOrder]!;
+    const tapOrder = vi.mocked(events.tap).mock.invocationCallOrder[0]!;
+    expect(cueOrder).toBeLessThan(tapOrder);
+  });
   it('invalidates a long stall before recording unfair misses', () => {
     const { round, events } = setup();
     round.tick(9, 9000);

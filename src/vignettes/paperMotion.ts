@@ -1,4 +1,4 @@
-import { clamp01, easeOut, REFERENCE_BEAT } from './motion';
+import { clamp01, easeOut, REFERENCE_BEAT, TURN_OPEN_SEC } from './motion';
 export { acceptDemoBeat, advanceOnHit, clamp01, easeOut } from './motion';
 
 export const PAPER_MOTION = {
@@ -28,6 +28,14 @@ export function paperOutcome(accuracy: number): PaperOutcome {
 export function scissorOpening(age: number, beat = REFERENCE_BEAT): number {
   if (age < 0) return 1;
   return easeOut(age / (PAPER_MOTION.reopenBeats * beat));
+}
+
+/**
+ * The example travels the fold; the player's cut starts at the top. Ease back over the
+ * same window as the stage light so a late last snip does not teleport the scissors.
+ */
+export function paperHandoff(demoProgress: number, respondAge: number): number {
+  return clamp01(demoProgress) * (1 - easeOut(respondAge / TURN_OPEN_SEC));
 }
 
 const point = (x: number, y: number): PaperPoint => ({ x, y });

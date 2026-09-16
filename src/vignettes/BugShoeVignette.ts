@@ -132,7 +132,9 @@ export class BugShoeVignette implements Vignette {
     this.phase = phase;
     // The bug is never consumed, so this only returns the shoe to the first stop of its
     // cycle for the player's turn.
-    if (phase === 'respond') { this.steps = 0; this.previousX = this.contactX = 0; this.respondAt = now; }
+    // The next stomp starts the player's cycle. Leaving the shoe where the example
+    // landed lets it travel to that first stop instead of teleporting mid-lift.
+    if (phase === 'respond') { this.steps = 0; this.respondAt = now; }
   }
   private strike(time: number): void {
     this.previousX = this.contactX;

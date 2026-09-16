@@ -65,12 +65,15 @@ export class RoundController {
     if (!this.active || !this.plan || !this.judge || !this.healthy(now, wallMs)) return;
     this.lastPumpMs = wallMs;
     const plan = this.plan;
-    this.setPhase(now < plan.demo ? 'prepare' : now < plan.response ? 'demonstrate' : 'respond');
-    this.releaseHeldHit();
+    // Demonstration cues first, while the rendered phase is still the example. A last
+    // beat that sits inside the stall window of the response downbeat must land on the
+    // tool before a held first tap, or it overwrites the player's strike.
     while (this.cueIndex < plan.cues.length && plan.cues[this.cueIndex]!.time <= now) {
       const cue = plan.cues[this.cueIndex++]!;
       if (now - cue.time < RHYTHM.stallMs / 1000) this.events.cue(cue);
     }
+    this.setPhase(now < plan.demo ? 'prepare' : now < plan.response ? 'demonstrate' : 'respond');
+    this.releaseHeldHit();
     for (const miss of expireTargets(this.judge, now)) this.events.judgement(miss);
     if (now > plan.end + (RHYTHM.goodMs + RHYTHM.deliveryGraceMs) / 1000) {
       this.result = scoreRound(this.judge);

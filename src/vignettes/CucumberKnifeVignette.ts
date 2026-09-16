@@ -208,7 +208,6 @@ export class CucumberKnifeVignette implements Vignette {
   public onPhase(phase: Phase, now: number): void {
     this.phase = phase;
     if (phase === 'respond') {
-      this.strikeAt = -100;
       this.setCut(0, now);
       this.respondAt = now;
     }

@@ -160,6 +160,8 @@ export class PlayScene extends BaseScene {
   private replay: { roundId: number; targets: readonly number[]; next: number } | null = null;
   private replayPanel: HTMLElement | null = null;
   private pump: ReturnType<typeof setInterval> | null = null;
+  /** Last Date.now() we re-read storage on the out-of-hearts WATCH plaque. */
+  private watchPollAt = 0;
   private readonly debugMode = import.meta.env.DEV && new URLSearchParams(location.search).has('debug');
 
   public constructor() { super(SceneKey.Play); }
@@ -405,17 +407,19 @@ export class PlayScene extends BaseScene {
     try {
       if (!this.controller) {
         this.audio = sharedAudio(this);
-        this.audio.setSounds(this.definition.sounds(this.audio.context));
         this.audio.context.addEventListener('statechange', this.audioState);
         this.muted = this.audio.muted;
         this.drawChrome(this.uiScale, 0);
         this.controller = new RoundController(this.audio, {
           phase: phase => this.showPhase(phase),
           cue: cue => {
-            if (cue.kind === 'action') {
-              this.vignette.onDemonstrationBeat(cue.time);
-              this.demoCount++;
-            }
+            // Leftover demonstration beats that land after respond are consumed by the
+            // controller; never start the example on the tool the player already holds.
+            if (cue.kind !== 'action') return;
+            const phase = this.controller?.phase;
+            if (phase !== 'demonstrate' && phase !== 'prepare') return;
+            this.vignette.onDemonstrationBeat(cue.time);
+            this.demoCount++;
           },
           tap: () => {
             this.vignette.onPlayerHit(this.now());
@@ -637,16 +641,22 @@ export class PlayScene extends BaseScene {
       this.refillRoot.setY(0).setAlpha(1);
     }
     if (this.actionCaption === 'WATCH' && !this.summaryShown) {
-      const health = loadHealth();
-      if (
-        !this.starting && !this.commerceBusy
-        && canBeginAttempt(health, loadProgress(), this.spec.level, Date.now(), monetization().premium())
-      ) {
-        void this.startRound();
-        return;
+      const wall = Date.now();
+      // localStorage parse every frame showed up in the play-scene profile; the
+      // countdown is mm:ss, so a quarter-second poll is tighter than the display.
+      if (wall - this.watchPollAt >= 250) {
+        this.watchPollAt = wall;
+        const health = loadHealth();
+        if (
+          !this.starting && !this.commerceBusy
+          && canBeginAttempt(health, loadProgress(), this.spec.level, wall, monetization().premium())
+        ) {
+          void this.startRound();
+          return;
+        }
+        const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait ?? '';
+        if (this.accuracy.text !== wait) this.accuracy.setText(wait);
       }
-      const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait ?? '';
-      if (this.accuracy.text !== wait) this.accuracy.setText(wait);
     }
     // The verdict word rises and fades; one instance, so a quick double replaces rather
     // than stacks.

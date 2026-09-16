@@ -238,9 +238,9 @@ export class TomatoKnifeVignette implements Vignette {
   public onPhase(phase: Phase, now: number): void {
     this.phase = phase;
     // The demonstration rocks the knife over the fruit without cutting it, so the player
-    // starts on the tomato they watched and nothing has to arrive in the instant before
-    // their turn.
-    if (phase === 'respond') { this.strikeAt = -100; this.setCut(0, now); this.respondAt = now; }
+    // starts on the tomato they watched. The last chop is left on the blade — zeroing
+    // strikeAt here parked it at rest in the half-beat before the first response.
+    if (phase === 'respond') { this.setCut(0, now); this.respondAt = now; }
   }
 
   private setCut(fraction: number, now: number): void {

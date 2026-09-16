@@ -457,7 +457,6 @@ export class BicepCurlVignette implements Vignette {
     // on the empty board they watched and nothing has to be wiped in the instant before
     // their turn.
     if (phase === 'respond') {
-      this.repAt = -100;
       this.reps = 0;
       this.setPump(0, now);
       this.respondAt = now;

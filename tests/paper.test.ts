@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPES, paperCutPoint, paperOutcome, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
+import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPES, paperCutPoint, paperHandoff, paperOutcome, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
+import { TURN_OPEN_SEC } from '../src/vignettes/motion';
 import { synthesizePaper } from '../src/audio/paperSounds';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { VIGNETTES } from '../src/vignettes/registry';
@@ -43,6 +44,14 @@ describe('paper cutting presentation', () => {
       expect(scissorOpening(beat * 0.1, beat)).toBeGreaterThan(0);
       expect(scissorOpening(beat * 0.1, beat)).toBeLessThan(1);
     }
+  });
+
+  it('eases the scissors back to the start of the fold as the turn opens', () => {
+    expect(paperHandoff(0.88, 0)).toBeCloseTo(0.88);
+    expect(paperHandoff(0.88, TURN_OPEN_SEC)).toBe(0);
+    expect(paperHandoff(0.88, TURN_OPEN_SEC / 2)).toBeGreaterThan(0);
+    expect(paperHandoff(0.88, TURN_OPEN_SEC / 2)).toBeLessThan(0.88);
+    expect(paperHandoff(0, 0)).toBe(0);
   });
 
   it('makes the five endings distinct, bounded and complete before the stage leaves', () => {
