@@ -21,7 +21,7 @@ import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 import type { Vignette } from '@/vignettes/Vignette';
 
 const MENU = {
-  sign: { width: 560, height: 300, top: 118, ropeInset: 150 },
+  sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
   /** Beats per second of the sign's tempo beads: the game's own 120 BPM. */
   beatHz: 2, dots: 4,
 } as const;
@@ -46,6 +46,7 @@ export class MenuScene extends BaseScene {
   private buttonSurface!: Phaser.GameObjects.TileSprite;
   private playLabel!: Phaser.GameObjects.Text;
   private tutorialButton!: Phaser.GameObjects.Graphics;
+  private tutorialSurface!: Phaser.GameObjects.TileSprite;
   private tutorialLabel!: Phaser.GameObjects.Text;
   private tutorialRect = new Phaser.Geom.Rectangle();
   private pucks!: Phaser.GameObjects.Graphics;
@@ -86,14 +87,15 @@ export class MenuScene extends BaseScene {
     this.board = this.add.graphics();
     this.boardSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7);
     this.beads = this.add.graphics();
-    this.headline = display(this, 'Tiny\nTempo', { size: 96, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0.5);
+    this.headline = display(this, 'Tiny\nTempo', { size: 82, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0);
     this.sign.add([this.ropes, this.board, this.boardSurface, this.beads, this.headline]);
 
     this.button = this.add.graphics();
     this.buttonSurface = surface(this, MaterialKey.cloth, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, PALETTE.coral, 0.35);
     this.playLabel = display(this, 'Play', { size: 40, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
     this.tutorialButton = this.add.graphics();
-    this.tutorialLabel = display(this, 'How to play', { size: 32, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5);
+    this.tutorialSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7);
+    this.tutorialLabel = display(this, 'How to play', { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
     this.pucks = this.add.graphics();
 
     this.taps = new TapInput(this, tap => this.handleTap(tap));
@@ -121,9 +123,16 @@ export class MenuScene extends BaseScene {
     this.board.clear();
     drawPanel(this.board, this.boardRect, s, { fill: SHELL.wood, depth: 14, hero: true });
     placeSurface(this.boardSurface, this.boardRect, s);
-    resize(this.headline, 96 * s, SHELL.cream);
-    this.headline.setLineSpacing(-22 * s).setPosition(0, this.boardRect.y + h * 0.45);
-    this.beadRow = { x: -1.5 * 34 * s, y: this.boardRect.y + h * 0.82, gap: 34 * s, radius: 6 * s };
+    // Pack from the inner face so the two-line title cannot sit on the tempo beads.
+    const facePad = 32 * s;
+    resize(this.headline, 82 * s, SHELL.cream);
+    this.headline.setLineSpacing(-8 * s).setPosition(0, this.boardRect.y + facePad);
+    this.beadRow = {
+      x: -1.5 * 34 * s,
+      y: this.boardRect.bottom - facePad - 8 * s,
+      gap: 34 * s,
+      radius: 6 * s,
+    };
 
     // Utility pucks, top right, inside the safe frame and clear of the sign's swing.
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
@@ -139,9 +148,10 @@ export class MenuScene extends BaseScene {
     this.drawButton(0, s);
     resize(this.playLabel, 40 * s, SHELL.cream);
     this.tutorialRect.setTo(safe.centerX - 200 * s, this.buttonRect.y - this.controlSize - 24 * s, 400 * s, this.controlSize);
-    drawPanel(this.tutorialButton.clear(), this.tutorialRect, s, { fill: SHELL.puck, depth: 8 });
+    drawPanel(this.tutorialButton.clear(), this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
+    placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
-    resize(this.tutorialLabel, 32 * s, PALETTE.ink);
+    resize(this.tutorialLabel, 32 * s, SHELL.cream);
   }
 
   private drawPucks(s: number, press: number): void {

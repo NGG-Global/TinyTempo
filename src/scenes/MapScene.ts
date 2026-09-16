@@ -6,7 +6,7 @@ import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
-import { areaOf, levelSpec, starsFor, type Area } from '@/game/levels';
+import { areaOf, levelSpec, mapLastLevel, mapLevelState, starsFor, type Area } from '@/game/levels';
 import {
   canBeginAttempt, formatCountdown, healthHud, loadHealth, practiceLevel, reconcile, redeemFill,
   redeemHeart, viewHealth, type Health,
@@ -19,7 +19,7 @@ import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome'
 import { FxKey } from '@/ui/feedback';
 import { dashes, smoothPath, type Point } from '@/ui/path';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawHeart, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawHeart, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar } from '@/ui/star';
@@ -31,7 +31,7 @@ import { VIGNETTES } from '@/vignettes/registry';
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
 const MAP = {
-  step: 202, nodeRadius: 46, wobble: 0.27, topPad: 320, bottomPad: 660,
+  step: 202, nodeRadius: 46, wobble: 0.27, topPad: 420, bottomPad: 660,
   roadWidth: 58, tapSlop: 14, friction: 5,
   /** Spline samples per level span. Enough that the curve reads smooth at any width. */
   smoothing: 14,
@@ -80,6 +80,7 @@ export class MapScene extends BaseScene {
   private dock!: Phaser.GameObjects.Graphics;
   private dockSurface!: Phaser.GameObjects.TileSprite;
   private dockTitle!: Phaser.GameObjects.Text;
+  private gateLabel!: Phaser.GameObjects.Text;
   private restPlate!: Phaser.GameObjects.Graphics;
   private restSurface!: Phaser.GameObjects.TileSprite;
   private restTitle!: Phaser.GameObjects.Text;
@@ -167,7 +168,7 @@ export class MapScene extends BaseScene {
     this.restBusy = false;
     const data = this.sys.settings.data as { focus?: number } | undefined;
     this.focus = Math.max(1, Math.min(this.progress.unlocked, data?.focus ?? this.progress.unlocked));
-    const top = this.progress.unlocked + PROGRESSION.mapLookahead;
+    const top = mapLastLevel(this.progress.unlocked);
     this.first = Math.max(1, Math.min(this.focus - MAP.history, top - MAP.window + 1));
     this.shown = Math.min(top, this.first + MAP.window - 1) - this.first + 1;
     // Bands are addressed absolutely, because the window rarely starts on a band edge.
@@ -192,6 +193,7 @@ export class MapScene extends BaseScene {
     this.dock = this.add.graphics().setScrollFactor(0).setDepth(10);
     this.dockSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(10);
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
+    this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
     this.restPlate = this.add.graphics().setScrollFactor(0).setDepth(20);
     this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(20);
     this.restTitle = display(this, 'No hearts', { size: 44, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
@@ -254,6 +256,7 @@ export class MapScene extends BaseScene {
     this.drawScenery(g, s);
     this.drawPlaques(g, s);
     this.drawNodes(g, s);
+    this.drawGate(g, s);
     const size = Math.max(full.width, full.height) * 1.25;
     this.glow.setPosition(full.x + full.width * 0.38, full.y + full.height * 0.34).setDisplaySize(size, size)
       .setTint(mix(0xf6e6bc, areaOf(this.progress.unlocked).area.sky, 0.4));
@@ -575,13 +578,22 @@ export class MapScene extends BaseScene {
     }
   }
 
-  /** The three puck states share one geometry; only the frontier is left out of the bake. */
-  private puckOf(i: number): { r: number; depth: number; fill: number; number: number; size: number; state: 'frontier' | 'cleared' | 'locked' } {
+  /** The four puck states share one geometry; only the frontier is left out of the bake. */
+  private puckOf(i: number): { r: number; depth: number; fill: number; number: number; size: number; state: 'frontier' | 'cleared' | 'locked' | 'preview' } {
     const level = this.first + i;
     const { area } = areaOf(level);
     const s = this.uiScale;
-    if (level === this.progress.unlocked) return { r: MAP.nodeRadius * 1.1 * s, depth: 10, fill: PALETTE.coral, number: SHELL.cream, size: 34 * s, state: 'frontier' };
-    if (level < this.progress.unlocked) return { r: MAP.nodeRadius * s, depth: 8, fill: area.ink, number: area.paper, size: 30 * s, state: 'cleared' };
+    const state = mapLevelState(level, this.progress.unlocked);
+    if (state === 'frontier') return { r: MAP.nodeRadius * 1.1 * s, depth: 10, fill: PALETTE.coral, number: SHELL.cream, size: 34 * s, state };
+    if (state === 'cleared') return { r: MAP.nodeRadius * s, depth: 8, fill: area.ink, number: area.paper, size: 30 * s, state };
+    if (state === 'preview') {
+      return {
+        r: MAP.nodeRadius * 0.72 * s, depth: 3,
+        fill: mix(area.paper, area.ground, 0.62),
+        number: mix(area.ink, area.ground, 0.38),
+        size: 22 * s, state,
+      };
+    }
     return { r: MAP.nodeRadius * 0.84 * s, depth: 5, fill: mix(area.paper, area.ground, 0.42), number: mix(area.ink, area.ground, 0.12), size: 26 * s, state: 'locked' };
   }
 
@@ -589,7 +601,10 @@ export class MapScene extends BaseScene {
   private drawLevelPuck(g: Phaser.GameObjects.Graphics, i: number, lift: number): void {
     const node = this.nodes[i]!;
     const p = this.puckOf(i);
-    const t = p.state === 'locked' ? { ...STYLE.current, outline: STYLE.current.outline * 0.7 } : STYLE.current;
+    const outline = p.state === 'preview' ? STYLE.current.outline * 0.4
+      : p.state === 'locked' ? STYLE.current.outline * 0.7
+        : STYLE.current.outline;
+    const t = outline === STYLE.current.outline ? STYLE.current : { ...STYLE.current, outline };
     drawDisc(g, node.x, node.y - lift, p.r, this.uiScale, { fill: p.fill, depth: p.depth }, t);
   }
 
@@ -601,8 +616,8 @@ export class MapScene extends BaseScene {
       const { area } = areaOf(level);
       const node = this.nodes[i]!;
       const p = this.puckOf(i);
-      const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1);
-      resize(text, p.size, p.number, STYLE.current, p.state !== 'locked');
+      const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1).setAlpha(p.state === 'preview' ? 0.58 : 1);
+      resize(text, p.size, p.number, STYLE.current, p.state === 'cleared' || p.state === 'frontier');
       const plateY = node.y + p.r + (p.depth + 24) * s;
       if (p.state === 'frontier') {
         this.frontierIndex = i;
@@ -611,19 +626,38 @@ export class MapScene extends BaseScene {
       this.drawLevelPuck(g, i, 0);
       if (p.state === 'cleared') {
         this.drawStars(g, node.x, plateY, starsFor(this.progress.best[level] ?? 0, levelSpec(level)), area, s);
-      } else {
-        // A shackle and body say locked without needing a glyph the device font might lack.
-        const ly = plateY - 10 * s;
-        const outline = STYLE.current.outline * s * 0.55;
-        const f = faces(area.ink);
-        g.lineStyle(4 * s + outline * 2, shade(area.ink, -0.6), 1).beginPath().arc(node.x, ly - 1 * s, 9 * s, Math.PI, 0).strokePath();
-        g.lineStyle(4 * s, area.ink, 1).beginPath().arc(node.x, ly - 1 * s, 9 * s, Math.PI, 0).strokePath();
-        g.lineStyle(outline, shade(area.ink, -0.6), 1).strokeRoundedRect(node.x - 13 * s, ly, 26 * s, 19 * s, 5 * s);
-        g.fillStyle(f.shade).fillRoundedRect(node.x - 13 * s, ly, 26 * s, 19 * s, 5 * s);
-        g.fillStyle(f.face).fillRoundedRect(node.x - 13 * s, ly - 2 * s, 26 * s, 17 * s, 5 * s);
-        g.fillStyle(p.fill).fillCircle(node.x, ly + 7 * s, 3.2 * s);
+      } else if (p.state === 'locked') {
+        drawPadlock(g, node.x, plateY - 10 * s, 26 * s, area.ink, p.fill);
       }
     }
+  }
+
+  /**
+   * Destination at the end of the reachable stretch: a lock and a reason to come back,
+   * with greyed preview levels continuing above it so the road does not clip off.
+   */
+  private drawGate(g: Phaser.GameObjects.Graphics, s: number): void {
+    const lastReachable = this.progress.unlocked + PROGRESSION.mapLookahead;
+    const i = lastReachable - this.first;
+    let y: number | null = null;
+    if (i >= 0 && i < this.shown - 1) y = (this.nodes[i]!.y + this.nodes[i + 1]!.y) / 2;
+    else if (i === this.shown - 1) y = this.nodes[i]!.y - MAP.step * s / 2;
+    else if (i === -1 && this.shown > 0) y = this.nodes[0]!.y + MAP.step * s / 2;
+    if (y === null) {
+      this.gateLabel.setVisible(false);
+      return;
+    }
+    const { safe } = this.viewport;
+    const w = Math.min(460 * s, safe.width - 40 * s);
+    const h = 108 * s;
+    const roadX = this.roadXAt(y);
+    const x = Math.max(safe.left + 16 * s, Math.min(safe.right - 16 * s - w, roadX - w / 2));
+    drawPanel(g, new Phaser.Geom.Rectangle(x, y - h / 2, w, h), s, { fill: SHELL.wood, depth: 10, hero: true });
+    const lockX = x + 64 * s;
+    drawPadlock(g, lockX, y - 6 * s, 48 * s, SHELL.cream, shade(PALETTE.ink, -0.25));
+    this.gateLabel.setVisible(true).setText('Complete more\nto unlock');
+    resize(this.gateLabel, 28 * s, SHELL.cream);
+    this.gateLabel.setLineSpacing(-4 * s).setPosition(lockX + 44 * s, y);
   }
 
   /** Stars on their own small slab, so they never sit directly on the road surface. */
@@ -809,7 +843,7 @@ export class MapScene extends BaseScene {
     const g = this.restPlate.clear();
     drawPanel(g, this.restRect, s, { fill: SHELL.puck, depth: 12, hero: true, radius: 28 });
     placeSurface(this.restSurface, this.restRect, s);
-    resize(this.restTitle, 40 * s, PALETTE.ink);
+    resize(this.restTitle, 40 * s, PALETTE.ink, STYLE.current, false);
     this.restTitle.setPosition(this.restRect.centerX, this.restRect.y + 44 * s);
     this.restWait.setText(wait === null ? 'Hearts are full.' : `Next heart ${wait}`);
     resize(this.restWait, 26 * s, PALETTE.ink, STYLE.current, false);
@@ -1016,7 +1050,7 @@ export class MapScene extends BaseScene {
       const q = still ? 0 : squash(feedbackAge, 0.36, 0.16 * ex);
       this.numbers[this.lockedIndex]!.setScale(1 + q, 1 - q * 0.6);
       const ring = spring(feedbackAge / 0.36, 5, 1.6);
-      g.lineStyle(STYLE.current.outline * s * 0.55, PALETTE.coral, (1 - feedbackAge / 0.36) * 0.7).strokeCircle(locked.x, locked.y, MAP.nodeRadius * 0.84 * s + 5 * s + ring * 10 * s);
+      g.lineStyle(STYLE.current.outline * s * 0.55, PALETTE.coral, (1 - feedbackAge / 0.36) * 0.7).strokeCircle(locked.x, locked.y, this.puckOf(this.lockedIndex).r + 5 * s + ring * 10 * s);
     } else if (locked) { this.numbers[this.lockedIndex]!.setScale(1); this.lockedIndex = -1; }
     // The tap acknowledgement.
     this.touch.clear();

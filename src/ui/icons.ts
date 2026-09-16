@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { shade } from './colour';
+import { faces } from './light';
 
 /**
  * Controls drawn as geometry. `♪ × ← ↻` were set as text, and `gear.ts` already records
@@ -55,6 +56,33 @@ export function drawHeart(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   }
   g.fillStyle(colour, alpha).fillPoints(points, true);
   g.lineStyle(Math.max(1.6, r * 0.18), shade(colour, -0.55), alpha).strokePoints(points, true);
+}
+
+/**
+ * A shackle and body. Geometry rather than a glyph, because enough Android fonts lack
+ * a padlock and would show a tofu box. `y` is the top of the body.
+ */
+export function drawPadlock(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  body: number,
+  colour: number,
+  keyhole = colour,
+): void {
+  const f = faces(colour);
+  const outline = Math.max(1.6, body * 0.12);
+  const w = body;
+  const h = body * 0.73;
+  const shackleR = body * 0.35;
+  const shackleY = y + body * 0.04;
+  const bar = Math.max(2.4, body * 0.16);
+  g.lineStyle(bar + outline * 2, shade(colour, -0.6), 1).beginPath().arc(x, shackleY, shackleR, Math.PI, 0).strokePath();
+  g.lineStyle(bar, colour, 1).beginPath().arc(x, shackleY, shackleR, Math.PI, 0).strokePath();
+  g.lineStyle(outline, shade(colour, -0.6), 1).strokeRoundedRect(x - w / 2, y, w, h, body * 0.19);
+  g.fillStyle(f.shade).fillRoundedRect(x - w / 2, y, w, h, body * 0.19);
+  g.fillStyle(f.face).fillRoundedRect(x - w / 2, y - body * 0.08, w, h * 0.9, body * 0.19);
+  g.fillStyle(keyhole).fillCircle(x, y + h * 0.42, body * 0.12);
 }
 
 export function drawMap(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {

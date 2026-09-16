@@ -35,10 +35,13 @@ export function drawPanel(g: Phaser.GameObjects.Graphics, r: Phaser.Geom.Rectang
 
   g.fillStyle(0x1a1410, shadow.alpha);
   g.fillRoundedRect(r.x + shadow.dx * s, r.y + shadow.dy * s + depth, r.width, r.height, radius);
-  // Side wall, then its bottom edge line.
+  // Side wall, then a contact strip along the bottom. The strip is a flat inset rather
+  // than a full-width small-radius rounded rect: that older pair, plus a stroke around
+  // the thickness, drew dark ticks out of the two bottom corners.
   g.fillStyle(f.shade, 1).fillRoundedRect(r.x, r.y + depth, r.width, r.height, radius);
-  g.fillStyle(f.edge, 1).fillRoundedRect(r.x, r.y + depth + r.height - Math.max(2, 3 * s), r.width, Math.max(2, 3 * s), Math.max(1, 1.5 * s));
-  if (t.outline > 0) g.lineStyle(t.outline * s * 0.55, f.edge, 1).strokeRoundedRect(r.x, r.y + depth, r.width, r.height, radius);
+  const edgeH = Math.max(2, 3 * s);
+  const edgeInset = Math.max(radius * 0.55, 8 * s);
+  g.fillStyle(f.edge, 1).fillRect(r.x + edgeInset, r.y + depth + r.height - edgeH, Math.max(0, r.width - edgeInset * 2), edgeH);
   // Face.
   g.fillStyle(f.face, 1).fillRoundedRect(r.x, r.y + sink, r.width, r.height, radius);
   // Rim light along the top of the face, where the shared light catches the edge.
