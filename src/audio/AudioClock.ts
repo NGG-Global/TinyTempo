@@ -3,7 +3,7 @@ import { RHYTHM } from '../config/rhythm';
 export function normalizeTimestamp(timestamp: number, nowMs: number, originMs: number): number {
   const normalized = timestamp > originMs ? timestamp - originMs : timestamp;
   return Number.isFinite(normalized) && normalized > 0 && normalized <= nowMs + 1
-    && nowMs - normalized < 1000 ? normalized : nowMs;
+    && nowMs - normalized < RHYTHM.inputStampMaxAgeMs ? normalized : nowMs;
 }
 
 export function mapTimestamp(eventMs: number, performanceMs: number, audioSec: number): number {

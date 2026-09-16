@@ -9,6 +9,8 @@ it('normalizes modern/legacy timestamps and falls back for invalid ones', () => 
   expect(normalizeTimestamp(NaN, 1000, origin)).toBe(1000);
   expect(normalizeTimestamp(0, 1000, origin)).toBe(1000);
   expect(normalizeTimestamp(2000, 1000, origin)).toBe(1000);
+  // A Bluetooth-sized offset is a different clock, not a late handler.
+  expect(normalizeTimestamp(700, 1000, origin)).toBe(1000);
 });
 it('maps original input to the audio output domain without adding handler delay', () => {
   expect(mapTimestamp(950, 1000, 2)).toBeCloseTo(1.95);
@@ -81,6 +83,23 @@ describe('Bluetooth output stamps', () => {
       expect(expireTargets(judge, clock.now())).toEqual([]);
       const hit = judgeTap(judge, clock.input(1000));
       expect(hit.grade).toBe('Perfect');
+    } finally { vi.restoreAllMocks(); }
+  });
+
+  it('still scores a tap whose DOM stamp sits on the Bluetooth audio clock', () => {
+    try {
+      const target = 5;
+      const delayMs = 300;
+      const currentTime = target + delayMs / 1000;
+      const clock = clockAt(currentTime, 1000, {
+        contextTime: target, performanceTime: 1000,
+      });
+      // Demo/visuals use now() (performance.now), so they stay in sync. The pointer
+      // event is stamped 300 ms ago on the device clock — inside the old 1000 ms
+      // window, that mapped 300 ms early and missed.
+      const hit = judgeTap(createJudge([target]), clock.input(1000 - delayMs));
+      expect(hit.grade).toBe('Perfect');
+      expect(hit.deltaMs).toBeCloseTo(0, 5);
     } finally { vi.restoreAllMocks(); }
   });
 });

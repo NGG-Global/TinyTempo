@@ -16,6 +16,15 @@ export const RHYTHM = {
    * by the delay — which expired the player's targets before they heard them.
    */
   clockStampMaxAgeMs: 1000,
+  /**
+   * How old a tap's DOM timestamp may be before `input()` treats it as a different
+   * clock rather than a late handler. Original timestamps exist to remove a frame of
+   * dispatch delay — tens of milliseconds. Chrome on Bluetooth often stamps pointer
+   * events on the audio device clock, 150–400 ms behind `performance.now()`. The old
+   * 1000 ms window kept those, so `now()` (synced, using `performance.now()`) looked
+   * fine while `input()` placed every tap a Bluetooth buffer early and missed.
+   */
+  inputStampMaxAgeMs: 80,
   goodPoints: 70,
   extraPenalty: 25,
 } as const;

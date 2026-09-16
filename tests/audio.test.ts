@@ -87,6 +87,96 @@ it('gives up on an unlock whose resume() never settles instead of waiting foreve
   } finally { vi.useRealTimers(); }
 });
 
+it('keeps the audible clock when sinkchange fires without a fresh stamp', () => {
+  const listeners = new Map<string, () => void>();
+  let currentTime = 10.3;
+  let stamp: { contextTime: number; performanceTime: number } | null = {
+    contextTime: 10, performanceTime: 1000,
+  };
+  vi.stubGlobal('AudioContext', class {
+    get currentTime() { return currentTime; }
+    state = 'running';
+    destination = {};
+    close = vi.fn(() => Promise.resolve());
+    getOutputTimestamp() { return stamp ?? { contextTime: 0, performanceTime: 0 }; }
+    addEventListener(name: string, fn: () => void) { listeners.set(name, fn); }
+    removeEventListener(name: string) { listeners.delete(name); }
+    createGain() {
+      return { gain: { value: 1, setValueAtTime() {} }, connect() { return this; }, disconnect() {} };
+    }
+  });
+  try {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const engine = new AudioEngine();
+    engine.clock.refresh();
+    expect(engine.clock.mode).toBe('output');
+    expect(engine.clock.now()).toBeCloseTo(10);
+    stamp = null;
+    currentTime = 10.5;
+    vi.spyOn(performance, 'now').mockReturnValue(1200);
+    listeners.get('sinkchange')!();
+    expect(engine.clock.mode).toBe('output');
+    expect(engine.clock.now()).toBeCloseTo(10.2, 5);
+    engine.dispose();
+  } finally { vi.restoreAllMocks(); }
+});
+
+it('resumes a suspended context without resetting the audible clock', () => {
+  const resume = vi.fn(() => Promise.resolve());
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 10;
+    state = 'suspended';
+    destination = {};
+    close = vi.fn(() => Promise.resolve());
+    resume = resume;
+    getOutputTimestamp() { return { contextTime: 9.7, performanceTime: 1000 }; }
+    createGain() {
+      return { gain: { value: 1 }, connect() { return this; }, disconnect() {} };
+    }
+  });
+  try {
+    vi.spyOn(performance, 'now').mockReturnValue(1000);
+    const engine = new AudioEngine();
+    engine.clock.refresh();
+    expect(engine.clock.mode).toBe('output');
+    engine.recover();
+    expect(resume).toHaveBeenCalledTimes(1);
+    expect(engine.clock.mode).toBe('output');
+    expect(engine.clock.now()).toBeCloseTo(9.7);
+    engine.dispose();
+  } finally { vi.restoreAllMocks(); }
+});
+
+it('drops a voice that cannot start instead of throwing out of the tap path', () => {
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 10;
+    state = 'running';
+    destination = {};
+    close = vi.fn(() => Promise.resolve());
+    createGain() {
+      return {
+        gain: { value: 1, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} },
+        connect() { return this; },
+        disconnect: vi.fn(),
+      };
+    }
+    createOscillator() {
+      return {
+        frequency: { value: 0 },
+        connect: vi.fn((target: object) => target),
+        start: () => { throw new Error('The start time is earlier than currentTime.'); },
+        stop: vi.fn(),
+        disconnect: vi.fn(),
+        onended: null as (() => void) | null,
+      };
+    }
+  });
+  const engine = new AudioEngine();
+  expect(() => engine.play(10, 'count')).not.toThrow();
+  expect(engine.activeSources).toBe(0);
+  engine.dispose();
+});
+
 it('reacts to a grade with its own voice and stays silent for a set that declares none', () => {
   const nodes: { start: ReturnType<typeof vi.fn>; onended: (() => void) | null }[] = [];
   vi.stubGlobal('AudioContext', class {

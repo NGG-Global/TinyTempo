@@ -529,7 +529,13 @@ export class PlayScene extends BaseScene {
   }
   private tick(): void {
     if (!this.audio || this.blocked()) return;
-    if (this.audio.context.state !== 'running') { this.interrupt(); return; }
+    if (this.audio.context.state !== 'running') {
+      // A Bluetooth rebuffer can suspend the context for a frame when the player first
+      // sounds. Interrupting here ended the response while the demonstration — whose
+      // voices were already scheduled — had played in time.
+      this.audio.recover();
+      return;
+    }
     this.audio.clock.refresh();
     const transition = this.transition;
     if (transition && this.now() >= transition.swap && !transition.swapped) {
@@ -1111,7 +1117,7 @@ export class PlayScene extends BaseScene {
   private readonly pageHide = (): void => {
     if (!this.commerceBusy) this.interrupt();
   };
-  private readonly audioState = (): void => { if (this.audio?.context.state !== 'running') this.interrupt(); };
+  private readonly audioState = (): void => { this.audio?.recover(); };
   private checkOrientation(): void { if (this.blocked()) this.interrupt(); }
   private shutdown(): void {
     if (this.disposed) return;

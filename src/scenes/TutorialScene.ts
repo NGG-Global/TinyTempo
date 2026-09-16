@@ -366,7 +366,7 @@ export class TutorialScene extends BaseScene {
     this.taps.reset();
   };
   private readonly visibility = (): void => { if (document.hidden) this.interrupt(); };
-  private readonly audioState = (): void => { if (this.started && this.audio.context.state !== 'running') this.interrupt(); };
+  private readonly audioState = (): void => { if (this.started) this.audio.recover(); };
 
   private shutdown(): void {
     if (this.disposed) return;
