@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type Phaser from 'phaser';
+import type { Viewport } from '../src/core/Viewport';
 import { synthesizeHousehold } from '../src/audio/householdSounds';
 import { BUBBLE_CHAIN, doorOpening, eggReveal, HOUSEHOLD_REVEAL_SEC, roomReveal } from '../src/vignettes/householdMotion';
 import { HouseholdVignette } from '../src/vignettes/HouseholdVignette';
@@ -20,7 +21,14 @@ class Probe extends HouseholdVignette {
   public get state() { return { hits: this.hitTimes.length, demos: this.demoTimes.length, taps: this.taps, strike: this.strikeAt, successful: this.successful }; }
 }
 function probe() {
-  const container = { setDepth() { return this; }, add() {}, destroy: vi.fn() };
+  const container = {
+    x: 0, y: 0, scale: 1,
+    setDepth() { return this; },
+    setPosition(x: number, y: number) { this.x = x; this.y = y; return this; },
+    setScale(scale: number) { this.scale = scale; return this; },
+    add() {},
+    destroy: vi.fn(),
+  };
   const scene = { add: { container: () => container, graphics: () => ({}) } } as unknown as Phaser.Scene;
   const vignette = new Probe(scene, 0, 0);
   const plan = createRoundPlan(1, parsePattern('test', 'X X - X'), 120, 10);
@@ -29,6 +37,28 @@ function probe() {
 }
 
 describe('household act lifecycle', () => {
+  it('returns the stage to its laid-out home every frame, so the table slide cannot accumulate', () => {
+    const { vignette, container } = probe();
+    const viewport = { safe: { width: 720, height: 1280, top: 0, bottom: 1280, centerX: 360 } } as unknown as Viewport;
+    vignette.layout(viewport);
+    const home = { x: container.x, y: container.y };
+    expect(home.x).toBe(360);
+    // PlayScene calls translate right after update, with an absolute offset from the
+    // home rather than a step, for every frame of the between-task slide.
+    for (const offset of [-6, -180, -720, 720, 240, 30]) {
+      vignette.update(11);
+      vignette.translate(offset);
+      expect(container.x).toBe(home.x + offset);
+      expect(container.y).toBe(home.y);
+    }
+    vignette.update(12);
+    expect(container).toMatchObject(home);
+    // A second layout, as a resize mid-slide gives, re-homes rather than compounding.
+    vignette.translate(-400);
+    vignette.layout(viewport);
+    vignette.update(13);
+    expect(container).toMatchObject(home);
+  });
   it('deduplicates demonstration callbacks without consuming player progress', () => {
     const { vignette, plan } = probe();
     vignette.onDemonstrationBeat(10);
