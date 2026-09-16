@@ -1,13 +1,18 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { levelSpec, starsFor } from '../src/game/levels';
 import type { Progress } from '../src/game/progress';
 import {
-  HEALTH, abandonAttempt, attemptCostsHeart, beginAttempt, canBeginAttempt, claimFill, claimHeart,
-  clearHealth, createAttemptId, fillHearts, finishAttempt, formatCountdown, grantHeart, healthHud, isMastered,
-  isProtectedLevel, loadHealth, practiceLevel, reconcile, saveHealth, viewHealth, type Health,
+  HEALTH, HEALTH_COPY, abandonAttempt, attemptCostsHeart, beginAttempt, calendarDay, canBeginAttempt,
+  canClaimDailyHeart, claimDailyHeart, claimFill, claimHeart, clearHealth, createAttemptId, fillHearts,
+  finishAttempt, formatCountdown, grantHeart, healthHud, isCleared, isMastered, isProtectedLevel,
+  loadHealth, reconcile, redeemDailyHeart, saveHealth, viewHealth, type Health,
 } from '../src/game/health';
 
 vi.mock('phaser', () => ({ default: {} }));
+
+beforeEach(() => {
+  clearHealth(memoryStorage());
+});
 
 const T0 = 1_700_000_000_000;
 const EMPTY: Progress = { unlocked: 1, best: {} };
@@ -120,7 +125,7 @@ describe('spending and refunding', () => {
   });
 });
 
-describe('protected levels and mastered replay', () => {
+describe('protected levels and cleared replay', () => {
   it('treats levels 1–5 as free even with no stars', () => {
     for (let level = 1; level <= 5; level++) {
       expect(isProtectedLevel(level)).toBe(true);
@@ -134,24 +139,31 @@ describe('protected levels and mastered replay', () => {
     expect(attemptCostsHeart(ROAD, 6)).toBe(true);
   });
 
-  it('lets a previously 3-starred level replay for free', () => {
+  it('lets any previously cleared level replay for free, not only a 3-star', () => {
     const mastered: Progress = { unlocked: 10, best: { 6: threeStar(6) } };
     expect(starsFor(threeStar(6), levelSpec(6))).toBe(3);
     expect(isMastered(mastered, 6)).toBe(true);
+    expect(isCleared(mastered, 6)).toBe(true);
     expect(attemptCostsHeart(mastered, 6)).toBe(false);
     const begun = beginAttempt(full({ hearts: 0 }), mastered, 6, 'replay', T0);
     expect(begun.ok).toBe(true);
     expect(begun.spent).toBe(false);
     expect(begun.health.hearts).toBe(0);
-    expect(practiceLevel(mastered)).toBe(6);
-  });
 
-  it('still charges a 1- or 2-star replay', () => {
     const cleared: Progress = { unlocked: 10, best: { 6: twoStar(6) } };
     expect(starsFor(twoStar(6), levelSpec(6))).toBe(2);
     expect(isMastered(cleared, 6)).toBe(false);
-    expect(attemptCostsHeart(cleared, 6)).toBe(true);
-    expect(beginAttempt(full({ hearts: 1 }), cleared, 6, 'a', T0).health.hearts).toBe(0);
+    expect(isCleared(cleared, 6)).toBe(true);
+    expect(attemptCostsHeart(cleared, 6)).toBe(false);
+    expect(beginAttempt(full({ hearts: 0 }), cleared, 6, 'one-star-road', T0).ok).toBe(true);
+    expect(beginAttempt(full({ hearts: 1 }), cleared, 6, 'a', T0).health.hearts).toBe(1);
+  });
+
+  it('still charges an uncleared frontier level', () => {
+    const midRoad: Progress = { unlocked: 10, best: { 6: twoStar(6), 7: twoStar(7) } };
+    expect(attemptCostsHeart(midRoad, 10)).toBe(true);
+    expect(canBeginAttempt(full({ hearts: 0, refillStartedAt: T0 }), midRoad, 10, T0)).toBe(false);
+    expect(canBeginAttempt(full({ hearts: 0, refillStartedAt: T0 }), midRoad, 7, T0)).toBe(true);
   });
 
   it('does not refund a free 3-star run', () => {
@@ -293,16 +305,18 @@ describe('abandoned attempts', () => {
 });
 
 describe('zero-health gating', () => {
-  it('blocks a normal unmastered level at zero hearts and allows protected or mastered ones', () => {
+  it('blocks an uncleared level at zero hearts and allows protected or cleared ones', () => {
     const empty = full({ hearts: 0, refillStartedAt: T0 });
     expect(canBeginAttempt(empty, ROAD, 6, T0)).toBe(false);
     expect(beginAttempt(empty, ROAD, 6, 'a', T0).ok).toBe(false);
     expect(canBeginAttempt(empty, ROAD, 1, T0)).toBe(true);
+    const cleared: Progress = { unlocked: 12, best: { 8: twoStar(8) } };
+    expect(isCleared(cleared, 8)).toBe(true);
+    expect(isMastered(cleared, 8)).toBe(false);
+    expect(canBeginAttempt(empty, cleared, 8, T0)).toBe(true);
     const mastered: Progress = { unlocked: 12, best: { 8: 100 } };
     expect(isMastered(mastered, 8)).toBe(true);
     expect(canBeginAttempt(empty, mastered, 8, T0)).toBe(true);
-    expect(practiceLevel(mastered)).toBe(8);
-    expect(practiceLevel(EMPTY)).toBeNull();
   });
 
   it('does not gate or consume hearts for Premium', () => {
@@ -412,5 +426,71 @@ describe('full heart refill', () => {
     const again = claimFill(empty, 'persist-txn', T0, storage);
     expect(again.granted).toBe(false);
     expect(again.health.hearts).toBe(0);
+  });
+});
+
+describe('daily free heart', () => {
+  it('grants one heart only while the bar is empty', () => {
+    const storage = memoryStorage();
+    const empty = full({ hearts: 0, refillStartedAt: T0 });
+    expect(canClaimDailyHeart(empty, T0, storage)).toBe(true);
+    const claimed = claimDailyHeart(empty, T0, storage);
+    expect(claimed.granted).toBe(true);
+    expect(claimed.health.hearts).toBe(1);
+    expect(canClaimDailyHeart(claimed.health, T0, storage)).toBe(false);
+    expect(claimDailyHeart(full({ hearts: 2, refillStartedAt: T0 }), T0, memoryStorage()).granted).toBe(false);
+  });
+
+  it('does not grant a second heart the same local day, including after reload', () => {
+    const storage = memoryStorage();
+    const empty = full({ hearts: 0, refillStartedAt: T0 });
+    expect(claimDailyHeart(empty, T0, storage).granted).toBe(true);
+    expect(claimDailyHeart(empty, T0 + 3_600_000, storage).granted).toBe(false);
+    const spent = full({ hearts: 0, refillStartedAt: T0 });
+    expect(claimDailyHeart(spent, T0 + 60_000, storage).granted).toBe(false);
+  });
+
+  it('opens again after local midnight', () => {
+    const storage = memoryStorage();
+    const empty = full({ hearts: 0, refillStartedAt: T0 });
+    expect(claimDailyHeart(empty, T0, storage).granted).toBe(true);
+    const next = new Date(T0);
+    next.setHours(24, 0, 0, 0);
+    const tomorrow = next.getTime();
+    expect(calendarDay(tomorrow)).not.toBe(calendarDay(T0));
+    // Regen would have filled a real bar overnight; the daily gift is for a still-empty one.
+    const stillEmpty = full({ hearts: 0, refillStartedAt: tomorrow });
+    expect(canClaimDailyHeart(stillEmpty, tomorrow, storage)).toBe(true);
+    const again = claimDailyHeart(stillEmpty, tomorrow, storage);
+    expect(again.granted).toBe(true);
+    expect(again.health.hearts).toBe(1);
+  });
+
+  it('clears the daily claim with the rest of health', () => {
+    const storage = memoryStorage();
+    expect(claimDailyHeart(full({ hearts: 0, refillStartedAt: T0 }), T0, storage).granted).toBe(true);
+    expect(clearHealth(storage)).toBe(true);
+    expect(canClaimDailyHeart(full({ hearts: 0, refillStartedAt: T0 }), T0, storage)).toBe(true);
+  });
+
+  it('persists through redeemDailyHeart so a scene can grant without threading storage', () => {
+    const isolated = memoryStorage();
+    const previous = globalThis.localStorage;
+    Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: isolated });
+    try {
+      clearHealth(isolated);
+      saveHealth(full({ hearts: 0, refillStartedAt: T0 }), isolated);
+      const result = redeemDailyHeart(T0);
+      expect(result.granted).toBe(true);
+      expect(loadHealth(isolated, T0).hearts).toBe(1);
+      expect(redeemDailyHeart(T0).granted).toBe(false);
+    } finally {
+      Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: previous });
+    }
+  });
+
+  it('keeps the rest-sheet copy that tells the player replays stay open', () => {
+    expect(HEALTH_COPY.restNote).toMatch(/finished levels/i);
+    expect(HEALTH_COPY.playNote).toMatch(/map/i);
   });
 });
