@@ -654,7 +654,7 @@ export class MapScene extends BaseScene {
     const x = Math.max(safe.left + 16 * s, Math.min(safe.right - 16 * s - w, roadX - w / 2));
     drawPanel(g, new Phaser.Geom.Rectangle(x, y - h / 2, w, h), s, { fill: SHELL.wood, depth: 10, hero: true });
     const lockX = x + 64 * s;
-    drawPadlock(g, lockX, y - 8 * s, 44 * s, PALETTE.ink, SHELL.cream);
+    drawPadlock(g, lockX, y - 6 * s, 48 * s, SHELL.cream, shade(PALETTE.ink, -0.25));
     this.gateLabel.setVisible(true).setText('Complete more\nto unlock');
     resize(this.gateLabel, 28 * s, SHELL.cream);
     this.gateLabel.setLineSpacing(-4 * s).setPosition(lockX + 44 * s, y);
