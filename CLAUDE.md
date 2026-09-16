@@ -11,7 +11,7 @@ curve. `src/game/progress.ts` owns saved progress and `src/game/settings.ts`
 owns player settings; both validate every field on read, because storage can be
 blocked, stale or tampered with.
 
-Thirteen vignettes rotate strictly by registry order: `levelSpec` picks
+Seventeen vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -23,7 +23,7 @@ rotation has come round before a level, PlayScene passes it to `create(scene, la
 and the act indexes its own list with it: bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), and scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`).
-Lap 0 is always the original look, so the first thirteen levels are unchanged. Add
+Lap 0 is always the original look, so the first seventeen levels are unchanged. Add
 variety this way, as a new look inside an existing act, rather than as a registry
 entry. See `docs/VARIANTS.md`.
 
@@ -39,6 +39,17 @@ the lifecycle in `HouseholdVignette.ts`, with independent drawings and material
 voices in `audio/householdSounds.ts`. Their five-beat finale holds preserve the
 downbeat and allow the egg drop, pop cascade, room reveal and door swing to
 complete. See `docs/HOUSEHOLD_ACTS.md`.
+
+Paint roller, Hotel bell, Balloon pump and Stapler are acts 14–17, on the same
+lifecycle: one Graphics each, curves in `errandMotion.ts`, voices in
+`audio/errandSounds.ts`, and the same five-beat hold. The roller's picture is a
+coarse grid so a stripe of any width is whole columns; the balloon grows only on
+judged hits and bursts on a rough coda. See `docs/ERRAND_ACTS.md`.
+
+`HouseholdVignette.update` re-anchors the stage to its laid-out home every frame,
+as every other act does in its own `update`. `Vignette.translate` is the
+between-task slide and is an absolute offset from that home, applied by PlayScene
+right after `update`; an act that skips the re-anchor walks off screen.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.

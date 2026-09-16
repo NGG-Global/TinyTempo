@@ -18,6 +18,21 @@ follow-through is 190 ms against a 250 ms half beat; held in seconds it would ha
 
 ## Visual direction and controls
 
+### The second pass
+
+A later pass gave the saw a hand. A canvas work glove in the cool range grips a
+closed D-handle, and a rolled shirt sleeve runs along the blade's line out of the
+frame, so the stroke reads as someone sawing rather than a tool sliding by itself.
+The blade tapers more, carries a faint maker's etch, and its teeth are set, leaning
+alternately as a crosscut's do. The saw rocks about the bite as it strokes
+(`sawRock`, at most 0.04 rad): the heel dips into the push and the toe lifts on the
+pull, pivoting on the teeth in the kerf rather than on the container's origin. A
+pencilled line marks the cut below the kerf and a torn fibre or two sit at its
+mouth; a heap of sawdust grows on the floor under the cut with the kerf
+(`dustPile`), so the demonstration leaves the floor clean; the trestles gained a
+diagonal brace and a sacrificial timber cap; and the dropped offcut throws one puff
+of dust when it lands. None of it touches the stroke's timing, which the tests pin.
+
 Deliberately cool, so it cannot read as Hammer's warm workshop: cold linen `#e6e9e4`,
 deep slate `#22303a` for sawhorses, outlines and handle, pale sapwood `#cbb999` with a
 lit top edge `#e4d8c0` and `#a89070` grain, kerf interior `#544a39`, blade `#aab6bd`,

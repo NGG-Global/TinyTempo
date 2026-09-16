@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  advanceBite, acceptDemoBeat, bladeVisibleDepth, drawBack, dustFall,
-  kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawTiming, strokeTravel,
+  advanceBite, acceptDemoBeat, bladeVisibleDepth, drawBack, dustFall, dustPile,
+  kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from '../src/vignettes/sawMotion';
 import { synthesizeSaw } from '../src/audio/sawSounds';
 import { levelSpec } from '../src/game/levels';
@@ -83,6 +83,19 @@ describe('saw presentation curves', () => {
     expect(acceptDemoBeat(first!, 3.5)).toBeNull();
     expect(acceptDemoBeat(first!, 4.5)).toBe(4.5);
   });
+  it('rocks about the bite with the stroke and heaps dust only as the kerf deepens', () => {
+    expect(sawRock(0)).toBe(0);
+    expect(Math.abs(sawRock(SAW_MOTION.travel))).toBeCloseTo(SAW_MOTION.rockRad);
+    expect(sawRock(SAW_MOTION.travel)).toBeCloseTo(-sawRock(-SAW_MOTION.travel));
+    // Overshoot never rocks further than a full stroke.
+    expect(Math.abs(sawRock(SAW_MOTION.travel * 5))).toBeCloseTo(SAW_MOTION.rockRad);
+    expect(SAW_MOTION.rockRad).toBeLessThan(0.1);
+    expect(dustPile(0)).toEqual({ width: 0, height: 0 });
+    expect(dustPile(-1)).toEqual({ width: 0, height: 0 });
+    expect(dustPile(1)).toEqual({ width: SAW_MOTION.pileWidth, height: SAW_MOTION.pileHeight });
+    expect(dustPile(2)).toEqual(dustPile(1));
+    expect(dustPile(0.5).width).toBeGreaterThan(dustPile(0.25).width);
+  });
   it('keeps the dust plume bounded and grounded', () => {
     expect(dustFall(-1)).toBe(0);
     expect(dustFall(0)).toBe(0);
@@ -95,7 +108,7 @@ describe('saw presentation curves', () => {
     // cucumber, banana and paper were each appended so the earlier levels kept theirs.
     expect(VIGNETTES.map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
-      'egg', 'bubble', 'light', 'doorbell',
+      'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler',
     ]);
     expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 1 + VIGNETTES.length, 9 + VIGNETTES.length].map(level => levelSpec(level).vignette))
       .toEqual(['hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper', 'hammer', 'paper']);
