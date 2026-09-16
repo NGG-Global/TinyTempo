@@ -4,6 +4,7 @@ import { PROGRESSION } from '../src/config/progression';
 import { RHYTHM } from '../src/config/rhythm';
 import { RoundController, type RoundEvents } from '../src/game/RoundController';
 import { TaskSequence } from '../src/game/TaskSequence';
+import { VIGNETTES } from '../src/vignettes/registry';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -16,6 +17,7 @@ describe('level progression', () => {
     expect(first.clearAccuracy).toBe(40);
     expect(first.starAccuracy).toEqual([40, 60, 80]);
     expect(first.vignette).toBe('hammer');
+    expect(first.lap).toBe(0);
     expect(first.areaName).toBe('Grass');
   });
   it('raises length, tempo ceiling, density and clear bar together and never lowers them', () => {
@@ -27,6 +29,9 @@ describe('level progression', () => {
       expect(spec.clearAccuracy).toBeGreaterThanOrEqual(previous.clearAccuracy);
       expect(Math.max(...spec.tasks.map(t => t.tier))).toBeGreaterThanOrEqual(Math.max(...previous.tasks.map(t => t.tier)));
       expect(spec.vignette).not.toBe(previous.vignette);
+      // The lap counts completed rotations, so it steps up exactly when the first act returns.
+      expect(spec.lap).toBe(spec.vignette === previous.vignette ? previous.lap : spec.vignette === 'hammer' ? previous.lap + 1 : previous.lap);
+      expect(spec.lap).toBe(Math.floor((level - 1) / VIGNETTES.length));
       previous = spec;
     }
     expect(previous.tasks).toHaveLength(PROGRESSION.tasksMax);

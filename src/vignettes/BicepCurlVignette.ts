@@ -30,6 +30,7 @@ import {
   pumpLevel,
   REFERENCE_BEAT,
 } from './curlMotion';
+import { curlLook, type CurlLook } from './curlLooks';
 import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
 
 /**
@@ -43,9 +44,6 @@ export const GYM = {
   lamp: 0xfff1d6,
   mat: 0x4c4954,
   matSeam: 0x5d5966,
-  skin: 0xd8945f,
-  flush: 0xd9634a,
-  tank: 0x2e9c8e,
   iron: 0x3b3e47,
   chrome: 0xbcc3ca,
   board: 0x34493f,
@@ -75,6 +73,8 @@ const TALLY_GROUPS_PER_ROW = 2;
 
 /** Owns an illustration and its motion. Judgement arrives already decided; it is never computed here. */
 export class BicepCurlVignette implements Vignette {
+  /** Who is lifting. Chosen once from the rotation lap; the gym around them is shared. */
+  private readonly look: CurlLook;
   private readonly backdrop: Backdrop;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly room: Phaser.GameObjects.Graphics;
@@ -120,7 +120,8 @@ export class BicepCurlVignette implements Vignette {
     return reducedMotion();
   }
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.look = curlLook(lap);
     // The pool of light sits over the working arm, which is what the eye is meant to follow.
     this.backdrop = new Backdrop(scene, GYM.paper, GYM.lamp, { glowAt: { x: 0.56, y: 0.4 }, glowAlpha: 0.7 });
     this.stage = scene.add.container(0, 0).setDepth(-10);
@@ -151,7 +152,7 @@ export class BicepCurlVignette implements Vignette {
   /** Continuous contours keep knees, calves and clothing free of overlap seams. */
   private drawLegs(g: Phaser.GameObjects.Graphics): void {
     const line = STYLE.current.outline;
-    const skin = faces(GYM.skin);
+    const skin = faces(this.look.skin);
     const shape = (x: number, y: number, curves: Parameters<typeof cubicContour>[2], colour: number): void =>
       paintedContour(g, cubicContour(x, y, curves), colour, GYM.ink, line);
     g.fillStyle(GYM.ink, 0.16).fillEllipse(36, 9, 280, 24);
@@ -185,7 +186,7 @@ export class BicepCurlVignette implements Vignette {
       [86, -46],
     ]) {
       g.fillStyle(GYM.chalk).fillRoundedRect(x! - 20, y! - 24, 39, 47, 9);
-      g.lineStyle(5, GYM.tank).lineBetween(x! - 18, y! - 12, x! + 17, y! - 12);
+      g.lineStyle(5, this.look.kit).lineBetween(x! - 18, y! - 12, x! + 17, y! - 12);
       g.lineStyle(2, GYM.ink, 0.15).lineBetween(x! - 8, y! - 4, x! - 8, y! + 15);
     }
     this.drawShoe(g, -85, 0, 0.9, false, line);
@@ -204,7 +205,7 @@ export class BicepCurlVignette implements Vignette {
       ],
       GYM.ink,
     );
-    g.lineStyle(6, GYM.tank).lineBetween(77, -278, 79, -226);
+    g.lineStyle(6, this.look.kit).lineBetween(77, -278, 79, -226);
     g.lineStyle(3, GYM.chalk, 0.25).lineBetween(-37, -232, -12, -227).lineBetween(43, -227, 72, -222);
     g.lineStyle(3, GYM.chalk, 0.75).lineBetween(14, -290, 9, -270).lineBetween(15, -290, 23, -273);
   }
@@ -236,12 +237,12 @@ export class BicepCurlVignette implements Vignette {
         heelX + (29 + i * 10) * size,
         soleY - (19 - i * 3) * size,
       );
-    g.lineStyle(5, GYM.tank).lineBetween(heelX + 13 * size, soleY - 27 * size, heelX + 13 * size, soleY - 15 * size);
+    g.lineStyle(5, this.look.kit).lineBetween(heelX + 13 * size, soleY - 27 * size, heelX + 13 * size, soleY - 15 * size);
   }
 
   private drawBody(g: Phaser.GameObjects.Graphics): void {
     const line = STYLE.current.outline;
-    const skin = faces(GYM.skin);
+    const skin = faces(this.look.skin);
     const shape = (x: number, y: number, curves: Parameters<typeof cubicContour>[2], colour: number): void =>
       paintedContour(g, cubicContour(x, y, curves), colour, GYM.ink, line);
     // Relaxed far arm and a racerback singlet establish the three-quarter pose.
@@ -294,9 +295,9 @@ export class BicepCurlVignette implements Vignette {
         [46, -3, -5, -4, -32, -18],
         [-37, -76, -52, -188, -20, -246],
       ],
-      GYM.tank,
+      this.look.kit,
     );
-    g.fillStyle(0x237a72);
+    g.fillStyle(this.look.kitShade);
     fillContour(
       g,
       cubicContour(-20, -239, [
@@ -305,11 +306,9 @@ export class BicepCurlVignette implements Vignette {
         [-37, -87, -49, -182, -20, -239],
       ]),
     );
-    g.lineStyle(4, 0x89c7b4).beginPath().moveTo(-9, -242).lineTo(-15, -203).strokePath();
-    g.lineStyle(3, 0x154f4b, 0.5).lineBetween(-5, -42, 52, -34);
-    // A little lightning badge gives the kit a character of its own.
-    g.fillStyle(GYM.chalk);
-    fillContour(g, [7, -163, 30, -168, 21, -147, 36, -149, 10, -116, 16, -142, 3, -138]);
+    g.lineStyle(4, this.look.kitTrim).beginPath().moveTo(-9, -242).lineTo(-15, -203).strokePath();
+    g.lineStyle(3, this.look.kitSeam, 0.5).lineBetween(-5, -42, 52, -34);
+    this.drawBadge(g);
     // The far cheek stays rounded: a three-quarter nose belongs inside the face,
     // not in the outer silhouette as it would in a side profile.
     shape(
@@ -338,25 +337,9 @@ export class BicepCurlVignette implements Vignette {
         [50, -284, 30, -299, 22, -324],
       ]),
     );
-    g.lineStyle(3, 0x9c5c40, 0.7).beginPath().arc(7, -353, 10, -1.7, 1.3).strokePath();
-    // Sculpted swept quiff, not three intersecting circles.
-    shape(
-      2,
-      -370,
-      [
-        [-12, -395, -8, -420, 8, -434],
-        [18, -451, 39, -458, 62, -453],
-        [91, -467, 116, -451, 123, -437],
-        [127, -428, 121, -414, 110, -409],
-        [79, -402, 48, -412, 28, -416],
-        [21, -397, 20, -380, 15, -372],
-        [10, -379, 7, -377, 2, -370],
-      ],
-      GYM.ink,
-    );
-    g.lineStyle(5, 0x5b4c52, 0.85);
-    traceContour(g, cubicContour(15, -430, [[37, -447, 69, -431, 96, -439]]));
-    g.strokePath();
+    g.lineStyle(3, this.look.crease, 0.7).beginPath().arc(7, -353, 10, -1.7, 1.3).strokePath();
+    this.drawHair(g);
+    if (this.look.beard) this.drawBeard(g);
     // Sweatband follows the forehead rather than projecting beyond its silhouette.
     shape(
       23,
@@ -369,8 +352,129 @@ export class BicepCurlVignette implements Vignette {
       ],
       GYM.chalk,
     );
-    g.lineStyle(4, GYM.tank);
+    g.lineStyle(4, this.look.kit);
     traceContour(g, cubicContour(26, -402, [[51, -396, 91, -396, 113, -401]]));
+    g.strokePath();
+  }
+
+  /** Kit insignia over the chest. Chalk on every look, so it reads against any singlet colour. */
+  private drawBadge(g: Phaser.GameObjects.Graphics): void {
+    g.fillStyle(GYM.chalk);
+    switch (this.look.badge) {
+      case 'bolt':
+        fillContour(g, [7, -163, 30, -168, 21, -147, 36, -149, 10, -116, 16, -142, 3, -138]);
+        return;
+      case 'star': {
+        const points: number[] = [];
+        for (let i = 0; i < 10; i++) {
+          const r = i % 2 ? 9 : 22;
+          const a = -Math.PI / 2 + (i * Math.PI) / 5;
+          points.push(20 + Math.cos(a) * r, -142 + Math.sin(a) * r);
+        }
+        fillContour(g, points);
+        return;
+      }
+      case 'stripes':
+        g.lineStyle(7, GYM.chalk, 0.9).lineBetween(-2, -168, 40, -104).lineBetween(14, -172, 56, -108);
+        return;
+    }
+  }
+
+  /** The hair is the loudest identity cue after the kit, so each look draws its own. */
+  private drawHair(g: Phaser.GameObjects.Graphics): void {
+    const line = STYLE.current.outline;
+    const { hair, hairSheen } = this.look;
+    const shape = (x: number, y: number, curves: Parameters<typeof cubicContour>[2], colour: number): void =>
+      paintedContour(g, cubicContour(x, y, curves), colour, GYM.ink, line);
+    switch (this.look.hairStyle) {
+      case 'quiff':
+        // Sculpted swept quiff, not three intersecting circles.
+        shape(
+          2,
+          -370,
+          [
+            [-12, -395, -8, -420, 8, -434],
+            [18, -451, 39, -458, 62, -453],
+            [91, -467, 116, -451, 123, -437],
+            [127, -428, 121, -414, 110, -409],
+            [79, -402, 48, -412, 28, -416],
+            [21, -397, 20, -380, 15, -372],
+            [10, -379, 7, -377, 2, -370],
+          ],
+          hair,
+        );
+        g.lineStyle(5, hairSheen, 0.85);
+        traceContour(g, cubicContour(15, -430, [[37, -447, 69, -431, 96, -439]]));
+        g.strokePath();
+        return;
+      case 'bun':
+        // A close cap that follows the egg of the head, gathered into a bun behind the crown.
+        shape(
+          -6,
+          -448,
+          [
+            [-4, -466, 12, -476, 26, -474],
+            [16, -462, 8, -444, 6, -428],
+            [-16, -430, -30, -448, -6, -448],
+          ],
+          hair,
+        );
+        g.fillStyle(hair).fillCircle(-4, -452, 27);
+        g.lineStyle(line, GYM.ink).strokeCircle(-4, -452, 27);
+        g.lineStyle(4, hairSheen, 0.7).beginPath().arc(-4, -452, 17, Math.PI * 1.1, Math.PI * 1.7).strokePath();
+        shape(
+          4,
+          -398,
+          [
+            [2, -428, 14, -452, 40, -462],
+            [66, -470, 100, -462, 118, -438],
+            [122, -428, 121, -418, 117, -410],
+            [80, -403, 48, -406, 22, -405],
+            [14, -401, 8, -398, 4, -398],
+          ],
+          hair,
+        );
+        g.lineStyle(4, hairSheen, 0.75);
+        traceContour(g, cubicContour(24, -434, [[46, -452, 82, -452, 106, -436]]));
+        g.strokePath();
+        return;
+      case 'bald':
+        // Light on the crown, and a grey fringe over each ear where the hair still grows.
+        g.fillStyle(0xffffff, 0.22).fillEllipse(58, -440, 54, 18);
+        shape(
+          2,
+          -372,
+          [
+            [-6, -392, -4, -408, 8, -412],
+            [14, -398, 18, -384, 16, -372],
+            [10, -371, 5, -370, 2, -372],
+          ],
+          hair,
+        );
+        g.lineStyle(3, hairSheen, 0.8).lineBetween(2, -398, 10, -386);
+        return;
+    }
+  }
+
+  /** A full beard along the jaw, under the mouth so the face still carries the effort. */
+  private drawBeard(g: Phaser.GameObjects.Graphics): void {
+    const line = STYLE.current.outline;
+    const { hair, hairSheen } = this.look;
+    paintedContour(
+      g,
+      cubicContour(19, -332, [
+        [22, -300, 44, -270, 82, -268],
+        [112, -270, 126, -296, 125, -334],
+        [120, -318, 111, -306, 98, -304],
+        [80, -298, 52, -300, 32, -316],
+        [26, -322, 21, -328, 19, -332],
+      ]),
+      hair,
+      shade(hair, -0.45),
+      line * 0.8,
+    );
+    g.lineStyle(3, hairSheen, 0.7);
+    traceContour(g, cubicContour(40, -292, [[58, -280, 84, -278, 104, -290]]));
     g.strokePath();
   }
 
@@ -623,7 +727,7 @@ export class BicepCurlVignette implements Vignette {
   private drawArm(now: number, flex: number, pop: number): void {
     const g = this.arm.clear();
     const line = STYLE.current.outline;
-    const skin = faces(mix(GYM.skin, GYM.flush, this.pump * 0.12));
+    const skin = faces(mix(this.look.skin, this.look.flush, this.pump * 0.12));
     const shake = now - this.judderAt;
     const tremble =
       this.reducedMotion || shake < 0 || shake > 0.3 ? 0 : Math.sin(shake * 90) * Math.exp(-shake * 9) * 0.05;
@@ -653,7 +757,7 @@ export class BicepCurlVignette implements Vignette {
       ]),
     );
     // Short contour accents describe tension without drawing circles on the skin.
-    g.lineStyle(3, 0x995b40, 0.55);
+    g.lineStyle(3, this.look.crease, 0.55);
     traceContour(g, cubicContour(55, -217, [[68, -232, 91, -224, 96, -206]]));
     g.strokePath();
     if (flex > 0.25) {
@@ -691,20 +795,20 @@ export class BicepCurlVignette implements Vignette {
     );
     // Keep the elbow joined: a short crease, not a ring around the joint.
     g.fillStyle(skin.face).fillCircle(ELBOW.x, ELBOW.y, 22);
-    g.lineStyle(3, 0x995b40, 0.5);
+    g.lineStyle(3, this.look.crease, 0.5);
     const crease = transform(cubicContour(7, -14, [[0, -8, -1, 2, 5, 8]]));
     traceContour(g, crease);
     g.strokePath();
     const band = transform([131, -25, 151, -23, 151, 25, 131, 27]);
     paintedContour(g, band, GYM.chalk, GYM.ink, 2);
-    g.lineStyle(4, GYM.tank);
+    g.lineStyle(4, this.look.kit);
     const stripe = transform([141, -24, 141, 26]);
     g.lineBetween(stripe[0]!, stripe[1]!, stripe[2]!, stripe[3]!);
     if (!(this.finished && !this.successful)) this.drawDumbbell(g, hand.x, hand.y, now);
     g.fillStyle(skin.face).fillRoundedRect(hand.x - 24, hand.y - 26, 48, 52, 15);
     g.lineStyle(line, GYM.ink).strokeRoundedRect(hand.x - 24, hand.y - 26, 48, 52, 15);
     g.fillStyle(skin.face).fillEllipse(hand.x - 20, hand.y - 13, 25, 26);
-    g.lineStyle(3, 0x995b40, 0.8);
+    g.lineStyle(3, this.look.crease, 0.8);
     for (let i = 0; i < 3; i++) g.lineBetween(hand.x - 3, hand.y - 10 + i * 11, hand.x + 17, hand.y - 10 + i * 11);
   }
 
@@ -782,20 +886,24 @@ export class BicepCurlVignette implements Vignette {
       ]),
     );
     g.strokePath();
-    g.fillStyle(GYM.flush, 0.18 + this.pump * 0.1).fillEllipse(48, -340, 27, 15);
-    // A little curled moustache gives the coach a warm, old-school gym personality.
-    paintedContour(
-      g,
-      cubicContour(86, -334, [
-        [98, -340, 105, -329, 116, -333],
-        [115, -319, 99, -320, 90, -326],
-        [77, -314, 60, -321, 59, -333],
-        [69, -326, 75, -338, 86, -334],
-      ]),
-      GYM.ink,
-      GYM.ink,
-      1,
-    );
+    g.fillStyle(this.look.flush, 0.18 + this.pump * 0.1).fillEllipse(48, -340, 27, 15);
+    // A little curled moustache gives the coach a warm, old-school gym personality; the
+    // veteran's is the top of a full beard, so it takes the beard's grey.
+    if (this.look.moustache) {
+      const whisker = this.look.beard ? this.look.hair : GYM.ink;
+      paintedContour(
+        g,
+        cubicContour(86, -334, [
+          [98, -340, 105, -329, 116, -333],
+          [115, -319, 99, -320, 90, -326],
+          [77, -314, 60, -321, 59, -333],
+          [69, -326, 75, -338, 86, -334],
+        ]),
+        whisker,
+        this.look.beard ? shade(whisker, -0.45) : GYM.ink,
+        1,
+      );
+    }
     if (tired) {
       g.fillStyle(GYM.ink).fillEllipse(95, -308, 17, 15);
     } else if (effort > 0.2 || happy) {

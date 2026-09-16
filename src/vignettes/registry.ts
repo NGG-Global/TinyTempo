@@ -44,7 +44,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'bug', title: 'Bug & shoe', intro: 'Watch your\nstep.', ink: GARDEN.ink,
     success: ['New\npassenger.', 'Small feet. Big personality.'], rough: ['Missed\nme.', 'A very determined little dot.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new BugShoeVignette(scene), sounds: createBugSounds,
+    create: (scene, lap) => new BugShoeVignette(scene, lap), sounds: createBugSounds,
   },
   {
     id: 'saw', title: 'Saw & timber', intro: 'Follow\nthe line.', ink: TIMBER.ink,
@@ -63,7 +63,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'curl', title: 'Bicep curl', intro: 'One more\nrep.', ink: GYM.ink,
     success: ['Solid\nset.', 'Every rep to the top.'], rough: ['Form\ncheck.', 'The weight had other ideas.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new BicepCurlVignette(scene), sounds: createCurlSounds,
+    create: (scene, lap) => new BicepCurlVignette(scene, lap), sounds: createCurlSounds,
   },
   // Appended, not inserted: levels 1 to 6 keep the vignettes they had.
   {
@@ -84,7 +84,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     partial: { minAccuracy: PAPER_MOTION.partialAccuracy, copy: ['Almost\na masterpiece.', 'One edge needs another snip.'] },
     rough: ['A fresh\nsheet?', 'A few snips went astray.'],
     endingSec: 2, endingHoldBeats: 5, successAccuracy: PAPER_MOTION.successAccuracy,
-    create: scene => new ScissorsPaperVignette(scene), sounds: createPaperSounds,
+    create: (scene, lap) => new ScissorsPaperVignette(scene, lap), sounds: createPaperSounds,
   },
   {
     id: 'egg', title: 'Egg cracking', intro: 'A cracking\nlittle rhythm.', ink: HOME_INK,

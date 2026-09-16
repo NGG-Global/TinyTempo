@@ -7,6 +7,12 @@ to 5 keep the vignettes they had and the curl is every sixth level from 6 on.
 
 ## Visual direction and controls
 
+The coach described below is the first of three people who take the bench. On the
+act's second visit (level 19) a sprinter in a plum singlet lifts, with a high bun
+and a star badge; on the third (level 32) a bald, bearded veteran in amber with two
+racing stripes. `src/vignettes/curlLooks.ts` holds the three as data; the figure,
+its motion and the gym are shared. See `docs/VARIANTS.md`.
+
 A gym of concrete, rubber and iron: paper `#dad4cb` with a dado of cooler plaster
 `#cbc3b7`, a slate mat `#4c4954` with paler seams, a chalkboard `#34493f` in a timber
 frame. The tank `#2e9c8e` is the only saturated colour in the room, which makes the

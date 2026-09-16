@@ -15,6 +15,11 @@ export interface LevelSpec {
   readonly level: number;
   readonly difficulty: number;
   readonly vignette: string;
+  /**
+   * How many times the vignette rotation has come round before this level. Acts with
+   * more than one look index it, so a second visit to an act does not repeat the first.
+   */
+  readonly lap: number;
   readonly areaName: string;
   readonly area: Area;
   readonly tasks: readonly LevelTask[];
@@ -108,7 +113,8 @@ export function levelSpec(level: number): LevelSpec {
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
   return Object.freeze({
-    level, difficulty: d, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id, areaName: name, area,
+    level, difficulty: d, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
+    lap: Math.floor((level - 1) / VIGNETTES.length), areaName: name, area,
     tasks: Object.freeze(tasks), peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });
