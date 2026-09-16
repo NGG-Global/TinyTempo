@@ -19,7 +19,18 @@ export const CRAFT = {
   paper: 0xeee8d8, ink: 0x30493f, mat: 0x8fa996, grid: 0xb9cbb5, edge: 0x5d7c69,
   coral: 0xcf5134, steel: 0xc7d4d2, steelLight: 0xf5f4e7, steelDark: 0x79908a,
   star: 0xf0ce7e, heart: 0xf29c87, angel: 0xfff1d7,
+  butterfly: 0xb99bd9, tree: 0x86b87c, tulip: 0xe57f90,
 } as const;
+
+/** Where the three glints land for each shape once it has opened. */
+const GLINTS: Readonly<Record<PaperShape, readonly (readonly [number, number])[]>> = {
+  star: [[-215, -128], [210, -77], [148, 167]],
+  heart: [[-201, -103], [204, -137], [-146, 124]],
+  angel: [[-204, -152], [207, -128], [165, 103]],
+  butterfly: [[-208, -166], [212, -120], [-150, 150]],
+  tree: [[-160, -150], [188, -40], [-198, 120]],
+  tulip: [[-190, -150], [196, -110], [178, 130]],
+};
 
 const MAT = { left: -346, top: -258, width: 692, height: 536 } as const;
 const FOLD = { top: -194, bottom: 194, width: 194 } as const;
@@ -74,7 +85,8 @@ export class ScissorsPaperVignette implements Vignette {
   private scale = 1;
   private chips: { at: number; x: number; y: number; seed: number }[] = [];
 
-  public constructor(scene: Phaser.Scene) {
+  /** `lap` picks the set of shapes; a return visit to the act cuts new silhouettes. */
+  public constructor(scene: Phaser.Scene, private readonly lap = 0) {
     this.backdrop = new Backdrop(scene, CRAFT.paper, 0xdfc37f, { glowAt: { x: 0.42, y: 0.43 }, glowAlpha: 0.6 });
     this.stage = scene.add.container(0, 0).setDepth(-10);
     this.mat = scene.add.graphics();
@@ -144,7 +156,7 @@ export class ScissorsPaperVignette implements Vignette {
 
   public reset(plan: RoundPlan): void {
     this.plan = plan;
-    this.shape = paperShape(plan.id);
+    this.shape = paperShape(plan.id, this.lap);
     this.phase = 'prepare';
     this.outcome = 'fail';
     this.progress = this.progressFrom = this.hitCount = this.demoCount = this.handoffFrom = this.mistakes = 0;
@@ -225,6 +237,9 @@ export class ScissorsPaperVignette implements Vignette {
     const breathe = !still && age >= 0 && this.outcome === 'success' && this.shape === 'heart'
       ? Math.sin(Math.min(1, age / 0.9) * Math.PI * 2) * Math.exp(-age * 2) * 0.035 : 0;
     this.paper.scaleX += breathe; this.paper.scaleY += breathe;
+    // The butterfly beats its wings once or twice as it opens: width only, so the fold holds.
+    if (!still && age >= 0 && this.outcome === 'success' && this.shape === 'butterfly')
+      this.paper.scaleX -= Math.abs(Math.sin(age * 9)) * Math.exp(-age * 2.2) * 0.12;
     this.drawShadow(reveal.open, reveal.lift, reveal.crumple);
     this.drawScraps(now, still);
     this.drawScissors(now, age, progress, demo, still);
@@ -275,14 +290,30 @@ export class ScissorsPaperVignette implements Vignette {
       const alpha = easeOut(age / 0.5);
       d.lineStyle(2, shade(colour, -0.26), 0.42 * alpha).lineBetween(0, contour[0]!.y + 18, 0, contour.at(-1)!.y - 12);
       d.lineStyle(2, 0xfffae9, 0.65 * alpha).lineBetween(3, contour[0]!.y + 22, 3, contour.at(-1)!.y - 16);
-      if (this.shape === 'star') {
+      this.drawKeepsake(d, contour, open, alpha);
+      if (this.outcome === 'partial') {
+        // The missed cut leaves an attached, folded flap instead of a flawless silhouette.
+        polygon(d, [{ x: -62 * open, y: 46 }, { x: -178 * open, y: 99 }, { x: -104 * open, y: 169 }, { x: -38 * open, y: 121 }], shade(colour, -0.15), line);
+        d.lineStyle(3, shade(colour, -0.4), 0.8).lineBetween(-62 * open, 46, -38 * open, 121);
+      }
+    }
+  }
+
+  /** The scored creases and small marks that make each opened silhouette legible at phone size. */
+  private drawKeepsake(d: Phaser.GameObjects.Graphics, contour: readonly PaperPoint[], open: number, alpha: number): void {
+    const colour = CRAFT[this.shape];
+    const score = shade(colour, -0.26);
+    switch (this.shape) {
+      case 'star':
         for (const p of [contour[0]!, contour[2]!, contour[4]!]) {
           d.lineStyle(2, shade(colour, -0.18), 0.55 * alpha).lineBetween(0, 0, p.x * 0.83, p.y * 0.83);
           d.lineBetween(0, 0, -p.x * open * 0.83, p.y * 0.83);
         }
-      } else if (this.shape === 'heart') {
+        return;
+      case 'heart':
         d.lineStyle(6, 0xffe3c9, 0.8 * alpha).beginPath().moveTo(47, -104).lineTo(70, -125).lineTo(92, -131).strokePath();
-      } else {
+        return;
+      case 'angel':
         // Feather scores, a pleated gown and a little golden halo make the angel legible at phone size.
         for (const side of [-open, 1]) {
           for (let i = 0; i < 3; i++) {
@@ -293,12 +324,37 @@ export class ScissorsPaperVignette implements Vignette {
         }
         d.lineStyle(5, 0xc9963b, alpha).strokeEllipse(0, -202, 61, 16);
         d.lineStyle(2, 0xffecc0, alpha).strokeEllipse(0, -204, 59, 14);
-      }
-      if (this.outcome === 'partial') {
-        // The missed cut leaves an attached, folded flap instead of a flawless silhouette.
-        polygon(d, [{ x: -62 * open, y: 46 }, { x: -178 * open, y: 99 }, { x: -104 * open, y: 169 }, { x: -38 * open, y: 121 }], shade(colour, -0.15), line);
-        d.lineStyle(3, shade(colour, -0.4), 0.8).lineBetween(-62 * open, 46, -38 * open, 121);
-      }
+        return;
+      case 'butterfly':
+        // Eye spots on both wings, a vein from the body, and antennae curling off the fold.
+        for (const side of [-open, 1]) {
+          d.fillStyle(shade(colour, -0.3), 0.75 * alpha).fillEllipse(112 * side, -96, 46, 40);
+          d.fillStyle(0xfff3e2, 0.85 * alpha).fillEllipse(104 * side, -104, 18, 16);
+          d.fillStyle(shade(colour, -0.22), 0.7 * alpha).fillEllipse(96 * side, 82, 30, 26);
+          d.lineStyle(2.5, score, 0.6 * alpha).lineBetween(10 * side, -40, 150 * side, -140).lineBetween(10 * side, 20, 130 * side, 120);
+          d.lineStyle(3, CRAFT.ink, 0.8 * alpha).beginPath().moveTo(4 * side, -120).lineTo(30 * side, -172).lineTo(46 * side, -186).strokePath();
+          d.fillStyle(CRAFT.ink, 0.8 * alpha).fillCircle(48 * side, -188, 4);
+        }
+        d.fillStyle(shade(colour, -0.45), 0.9 * alpha).fillEllipse(0, 6, 22, 190);
+        return;
+      case 'tree':
+        // A darker trunk and a few paper baubles; the tiers already read from the cut.
+        d.fillStyle(0x8d6a45, alpha).fillRect(-28 * open, 82, 28 * open + 28, 62);
+        for (const [x, y, c] of [[70, 40, 0xf0ce7e], [-40, -50, 0xf29c87], [40, -120, 0xfff1d7], [-78, 44, 0xb99bd9], [18, -40, 0xf0ce7e]] as const) {
+          d.fillStyle(c, 0.95 * alpha).fillCircle(x < 0 ? x * open : x, y, 9);
+        }
+        d.lineStyle(2.5, score, 0.55 * alpha);
+        for (const side of [-open, 1]) d.lineBetween(0, -170, 108 * side, 60);
+        return;
+      case 'tulip':
+        // Petal creases up from the throat, a vein along the leaf, and a lighter lip on the stem.
+        for (const side of [-open, 1]) {
+          d.lineStyle(2.5, score, 0.6 * alpha).lineBetween(26 * side, -28, 62 * side, -126).lineBetween(8 * side, -28, 10 * side, -150);
+          d.lineStyle(2.5, 0x4f8a4a, 0.7 * alpha).lineBetween(18 * side, 60, 96 * side, 140);
+        }
+        d.fillStyle(0x6fa66a, 0.9 * alpha).fillRect(-14 * open, -12, 14 * open + 14, 182);
+        d.lineStyle(2, 0xc2e0b8, 0.7 * alpha).lineBetween(4, -4, 4, 166);
+        return;
     }
   }
 
@@ -351,14 +407,12 @@ export class ScissorsPaperVignette implements Vignette {
     if (age < 0 || this.outcome !== 'success') return;
     const alpha = easeOut((age - 0.36) / 0.22);
     const drift = still ? 0 : Math.sin(age * 5) * Math.exp(-age) * 9;
-    const points = this.shape === 'star' ? [[-215, -128], [210, -77], [148, 167]]
-      : this.shape === 'heart' ? [[-201, -103], [204, -137], [-146, 124]] : [[-204, -152], [207, -128], [165, 103]];
-    for (const [x, y] of points) {
-      const size = (this.shape === 'star' ? 16 : 11) * open;
-      const cy = y! + drift;
-      polygon(g, [{ x: x!, y: cy - size }, { x: x! + size * 0.25, y: cy - size * 0.25 }, { x: x! + size, y: cy },
-        { x: x! + size * 0.25, y: cy + size * 0.25 }, { x: x!, y: cy + size }, { x: x! - size * 0.25, y: cy + size * 0.25 },
-        { x: x! - size, y: cy }, { x: x! - size * 0.25, y: cy - size * 0.25 }], 0xfff8db, 0, alpha);
+    for (const [x, y] of GLINTS[this.shape]) {
+      const size = (this.shape === 'star' || this.shape === 'tree' ? 16 : 11) * open;
+      const cy = y + drift;
+      polygon(g, [{ x, y: cy - size }, { x: x + size * 0.25, y: cy - size * 0.25 }, { x: x + size, y: cy },
+        { x: x + size * 0.25, y: cy + size * 0.25 }, { x, y: cy + size }, { x: x - size * 0.25, y: cy + size * 0.25 },
+        { x: x - size, y: cy }, { x: x - size * 0.25, y: cy - size * 0.25 }], 0xfff8db, 0, alpha);
     }
   }
 

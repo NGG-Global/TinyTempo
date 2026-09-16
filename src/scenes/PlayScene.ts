@@ -172,7 +172,7 @@ export class PlayScene extends BaseScene {
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
-    this.vignette = this.definition.create(this);
+    this.vignette = this.definition.create(this, this.spec.lap);
     const ink = this.definition.ink;
     this.stars = this.add.graphics().setDepth(9);
     this.fx = new Feedback(this, 5);

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPES, paperCutPoint, paperHandoff, paperOutcome, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
+import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPE_SETS, PAPER_SHAPES, paperCutPoint, paperHandoff, paperOutcome, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
 import { TURN_OPEN_SEC } from '../src/vignettes/motion';
 import { synthesizePaper } from '../src/audio/paperSounds';
 import { TaskSequence } from '../src/game/TaskSequence';
@@ -10,7 +10,7 @@ vi.mock('phaser', () => ({ default: {} }));
 
 describe('paper cutting presentation', () => {
   it('cycles all three silhouettes between tasks and repeats deterministically', () => {
-    expect([1, 2, 3, 4, 5, 6].map(paperShape)).toEqual(['star', 'heart', 'angel', 'star', 'heart', 'angel']);
+    expect([1, 2, 3, 4, 5, 6].map(id => paperShape(id))).toEqual(['star', 'heart', 'angel', 'star', 'heart', 'angel']);
     for (const shape of PAPER_SHAPES) {
       const points = PAPER_CONTOURS[shape];
       expect(points[0]!.x).toBe(0);
@@ -23,6 +23,18 @@ describe('paper cutting presentation', () => {
         expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true);
       }
     }
+  });
+
+  it('cuts a second set of shapes on the next lap of the rotation and comes back round', () => {
+    expect(PAPER_SHAPE_SETS).toHaveLength(2);
+    expect(new Set(PAPER_SHAPES).size).toBe(PAPER_SHAPES.length);
+    expect([1, 2, 3, 4].map(id => paperShape(id, 1))).toEqual(['butterfly', 'tree', 'tulip', 'butterfly']);
+    expect([1, 2, 3].map(id => paperShape(id, 2))).toEqual(['star', 'heart', 'angel']);
+    expect(paperShape(1, -1)).toBe('star');
+    expect(paperShape(1, 1.9)).toBe('butterfly');
+    // The first visit to the act keeps the shapes it always had; the second visit is new.
+    expect(levelSpec(9).lap).toBe(0);
+    expect(levelSpec(9 + VIGNETTES.length).lap).toBe(1);
   });
 
   it('uses authoritative accuracy for success, half success and failure', () => {

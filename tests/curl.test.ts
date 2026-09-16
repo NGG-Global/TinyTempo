@@ -4,6 +4,7 @@ import {
   DROP_LANDING_SEC, dropHeight, forearmAngle, holdTremor, pumpLevel, REFERENCE_BEAT,
 } from '../src/vignettes/curlMotion';
 import { synthesizeCurl } from '../src/audio/curlSounds';
+import { CURL_LOOKS, curlLook } from '../src/vignettes/curlLooks';
 
 describe('curl presentation curves', () => {
   it('squeezes on the beat and is hanging again before the next possible hit', () => {
@@ -116,5 +117,24 @@ describe('curl presentation curves', () => {
     for (let i = Math.floor(rate * 0.15); i < samples.length; i++) if (Math.abs(samples[i]!) > Math.abs(samples[peakAt]!)) peakAt = i;
     expect(peakAt / rate).toBeGreaterThan(DROP_LANDING_SEC);
     expect(peakAt / rate).toBeLessThan(DROP_LANDING_SEC + 0.03);
+  });
+  it('puts a different person at the bench on each lap of the rotation', () => {
+    expect(CURL_LOOKS.length).toBeGreaterThanOrEqual(3);
+    expect(new Set(CURL_LOOKS.map(l => l.id)).size).toBe(CURL_LOOKS.length);
+    // The kit is the one saturated colour in the room, so no two people may share it.
+    expect(new Set(CURL_LOOKS.map(l => l.kit)).size).toBe(CURL_LOOKS.length);
+    expect(new Set(CURL_LOOKS.map(l => l.hairStyle)).size).toBe(CURL_LOOKS.length);
+    // The first visit keeps the original coach.
+    expect(curlLook(0).id).toBe('coach');
+    expect(curlLook(0).hairStyle).toBe('quiff');
+    expect(curlLook(1)).not.toBe(curlLook(0));
+    expect(curlLook(CURL_LOOKS.length)).toBe(curlLook(0));
+    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(curlLook(bad)).toBe(curlLook(0));
+    expect(curlLook(1.7)).toBe(curlLook(1));
+    for (const look of CURL_LOOKS) {
+      for (const key of ['skin', 'flush', 'crease', 'kit', 'kitShade', 'kitTrim', 'kitSeam', 'hair', 'hairSheen'] as const) {
+        expect(Number.isInteger(look[key]) && look[key] >= 0 && look[key] <= 0xffffff).toBe(true);
+      }
+    }
   });
 });

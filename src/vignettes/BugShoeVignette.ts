@@ -11,6 +11,7 @@ import { shade } from '@/ui/colour';
 import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
+import { bugLook, type BugLook } from './bugLooks';
 import { clamp01, easeOut, isPlayerTurn, TURN_OPEN_SEC } from './motion';
 
 export const GARDEN = { paper: 0xe4e7ce, ink: 0x303f43, tile: 0xb8c2a0, plum: 0x8b6085, cream: 0xfff5dc, coral: 0xd87d62 };
@@ -24,6 +25,8 @@ export function shoeLift(age: number): number { return 245 * easeOut((age - 0.03
  * contact are unchanged.
  */
 export class BugShoeVignette implements Vignette {
+  /** Which bug, and which sneaker. Chosen once from the rotation lap. */
+  private readonly look: BugLook;
   private readonly backdrop: Backdrop;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly ground: Phaser.GameObjects.Graphics;
@@ -53,7 +56,8 @@ export class BugShoeVignette implements Vignette {
   private steps = 0;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.look = bugLook(lap);
     // The pool of light replaces the cream disc this scene used to draw for itself.
     this.backdrop = new Backdrop(scene, GARDEN.paper, GARDEN.cream, { glowAt: { x: 0.58, y: 0.42 } });
     this.stage = scene.add.container(0, 0).setDepth(-10);
@@ -77,7 +81,7 @@ export class BugShoeVignette implements Vignette {
   private drawShoe(scene: Phaser.Scene): void {
     const s = scene.add.graphics();
     const line = STYLE.current.outline * 1.4;
-    const ink = faces(GARDEN.ink), cream = faces(GARDEN.cream), coral = faces(GARDEN.coral);
+    const ink = faces(GARDEN.ink), upper = faces(this.look.upper), cream = faces(GARDEN.cream), coral = faces(this.look.trim);
     // Outlines first, under every fill, so no seam shows between the masses.
     if (line > 0) {
       s.lineStyle(line, ink.edge, 1);
@@ -85,12 +89,12 @@ export class BugShoeVignette implements Vignette {
       s.lineStyle(line, shade(GARDEN.cream, -0.5), 1).strokeRoundedRect(-217, -57, 389, 57, 21);
     }
     // Upper and ankle collar: a shade body with a lit top where the light reaches.
-    s.fillStyle(ink.shade).fillRoundedRect(-200, -108, 350, 95, 40);
-    s.fillStyle(ink.face).fillRoundedRect(-200, -108, 350, 76, 40);
-    s.fillStyle(ink.lit, 0.75).fillRoundedRect(-176, -104, 210, 16, 8);
-    s.fillStyle(ink.shade).fillRoundedRect(46, -208, 111, 159, 19);
-    s.fillStyle(ink.face).fillRoundedRect(46, -208, 111, 134, 19);
-    s.fillStyle(ink.lit, 0.8).fillRoundedRect(56, -204, 88, 14, 7);
+    s.fillStyle(upper.shade).fillRoundedRect(-200, -108, 350, 95, 40);
+    s.fillStyle(upper.face).fillRoundedRect(-200, -108, 350, 76, 40);
+    s.fillStyle(upper.lit, 0.75).fillRoundedRect(-176, -104, 210, 16, 8);
+    s.fillStyle(upper.shade).fillRoundedRect(46, -208, 111, 159, 19);
+    s.fillStyle(upper.face).fillRoundedRect(46, -208, 111, 134, 19);
+    s.fillStyle(upper.lit, 0.8).fillRoundedRect(56, -204, 88, 14, 7);
     s.fillStyle(0x516b69).fillRoundedRect(-148, -112, 197, 43, 18);
     s.fillStyle(shade(0x516b69, 0.22), 0.7).fillRoundedRect(-140, -108, 170, 10, 5);
     // Foxing and outsole: the part that meets the floor, so it carries the lit rim.
@@ -206,13 +210,12 @@ export class BugShoeVignette implements Vignette {
       g.lineBetween(i * 15, 10, i * 23 - 7, 22 + wiggle);
       g.lineBetween(i * 15, -2, i * 23 + 5, -16 - wiggle);
     }
-    const plum = faces(GARDEN.plum);
+    const body = faces(this.look.body);
     const line = STYLE.current.outline * 1.4;
-    if (line > 0) g.lineStyle(line, plum.edge, 1).strokeEllipse(0, 0, 72, 40);
-    g.fillStyle(plum.shade).fillEllipse(0, 2, 72, 40);
-    g.fillStyle(plum.face).fillEllipse(0, 0, 72, 40);
-    g.fillStyle(0xb68da2).fillEllipse(-10, -6, 33, 20);
-    g.lineStyle(2, GARDEN.ink, 0.5).lineBetween(-4, -17, -4, 18);
+    if (line > 0) g.lineStyle(line, body.edge, 1).strokeEllipse(0, 0, 72, 40);
+    g.fillStyle(body.shade).fillEllipse(0, 2, 72, 40);
+    g.fillStyle(body.face).fillEllipse(0, 0, 72, 40);
+    this.drawMarkings(g);
     for (const eyeX of [20, 35]) {
       g.fillStyle(GARDEN.cream).fillCircle(eyeX, -14, 11);
       g.fillStyle(GARDEN.ink).fillCircle(eyeX + Math.sin(now * 2) * 2, -16, 4);
@@ -228,6 +231,31 @@ export class BugShoeVignette implements Vignette {
       this.accents.lineStyle(3, GARDEN.cream, 1 - p).strokeEllipse(this.contactX, 2, 210 + p * 180, 14 + p * 22);
     }
   }
+  /** What tells one bug from the next, drawn over the shell and under the eyes. */
+  private drawMarkings(g: Phaser.GameObjects.Graphics): void {
+    const { marking, markings } = this.look;
+    switch (markings) {
+      case 'sheen':
+        g.fillStyle(marking).fillEllipse(-10, -6, 33, 20);
+        g.lineStyle(2, GARDEN.ink, 0.5).lineBetween(-4, -17, -4, 18);
+        return;
+      case 'spots':
+        // A ladybird's dark head under the eyes, a wing split, and dots that avoid the split.
+        g.fillStyle(marking).fillEllipse(24, 0, 30, 36);
+        g.lineStyle(2, marking, 0.8).lineBetween(-2, -19, -2, 19);
+        for (const [x, y, r] of [[-24, -6, 5], [-10, 9, 4], [-8, -10, 4], [-26, 10, 3]] as const) {
+          g.fillStyle(marking).fillCircle(x, y, r);
+        }
+        return;
+      case 'stripe':
+        // A beetle's metallic band along the shell, and a rim of the same light on the far edge.
+        g.fillStyle(marking, 0.9).fillEllipse(-6, -9, 46, 9);
+        g.lineStyle(2, marking, 0.6).lineBetween(-30, 6, 26, 6);
+        g.lineStyle(2, GARDEN.ink, 0.5).lineBetween(-4, -17, -4, 18);
+        return;
+    }
+  }
+
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
 }
