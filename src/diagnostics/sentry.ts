@@ -3,7 +3,8 @@ import {
 } from '@sentry/browser';
 
 import { DIAGNOSTICS } from '@/config/diagnostics';
-import type { ErrorReport, ErrorSink } from '@/core/errors';
+import { breadcrumbEpochMs, type ErrorReport, type ErrorSink } from '@/core/errors';
+import { REMOVED_INTEGRATIONS } from './integrations';
 
 /**
  * The Sentry adapter.
@@ -22,22 +23,41 @@ import type { ErrorReport, ErrorSink } from '@/core/errors';
  * sets of rules fighting over what to drop is how a quota disappears quietly.
  */
 
-/** Sentry's own global handlers would double-report what `captureGlobalErrors` sends. */
 const OPTIONS: BrowserOptions = {
   dsn: DIAGNOSTICS.dsn,
   release: DIAGNOSTICS.release,
   environment: DIAGNOSTICS.environment,
   sampleRate: DIAGNOSTICS.sampleRate,
-  // No performance tracing and no session replay: both are for a product with a
-  // budget for them, and both send far more than a crash report does.
+  /*
+   * No tracing and no session replay, against Sentry's recommended base. Both are
+   * deliberate for this app rather than an oversight:
+   *
+   * - Tracing's value in `@sentry/browser` is page-load and navigation spans. This is
+   *   one canvas that never navigates and makes no API calls, so it would buy a single
+   *   pageload transaction per session, against a transaction quota that is separate
+   *   from the error quota. One line to turn on if boot-time web vitals ever matter.
+   * - Session Replay records the DOM. The game draws to a `<canvas>`, so a replay here
+   *   is a still frame of an empty page — and `blockAllMedia`, which Sentry recommends,
+   *   would block the canvas anyway. It is a large bundle addition and a privacy
+   *   surface, in exchange for nothing.
+   */
   tracesSampleRate: 0,
-  // The game has no accounts and no personal data. Saying so to the SDK stops it
-  // attaching a source IP or a cookie to an issue on its own initiative.
-  sendDefaultPii: false,
+  /*
+   * The game has no accounts and no personal data, and the privacy policy says so.
+   * `dataCollection` rather than `sendDefaultPii`, which is deprecated and goes away in
+   * v11: the categories are set explicitly so a future SDK default cannot quietly start
+   * attaching something the policy does not cover.
+   */
+  dataCollection: {
+    userInfo: false,
+    cookies: false,
+    httpHeaders: false,
+    httpBodies: [],
+    queryParams: false,
+    urlQueryParams: false,
+  },
   integrations: integrations => integrations.filter(
-    integration => integration.name !== 'GlobalHandlers'
-      && integration.name !== 'BrowserSession'
-      && integration.name !== 'Breadcrumbs',
+    integration => !REMOVED_INTEGRATIONS.has(integration.name),
   ),
 };
 
@@ -58,14 +78,19 @@ export function createSentrySink(): ErrorSink {
       addBreadcrumb({
         message: crumb.message,
         level: 'info',
-        timestamp: crumb.at / 1000,
+        // Seconds since the epoch. `crumb.at` is milliseconds since the page opened,
+        // and sending that directly dated every crumb to 1970 and lost all of them.
+        timestamp: breadcrumbEpochMs(crumb.at) / 1000,
         ...(crumb.data === undefined ? {} : { data: { ...crumb.data } }),
       });
     }
     // The stack is rebuilt rather than passed through: the capture layer redacted the
     // strings, and an Error carrying them is what the SDK knows how to symbolicate.
+    // The name is the thrown error's own — `ReferenceError`, `TypeError` — because that
+    // is half of how Sentry groups an issue and all of how a human reads one at a
+    // glance. Which capture path it arrived by is the `kind` tag's job, not the type's.
     const error = new Error(report.message);
-    error.name = `TinyTempo:${report.kind}`;
+    error.name = report.name;
     if (report.stack !== undefined) error.stack = report.stack;
     captureException(error);
   };

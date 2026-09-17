@@ -11,12 +11,14 @@ export const DIAGNOSTICS = {
   /** Sentry DSN. Empty disables reporting entirely; nothing is loaded and nothing is sent. */
   dsn: (typeof import.meta.env.VITE_SENTRY_DSN === 'string' ? import.meta.env.VITE_SENTRY_DSN : ''),
   /**
-   * The release the uploaded sourcemaps are filed under. Must match what
-   * `scripts/upload-sourcemaps.mjs` sends, or a stack trace arrives unsymbolicated
-   * and the whole exercise buys nothing.
+   * The release the uploaded sourcemaps are filed under. Must match the `release.name`
+   * that `@sentry/vite-plugin` is given in `vite.config.ts`, or a stack trace arrives
+   * unsymbolicated and the whole exercise buys nothing.
    */
   release: `tiny-tempo@${__APP_VERSION__}`,
-  environment: import.meta.env.DEV ? 'development' : 'production',
+  // `MODE`, not `DEV`: Vite's mode is the exact build profile, so a staging or
+  // preview build files its issues separately instead of landing in production.
+  environment: import.meta.env.MODE,
   /**
    * Fraction of errors sent. One at launch: this is a small audience and the whole
    * point is to see the first crash, not to sample a steady state.

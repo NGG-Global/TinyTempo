@@ -118,16 +118,22 @@ tells the player one version and the store another.
 
 The code is in and tested; these are the account-side steps.
 
-- [ ] Create a Sentry project (platform: Browser / JavaScript) and take its DSN.
+- [ ] Create a Sentry project with platform **Browser → JavaScript** (`browser`),
+      confirmed against Sentry's own platform table. Not Capacitor, not Android.
+      Ignore the onboarding wizard that follows — the SDK and `init` are already in
+      the repo, and following it would create a second initialisation.
 - [ ] Set `VITE_SENTRY_DSN` for release builds. It is a write credential for an
       issue stream, so a debug build should not carry the production one.
 - [ ] Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the release
       environment only — never in the bundle.
 - [ ] **Run `npm run build:release` once against the real project** and confirm a
-      test error arrives *symbolicated*. The upload step has only been run on its
-      failure path in this repository.
-- [ ] Confirm `dist/` holds no `.map` afterwards. The script deletes them even when
-      the upload fails, and CI checks the same thing on a plain build.
+      test error arrives *symbolicated*. Only the failure paths have been exercised
+      here — no upload has ever landed, because this repository has no credentials.
+- [ ] Confirm an event is actually visible in the Sentry dashboard. Sentry's own
+      guidance is that the task is not done until you have seen one.
+- [ ] Confirm `dist/` holds no `.map` afterwards. `@sentry/vite-plugin` deletes
+      them, `scripts/check-no-sourcemaps.mjs` fails the build if any survive, and
+      CI checks the same thing on a plain build.
 - [ ] Set the issue retention period, and check the free-tier event quota against
       `sampleRate: 1` in `src/config/diagnostics.ts`.
 - [ ] Decide whether native crash capture is worth `@sentry/capacitor` later;
