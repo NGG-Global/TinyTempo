@@ -215,6 +215,9 @@ RevenueCat for entitlements, no Tiny Tempo account. Contact on the pages is
   engine notes. Both carry historical sections, marked as such.
 - [Vertical slice](docs/VERTICAL_SLICE.md) — the vignette contract and what a
   vignette may and may not own.
+- [Visual polish](docs/VISUAL_POLISH.md) — the workshop treatment, and
+  [UI refinements](docs/UI_REFINEMENTS.md) — settings, the star reveal and the
+  out-of-hearts screens as they stand.
 - One document per vignette: [hammer](docs/HAMMER_NAIL.md),
   [window](docs/WINDOW_CLEANING.md), [saw](docs/SAW_TIMBER.md),
   [tomato](docs/TOMATO_KNIFE.md), [curl](docs/BICEP_CURL.md),

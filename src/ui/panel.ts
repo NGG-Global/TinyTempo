@@ -21,6 +21,8 @@ export interface PanelSpec {
   readonly radius?: number;
   /** Draw the painted accent frame inside the face, for the title and the one action. */
   readonly hero?: boolean;
+  /** Colour of that frame. Brass on paper; the store's brass panels take the cream instead. */
+  readonly frame?: number;
 }
 
 export const BRASS = 0xd4a54a;
@@ -50,7 +52,7 @@ export function drawPanel(g: Phaser.GameObjects.Graphics, r: Phaser.Geom.Rectang
   // A painted frame line inside the face of a hero.
   if (spec.hero) {
     const inset = 7 * s;
-    g.lineStyle(2 * s, BRASS, 0.6).strokeRoundedRect(r.x + inset, r.y + sink + inset, r.width - inset * 2, r.height - inset * 2, Math.max(2, radius - inset));
+    g.lineStyle(2 * s, spec.frame ?? BRASS, 0.6).strokeRoundedRect(r.x + inset, r.y + sink + inset, r.width - inset * 2, r.height - inset * 2, Math.max(2, radius - inset));
   }
 }
 

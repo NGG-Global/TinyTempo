@@ -21,15 +21,15 @@ function fakeStorage(initial?: string) {
 
 describe('stored settings', () => {
   it('falls back to the defaults for missing, unparseable and wrongly shaped values', () => {
-    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false });
-    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false });
-    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false });
-    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false });
+    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
   });
   it('clamps a stored offset rather than trusting it', () => {
-    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true });
+    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true, haptics: true });
     expect(loadSettings(fakeStorage(`{"calibrationMs":${1e9}}`)).calibrationMs).toBe(CALIBRATION_LIMIT_MS);
     expect(loadSettings(fakeStorage('{"calibrationMs":-1e9}')).calibrationMs).toBe(-CALIBRATION_LIMIT_MS);
     expect(clampCalibration(NaN)).toBe(0);
@@ -37,16 +37,23 @@ describe('stored settings', () => {
     expect(clampCalibration(Infinity)).toBe(0);
     expect(clampCalibration(83.4)).toBe(83);
   });
+  it('defaults haptics on, and only an explicit false turns them off', () => {
+    // A save written before the switch existed carries no field; the player gets the pulse.
+    expect(loadSettings(fakeStorage('{"calibrationMs":0,"muted":false}')).haptics).toBe(true);
+    expect(loadSettings(fakeStorage('{"haptics":false}')).haptics).toBe(false);
+    expect(loadSettings(fakeStorage('{"haptics":"no"}')).haptics).toBe(true);
+    expect(loadSettings(null).haptics).toBe(true);
+  });
   it('reports whether a write landed and clamps on the way out', () => {
     const storage = fakeStorage();
-    expect(saveSettings({ calibrationMs: 5000, muted: true }, storage)).toBe(true);
-    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true });
-    expect(saveSettings({ calibrationMs: 0, muted: false }, null)).toBe(false);
+    expect(saveSettings({ calibrationMs: 5000, muted: true, haptics: true }, storage)).toBe(true);
+    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true, haptics: true });
+    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true }, null)).toBe(false);
     const blocked = { setItem: () => { throw new Error('quota'); } } as unknown as Storage;
-    expect(saveSettings({ calibrationMs: 0, muted: false }, blocked)).toBe(false);
+    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true }, blocked)).toBe(false);
     // A round trip through storage is the shape the game actually uses.
-    saveSettings({ calibrationMs: -40, muted: false }, storage);
-    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false });
+    saveSettings({ calibrationMs: -40, muted: false, haptics: false }, storage);
+    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, haptics: false });
   });
 });
 

@@ -51,6 +51,15 @@ as every other act does in its own `update`. `Vignette.translate` is the
 between-task slide and is an absolute offset from that home, applied by PlayScene
 right after `update`; an act that skips the re-anchor walks off screen.
 
+Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Settings is
+labelled sections scrolling between a pinned title and a pinned Done, with calibration on
+its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
+knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid-run.
+Two version traps live there. **Phaser 4 dropped WebGL geometry masks** — `setMask` warns
+and no-ops off the canvas renderer — so a clipped region is a second camera's viewport,
+never a mask. And a control inside a scrolling list fires on the pointer *release*:
+`TapInput` reports the press, which is right only where the press is the musical event.
+
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
@@ -138,7 +147,7 @@ GPU fill-rate limits, or the URL bar collapsing mid-frame.
 - **Vite 8** — bundles with **Rolldown**, not Rollup
 - **npm**
 
-Three version-specific traps, all of which cost time if assumed away:
+Four version-specific traps, all of which cost time if assumed away:
 
 1. **TypeScript 7 removed `baseUrl`.** Entries in `paths` must be relative
    (`"@/*": ["./src/*"]`).
@@ -148,6 +157,15 @@ Three version-specific traps, all of which cost time if assumed away:
 3. **Phaser 4 ships `export = Phaser`** typings against an ESM runtime build.
    `import Phaser from 'phaser'` is the form used here; named imports also work
    but do not meaningfully shrink the bundle, since the engine is monolithic.
+4. **Phaser 4 dropped WebGL geometry masks.** `GameObject.setMask` and
+   `Camera.setMask` are canvas-only: under WebGL they log a warning and leave
+   `mask` null, so the clip silently does nothing. The replacement,
+   `FilterList#addMask`, renders the mask object to a DynamicTexture. To clip a
+   rectangular region, give it a camera: `cameras.add(...)` plus `setViewport`
+   is a scissor rectangle and costs nothing (`SettingsScene`). A camera renders
+   every object the other cameras do, so `ignore()` both ways, and note that a
+   `setScrollFactor(0)` object lands offset by the second camera's viewport
+   origin.
 
 ## Project layout
 
@@ -171,6 +189,7 @@ src/
     theme.ts           PALETTE: the four colours the shell, curtain and clear colour share
   core/
     BaseScene.ts       Scene base class owning the build/layout lifecycle
+    haptics.ts         navigator.vibrate behind the player's setting; the one added web API
     Viewport.ts        Live layout frames (full / safe / content / designBox)
     motionPreference.ts  The one live read of prefers-reduced-motion
     safeArea.ts        Reads env(safe-area-inset-*) via a probe element
@@ -197,7 +216,8 @@ src/
     MenuScene.ts       Title; owns the first audio gesture
     MapScene.ts        The endless road, rendered as a bounded window
     PlayScene.ts       One level: hosts a vignette, never judges
-    SettingsScene.ts   Latency calibration, mute, reset progress
+    SettingsScene.ts   Labelled sections, scrolling under a camera viewport
+    CalibrateScene.ts  Tap offset: the latency measurement on its own screen
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -210,6 +230,9 @@ src/
     path.ts            Catmull-Rom smoothing and dash spacing
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
+    starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
+    sheen.ts           The light crossing a brass panel; still under reduced motion
+    switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces
   vignettes/
     registry.ts        The rotation. Order is the level assignment.
@@ -388,5 +411,11 @@ android:apk` builds, syncs and assembles a debug APK; it needs JDK 21 and an
 Android SDK (platform 36, build-tools 36.0.0) referenced from the untracked
 `android/local.properties`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
-is generated by `cap sync` and is not committed. No native plugins are used;
-the game never depends on a web-only API beyond Web Audio and pointer events.
+is generated by `cap sync` and is not committed. No native plugins are used; the game
+depends on exactly three web APIs — Web Audio, pointer events, and `navigator.vibrate`
+for the Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE`
+permission. The vibration call was added deliberately rather than worked around (see
+`docs/UI_REFINEMENTS.md`): a rhythm game played with one thumb confirms a landed tap with
+sound the player may have muted and with motion the thumb is covering. It is
+feature-detected at every call, fails silently, and never fires for anything the player
+did not just do. A fourth web API is not covered by that reasoning.

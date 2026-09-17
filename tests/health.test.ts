@@ -4,7 +4,7 @@ import type { Progress } from '../src/game/progress';
 import {
   HEALTH, HEALTH_COPY, abandonAttempt, attemptCostsHeart, beginAttempt, calendarDay, canBeginAttempt,
   canClaimDailyHeart, claimDailyHeart, claimFill, claimHeart, clearHealth, createAttemptId, fillHearts,
-  finishAttempt, formatCountdown, grantHeart, healthHud, isCleared, isMastered, isProtectedLevel,
+  finishAttempt, formatCountdown, grantHeart, healthHud, heartProgress, isCleared, isMastered, isProtectedLevel,
   loadHealth, reconcile, redeemDailyHeart, saveHealth, viewHealth, type Health,
 } from '../src/game/health';
 
@@ -492,5 +492,25 @@ describe('daily free heart', () => {
   it('keeps the rest-sheet copy that tells the player replays stay open', () => {
     expect(HEALTH_COPY.restNote).toMatch(/finished levels/i);
     expect(HEALTH_COPY.playNote).toMatch(/map/i);
+  });
+});
+
+describe('the refill a screen draws', () => {
+  it('is zero with nothing on the way, and climbs across the interval', () => {
+    const now = 1_700_000_000_000;
+    expect(heartProgress(viewHealth({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null }, now))).toBe(0);
+    // A heart that has just started coming back has come no distance.
+    const fresh = viewHealth({ hearts: 1, refillStartedAt: now, spentAttempt: null }, now);
+    expect(heartProgress(fresh)).toBeCloseTo(0, 5);
+    const half = viewHealth({ hearts: 1, refillStartedAt: now - HEALTH.regenMs / 2, spentAttempt: null }, now);
+    expect(heartProgress(half)).toBeCloseTo(0.5, 3);
+  });
+  it('never leaves 0-1, even for a clock that moved backwards', () => {
+    const now = 1_700_000_000_000;
+    for (const started of [now + HEALTH.regenMs, now - HEALTH.regenMs * 4, now - 1]) {
+      const p = heartProgress(viewHealth({ hearts: 1, refillStartedAt: started, spentAttempt: null }, now));
+      expect(p).toBeGreaterThanOrEqual(0);
+      expect(p).toBeLessThanOrEqual(1);
+    }
   });
 });

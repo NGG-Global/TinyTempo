@@ -147,3 +147,76 @@ export function chorusGlow(summaryAge: number, earned: number): number {
   if (t < 0) return 0;
   return Math.exp(-t * 2.8) * Math.sin(Math.min(1, t / 0.18) * Math.PI);
 }
+
+/**
+ * The plaque itself. It used to be a static plate that the medals happened to land on;
+ * the refinement hangs it from the ceiling on two ropes, so it arrives as an object with
+ * weight and every stamp visibly costs it something.
+ */
+export const PLAQUE = {
+  /** Seconds for the plaque to swing in, before the first medal is due. */
+  swing: 0.7,
+  /** Drop height at the start of the swing, in plaque heights. */
+  rise: 0.42,
+  /** Peak tilt of the swing, in radians. */
+  tilt: 0.055,
+  /** How far one stamp drives the plaque down, in plaque heights. */
+  jolt: 0.05,
+} as const;
+
+export interface PlaquePose {
+  readonly alpha: number;
+  /** Vertical offset in plaque heights. Negative is above rest. */
+  readonly drop: number;
+  /** Radians about the rope anchor above the plaque. */
+  readonly tilt: number;
+}
+
+/**
+ * Where the plaque hangs `age` seconds after the summary appeared. It falls the last
+ * stretch of its ropes and rings out on them, so the medals are already dropping into a
+ * plaque that has nearly, but not quite, come to rest.
+ */
+export function plaquePose(age: number, still = false): PlaquePose {
+  if (still) return { alpha: 1, drop: 0, tilt: 0 };
+  if (age <= 0) return { alpha: 0, drop: -PLAQUE.rise, tilt: -PLAQUE.tilt };
+  const fall = clamp01(age / PLAQUE.swing);
+  // The rope stops the fall, so the ringing is in the tilt rather than the height.
+  const drop = (1 - overshoot(fall, 0.1)) * -PLAQUE.rise;
+  const tilt = -PLAQUE.tilt * (1 - fall) + settle(age - PLAQUE.swing * 0.55, 9.5, 3.4) * PLAQUE.tilt * 0.8;
+  return { alpha: easeOut(clamp01(age / (PLAQUE.swing * 0.35))), drop, tilt };
+}
+
+/**
+ * The plaque's recoil from the medals already stamped, in plaque heights. Summed from
+ * the impacts themselves rather than run off a fixed timeline, so a one-star finish
+ * knocks it once and a three-star finish knocks it three times, in time with the brass.
+ */
+export function plaqueJolt(summaryAge: number, earned: number, exaggeration = 1.35): number {
+  let total = 0;
+  for (let k = 0; k < earned; k++) {
+    const age = starAge(summaryAge, k) - STAR_REVEAL.impact;
+    if (age < 0) continue;
+    total += Math.max(0, settle(age, 22, 9)) * PLAQUE.jolt * exaggeration;
+  }
+  return total;
+}
+
+export interface ChorusBurst {
+  /** Radius multiplier for the ray fan behind the plaque. */
+  readonly scale: number;
+  readonly alpha: number;
+  /** Radians, so the fan turns as it opens rather than flashing in place. */
+  readonly spin: number;
+}
+
+/**
+ * The fan of light a three-star finish throws behind the whole plaque, not just behind
+ * the third medal. Zero on anything short of three stars: the burst is the reward.
+ */
+export function chorusBurst(summaryAge: number, earned: number): ChorusBurst {
+  const glow = chorusGlow(summaryAge, earned);
+  if (glow <= 0) return { scale: 0, alpha: 0, spin: 0 };
+  const t = 1 - glow;
+  return { scale: 0.62 + t * 0.9, alpha: glow * 0.85, spin: t * 0.34 };
+}

@@ -9,6 +9,12 @@ export interface Settings {
    */
   readonly calibrationMs: number;
   readonly muted: boolean;
+  /**
+   * Short vibrations on a judged hit and on a control. Defaults on: the pulse is the
+   * only confirmation left to a player who has muted the game, and the one device that
+   * cannot do it ignores the setting entirely.
+   */
+  readonly haptics: boolean;
 }
 
 const KEY = 'tiny-tempo.settings.v1';
@@ -22,7 +28,7 @@ const VERSION = 1;
 export const CALIBRATION_LIMIT_MS = 500;
 /** Below this many usable taps a median says more about the sample than the device. */
 export const CALIBRATION_TAPS = 8;
-const DEFAULTS: Settings = Object.freeze({ calibrationMs: 0, muted: false });
+const DEFAULTS: Settings = Object.freeze({ calibrationMs: 0, muted: false, haptics: true });
 
 export function clampCalibration(ms: number): number {
   if (!Number.isFinite(ms)) return 0;
@@ -36,10 +42,13 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
-    const { calibrationMs, muted } = parsed as { calibrationMs?: unknown; muted?: unknown };
+    const { calibrationMs, muted, haptics } = parsed as { calibrationMs?: unknown; muted?: unknown; haptics?: unknown };
     return Object.freeze({
       calibrationMs: typeof calibrationMs === 'number' ? clampCalibration(calibrationMs) : 0,
       muted: muted === true,
+      // Absent in a v1 save written before the switch existed, and the default is on,
+      // so only an explicit `false` turns it off.
+      haptics: haptics !== false,
     });
   } catch { return DEFAULTS; }
 }

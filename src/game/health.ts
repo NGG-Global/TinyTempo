@@ -119,6 +119,16 @@ export function viewHealth(health: Health, now: number = Date.now()): HealthView
   };
 }
 
+/**
+ * How far the current refill has come, 0-1. The countdown already says when the next
+ * heart lands; this is the same fact as a picture, for the bar and the half-filled heart
+ * that the refined screens draw. Full hearts read as 0: there is nothing on the way.
+ */
+export function heartProgress(view: HealthView): number {
+  if (view.nextHeartInMs === null) return 0;
+  return Math.max(0, Math.min(1, 1 - view.nextHeartInMs / HEALTH.regenMs));
+}
+
 /** `m:ss` remaining. Ceil so a leftover millisecond still reads as a second on the clock. */
 export function formatCountdown(ms: number): string {
   const total = Math.max(0, Math.ceil(ms / 1000));

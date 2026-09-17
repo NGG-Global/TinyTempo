@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { chorusGlow, starAge, starImpactAge, starPose, STAR_REVEAL } from '../src/ui/starReveal';
+import {
+  chorusBurst, chorusGlow, PLAQUE, plaqueJolt, plaquePose, starAge, starImpactAge, starPose, STAR_REVEAL,
+} from '../src/ui/starReveal';
 
 describe('star reveal pose', () => {
   it('keeps an earned slot seated until its medal starts falling', () => {
@@ -61,5 +63,57 @@ describe('star reveal pose', () => {
     expect(chorusGlow(0, 3)).toBe(0);
     expect(chorusGlow(peakAt, 3)).toBeGreaterThan(0.4);
     expect(chorusGlow(peakAt + 1.5, 3)).toBeLessThan(0.05);
+  });
+});
+
+describe('the result plaque', () => {
+  it('swings in from above and comes to rest', () => {
+    const start = plaquePose(0);
+    expect(start.alpha).toBe(0);
+    expect(start.drop).toBeCloseTo(-PLAQUE.rise, 5);
+    const rest = plaquePose(8);
+    expect(rest.alpha).toBe(1);
+    expect(rest.drop).toBeCloseTo(0, 3);
+    expect(rest.tilt).toBeCloseTo(0, 3);
+    // Never above its anchor, and never further down than the jolt can take it.
+    const samples = Array.from({ length: 121 }, (_, i) => plaquePose(i / 60));
+    expect(Math.min(...samples.map(p => p.drop))).toBeGreaterThanOrEqual(-PLAQUE.rise);
+    expect(Math.max(...samples.map(p => p.drop))).toBeLessThan(0.08);
+    expect(Math.max(...samples.map(p => Math.abs(p.tilt)))).toBeLessThan(PLAQUE.tilt * 1.4);
+  });
+
+  it('is still under reduced motion rather than merely quicker', () => {
+    expect(plaquePose(0, true)).toEqual({ alpha: 1, drop: 0, tilt: 0 });
+    expect(plaquePose(0.3, true)).toEqual({ alpha: 1, drop: 0, tilt: 0 });
+  });
+
+  it('takes one knock per medal, in time with the brass', () => {
+    // Before the first stamp nothing has hit it.
+    expect(plaqueJolt(0, 3)).toBe(0);
+    expect(plaqueJolt(STAR_REVEAL.delay + STAR_REVEAL.impact - 0.01, 3)).toBe(0);
+    const afterFirst = plaqueJolt(STAR_REVEAL.delay + STAR_REVEAL.impact + 0.02, 3);
+    expect(afterFirst).toBeGreaterThan(0);
+    // A level that earned nothing never knocks the plaque at all.
+    const idle = Array.from({ length: 60 }, (_, i) => plaqueJolt(i / 30, 0));
+    expect(Math.max(...idle)).toBe(0);
+    // Three medals knock harder than one, and every knock rings out.
+    const peak = (earned: number): number =>
+      Math.max(...Array.from({ length: 180 }, (_, i) => plaqueJolt(i / 60, earned)));
+    expect(peak(3)).toBeGreaterThan(peak(1));
+    expect(plaqueJolt(6, 3)).toBeCloseTo(0, 4);
+  });
+
+  it('throws the chorus only on a clean sweep', () => {
+    const at = STAR_REVEAL.delay + STAR_REVEAL.spread + STAR_REVEAL.impact + 0.2;
+    expect(chorusBurst(at, 2)).toEqual({ scale: 0, alpha: 0, spin: 0 });
+    expect(chorusBurst(0, 3).alpha).toBe(0);
+    const burst = chorusBurst(at, 3);
+    expect(burst.alpha).toBeGreaterThan(0);
+    // It opens outward and turns as it goes, then leaves.
+    const later = chorusBurst(at + 0.4, 3);
+    expect(later.scale).toBeGreaterThan(burst.scale);
+    expect(later.spin).toBeGreaterThan(burst.spin);
+    expect(later.alpha).toBeLessThan(burst.alpha);
+    expect(chorusBurst(at + 4, 3).alpha).toBeCloseTo(0, 6);
   });
 });
