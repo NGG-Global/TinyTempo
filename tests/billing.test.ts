@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PRODUCT, classifyPurchaseError, createMonetization, createRevenueCatBilling } from '../src/monetization';
 import { claimFill, type Health } from '../src/game/health';
 import type { CatalogProduct, CustomerSnapshot, PurchasesClient, PurchaseReceipt } from '../src/monetization';
+import { readPremiumCache, writePremiumCache } from '../src/monetization/billing';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -352,5 +353,52 @@ describe('RevenueCat Premium entitlement', () => {
     }), { apiKey: 'goog_test', lateMs: 5, cache });
     await billing.boot();
     expect(billing.premium()).toBe(false);
+  });
+});
+
+describe('the cached entitlement', () => {
+  const KEY = 'tiny-tempo.premium.v1';
+  const DAY = 24 * 60 * 60 * 1000;
+  const NOW = 1_800_000_000_000;
+
+  it('honours a recent cache, so premium does not flicker off on a slow boot', () => {
+    const storage = memoryStorage();
+    writePremiumCache(storage, true, NOW);
+    expect(readPremiumCache(storage, NOW)).toBe(true);
+    expect(readPremiumCache(storage, NOW + 29 * DAY)).toBe(true);
+  });
+
+  it('stops honouring one the store has not confirmed in a month', () => {
+    // The bound is the whole reason this is a grace period and not a licence.
+    const storage = memoryStorage();
+    writePremiumCache(storage, true, NOW);
+    expect(readPremiumCache(storage, NOW + 31 * DAY)).toBe(false);
+  });
+
+  it('does not grant premium from a restored backup', () => {
+    // Auto Backup carries the WebView store to a new device. Before the timestamp this
+    // read `entitled === true` and nothing else, so a backup was a permanent entitlement
+    // on any device that never reached the network.
+    const restored = memoryStorage({ [KEY]: JSON.stringify({ version: 1, entitled: true }) });
+    expect(readPremiumCache(restored, NOW)).toBe(false);
+  });
+
+  it('refuses a cache from the future or from a clock that moved back', () => {
+    const storage = memoryStorage();
+    writePremiumCache(storage, true, NOW);
+    expect(readPremiumCache(storage, NOW - DAY)).toBe(false);
+  });
+
+  it('refuses a malformed cache rather than reading it optimistically', () => {
+    for (const raw of ['', 'null', '{}', '[]', 'not json', JSON.stringify({ entitled: 'yes', checkedAt: NOW })]) {
+      expect(readPremiumCache(memoryStorage({ [KEY]: raw }), NOW)).toBe(false);
+    }
+    expect(readPremiumCache(null, NOW)).toBe(false);
+  });
+
+  it('writes nothing it would then refuse to read', () => {
+    const storage = memoryStorage();
+    writePremiumCache(storage, false, NOW);
+    expect(readPremiumCache(storage, NOW)).toBe(false);
   });
 });

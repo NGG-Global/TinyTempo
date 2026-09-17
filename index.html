@@ -176,6 +176,68 @@
         }
       }
 
+      /*
+        Save-code entry. The one place the game asks for typed text, and the reason it
+        is DOM rather than canvas: a real `<input>` is what opens the system keyboard in
+        an Android WebView, with the platform's own selection, paste and autocorrect
+        handling. Drawing a keypad on the canvas would reimplement all of that worse.
+      */
+      #code-overlay {
+        justify-content: center;
+        gap: 1.1rem;
+        /* The body suppresses selection and browser touch handling for the canvas'
+           benefit; inside this panel both have to come back or the field is unusable. */
+        touch-action: auto;
+        -webkit-user-select: text;
+        user-select: text;
+      }
+
+      #code-input {
+        width: min(20rem, 100%);
+        padding: 0.75rem 0.85rem;
+        border: 3px solid var(--shell-fg);
+        border-radius: 0.7rem;
+        background: #fff;
+        color: var(--shell-fg);
+        font-family: 'Nunito', system-ui, sans-serif;
+        font-size: 1.15rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      #code-input:focus {
+        outline: none;
+        border-color: var(--shell-accent);
+      }
+
+      .code-actions {
+        display: flex;
+        gap: 0.7rem;
+      }
+
+      .code-button {
+        min-width: 7rem;
+        /* 48 CSS px, the same accessible floor LAYOUT.minTouchTarget sets on the canvas. */
+        min-height: 3rem;
+        padding: 0 1.1rem;
+        border: none;
+        border-radius: 0.7rem;
+        background: var(--shell-accent);
+        color: #fff8ec;
+        font-family: 'Fredoka', system-ui, sans-serif;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+      }
+
+      .code-button--quiet {
+        background: transparent;
+        border: 3px solid var(--shell-muted);
+        color: var(--shell-fg);
+      }
+
       .rotate-icon {
         width: 2.5rem;
         height: 4rem;
@@ -226,6 +288,29 @@
     <div class="overlay" id="orientation-overlay" hidden>
       <div class="rotate-icon"></div>
       <p class="overlay__title">Portrait, please</p>
+    </div>
+
+    <!--
+      Save-code entry, shown by `core/shell.ts` and hidden the rest of the time. See
+      docs/SAVES.md for why restoring merges rather than replaces.
+    -->
+    <div class="overlay" id="code-overlay" role="dialog" aria-modal="true" aria-labelledby="code-title" hidden>
+      <p class="overlay__title" id="code-title">Enter a save code</p>
+      <p class="overlay__note">Paste or type the code from your other device. Dashes and spacing don’t matter.</p>
+      <input
+        id="code-input"
+        type="text"
+        inputmode="text"
+        autocapitalize="characters"
+        autocomplete="off"
+        autocorrect="off"
+        spellcheck="false"
+        aria-labelledby="code-title"
+      />
+      <div class="code-actions">
+        <button type="button" class="code-button code-button--quiet" id="code-cancel">Cancel</button>
+        <button type="button" class="code-button" id="code-confirm">Restore</button>
+      </div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

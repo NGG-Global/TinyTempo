@@ -39,7 +39,8 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'unlock' | 'restore' | 'refill' | 'reset' | 'privacy' | 'terms' | 'done';
+type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'unlock' | 'restore' | 'refill'
+  | 'transfer' | 'reset' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -194,6 +195,9 @@ export class SettingsScene extends BaseScene {
       refill: rowTitle(STORE_COPY.refillTitle),
       refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
       refillPrice: chip(''),
+      transfer: rowTitle('Save code'),
+      transferNote: rowNote('Carry your progress to another device'),
+      transferGo: chip('Open'),
       level: rowTitle(''),
       levelNote: rowNote(''),
       reset: chip('Reset'),
@@ -375,14 +379,26 @@ export class SettingsScene extends BaseScene {
       y += SETTINGS.sectionGap * s;
     }
 
-    // PROGRESS — the one control with no undo, so it arms before it fires.
+    // PROGRESS — the way out, then the way to destroy it. The save code goes first because
+    // a player who reads this far and taps the wrong one should land on the recoverable one.
     eyebrow(4);
-    const progress = plate(row);
+    const progress = plate(row * 2);
     this.rows.progress = progress;
-    this.texts.level!.setPosition(left + 30 * s, progress.centerY);
-    this.texts.levelNote!.setPosition(left + 30 * s + this.texts.level!.width + 10 * s, progress.centerY);
+    const transferRow = new Phaser.Geom.Rectangle(left, progress.y, width, row);
+    this.rows.transferRow = transferRow;
+    this.texts.transfer!.setPosition(left + 30 * s, transferRow.centerY - 15 * s);
+    this.texts.transferNote!.setPosition(left + 30 * s, transferRow.centerY + 19 * s);
+    const goW = Math.max(150 * s, control);
+    const goRect = new Phaser.Geom.Rectangle(transferRow.right - 26 * s - goW, transferRow.centerY - control / 2, goW, control);
+    this.rows.transfer = goRect;
+    this.texts.transferGo!.setPosition(goRect.centerX, goRect.centerY);
+    this.hits.push({ name: 'transfer', rect: goRect, pinned: false });
+
+    const resetRow = new Phaser.Geom.Rectangle(left, progress.y + row, width, row);
+    this.texts.level!.setPosition(left + 30 * s, resetRow.centerY);
+    this.texts.levelNote!.setPosition(left + 30 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
     const resetW = Math.max(160 * s, control);
-    const resetRect = new Phaser.Geom.Rectangle(progress.right - 26 * s - resetW, progress.centerY - control / 2, resetW, control);
+    const resetRect = new Phaser.Geom.Rectangle(resetRow.right - 26 * s - resetW, resetRow.centerY - control / 2, resetW, control);
     this.rows.reset = resetRect;
     this.texts.reset!.setPosition(resetRect.centerX, resetRect.centerY);
     this.hits.push({ name: 'reset', rect: resetRect, pinned: false });
@@ -482,7 +498,15 @@ export class SettingsScene extends BaseScene {
       drawPanel(g, this.rows.refillPrice, s, { fill: SHELL.cream, depth: 8, press: sunk('refill'), radius: 18 });
       this.texts.refillPrice!.setY(this.rows.refillPrice.centerY + 8 * s * sunk('refill') * 0.8);
     }
-    // Progress.
+    // Progress: the save code, the scored line, then reset.
+    if (this.rows.transfer && this.rows.transferRow) {
+      const line = this.rows.transferRow;
+      g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(line.x + 24 * s, line.bottom - 1.5 * s, line.width - 48 * s, 3 * s);
+      drawPanel(g, this.rows.transfer, s, { fill: SHELL.cream, depth: 8, press: sunk('transfer'), radius: 18 });
+      const sink = 8 * s * sunk('transfer') * 0.8;
+      drawChevron(g, this.rows.transfer.right - 30 * s, this.rows.transfer.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.transferGo!.setPosition(this.rows.transfer.centerX - 14 * s, this.rows.transfer.centerY + sink);
+    }
     if (this.rows.reset) {
       drawPanel(g, this.rows.reset, s, {
         fill: this.resetArmed ? PALETTE.coral : SHELL.cream, depth: 8, press: sunk('reset'), radius: 18,
@@ -687,6 +711,9 @@ export class SettingsScene extends BaseScene {
       case 'done': this.leave(); return;
       case 'tune':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Calibrate, { from: this.from })));
+        return;
+      case 'transfer':
+        this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Transfer, { from: this.from })));
         return;
       case 'sound': this.toggleSound(); return;
       case 'haptics': this.toggleHaptics(); return;

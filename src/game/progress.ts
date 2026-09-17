@@ -71,6 +71,30 @@ export function recordResult(progress: Progress, level: number, accuracy: number
 }
 
 /**
+ * Two saves into one, keeping the better of each.
+ *
+ * Restoring a save code merges rather than replaces, and the reason is that a player
+ * restoring onto a device that already has progress would otherwise lose whichever
+ * side was behind — with no undo, and usually without noticing until much later. Taking
+ * the higher frontier and the higher accuracy per level means a restore can only ever
+ * add, which is what lets it happen on one tap instead of behind a confirmation the
+ * player has no way to answer well.
+ *
+ * Only what was earned merges. Settings and the tutorial flag are preferences and come
+ * across whole; hearts, the ledgers and the premium cache are not in a save code at all.
+ */
+export function mergeProgress(local: Progress, incoming: Progress): Progress {
+  const best: Record<number, number> = { ...local.best };
+  for (const [level, accuracy] of Object.entries(incoming.best)) {
+    const n = Number(level);
+    if (!Number.isInteger(n) || n < 1 || !Number.isFinite(accuracy)) continue;
+    best[n] = Math.max(best[n] ?? 0, Math.max(0, Math.min(100, accuracy)));
+  }
+  const unlocked = Math.min(MAX_LEVEL, Math.max(local.unlocked, incoming.unlocked, frontierFrom(best)));
+  return { unlocked, best: Object.freeze(best) };
+}
+
+/**
  * The escape hatch for a save the player cannot otherwise recover from, and the only
  * place progress is ever destroyed. False means nothing was written.
  */
