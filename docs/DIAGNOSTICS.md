@@ -206,13 +206,14 @@ Almost always one of three things, in this order:
   Sentry credentials, so no upload has ever landed. Run `npm run build:release`
   once against the real project and confirm a test error arrives *symbolicated*
   before trusting a release.
-- **Ingest has accepted the app's own envelope.** The sandbox intercepts TLS, so a
-  browser here cannot complete the POST — but the envelope the app builds was
-  captured at the network boundary and relayed with `curl`, which uses the proxy's
-  CA. Sentry answered `HTTP 200` and returned the event id, with the right exception
-  type, tags, release, game context and four breadcrumbs dated to this year. What
-  has still not happened is a human looking at the dashboard; receipt is confirmed,
-  presentation is not.
+- ~~No event has been confirmed in Sentry.~~ **Confirmed, end to end.** The sandbox
+  intercepts TLS, so a browser here cannot complete the POST; the envelope the app
+  builds was captured at the network boundary and relayed with `curl`, which uses the
+  proxy's CA. Sentry answered `HTTP 200`, and the event then appeared in the dashboard
+  and raised its alert. The payload carried `ReferenceError` as its own type, the
+  `kind` and `seen` tags, the release, the game context and four breadcrumbs dated to
+  this year — so all three bugs found while building this are still fixed, on the
+  round trip that matters rather than in a test.
 - No in-app opt-out switch. The privacy policy says so plainly. Worth adding to
   Settings if reporting ever grows past diagnostics.
 - `sampleRate` is 1. Correct for launch; revisit if the audience grows enough for

@@ -16,13 +16,15 @@ read out of the repository and is accurate as of this audit.
 
 ### Things that would hurt after launch, in the order they would hurt
 
-**1. ~~No crash reporting.~~ Done — needs a Sentry account to switch on.**
+**1. ~~No crash reporting.~~ Done, and confirmed against the live project.**
 `core/errors.ts` captures window errors, unhandled rejections and explicit
 reports, with de-duplication, a session cap, breadcrumbs and redaction;
 `diagnostics/sentry.ts` is the vendor adapter, loaded only when a DSN was built
-in. See `docs/DIAGNOSTICS.md`. What is left is operational, not code: create the
-project, set the four environment variables, and run the sourcemap upload once
-for real — it has only been exercised on its failure path here.
+in. An event the game itself produced has now reached the dashboard and alerted.
+See `docs/DIAGNOSTICS.md`. One operational step remains: **run the sourcemap
+upload once for real**, because it has only ever been exercised on its failure
+path. Until then every stack trace from a release build arrives minified, which
+is the one thing that makes a crash report useless.
 
 **2. ~~Progress lives only on the device.~~ Done — needs one check on hardware.**
 Two answers, neither of them an account. Auto Backup is now declared rather than
@@ -145,11 +147,12 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Run `npm run build:release` once against the real project** and confirm a
       test error arrives *symbolicated*. Only the failure paths have been exercised
       here — no upload has ever landed, because this repository has no credentials.
-- [x] ~~Confirm Sentry accepts an event.~~ Done: the envelope the app builds was
-      relayed to ingest and returned `HTTP 200` with an event id. Two events exist —
-      one synthetic (`environment: verification`) and one the app produced
-      (`environment: development`). **If the dashboard looks empty, check the
-      environment filter**, which defaults in some views to `production`.
+- [x] ~~Confirm an event is actually visible in the Sentry dashboard.~~ Done — the
+      event the app produced arrived, appeared, and alerted. Two events exist: one
+      synthetic (`environment: verification`) and one from the app
+      (`environment: development`); the synthetic one can be deleted, it was only ever
+      a probe. **If a project ever looks empty again, check the environment filter**
+      before anything else — a dev session reports as `development`.
 - [ ] Confirm `dist/` holds no `.map` afterwards. `@sentry/vite-plugin` deletes
       them, `scripts/check-no-sourcemaps.mjs` fails the build if any survive, and
       CI checks the same thing on a plain build.
