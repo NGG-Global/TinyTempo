@@ -11,7 +11,7 @@
     "lint": "oxlint src tests --deny-warnings",
     "test": "vitest run",
     "build": "tsc --noEmit && vite build",
-    "build:release": "SOURCEMAP=hidden npm run build && node scripts/upload-sourcemaps.mjs",
+    "build:release": "SENTRY_UPLOAD=1 npm run build && node scripts/check-no-sourcemaps.mjs",
     "preview": "vite preview",
     "preview:host": "vite preview --host",
     "music:encode": "node scripts/encode-music.mjs",
@@ -33,6 +33,7 @@
   "devDependencies": {
     "@breezystack/lamejs": "^1.2.7",
     "@capacitor/cli": "^8.5.1",
+    "@sentry/vite-plugin": "^5.4.0",
     "@types/node": "^26.5.0",
     "oxlint": "^1.82.0",
     "typescript": "^7.0.2",

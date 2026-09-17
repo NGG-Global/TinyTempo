@@ -73,8 +73,11 @@ Sentry adapter), the same split `monetization/` uses — see `docs/DIAGNOSTICS.m
 by message plus top frame and re-sent only on a power-of-two repeat; nothing added to a
 sink may throw, and nothing may send a query string or a device file path. Capture is
 installed before Phaser is constructed. Sourcemaps are still never shipped: only
-`npm run build:release` emits them, and it deletes them from `dist/` after upload,
-which is what CI's "no sourcemaps ship" check keeps honest.
+`npm run build:release` emits them, and `@sentry/vite-plugin` uploads and deletes them,
+which is what CI's "no sourcemaps ship" check keeps honest. That plugin **warns instead
+of failing** on a missing token or a failed upload, which would ship a release whose
+every trace is minified, so `vite.config.ts` throws on both and
+`scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
