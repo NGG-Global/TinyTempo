@@ -181,6 +181,24 @@ deprecated and removed in SDK v11. The categories are named explicitly so a futu
 SDK default cannot quietly start attaching something the privacy policy does not
 cover.
 
+## When nothing arrives in Sentry
+
+Almost always one of three things, in this order:
+
+1. **No `.env`.** It is gitignored, because a DSN is a write credential for an issue
+   stream, so a fresh clone has `.env.example` and nothing else. With an empty DSN
+   `installDiagnostics` returns before the vendor chunk is even fetched, and an empty
+   Sentry project looks exactly like an app that has not crashed yet. `npm run build`
+   now warns about this, `npm run build:release` refuses outright, and `npm run dev`
+   says so once in the console.
+2. **The DSN is inlined at build time, not read at run time.** Vite replaces
+   `import.meta.env.VITE_SENTRY_DSN` with a literal when the bundle is built, so an
+   APK or a `preview` build has to be *built* with the variable set. Setting it
+   afterwards changes nothing.
+3. **The environment filter.** `environment` is Vite's mode, so a `npm run dev`
+   session reports as `development`. A dashboard filtered to `production` will show
+   nothing and look broken.
+
 ## Still to do
 
 - **A successful upload is still unverified.** The failure paths are covered —
@@ -188,10 +206,13 @@ cover.
   Sentry credentials, so no upload has ever landed. Run `npm run build:release`
   once against the real project and confirm a test error arrives *symbolicated*
   before trusting a release.
-- **No event has been confirmed in Sentry.** Sentry's own skill is firm that the
-  task is not done until an event is seen in the dashboard; that needs the Sentry
-  MCP or a real DSN, and neither exists here. What *was* verified is that the game
-  attaches the SDK and posts an envelope to the configured ingest host.
+- **Ingest has accepted the app's own envelope.** The sandbox intercepts TLS, so a
+  browser here cannot complete the POST — but the envelope the app builds was
+  captured at the network boundary and relayed with `curl`, which uses the proxy's
+  CA. Sentry answered `HTTP 200` and returned the event id, with the right exception
+  type, tags, release, game context and four breadcrumbs dated to this year. What
+  has still not happened is a human looking at the dashboard; receipt is confirmed,
+  presentation is not.
 - No in-app opt-out switch. The privacy policy says so plainly. Worth adding to
   Settings if reporting ever grows past diagnostics.
 - `sampleRate` is 1. Correct for launch; revisit if the audience grows enough for

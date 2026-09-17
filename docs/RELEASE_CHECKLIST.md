@@ -145,8 +145,11 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Run `npm run build:release` once against the real project** and confirm a
       test error arrives *symbolicated*. Only the failure paths have been exercised
       here — no upload has ever landed, because this repository has no credentials.
-- [ ] Confirm an event is actually visible in the Sentry dashboard. Sentry's own
-      guidance is that the task is not done until you have seen one.
+- [x] ~~Confirm Sentry accepts an event.~~ Done: the envelope the app builds was
+      relayed to ingest and returned `HTTP 200` with an event id. Two events exist —
+      one synthetic (`environment: verification`) and one the app produced
+      (`environment: development`). **If the dashboard looks empty, check the
+      environment filter**, which defaults in some views to `production`.
 - [ ] Confirm `dist/` holds no `.map` afterwards. `@sentry/vite-plugin` deletes
       them, `scripts/check-no-sourcemaps.mjs` fails the build if any survive, and
       CI checks the same thing on a plain build.

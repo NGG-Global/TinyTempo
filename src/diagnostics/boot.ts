@@ -18,7 +18,15 @@ export function installDiagnostics(): void {
   bridgeCommerceBreadcrumbs();
   breadcrumb('boot');
   installTestTrigger();
-  if (DIAGNOSTICS.dsn === '') return;
+  if (DIAGNOSTICS.dsn === '') {
+    // Said once, in development only. An empty Sentry project looks exactly like an app
+    // that has not crashed yet, and the difference is a `.env` that a fresh clone does not
+    // have — which is worth one line in the console rather than an afternoon.
+    if (import.meta.env.DEV) {
+      console.info('[diagnostics] No VITE_SENTRY_DSN: errors are captured but sent nowhere.');
+    }
+    return;
+  }
   void attachSentry();
 }
 
