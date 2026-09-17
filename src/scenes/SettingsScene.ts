@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { setAnalyticsConsent } from '@/analytics/boot';
 import { isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -40,7 +41,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'reset' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'reset' | 'analytics' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -104,9 +105,10 @@ export class SettingsScene extends BaseScene {
   private headlineAt = { x: 0, y: 0 };
   private soundOn = true;
   private hapticsOn = true;
+  private analyticsOn = false;
   /** 0-1 positions, so a flipped switch slides rather than jumping. */
-  private switchAt = { sound: 1, haptics: 1 };
-  private switchedAt = { sound: -Infinity, haptics: -Infinity };
+  private switchAt = { sound: 1, haptics: 1, analytics: 1 };
+  private switchedAt = { sound: -Infinity, haptics: -Infinity, analytics: -Infinity };
   private disposed = false;
   private get reducedMotion(): boolean { return reducedMotion(); }
 
@@ -127,8 +129,11 @@ export class SettingsScene extends BaseScene {
     const settings = loadSettings();
     this.soundOn = !isMuted(this);
     this.hapticsOn = settings.haptics;
-    this.switchAt = { sound: this.soundOn ? 1 : 0, haptics: this.hapticsOn ? 1 : 0 };
-    this.switchedAt = { sound: -Infinity, haptics: -Infinity };
+    this.analyticsOn = settings.analytics;
+    this.switchAt = {
+      sound: this.soundOn ? 1 : 0, haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0,
+    };
+    this.switchedAt = { sound: -Infinity, haptics: -Infinity, analytics: -Infinity };
     this.enteredAt = performance.now() / 1000;
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.16 }, glowAlpha: 0.6 });
     this.band = this.add.container(0, 0).setDepth(1);
@@ -144,7 +149,7 @@ export class SettingsScene extends BaseScene {
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
     this.headline = display(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
-    for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress']) {
+    for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy']) {
       this.eyebrows.push(this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     }
     this.buildTexts();
@@ -195,6 +200,12 @@ export class SettingsScene extends BaseScene {
       refill: rowTitle(STORE_COPY.refillTitle),
       refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
       refillPrice: chip(''),
+      analytics: rowTitle('Share usage data'),
+      // Kept short on purpose: the switch starts 150 units from the card's right edge, so
+      // a note has about 450 design units — roughly forty characters at this size — before
+      // it runs under the knob. It also answers the question a consent row actually raises,
+      // which is what is *not* sent.
+      analyticsNote: rowNote('No name, no progress — offers only'),
       transfer: rowTitle('Save code'),
       transferNote: rowNote('Carry your progress to another device'),
       transferGo: chip('Open'),
@@ -403,6 +414,18 @@ export class SettingsScene extends BaseScene {
     this.texts.reset!.setPosition(resetRect.centerX, resetRect.centerY);
     this.hits.push({ name: 'reset', rect: resetRect, pinned: false });
 
+    // PRIVACY — one switch. The policy's "your choices" section has to be able to point
+    // at something a player can actually reach, and a consent that can only be granted by
+    // a build flag is not a choice.
+    y += SETTINGS.sectionGap * s;
+    eyebrow(5);
+    const privacy = plate(row);
+    this.rows.privacyCard = privacy;
+    this.rows.analytics = switchRect(privacy, privacy.y, row);
+    this.texts.analytics!.setPosition(left + 30 * s, privacy.centerY - 15 * s);
+    this.texts.analyticsNote!.setPosition(left + 30 * s, privacy.centerY + 19 * s);
+    this.hits.push({ name: 'analytics', rect: new Phaser.Geom.Rectangle(left, privacy.y, width, row), pinned: false });
+
     // A store or reset message, under the last section rather than over a row.
     this.texts.notice!.setWordWrapWidth(width - 40 * s, false);
     resize(this.texts.notice!, 25 * s, PALETTE.coral, STYLE.current, false);
@@ -507,6 +530,7 @@ export class SettingsScene extends BaseScene {
       drawChevron(g, this.rows.transfer.right - 30 * s, this.rows.transfer.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.transferGo!.setPosition(this.rows.transfer.centerX - 14 * s, this.rows.transfer.centerY + sink);
     }
+    if (this.rows.analytics) drawSwitch(g, this.rows.analytics, s, this.switchAt.analytics);
     if (this.rows.reset) {
       drawPanel(g, this.rows.reset, s, {
         fill: this.resetArmed ? PALETTE.coral : SHELL.cream, depth: 8, press: sunk('reset'), radius: 18,
@@ -573,8 +597,9 @@ export class SettingsScene extends BaseScene {
       if (!this.pressDirty) this.pressed = null;
     }
     // The switches slide rather than cut, and the slide is the only thing that redraws.
-    for (const key of ['sound', 'haptics'] as const) {
-      const target = (key === 'sound' ? this.soundOn : this.hapticsOn) ? 1 : 0;
+    const switchOn = { sound: this.soundOn, haptics: this.hapticsOn, analytics: this.analyticsOn };
+    for (const key of ['sound', 'haptics', 'analytics'] as const) {
+      const target = switchOn[key] ? 1 : 0;
       if (Math.abs(this.switchAt[key] - target) < 0.002) { this.switchAt[key] = target; continue; }
       const age = now - this.switchedAt[key];
       const t = this.reducedMotion ? 1 : Math.min(1, age / 0.18);
@@ -717,6 +742,7 @@ export class SettingsScene extends BaseScene {
         return;
       case 'sound': this.toggleSound(); return;
       case 'haptics': this.toggleHaptics(); return;
+      case 'analytics': this.toggleAnalytics(); return;
       case 'unlock': void this.buy(PRODUCT.premium); return;
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
@@ -739,6 +765,19 @@ export class SettingsScene extends BaseScene {
     setHaptics(this.hapticsOn);
     saveSettings({ ...loadSettings(), haptics: this.hapticsOn });
     if (this.hapticsOn) vibrate('stamp');
+    this.refreshCopy();
+  }
+
+  /**
+   * The switch is the stored answer, and the SDK is told afterwards. That order is
+   * deliberate: a consent call that cannot be delivered — no provider in this build, no
+   * network, a browser — must not leave the switch showing something the save disagrees
+   * with, because the save is what the next boot reads.
+   */
+  private toggleAnalytics(): void {
+    this.analyticsOn = !this.analyticsOn;
+    this.switchedAt.analytics = performance.now() / 1000;
+    void setAnalyticsConsent(this.analyticsOn);
     this.refreshCopy();
   }
 

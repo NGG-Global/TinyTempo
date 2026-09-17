@@ -21,15 +21,15 @@ function fakeStorage(initial?: string) {
 
 describe('stored settings', () => {
   it('falls back to the defaults for missing, unparseable and wrongly shaped values', () => {
-    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false, haptics: true });
-    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false, haptics: true });
-    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
-    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
-    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
-    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true });
+    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
   });
   it('clamps a stored offset rather than trusting it', () => {
-    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true, haptics: true });
+    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true, haptics: true, analytics: false });
     expect(loadSettings(fakeStorage(`{"calibrationMs":${1e9}}`)).calibrationMs).toBe(CALIBRATION_LIMIT_MS);
     expect(loadSettings(fakeStorage('{"calibrationMs":-1e9}')).calibrationMs).toBe(-CALIBRATION_LIMIT_MS);
     expect(clampCalibration(NaN)).toBe(0);
@@ -46,14 +46,14 @@ describe('stored settings', () => {
   });
   it('reports whether a write landed and clamps on the way out', () => {
     const storage = fakeStorage();
-    expect(saveSettings({ calibrationMs: 5000, muted: true, haptics: true }, storage)).toBe(true);
-    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true, haptics: true });
-    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true }, null)).toBe(false);
+    expect(saveSettings({ calibrationMs: 5000, muted: true, haptics: true, analytics: false }, storage)).toBe(true);
+    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true, haptics: true, analytics: false });
+    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics: false }, null)).toBe(false);
     const blocked = { setItem: () => { throw new Error('quota'); } } as unknown as Storage;
-    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true }, blocked)).toBe(false);
+    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics: false }, blocked)).toBe(false);
     // A round trip through storage is the shape the game actually uses.
-    saveSettings({ calibrationMs: -40, muted: false, haptics: false }, storage);
-    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, haptics: false });
+    saveSettings({ calibrationMs: -40, muted: false, haptics: false, analytics: false }, storage);
+    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, haptics: false, analytics: false });
   });
 });
 
@@ -121,5 +121,34 @@ describe('the offset applies to judged input only', () => {
       // so shifting them would introduce an error rather than remove one.
       expect(clock.now()).toBeCloseTo(10, 9);
     } finally { vi.restoreAllMocks(); }
+  });
+});
+
+describe('analytics consent', () => {
+  it('treats a save written before the switch existed as unanswered, not as a yes', () => {
+    // The opposite of the `haptics` rule above, and deliberately so: a missing preference
+    // can be assumed, a missing consent cannot. The fallback is the build's own default.
+    const old = fakeStorage(JSON.stringify({ version: 1, calibrationMs: 0, muted: false, haptics: true }));
+    expect(loadSettings(old).analytics).toBe(false);
+    // And the rest of that save is still read, so this is the field falling back and not
+    // the whole parse failing into the defaults.
+    expect(loadSettings(old).haptics).toBe(true);
+  });
+
+  it('keeps an explicit answer of either kind', () => {
+    for (const analytics of [true, false]) {
+      const storage = fakeStorage();
+      saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics }, storage);
+      expect(loadSettings(storage).analytics).toBe(analytics);
+    }
+  });
+
+  it('ignores a non-boolean answer rather than coercing it', () => {
+    for (const analytics of ['true', 1, {}, null]) {
+      const storage = fakeStorage(JSON.stringify({ version: 1, calibrationMs: -20, analytics }));
+      expect(loadSettings(storage).analytics).toBe(false);
+      // Same guard: the neighbouring field proves the save parsed rather than threw.
+      expect(loadSettings(storage).calibrationMs).toBe(-20);
+    }
   });
 });

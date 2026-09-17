@@ -39,9 +39,19 @@ export const SAVE_CODE = {
 
 export type SaveCodeError = 'empty' | 'malformed' | 'checksum' | 'version';
 
+/**
+ * The settings a code carries — deliberately not all of them.
+ *
+ * `Settings.analytics` is a consent signal, not a preference: it belongs to the device
+ * and the jurisdiction its owner is in, not to the save. Restoring a code must not answer
+ * a consent question on a phone whose owner was never asked it, so the type says so and
+ * the compiler keeps it that way.
+ */
+export type PortableSettings = Pick<Settings, 'calibrationMs' | 'muted' | 'haptics'>;
+
 export interface SaveData {
   readonly progress: Progress;
-  readonly settings: Settings;
+  readonly settings: PortableSettings;
   readonly tutorialComplete: boolean;
 }
 
