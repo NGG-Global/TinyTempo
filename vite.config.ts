@@ -65,8 +65,8 @@ export default defineConfig({
         // By default a failed upload only warns and the build still exits 0 — measured,
         // not assumed. That ships a release nobody can read a crash from, so it throws.
         errorHandler: error => { throw error; },
-        // The plugin reports its own build telemetry to Sentry's org. This is NGG's
-        // build, not theirs.
+        // The plugin reports its own build telemetry to Sentry's own org by default.
+        // This build is not theirs to measure.
         telemetry: false,
       }),
     ]

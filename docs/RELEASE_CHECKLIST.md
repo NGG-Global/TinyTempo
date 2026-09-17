@@ -49,10 +49,12 @@ drop in `google-services.json`, set the two build flags, and confirm an event in
 DebugView.
 
 **4. No in-app support route.** The store listing will carry a contact email, but
-a player who loses progress or is charged twice has no path from inside the game.
-Related: the address in the published privacy policy and terms is
-`dor1612@gmail.com` — a personal Gmail on an NGG Global product. Worth moving to
-a role address before the listing goes live.
+a player who loses progress or is charged twice has no path from inside the game —
+no address, no way to attach a save code, and nothing that tells support which
+build or device they are looking at.
+
+The contact address, `dor1612@gmail.com`, is correct and stays: this is a personal
+project rather than an NGG product, whatever the repository host suggests.
 
 ### Real gaps that are not launch blockers
 
@@ -64,7 +66,7 @@ cheaper than it looks.
 
 **6. English only.** No localization layer at all — every string is a literal in
 the scene that draws it. `android:supportsRtl="true"` is set but nothing is
-authored RTL. Hebrew is an obvious first candidate for an NGG title.
+authored RTL. Hebrew is an obvious first candidate given where this is written.
 
 **7. No Play Games Services.** No achievements, no leaderboards, and no Saved
 Games. Saved Games was the obvious answer to gap 2 and is no longer needed for
@@ -86,12 +88,17 @@ colour-vision check, there is no text-size option, and the judged-tap windows in
 player-friendly choice and I would not change it, but it means revenue leans
 almost entirely on the $4.99 Premium. Worth knowing before you model anything.
 
-**12. The identity is inconsistent, and one half of it is permanent.** The
-`applicationId` is `com.ngg.smallacts`; the app is called Tiny Tempo.
-**The application ID can never be changed once published.** Decide now whether
-you can live with it. `package.json` says `0.1.0`, Android says `versionName
-"1.0"`, and the settings footer reads from `package.json` — so the app currently
-tells the player one version and the store another.
+**12. ~~The identity is inconsistent~~ — half fixed; the version half remains.**
+The `applicationId` is now `com.tinytempo.app`, renamed from `com.ngg.smallacts`
+while that was still possible: **an application ID can never be changed once
+published**, and the old one carried both a company prefix this is not published
+under and the project's former name. The legal pages now name Tiny Tempo Games as
+publisher and data controller, which has to match the Play developer account
+exactly.
+
+Still open: `package.json` says `0.1.0`, Android says `versionName "1.0"`, and the
+settings footer reads from `package.json` — so the app tells the player one version
+and the store another.
 
 ---
 
@@ -207,7 +214,7 @@ The code is in and tested; these are the account-side steps.
 
 ### D. Play Console — products and services
 
-- [ ] Create the Play Console app entry; claim `com.ngg.smallacts`.
+- [ ] Create the Play Console app entry; claim `com.tinytempo.app`.
 - [ ] Create the in-app products with the exact IDs the code uses:
       `tinytempo_premium` (one-time) and `heart_refill_full` (consumable) —
       both from `src/monetization/types.ts`.
@@ -256,9 +263,18 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Account deletion** — the game has no accounts, so this likely does not
       apply *(verify how the requirement is phrased now.)*
 - [ ] Privacy policy URL: `https://ngg-global.github.io/TinyTempo/privacy/` is
-      live and covers advertising, purchases, retention, children and — as of the
-      crash-reporting change — a section 6 on what a crash report contains and what
-      it does not. Re-publish Pages so the live page matches the app you submit.
+      live and covers advertising, purchases, retention, children, a section 6 on
+      what a crash report contains, and a section 7 on analytics. Re-publish Pages
+      so the live page matches the app you submit — **the pages have changed since
+      they were last published**, so this is now required, not routine.
+- [ ] **Developer name must match the legal pages.** They name *Tiny Tempo Games*
+      as publisher and data controller; the Play developer account has to say the
+      same thing, and Play verifies and displays it publicly.
+- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Tiny
+      Tempo Games. That is only where the repository lives and is not a claim about
+      who publishes the app, but it reads oddly to anyone who looks. Moving the repo
+      or pointing a domain at Pages would settle it; the URL in
+      `SettingsScene.LEGAL` has to change with it.
 
 ### G. Testing before you promote anything
 
@@ -285,7 +301,8 @@ The code is in and tested; these are the account-side steps.
 - [ ] ~~Attach an analytics provider to the existing sink~~ — done, `docs/ANALYTICS.md`.
 - [ ] ~~Decide on cloud save~~ — done: Auto Backup plus a save code, `docs/SAVES.md`
       (gap 2).
-- [ ] Settle the `com.ngg.smallacts` application ID — it is permanent (gap 12).
+- [x] ~~Settle the application ID~~ — `com.tinytempo.app`, renamed before first
+      publish because it is permanent afterwards (gap 12).
 - [ ] Align `versionName`, `versionCode` and `package.json`.
 
 ### I. After launch

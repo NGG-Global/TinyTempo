@@ -136,8 +136,8 @@ CI's "no sourcemaps ship" check runs against a plain `npm run build`, where
 The release string is `tiny-tempo@<package.json version>` in `config/diagnostics.ts`
 and in the plugin's `release.name`. If they drift, traces arrive unsymbolicated.
 
-`telemetry: false` keeps the plugin from reporting NGG's build data to Sentry's own
-organisation, which is its default.
+`telemetry: false` keeps the plugin from reporting this project's build data to
+Sentry's own organisation, which is its default.
 
 ## Where this diverges from Sentry's recommended base, and why
 

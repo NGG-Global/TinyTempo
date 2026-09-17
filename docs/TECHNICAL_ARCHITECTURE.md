@@ -88,7 +88,7 @@ The Git/project root is `Phaser/`, one directory below the supplied workspace. T
 
 | Area | Observed state | Implication |
 | --- | --- | --- |
-| Package | `ngg-phaser-mobile`, private ESM, version 0.1.0 | Small starter, no application framework |
+| Package | `tiny-tempo`, private ESM, version 0.1.0 | Small starter, no application framework |
 | Phaser | Declared `^4.2.1`; lockfile resolves **4.2.1** | This is a Phaser 4 project; no installed engine was available to inspect |
 | Toolchain | TypeScript `^7.0.2` → 7.0.2; Vite `^8.2.2` → 8.2.2; `@types/node ^26.5.0` → 26.5.0 | Preserve existing strict TS and Rolldown configuration initially |
 | Node | Package says `>=20.19.0`; locked Vite requires `^20.19.0 || >=22.12.0` | Package range admits Node releases Vite excludes; align later |

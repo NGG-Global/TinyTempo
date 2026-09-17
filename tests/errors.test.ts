@@ -107,7 +107,7 @@ describe('redaction', () => {
   });
 
   it('shortens a device file path to its last segment', () => {
-    expect(redact('file:///data/user/0/com.ngg.smallacts/public/index.html'))
+    expect(redact('file:///data/user/0/com.tinytempo.app/public/index.html'))
       .toBe('file://…/index.html');
   });
 

@@ -128,7 +128,7 @@ Production builds omit the preview route and replay controls.
 Capacitor 8 wraps the web build. `npm run android:apk` builds the bundle, syncs
 it into `android/`, and produces
 `android/app/build/outputs/apk/debug/app-debug.apk` (debug-signed,
-portrait-locked, `com.ngg.smallacts`). It needs JDK 21 and an Android SDK with
+portrait-locked, `com.tinytempo.app`). It needs JDK 21 and an Android SDK with
 platform 36 and build-tools 36.0.0, pointed at by the untracked
 `android/local.properties` (`sdk.dir=...`). A clean debug APK is about 7.3 MB;
 an incremental one can carry stale merged assets, so run `./gradlew clean
