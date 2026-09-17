@@ -8,25 +8,26 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { areaOf, levelSpec, mapLastLevel, mapLevelState, starsFor, type Area } from '@/game/levels';
 import {
-  canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH_COPY, healthHud, loadHealth,
-  reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
+  canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
+  loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, track } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { loadProgress, type Progress } from '@/game/progress';
 import { MaterialKey } from '@/textures/materials';
 import { mix, shade, starColour } from '@/ui/colour';
-import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
+import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { FxKey } from '@/ui/feedback';
 import { dashes, smoothPath, type Point } from '@/ui/path';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawHeart, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
 import { resizedScroll, scrollStep } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
@@ -81,35 +82,29 @@ export class MapScene extends BaseScene {
   private dockSurface!: Phaser.GameObjects.TileSprite;
   private dockTitle!: Phaser.GameObjects.Text;
   private gateLabel!: Phaser.GameObjects.Text;
+  private restScrim!: Phaser.GameObjects.Graphics;
   private restPlate!: Phaser.GameObjects.Graphics;
   private restSurface!: Phaser.GameObjects.TileSprite;
+  private restControls!: Phaser.GameObjects.Graphics;
+  private restSheen!: Sheen;
   private restTitle!: Phaser.GameObjects.Text;
   private restWait!: Phaser.GameObjects.Text;
-  private restNote!: Phaser.GameObjects.Text;
-  private restWatch!: Phaser.GameObjects.Graphics;
-  private restWatchLabel!: Phaser.GameObjects.Text;
-  private restWatchHint!: Phaser.GameObjects.Text;
-  private restWatchMark!: Phaser.GameObjects.Graphics;
-  private restRefill!: Phaser.GameObjects.Graphics;
-  private restRefillLabel!: Phaser.GameObjects.Text;
-  private restRefillHint!: Phaser.GameObjects.Text;
-  private restRefillPrice!: Phaser.GameObjects.Text;
-  private restRefillMark!: Phaser.GameObjects.Graphics;
-  private restDaily!: Phaser.GameObjects.Graphics;
-  private restDailyLabel!: Phaser.GameObjects.Text;
-  private restDailyHint!: Phaser.GameObjects.Text;
-  private restDailyMark!: Phaser.GameObjects.Graphics;
+  private restTexts: Record<string, Phaser.GameObjects.Text> = {};
   private restRect = new Phaser.Geom.Rectangle();
   private restWatchRect = new Phaser.Geom.Rectangle();
   private restRefillRect = new Phaser.Geom.Rectangle();
   private restDailyRect = new Phaser.Geom.Rectangle();
+  private restPremiumRect = new Phaser.Geom.Rectangle();
+  private restBackRect = new Phaser.Geom.Rectangle();
   private restShown = false;
   private restDailyOpen = false;
   private restAt = -Infinity;
   private restPressDirty = false;
   private restPressedAt = -Infinity;
-  private restPressed: 'watch' | 'refill' | 'daily' | null = null;
+  private restPressed: 'watch' | 'refill' | 'daily' | 'premium' | 'back' | null = null;
   private restBusy = false;
+  /** A store or ad message under the sheet's controls; empty when there is nothing to say. */
+  private restNote = '';
   private watchClaims = 0;
   private curtain!: SceneCurtain;
   private footerTop = 0;
@@ -196,24 +191,29 @@ export class MapScene extends BaseScene {
     this.dockSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(10);
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
+    this.restScrim = this.add.graphics().setScrollFactor(0).setDepth(19).setVisible(false);
     this.restPlate = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(20);
-    this.restTitle = display(this, 'No hearts', { size: 44, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restWait = body(this, '', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restNote = body(this, HEALTH_COPY.restNote, { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(21);
-    this.restWatch = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.restWatchLabel = label(this, 'Watch', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restWatchHint = label(this, '+1', { size: 22, colour: SHELL.cream, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
-    this.restWatchMark = this.add.graphics().setScrollFactor(0).setDepth(21);
-    this.restRefill = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.restRefillLabel = label(this, 'Refill', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restRefillHint = label(this, 'restore 5', { size: 20, colour: PALETTE.ink, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
-    this.restRefillPrice = body(this, '', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restRefillMark = this.add.graphics().setScrollFactor(0).setDepth(21);
-    this.restDaily = this.add.graphics().setScrollFactor(0).setDepth(20);
-    this.restDailyLabel = label(this, 'Today', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(21);
-    this.restDailyHint = label(this, '+1', { size: 22, colour: PALETTE.ink, align: 'center' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(21);
-    this.restDailyMark = this.add.graphics().setScrollFactor(0).setDepth(21);
+    this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.28).setScrollFactor(0).setDepth(20);
+    this.restControls = this.add.graphics().setScrollFactor(0).setDepth(21);
+    this.restSheen = new Sheen(this, 22);
+    this.restSheen.node.setScrollFactor(0);
+    this.restTitle = embossed(this, 'Out of hearts', { size: 68, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
+    this.restWait = body(this, '', { size: 28, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
+    this.restTexts = {
+      dailyTitle: this.restText(body(this, STORE_COPY.dailyTitle, { size: 30, colour: PALETTE.ink }), 0, 0.5),
+      dailyTerms: this.restText(body(this, STORE_COPY.dailyTerms, { size: 24, colour: PALETTE.muted }), 0, 0.5),
+      dailyClaim: this.restText(label(this, 'Claim', { size: 24, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
+      watch: this.restText(display(this, STORE_COPY.watchTitle, { size: 52, colour: SHELL.cream }), 0, 0.5),
+      watchTerms: this.restText(label(this, STORE_COPY.watchTerms, { size: 22, colour: mix(SHELL.cream, PALETTE.coral, 0.2) }), 0, 0.5),
+      watchPlus: this.restText(display(this, '+1', { size: 38, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
+      refill: this.restText(display(this, STORE_COPY.refillShort, { size: 36, colour: PALETTE.ink }), 0, 0.5),
+      refillPrice: this.restText(label(this, '', { size: 28, colour: PALETTE.ink, align: 'right' }), 1, 0.5),
+      premium: this.restText(display(this, STORE_COPY.premiumHeadline, { size: 42, colour: SHELL.cream, outline: shade(BRASS, -0.62) }), 0, 0.5),
+      premiumTerms: this.restText(body(this, `${STORE_COPY.premiumTitle} · ${STORE_COPY.premiumShort.toLowerCase()}`, { size: 25, colour: shade(BRASS, -0.62) }), 0, 0.5),
+      premiumPrice: this.restText(label(this, '', { size: 26, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
+      back: this.restText(display(this, 'Back to the map', { size: 36, colour: PALETTE.ink, align: 'center' }), 0.5, 0.5),
+      note: this.restText(body(this, '', { size: 25, colour: PALETTE.coral, align: 'center' }), 0.5, 0.5),
+    };
     this.enteredAt = performance.now() / 1000;
     this.curtain = new SceneCurtain(this);
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
@@ -799,119 +799,165 @@ export class MapScene extends BaseScene {
   }
 
   /**
-   * Empty hearts: a daily free heart when it is still available, a rewarded watch,
-   * a store refill, and a reminder that finished levels stay open. No practice mode.
+   * Empty hearts. The old sheet was a plate with three stacked grey buttons on it and a
+   * line of copy; it stated the problem and then offered three near-identical answers.
+   * The refined sheet ranks them: the hearts themselves say what is gone and how far the
+   * next one has come, the free daily heart is offered first when it is there, the
+   * rewarded watch is the one coral block, and paying — once for five, or once for good —
+   * sits under it. The way out of the sheet is a control, not a tap on the backdrop.
    */
   private drawRest(s: number, press: number): void {
     const shown = this.restShown;
     const hasDaily = shown && this.restDailyOpen;
+    const entitled = monetization().premium();
+    this.restScrim.setVisible(shown);
     this.restPlate.setVisible(shown);
     this.restSurface.setVisible(shown);
+    this.restControls.setVisible(shown);
     this.restTitle.setVisible(shown);
     this.restWait.setVisible(shown);
-    this.restNote.setVisible(shown);
-    this.restWatch.setVisible(shown);
-    this.restWatchLabel.setVisible(shown);
-    this.restWatchHint.setVisible(shown);
-    this.restWatchMark.setVisible(shown);
-    this.restRefill.setVisible(shown);
-    this.restRefillLabel.setVisible(shown);
-    this.restRefillHint.setVisible(shown);
-    this.restRefillPrice.setVisible(shown);
-    this.restRefillMark.setVisible(shown);
-    this.restDaily.setVisible(hasDaily);
-    this.restDailyLabel.setVisible(hasDaily);
-    this.restDailyHint.setVisible(hasDaily);
-    this.restDailyMark.setVisible(hasDaily);
+    this.restSheen.setVisible(shown && !entitled);
+    for (const [name, text] of Object.entries(this.restTexts)) {
+      const daily = name.startsWith('daily');
+      const premium = name.startsWith('premium');
+      text.setVisible(shown && (daily ? hasDaily : premium ? !entitled : name !== 'note' || this.restNote !== ''));
+    }
     if (!shown) {
+      this.restScrim.clear();
       this.restPlate.clear();
-      this.restWatch.clear();
-      this.restWatchMark.clear();
-      this.restRefill.clear();
-      this.restRefillMark.clear();
-      this.restDaily.clear();
-      this.restDailyMark.clear();
+      this.restControls.clear();
       return;
     }
-    const { safe } = this.viewport;
+    const { safe, full } = this.viewport;
     const view = viewHealth(this.health);
-    const wait = view.nextHeartInMs === null ? null : formatCountdown(view.nextHeartInMs);
-    const price = monetization().productPrice(PRODUCT.heartRefill);
     const control = Math.max(88 * s, 48 * this.viewport.unitScale);
-    const watchH = Math.max(110 * s, control);
-    const refillH = Math.max(96 * s, control);
-    const dailyH = hasDaily ? Math.max(96 * s, control) : 0;
-    const gap = 12 * s;
-    const width = Math.min(560 * s, safe.width - 48 * s);
-    const buttons = watchH + gap + refillH + (hasDaily ? gap + dailyH : 0);
-    const noteH = 56 * s;
-    const height = 152 * s + noteH + buttons + 24 * s;
-    const y = (this.hudHeight + this.footerTop) / 2 - height / 2;
-    this.restRect.setTo(safe.centerX - width / 2, y, width, height);
+    const width = Math.min(656 * s, safe.width - 36 * s);
+    const left = safe.centerX - width / 2;
+
+    // Heights first, so the sheet is exactly as tall as what is in it.
+    const dailyH = hasDaily ? Math.max(124 * s, control) : 0;
+    const watchH = Math.max(152 * s, control);
+    const refillH = Math.max(118 * s, control);
+    const premiumH = entitled ? 0 : Math.max(142 * s, control);
+    const backH = Math.max(104 * s, control);
+    const noteH = this.restNote === '' ? 0 : 44 * s;
+    const gap = 22 * s;
+    const head = 250 * s;
+    const height = head + (hasDaily ? dailyH + gap : 0) + watchH + gap + refillH
+      + (entitled ? 0 : gap + premiumH) + gap + backH + noteH + 30 * s;
+    const top = Math.max(safe.top + 24 * s, (safe.top + safe.bottom) / 2 - height / 2);
+    this.restRect.setTo(left, top, width, height);
+
+    this.restScrim.clear().fillStyle(PALETTE.ink, 0.52).fillRect(full.x, full.y, full.width, full.height);
     const g = this.restPlate.clear();
-    drawPanel(g, this.restRect, s, { fill: SHELL.puck, depth: 12, hero: true, radius: 28 });
+    drawPanel(g, this.restRect, s, { fill: SHELL.puck, depth: 14, hero: true, radius: 44 });
     placeSurface(this.restSurface, this.restRect, s);
-    resize(this.restTitle, 40 * s, PALETTE.ink, STYLE.current, false);
-    this.restTitle.setPosition(this.restRect.centerX, this.restRect.y + 44 * s);
-    this.restWait.setText(wait === null ? 'Hearts are full.' : `Next heart ${wait}`);
-    resize(this.restWait, 26 * s, PALETTE.ink, STYLE.current, false);
-    this.restWait.setPosition(this.restRect.centerX, this.restRect.y + 90 * s);
-    this.restNote.setText(HEALTH_COPY.restNote);
-    this.restNote.setWordWrapWidth(width - 56 * s, false);
-    resize(this.restNote, 22 * s, PALETTE.muted, STYLE.current, false);
-    this.restNote.setPosition(this.restRect.centerX, this.restRect.y + 118 * s);
-    const bottom = this.restRect.bottom - 24 * s;
-    let cursor = bottom;
+
+    const c = this.restControls.clear();
+    drawHeartRow(c, {
+      centreX: this.restRect.centerX, y: top + 62 * s, count: HEALTH.max, radius: 26 * s, gap: 66 * s,
+      filled: view.hearts, part: heartProgress(view),
+      full: PALETTE.coral, empty: shade(SHELL.puck, -0.12), emptyOutline: shade(SHELL.puck, -0.45),
+    });
+    reemboss(this.restTitle, 68 * s, PALETTE.ink);
+    this.restTitle.setPosition(this.restRect.centerX, top + 148 * s);
+    resize(this.restWait, 28 * s, PALETTE.muted, STYLE.current, false);
+    this.restWait.setWordWrapWidth(width - 56 * s, false);
+    this.restWait.setPosition(this.restRect.centerX, top + 208 * s);
+
+    let y = top + head;
     if (hasDaily) {
-      this.restDailyRect.setTo(this.restRect.centerX - 180 * s, cursor - dailyH, 360 * s, dailyH);
-      cursor -= dailyH + gap;
+      // A free heart is not an offer to weigh up, so it reads as a row with one control
+      // rather than as a fourth block competing with the paid ones.
+      this.restDailyRect.setTo(left + 26 * s, y, width - 52 * s, dailyH);
+      const r = this.restDailyRect;
+      drawPanel(c, r, s, { fill: SHELL.cream, depth: 8, radius: 26 });
+      const coinR = 42 * s, coinX = r.x + 26 * s + coinR;
+      // The one glow on the sheet, on the one thing that costs nothing.
+      c.fillStyle(SHELL.sun, 0.35).fillCircle(coinX, r.centerY, coinR * 1.28);
+      drawDisc(c, coinX, r.centerY, coinR, s, { fill: SHELL.sun, depth: 5 });
+      drawHeart(c, coinX, r.centerY, coinR * 0.5, PALETTE.coral);
+      this.restTexts.dailyTitle!.setPosition(coinX + coinR + 24 * s, r.centerY - 18 * s);
+      this.restTexts.dailyTerms!.setPosition(coinX + coinR + 24 * s, r.centerY + 20 * s);
+      const claimW = Math.max(176 * s, control);
+      const claimRect = new Phaser.Geom.Rectangle(r.right - 22 * s - claimW, r.centerY - control / 2, claimW, control);
+      const claimPress = this.restPressed === 'daily' ? press : 0;
+      drawPanel(c, claimRect, s, { fill: PALETTE.coral, depth: 10, press: claimPress, radius: 22 });
+      this.restTexts.dailyClaim!.setPosition(claimRect.centerX, claimRect.centerY + 10 * s * claimPress * 0.8);
+      // The whole row is the target: the button is where the eye goes, not the hit area.
+      this.restDailyRect.setTo(r.x, r.y, r.width, r.height);
+      y += dailyH + gap;
     }
-    this.restRefillRect.setTo(this.restRect.centerX - 180 * s, cursor - refillH, 360 * s, refillH);
-    cursor -= refillH + gap;
-    this.restWatchRect.setTo(this.restRect.centerX - 180 * s, cursor - watchH, 360 * s, watchH);
+
+    this.restWatchRect.setTo(left + 26 * s, y, width - 52 * s, watchH);
     const watchPress = this.restPressed === 'watch' ? press : 0;
-    const watch = this.restWatch.clear();
-    drawPanel(watch, this.restWatchRect, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: watchPress, hero: true });
+    const watch = this.restWatchRect;
+    drawPanel(c, watch, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: watchPress, hero: true });
     const watchSink = CHROME.block.depth * s * watchPress * 0.8;
-    this.restWatchLabel.setText('WATCH');
-    resize(this.restWatchLabel, 30 * s, SHELL.cream);
-    this.restWatchLabel.setPosition(this.restWatchRect.centerX, this.restWatchRect.centerY - 16 * s + watchSink);
-    this.restWatchHint.setText('+1');
-    resize(this.restWatchHint, 22 * s, SHELL.cream);
-    this.restWatchHint.setPosition(this.restWatchRect.centerX - 4 * s, this.restWatchRect.centerY + 22 * s + watchSink);
-    this.restWatchMark.clear();
-    drawHeart(this.restWatchMark, this.restWatchRect.centerX + 18 * s, this.restWatchRect.centerY + 22 * s + watchSink, 10 * s, SHELL.cream);
+    const discR = 44 * s, discX = watch.x + 28 * s + discR;
+    drawActionDisc(c, discX, watch.centerY + watchSink, discR, s);
+    this.restTexts.watch!.setPosition(discX + discR + 26 * s, watch.centerY - 22 * s + watchSink);
+    this.restTexts.watchTerms!.setPosition(discX + discR + 26 * s, watch.centerY + 26 * s + watchSink);
+    const chipW = 118 * s, chipH = 64 * s, chipX = watch.right - 26 * s - chipW;
+    c.fillStyle(shade(PALETTE.coral, -0.5), 0.55).fillRoundedRect(chipX, watch.centerY - chipH / 2 + watchSink, chipW, chipH, 18 * s);
+    this.restTexts.watchPlus!.setPosition(chipX + 38 * s, watch.centerY + watchSink);
+    drawHeart(c, chipX + chipW - 34 * s, watch.centerY + watchSink, 17 * s, SHELL.cream, 1, shade(PALETTE.coral, -0.6));
+    y += watchH + gap;
+
+    this.restRefillRect.setTo(left + 26 * s, y, width - 52 * s, refillH);
     const refillPress = this.restPressed === 'refill' ? press : 0;
-    const refill = this.restRefill.clear();
-    drawPanel(refill, this.restRefillRect, s, { fill: SHELL.bench, depth: 12, press: refillPress });
+    const refill = this.restRefillRect;
+    drawPanel(c, refill, s, { fill: SHELL.bench, depth: 12, press: refillPress, radius: 26 });
     const refillSink = 12 * s * refillPress * 0.8;
-    this.restRefillLabel.setText('REFILL');
-    resize(this.restRefillLabel, 26 * s, PALETTE.ink);
-    this.restRefillLabel.setPosition(this.restRefillRect.centerX, this.restRefillRect.centerY - 14 * s + refillSink);
-    this.restRefillHint.setText('RESTORE 5');
-    resize(this.restRefillHint, 18 * s, PALETTE.ink, STYLE.current, false);
-    const priceText = price ?? '';
-    const hintX = priceText.length > 0 ? this.restRefillRect.centerX - 36 * s : this.restRefillRect.centerX - 4 * s;
-    this.restRefillHint.setPosition(hintX, this.restRefillRect.centerY + 20 * s + refillSink);
-    this.restRefillMark.clear();
-    drawHeart(this.restRefillMark, hintX + 16 * s, this.restRefillRect.centerY + 20 * s + refillSink, 9 * s, PALETTE.coral);
-    this.restRefillPrice.setText(priceText);
-    resize(this.restRefillPrice, 18 * s, PALETTE.muted, STYLE.current, false);
-    this.restRefillPrice.setPosition(this.restRefillRect.centerX + 70 * s, this.restRefillRect.centerY + 20 * s + refillSink);
-    this.restRefillPrice.setVisible(priceText.length > 0);
-    const daily = this.restDaily.clear();
-    this.restDailyMark.clear();
-    if (!hasDaily) return;
-    const dailyPress = this.restPressed === 'daily' ? press : 0;
-    drawPanel(daily, this.restDailyRect, s, { fill: SHELL.bench, depth: 12, press: dailyPress });
-    const dailySink = 12 * s * dailyPress * 0.8;
-    this.restDailyLabel.setText('TODAY');
-    resize(this.restDailyLabel, 26 * s, PALETTE.ink);
-    this.restDailyLabel.setPosition(this.restDailyRect.centerX, this.restDailyRect.centerY - 14 * s + dailySink);
-    this.restDailyHint.setText('+1');
-    resize(this.restDailyHint, 22 * s, PALETTE.ink, STYLE.current, false);
-    this.restDailyHint.setPosition(this.restDailyRect.centerX - 4 * s, this.restDailyRect.centerY + 20 * s + dailySink);
-    drawHeart(this.restDailyMark, this.restDailyRect.centerX + 18 * s, this.restDailyRect.centerY + 20 * s + dailySink, 10 * s, PALETTE.coral);
+    for (let i = 0; i < 3; i++) drawHeart(c, refill.x + 40 * s + i * 34 * s, refill.centerY + refillSink, 16 * s, PALETTE.coral);
+    resize(this.restTexts.refill!, 36 * s, PALETTE.ink, STYLE.current, false);
+    this.restTexts.refill!.setPosition(refill.x + 158 * s, refill.centerY + refillSink);
+    this.restTexts.refillPrice!.setPosition(refill.right - 28 * s, refill.centerY + refillSink);
+    y += refillH + gap;
+
+    if (!entitled) {
+      this.restPremiumRect.setTo(left + 26 * s, y, width - 52 * s, premiumH);
+      const premium = this.restPremiumRect;
+      const premiumPress = this.restPressed === 'premium' ? press : 0;
+      drawPanel(c, premium, s, { fill: BRASS, depth: 12, press: premiumPress, hero: true, frame: SHELL.cream });
+      const premiumSink = 12 * s * premiumPress * 0.8;
+      this.restSheen.place(premium, 32 * s, 5);
+      const markR = 34 * s, markX = premium.x + 26 * s + markR;
+      drawDisc(c, markX, premium.centerY + premiumSink, markR, s, { fill: shade(BRASS, 0.3), depth: 5 });
+      drawInfinity(c, markX, premium.centerY + premiumSink, markR * 0.56, shade(BRASS, -0.62));
+      const price = this.restTexts.premiumPrice!;
+      const pw = price.width + 32 * s, ph = 52 * s;
+      const copyX = markX + markR + 24 * s;
+      // The copy stops where the price chip starts, so the longest locale cannot run under it.
+      resize(this.restTexts.premiumTerms!, 21 * s, shade(BRASS, -0.62), STYLE.current, false);
+      this.restTexts.premiumTerms!.setWordWrapWidth(premium.right - 40 * s - pw - copyX, false);
+      this.restTexts.premium!.setPosition(copyX, premium.centerY - 20 * s + premiumSink);
+      this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 24 * s + premiumSink);
+      c.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + 3 * s + premiumSink, pw, ph, 14 * s);
+      c.fillStyle(PALETTE.coral, 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + premiumSink, pw, ph, 14 * s);
+      price.setPosition(premium.right - 24 * s - pw / 2, premium.centerY + premiumSink);
+      y += premiumH + gap;
+    } else {
+      this.restPremiumRect.setTo(0, 0, 0, 0);
+    }
+
+    this.restBackRect.setTo(left + 26 * s, y, width - 52 * s, backH);
+    const backPress = this.restPressed === 'back' ? press : 0;
+    drawPanel(c, this.restBackRect, s, { fill: SHELL.cream, depth: 10, press: backPress, radius: 26 });
+    const backSink = 10 * s * backPress * 0.8;
+    const backText = this.restTexts.back!;
+    resize(backText, 36 * s, PALETTE.ink, STYLE.current, false);
+    drawBack(c, this.restBackRect.centerX - backText.width / 2 - 26 * s, this.restBackRect.centerY + backSink, 18 * s, PALETTE.ink);
+    backText.setPosition(this.restBackRect.centerX + 16 * s, this.restBackRect.centerY + backSink);
+    y += backH;
+
+    const note = this.restTexts.note!;
+    note.setText(this.restNote).setWordWrapWidth(width - 56 * s, false);
+    note.setPosition(this.restRect.centerX, y + 24 * s);
+  }
+
+  private restText(text: Phaser.GameObjects.Text, originX: number, originY: number): Phaser.GameObjects.Text {
+    return text.setOrigin(originX, originY).setScrollFactor(0).setDepth(22);
   }
 
   private showRest(level: number): void {
@@ -920,14 +966,16 @@ export class MapScene extends BaseScene {
     this.restShown = true;
     this.restDailyOpen = canClaimDailyHeart(this.health);
     this.restPressed = null;
-    this.restNote.setText(HEALTH_COPY.restNote);
+    this.restNote = '';
     this.restAt = performance.now() / 1000;
+    this.refreshRestCopy();
     this.drawRest(this.uiScale, 0);
     this.restPressDirty = true;
     if (first) {
       track('health_empty', { level });
       track('rewarded_offer_shown', { placement: 'map' });
       track('purchase_offer_shown', { product: PRODUCT.heartRefill });
+      track('purchase_offer_shown', { product: PRODUCT.premium });
     }
   }
 
@@ -951,7 +999,8 @@ export class MapScene extends BaseScene {
       if (result.ok) this.health = redeemHeart(claimId).health;
       if (this.disposed) return;
       if (!result.ok) {
-        this.restNote.setText(rewardedFeedback(result.reason));
+        this.restNote = rewardedFeedback(result.reason);
+        this.drawRest(this.uiScale, 0);
         return;
       }
       this.hideRest();
@@ -972,15 +1021,43 @@ export class MapScene extends BaseScene {
       if (result.ok) this.health = redeemFill(result.claimId).health;
       if (this.disposed) return;
       if (!result.ok) {
-        this.restNote.setText(purchaseFeedback(result.reason));
+        this.restNote = purchaseFeedback(result.reason);
+        this.drawRest(this.uiScale, 0);
         return;
       }
       if (this.health.hearts <= 0) {
-        this.restNote.setText(purchaseFeedback('failed'));
+        this.restNote = purchaseFeedback('failed');
+        this.drawRest(this.uiScale, 0);
         return;
       }
       this.hideRest();
       this.drawSign(this.uiScale, 0, 0);
+    } finally {
+      this.restBusy = false;
+    }
+  }
+
+  /**
+   * Premium from the sheet. It ends the wait rather than paying this one off, so the
+   * sheet closes on success and the header's heart count becomes the infinity mark.
+   */
+  private async buyPremium(): Promise<void> {
+    if (this.restBusy || this.curtain.active || monetization().premium()) return;
+    this.restBusy = true;
+    this.restPressed = 'premium';
+    this.restPressedAt = performance.now() / 1000;
+    this.restPressDirty = true;
+    track('purchase_offer_shown', { product: PRODUCT.premium });
+    try {
+      const result = await monetization().purchase(PRODUCT.premium);
+      if (this.disposed) return;
+      if (!result.ok) {
+        this.restNote = purchaseFeedback(result.reason);
+        this.drawRest(this.uiScale, 0);
+        return;
+      }
+      this.hideRest();
+      this.layout();
     } finally {
       this.restBusy = false;
     }
@@ -998,7 +1075,7 @@ export class MapScene extends BaseScene {
       if (this.disposed) return;
       if (!result.granted) {
         this.restDailyOpen = false;
-        this.restNote.setText(HEALTH_COPY.restNote);
+        this.restNote = '';
         this.drawRest(this.uiScale, 0);
         return;
       }
@@ -1020,11 +1097,20 @@ export class MapScene extends BaseScene {
     if (this.healthWait.text !== wait) this.healthWait.setText(wait);
   }
 
+  /**
+   * One line under the title: when the next heart lands, and the reason waiting is not a
+   * dead end. They are one sentence rather than two lines because a player looking at an
+   * empty row is reading the number, and the reassurance has to be in the same glance.
+   */
   private refreshRestCopy(): void {
     const view = viewHealth(this.health);
     const wait = view.nextHeartInMs === null ? null : formatCountdown(view.nextHeartInMs);
-    const copy = wait === null ? 'Hearts are full.' : `Next heart ${wait}`;
+    const copy = wait === null ? HEALTH_COPY.restNote : `Next heart in ${wait} · early levels stay open`;
     if (this.restWait.text !== copy) this.restWait.setText(copy);
+    const refill = monetization().productPrice(PRODUCT.heartRefill);
+    const premium = monetization().productPrice(PRODUCT.premium);
+    this.restTexts.refillPrice?.setText(refill ?? 'Buy');
+    this.restTexts.premiumPrice?.setText(premium ?? 'Buy');
   }
 
   private scrollTo(level: number): void {
@@ -1110,24 +1196,14 @@ export class MapScene extends BaseScene {
     if (this.restShown) {
       const shownFor = now - this.restAt;
       const alpha = still || shownFor > 0.55 ? 1 : arrive(shownFor, 0.45).alpha;
+      this.restScrim.setAlpha(alpha);
       this.restPlate.setAlpha(alpha);
       this.restSurface.setAlpha(alpha);
+      this.restControls.setAlpha(alpha);
       this.restTitle.setAlpha(alpha);
       this.restWait.setAlpha(alpha);
-      this.restNote.setAlpha(alpha);
-      this.restWatch.setAlpha(alpha);
-      this.restWatchLabel.setAlpha(alpha);
-      this.restWatchHint.setAlpha(alpha);
-      this.restWatchMark.setAlpha(alpha);
-      this.restRefill.setAlpha(alpha);
-      this.restRefillLabel.setAlpha(alpha);
-      this.restRefillHint.setAlpha(alpha);
-      this.restRefillPrice.setAlpha(alpha);
-      this.restRefillMark.setAlpha(alpha);
-      this.restDaily.setAlpha(alpha);
-      this.restDailyLabel.setAlpha(alpha);
-      this.restDailyHint.setAlpha(alpha);
-      this.restDailyMark.setAlpha(alpha);
+      for (const text of Object.values(this.restTexts)) text.setAlpha(alpha);
+      this.restSheen.update(now, !monetization().premium());
     }
   }
 
@@ -1194,7 +1270,11 @@ export class MapScene extends BaseScene {
         this.claimToday();
         return;
       }
-      if (!this.restRect.contains(x, y)) this.hideRest();
+      if (!monetization().premium() && this.restPremiumRect.contains(x, y)) {
+        void this.buyPremium();
+        return;
+      }
+      if (this.restBackRect.contains(x, y) || !this.restRect.contains(x, y)) this.hideRest();
       return;
     }
     if (this.dockRect.contains(x, y)) {
@@ -1245,6 +1325,7 @@ export class MapScene extends BaseScene {
     window.removeEventListener('blur', this.cancelDrag);
     window.removeEventListener('touchcancel', this.cancelDrag);
     window.removeEventListener('pointercancel', this.cancelDrag);
+    this.restSheen.destroy();
     this.cancelDrag();
   }
 }

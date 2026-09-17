@@ -1,7 +1,16 @@
+import { createRequire } from 'node:module';
 import { fileURLToPath, URL } from 'node:url';
 import { defineConfig } from 'vite';
 
+const { version } = createRequire(import.meta.url)('./package.json') as { version: string };
+
 export default defineConfig({
+  /**
+   * The version the settings footer prints. Inlined at build time from the one place
+   * the number is already kept, so the screen cannot drift from the package.
+   */
+  define: { __APP_VERSION__: JSON.stringify(version) },
+
   /**
    * Relative base so the built bundle also loads from a `file://` origin.
    * An Android WebView serves the bundle from local storage rather than a web

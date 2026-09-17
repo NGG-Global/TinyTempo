@@ -47,4 +47,7 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="com.android.vending.BILLING" />
+    <!-- navigator.vibrate() for the Haptics switch in Settings. Normal permission: granted
+         at install with no runtime prompt, and silently ignored where the hardware is absent. -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 </manifest>

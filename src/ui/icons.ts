@@ -46,7 +46,7 @@ export function drawPlay(g: Phaser.GameObjects.Graphics, x: number, y: number, r
   g.fillTriangle(x - r * 0.5, y - r * 0.7, x - r * 0.5, y + r * 0.7, x + r * 0.75, y);
 }
 
-export function drawHeart(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+export function heartPoints(x: number, y: number, r: number): Phaser.Math.Vector2[] {
   const points: Phaser.Math.Vector2[] = [];
   for (let i = 0; i <= 28; i++) {
     const t = (i / 28) * Math.PI * 2;
@@ -54,8 +54,50 @@ export function drawHeart(g: Phaser.GameObjects.Graphics, x: number, y: number, 
     const hy = 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t);
     points.push(new Phaser.Math.Vector2(x + hx * r / 16, y - hy * r / 18));
   }
+  return points;
+}
+
+export function drawHeart(
+  g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1, outline?: number,
+): void {
+  const points = heartPoints(x, y, r);
   g.fillStyle(colour, alpha).fillPoints(points, true);
-  g.lineStyle(Math.max(1.6, r * 0.18), shade(colour, -0.55), alpha).strokePoints(points, true);
+  g.lineStyle(Math.max(1.6, r * 0.18), outline ?? shade(colour, -0.55), alpha).strokePoints(points, true);
+}
+
+/** The silhouette alone, for laying back over a partial fill. */
+export function strokeHeart(
+  g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1,
+): void {
+  g.lineStyle(Math.max(1.6, r * 0.18), colour, alpha).strokePoints(heartPoints(x, y, r), true);
+}
+
+/**
+ * The lower `part` of a heart, over an empty one already drawn: the regenerating heart
+ * filling up. Graphics has no clip, so the outline is clipped against the waterline
+ * instead — one half-plane, which for a convex-enough silhouette is a single pass.
+ */
+export function fillHeart(
+  g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, part: number, alpha = 1,
+): void {
+  const clamped = Math.max(0, Math.min(1, part));
+  if (clamped <= 0) return;
+  const points = heartPoints(x, y, r);
+  const top = Math.min(...points.map(p => p.y));
+  const bottom = Math.max(...points.map(p => p.y));
+  const line = bottom - (bottom - top) * clamped;
+  const kept: Phaser.Math.Vector2[] = [];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i]!, b = points[(i + 1) % points.length]!;
+    const aIn = a.y >= line, bIn = b.y >= line;
+    if (aIn) kept.push(a);
+    if (aIn !== bIn) {
+      const k = (line - a.y) / (b.y - a.y);
+      kept.push(new Phaser.Math.Vector2(a.x + (b.x - a.x) * k, line));
+    }
+  }
+  if (kept.length < 3) return;
+  g.fillStyle(colour, alpha).fillPoints(kept, true);
 }
 
 /**
@@ -100,4 +142,36 @@ export function drawMap(g: Phaser.GameObjects.Graphics, x: number, y: number, r:
   g.fillPoints(new Phaser.Geom.Polygon([
     { x: x + w * 0.5, y: y - h / 2 }, { x: x + w * 1.5, y: y - h / 2 + r * 0.25 }, { x: x + w * 1.5, y: y + h / 2 + r * 0.25 }, { x: x + w * 0.5, y: y + h / 2 },
   ]).points, true);
+}
+
+/** A chevron pointing right: "this opens its own screen". */
+export function drawChevron(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  g.lineStyle(Math.max(2.4, r * 0.34), colour, alpha);
+  g.lineBetween(x - r * 0.3, y - r * 0.55, x + r * 0.3, y);
+  g.lineBetween(x + r * 0.3, y, x - r * 0.3, y + r * 0.55);
+}
+
+/**
+ * A lemniscate for "unlimited". Drawn rather than set as `∞`, for the reason `gear.ts`
+ * records: the glyph is missing from enough Android system fonts to show a tofu box, and
+ * the bundled display face is not guaranteed to carry it either.
+ */
+export function drawInfinity(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const points: Phaser.Math.Vector2[] = [];
+  for (let i = 0; i <= 64; i++) {
+    const t = (i / 64) * Math.PI * 2;
+    const d = 1 + Math.sin(t) ** 2;
+    points.push(new Phaser.Math.Vector2(x + r * Math.cos(t) / d, y + r * 0.62 * Math.sin(t) * Math.cos(t) / d));
+  }
+  g.lineStyle(Math.max(2.2, r * 0.2), colour, alpha).strokePoints(points, true);
+}
+
+/** A phone buzzing: the handset plus a motion mark either side. The Haptics switch. */
+export function drawVibrate(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const w = r * 0.62, h = r * 1.3;
+  g.fillStyle(colour, alpha).fillRoundedRect(x - w / 2, y - h / 2, w, h, r * 0.2);
+  g.lineStyle(Math.max(2.2, r * 0.19), colour, alpha);
+  for (const side of [-1, 1]) {
+    g.lineBetween(x + side * r * 0.72, y - r * 0.4, x + side * r * 0.72, y + r * 0.4);
+  }
 }

@@ -1,6 +1,6 @@
 import type Phaser from 'phaser';
 import { STYLE, type Treatment } from '@/config/style';
-import { PALETTE } from '@/config/theme';
+import { PALETTE, SHELL } from '@/config/theme';
 import { hex, relativeLuminance, shade, typeStroke } from './colour';
 
 /**
@@ -56,7 +56,7 @@ export interface TypeSpec {
   readonly wrap?: number;
 }
 
-function style(t: Treatment, family: string, weight: number, spec: TypeSpec, dress: boolean): TextStyle {
+function styleFor(t: Treatment, family: string, weight: number, spec: TypeSpec, dress: boolean): TextStyle {
   const strokeThickness = dress ? strokeFor(t, spec.size) : 0;
   const s: TextStyle = {
     // Quoted, because Phaser assembles the canvas font shorthand verbatim and an unquoted
@@ -78,17 +78,44 @@ function style(t: Treatment, family: string, weight: number, spec: TypeSpec, dre
 
 /** A headline or a value: the display face, fully dressed. */
 export function display(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
-  return scene.add.text(0, 0, text, style(t, t.display, t.displayWeight, spec, true));
+  return scene.add.text(0, 0, text, styleFor(t, t.display, t.displayWeight, spec, true));
+}
+
+/**
+ * A headline on paper: the display face with no outline, lifted off the sheet by a pale
+ * drop instead. The full dressing is built for cream type on timber or coral, where a
+ * dark stroke is what gives the letter its silhouette; ink on cream already has one, and
+ * the stroke only fills in Fredoka's counters and turns a word into a logo.
+ */
+export function embossed(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
+  const style = { ...styleFor(t, t.display, t.displayWeight, spec, false) };
+  style.shadow = embossFor(spec.size);
+  style.padding = { left: 2, right: 2, top: 2, bottom: Math.max(2, Math.ceil(spec.size * 0.09)) };
+  return scene.add.text(0, 0, text, style);
+}
+
+/** Re-emboss after a size change, the way `resize` re-dresses. */
+export function reemboss(text: Phaser.GameObjects.Text, size: number, colour: number): void {
+  text.setFontSize(size);
+  text.setColor(hex(colour));
+  text.setStroke('#000000', 0);
+  const sh = embossFor(size);
+  text.setShadow(sh.offsetX, sh.offsetY, sh.color, 0, false, true);
+  text.setPadding({ left: 2, right: 2, top: 2, bottom: Math.max(2, Math.ceil(size * 0.09)) });
+}
+
+function embossFor(size: number): NonNullable<TextStyle['shadow']> {
+  return { offsetX: 0, offsetY: Math.max(1, size * 0.05), color: hex(SHELL.cream), blur: 0, fill: true, stroke: false };
 }
 
 /** Running copy: the body face, undressed, so it sits back behind the display. */
 export function body(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
-  return scene.add.text(0, 0, text, style(t, t.body, t.bodyWeight, spec, false));
+  return scene.add.text(0, 0, text, styleFor(t, t.body, t.bodyWeight, spec, false));
 }
 
 /** A control or a small tag: the body face, heavier, uppercase, no tracking. */
 export function label(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
-  return scene.add.text(0, 0, text.toUpperCase(), style(t, t.body, Math.min(900, t.bodyWeight + 200), spec, false));
+  return scene.add.text(0, 0, text.toUpperCase(), styleFor(t, t.body, Math.min(900, t.bodyWeight + 200), spec, false));
 }
 
 /**

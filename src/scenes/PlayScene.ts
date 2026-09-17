@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
@@ -18,22 +19,23 @@ import { beatsPlayed, countIn, markFor, trackGeometry, type Mark } from '@/game/
 import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
-  HEALTH_COPY, healthHud, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
+  HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, track } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { loadProgress, recordResult, saveProgress, type LevelOutcome } from '@/game/progress';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
-import { drawHeart, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
+import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
 import { faces } from '@/ui/light';
 import { mix, shade, starColour } from '@/ui/colour';
-import { CHROME, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
-import { drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
+import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
+import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback } from '@/ui/feedback';
+import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
 import { drawStarMark, prizeColour, STAR_PRIZE } from '@/ui/star';
-import { chorusGlow, starAge, starImpactAge, starPose } from '@/ui/starReveal';
+import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { VIGNETTES } from '@/vignettes/registry';
 import type { Vignette } from '@/vignettes/Vignette';
@@ -47,6 +49,27 @@ type TurnCue = 'none' | 'watch' | 'play';
  * than the map's area pips: this row is the only thing on screen that says whose turn it
  * is, so it has to read at arm's length rather than merely be present.
  */
+/**
+ * The result plaque, in design units at scale 1. It hangs from two ropes above the
+ * vignette and the medals straddle its top edge, half on the board and half off it, so
+ * the brass reads as struck into the plaque rather than laid out on a shelf.
+ */
+const PLATE = {
+  width: 624,
+  ropeLength: 130,
+  /** From the plaque's top edge down to the centre of a medal. */
+  medalY: 22,
+  medalRadius: 62,
+  medalGap: 202,
+  /** Local offsets from the plaque's top edge. */
+  scoreY: 162,
+  noteY: 228,
+  keptY: 282,
+  height: 268,
+  keptHeight: 328,
+  keptWidth: 300,
+} as const;
+
 const TRACK = {
   beadGap: 58,
   beadRadius: 19,
@@ -83,6 +106,10 @@ export class PlayScene extends BaseScene {
   private watchClaims = 0;
   private get definition() { return VIGNETTES.find(v => v.id === this.spec.vignette) ?? VIGNETTES[0]!; }
   private stars!: Phaser.GameObjects.Graphics;
+  private scoreValue!: Phaser.GameObjects.Text;
+  private scoreNote!: Phaser.GameObjects.Text;
+  /** Ceiling anchor the plaque and its ropes swing about; local (0,0) of `stars`. */
+  private plaqueAt = { x: 0, y: 0 };
   private headline!: Phaser.GameObjects.Text;
   /** Hung behind the phase word so Watch and Your turn are different objects, not just colours. */
   private turnSign!: Phaser.GameObjects.Graphics;
@@ -98,6 +125,7 @@ export class PlayScene extends BaseScene {
   private actionSurface!: Phaser.GameObjects.TileSprite;
   private actionLabel!: Phaser.GameObjects.Text;
   private actionHint!: Phaser.GameObjects.Text;
+  private plusOne!: Phaser.GameObjects.Text;
   private actionHeart!: Phaser.GameObjects.Graphics;
   private actionRect = new Phaser.Geom.Rectangle();
   private actionCaption = '';
@@ -112,6 +140,16 @@ export class PlayScene extends BaseScene {
   private refillMark!: Phaser.GameObjects.Graphics;
   private refillRect = new Phaser.Geom.Rectangle();
   private refillPressedAt = -Infinity;
+  private premiumRoot!: Phaser.GameObjects.Container;
+  private premiumPlate!: Phaser.GameObjects.Graphics;
+  private premiumLabel!: Phaser.GameObjects.Text;
+  private premiumPrice!: Phaser.GameObjects.Text;
+  private premiumSheen!: Sheen;
+  private premiumRect = new Phaser.Geom.Rectangle();
+  private premiumPressedAt = -Infinity;
+  /** Dims the vignette behind the out-of-hearts offer, so the offer is the only lit thing. */
+  private scrim!: Phaser.GameObjects.Graphics;
+  private emptyHearts!: Phaser.GameObjects.Graphics;
   private mapAt = { x: 0, y: 0 };
   private restartAt = { x: 0, y: 0 };
   private muteAt = { x: 0, y: 0 };
@@ -180,15 +218,18 @@ export class PlayScene extends BaseScene {
     this.turnSign = this.add.graphics().setDepth(11);
     this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
-    this.kept = label(this, '', { size: 22, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.scoreValue = embossed(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.scoreNote = label(this, 'On the beat', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
     this.actionRoot = this.add.container(0, 0).setDepth(10);
     this.action = this.add.graphics();
     this.actionSurface = surface(this, MaterialKey.cloth, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, PALETTE.coral, 0.35);
     this.actionLabel = display(this, '', { size: 40, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
-    this.actionHint = label(this, '+1', { size: 22, colour: SHELL.cream, align: 'center' }).setOrigin(1, 0.5);
+    this.actionHint = label(this, '', { size: 22, colour: SHELL.cream }).setOrigin(0, 0.5);
+    this.plusOne = display(this, '+1', { size: 36, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(false);
     this.actionHeart = this.add.graphics();
-    this.actionRoot.add([this.action, this.actionSurface, this.actionLabel, this.actionHint, this.actionHeart]);
+    this.actionRoot.add([this.action, this.actionSurface, this.actionLabel, this.actionHint, this.plusOne, this.actionHeart]);
     this.refillRoot = this.add.container(0, 0).setDepth(10);
     this.refill = this.add.graphics();
     this.refillLabel = label(this, 'REFILL', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5);
@@ -196,6 +237,14 @@ export class PlayScene extends BaseScene {
     this.refillPrice = body(this, '', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5);
     this.refillMark = this.add.graphics();
     this.refillRoot.add([this.refill, this.refillLabel, this.refillHint, this.refillPrice, this.refillMark]);
+    this.premiumRoot = this.add.container(0, 0).setDepth(10);
+    this.premiumPlate = this.add.graphics();
+    this.premiumLabel = display(this, 'Premium', { size: 36, colour: SHELL.cream, outline: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5);
+    this.premiumPrice = label(this, '', { size: 23, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5);
+    this.premiumSheen = new Sheen(this, 10);
+    this.premiumRoot.add([this.premiumPlate, this.premiumLabel, this.premiumPrice]);
+    this.scrim = this.add.graphics().setDepth(7).setVisible(false);
+    this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.taskMarks = this.add.graphics().setDepth(11);
@@ -220,7 +269,7 @@ export class PlayScene extends BaseScene {
     return this.add.text(0, 0, value, { fontFamily, fontSize: `${size}px`, color: `#${this.definition.ink.toString(16).padStart(6, '0')}` });
   }
   protected override layout(): void {
-    const { safe } = this.viewport;
+    const { safe, full } = this.viewport;
     this.vignette.layout(this.viewport);
     const s = Math.min(safe.width / 720, safe.height / 1150);
     this.uiScale = s;
@@ -248,32 +297,80 @@ export class PlayScene extends BaseScene {
     this.verdictY = this.trackY - TRACK.plateHeight * s / 2 - 34 * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
-    // Tighter than the menu's Play block, so the result plaque still fits above it.
-    const blockH = Math.max(96 * s, this.controlSize);
-    const refillH = Math.max(88 * s, this.controlSize);
-    this.actionRect.setTo(
-      safe.centerX - CHROME.block.width * s / 2,
-      safe.bottom - 72 * s - blockH,
-      CHROME.block.width * s,
-      blockH,
-    );
-    this.refillRect.setTo(
-      this.actionRect.x,
-      this.actionRect.y - 12 * s - refillH,
-      this.actionRect.width,
-      refillH,
-    );
+    this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
+    this.scrim.clear().fillStyle(0x1a201c, 0.5).fillRect(full.x, full.y, full.width, full.height);
     resize(this.accuracy, 34 * s, ink, STYLE.current, false);
     this.accuracy.setWordWrapWidth(Math.min(560 * s, safe.width - 64 * s), false);
     this.accuracy.setLineSpacing(-4 * s);
     this.placeWaitCopy();
-    resize(this.kept, 22 * s, PALETTE.coral, STYLE.current, false);
-    this.kept.setPosition(safe.centerX, this.trackY + 52 * s);
+    // The plaque hangs from just under the headline. It is clamped off the action block
+    // rather than centred, because on a tall handset the block stays by the thumb and the
+    // space that opens up belongs to the vignette, not to the result.
+    const plaqueH = (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * s;
+    const rig = PLATE.ropeLength * s + plaqueH;
+    const bandTop = safe.top + 300 * s;
+    const bandBottom = this.actionRect.y - 44 * s;
+    // Hangs just under the headline on a 16:9 frame, and takes a fifth of whatever a taller
+    // handset adds — enough that the plaque does not float at the top of a long screen,
+    // little enough that the space left under it still belongs to the act.
+    const free = Math.max(0, bandBottom - bandTop - rig);
+    this.plaqueAt = { x: safe.centerX, y: Math.max(safe.top + 220 * s, bandTop + free * 0.22) };
     this.drawStars();
     this.drawTaskMarks();
   }
+  /**
+   * Where the blocks sit. Two arrangements, because the out-of-hearts screen is not the
+   * result screen with an extra button on it: the offer wants a tall Watch with the two
+   * paid ways out beneath it, and the headline drops to make room for the empty hearts.
+   */
+  private placeBlocks(): void {
+    const s = this.uiScale;
+    const { safe } = this.viewport;
+    const offering = this.offeringHeart();
+    const width = CHROME.block.width * s;
+    const left = safe.centerX - width / 2;
+    if (offering) {
+      const pairH = Math.max(128 * s, this.controlSize);
+      const pairY = safe.bottom - 84 * s - pairH;
+      const gap = 16 * s;
+      const half = (width - gap) / 2;
+      this.refillRect.setTo(left, pairY, half, pairH);
+      this.premiumRect.setTo(left + half + gap, pairY, half, pairH);
+      const blockH = Math.max(156 * s, this.controlSize);
+      this.actionRect.setTo(left, pairY - 24 * s - blockH, width, blockH);
+      this.headlineY = safe.top + 304 * s;
+    } else {
+      const blockH = Math.max(96 * s, this.controlSize);
+      this.actionRect.setTo(left, safe.bottom - 72 * s - blockH, width, blockH);
+      this.refillRect.setTo(0, 0, 0, 0);
+      this.premiumRect.setTo(0, 0, 0, 0);
+      this.headlineY = safe.top + 84 * s;
+    }
+    this.headline.setY(this.headlineY);
+    this.premiumSheen.place(this.premiumRect, Math.min(this.premiumRect.height / 2, STYLE.current.radius * s), 4.2);
+    this.drawEmptyHearts();
+    this.placeWaitCopy();
+  }
+
+  /** Five outlines over the dimmed vignette: what is gone, stated before what it costs. */
+  private drawEmptyHearts(): void {
+    const offering = this.offeringHeart();
+    this.emptyHearts.setVisible(offering);
+    this.scrim.setVisible(offering);
+    const g = this.emptyHearts.clear();
+    if (!offering) return;
+    const s = this.uiScale;
+    const view = viewHealth(loadHealth());
+    drawHeartRow(g, {
+      centreX: this.viewport.safe.centerX, y: this.viewport.safe.top + 247 * s,
+      count: view.maxHearts, radius: 23 * s, gap: 60 * s,
+      filled: view.hearts, part: heartProgress(view),
+      full: PALETTE.coral, empty: SHELL.cream, emptyAlpha: 0.18, emptyOutline: SHELL.cream,
+    });
+  }
+
   private drawChrome(s: number, press: number): void {
     const g = this.chrome.clear();
     const sinkOf = (key: 'map' | 'restart' | 'mute') => (this.puckPressed === key ? press : 0);
@@ -297,9 +394,12 @@ export class PlayScene extends BaseScene {
     const offering = this.offeringHeart();
     this.actionRoot.setVisible(shown);
     this.refillRoot.setVisible(offering);
+    this.premiumRoot.setVisible(offering && !monetization().premium());
+    this.premiumSheen.setVisible(offering && !monetization().premium());
     if (!shown) {
       this.refill.clear();
       this.refillMark.clear();
+      this.premiumPlate.clear();
       return;
     }
     const s = this.uiScale;
@@ -309,61 +409,103 @@ export class PlayScene extends BaseScene {
     const sink = CHROME.block.depth * s * press * 0.8;
     placeSurface(this.actionSurface, r, s, sink);
     this.actionHint.setVisible(offering);
-    this.actionHeart.setVisible(offering);
-    this.actionLabel.setText(this.actionCaption);
+    this.actionHeart.clear();
     if (offering) {
-      resize(this.actionLabel, 32 * s, SHELL.cream);
-      this.actionLabel.setPosition(r.centerX, r.centerY - 16 * s + sink);
-      this.actionHint.setText('+1');
-      resize(this.actionHint, 22 * s, SHELL.cream);
-      this.actionHint.setPosition(r.centerX - 4 * s, r.centerY + 22 * s + sink);
-      this.actionHeart.clear();
-      drawHeart(this.actionHeart, r.centerX + 18 * s, r.centerY + 22 * s + sink, 10 * s, SHELL.cream);
+      // A rewarded watch is an offer, not a verdict: the disc says a video starts, the
+      // second line says how long it takes, and the chip says exactly what it buys.
+      const discR = 44 * s;
+      const discX = r.x + 30 * s + discR;
+      drawActionDisc(g, discX, r.centerY + sink, discR, s);
+      const today = this.actionCaption === 'TODAY';
+      this.actionLabel.setText(today ? 'Today' : STORE_COPY.watchTitle);
+      resize(this.actionLabel, 50 * s, SHELL.cream);
+      this.actionLabel.setOrigin(0, 0.5).setPosition(discX + discR + 26 * s, r.centerY - 22 * s + sink);
+      this.actionHint.setText(today ? STORE_COPY.dailyTerms : STORE_COPY.watchNow);
+      resize(this.actionHint, 22 * s, mix(SHELL.cream, PALETTE.coral, 0.2), STYLE.current, false);
+      this.actionHint.setOrigin(0, 0.5).setPosition(discX + discR + 26 * s, r.centerY + 26 * s + sink);
+      // The chip: a struck recess on the block's own colour, so it reads as part of it.
+      const chipW = 116 * s, chipH = 64 * s;
+      const chipX = r.right - 26 * s - chipW;
+      g.fillStyle(shade(PALETTE.coral, -0.5), 0.55)
+        .fillRoundedRect(chipX, r.centerY - chipH / 2 + sink, chipW, chipH, 18 * s);
+      this.plusOne.setVisible(true);
+      resize(this.plusOne, 36 * s, SHELL.cream);
+      this.plusOne.setPosition(chipX + 38 * s, r.centerY + sink);
+      drawHeart(this.actionHeart, chipX + chipW - 34 * s, r.centerY + sink, 17 * s, SHELL.cream, 1, shade(PALETTE.coral, -0.6));
       this.drawRefill(refillPress);
+      this.drawPremium(0);
     } else {
-      this.actionHeart.clear();
+      this.plusOne.setVisible(false);
       this.refill.clear();
       this.refillMark.clear();
+      this.premiumPlate.clear();
+      this.actionHint.setVisible(false);
+      this.actionLabel.setText(this.actionCaption);
       resize(this.actionLabel, 40 * s, SHELL.cream);
-      this.actionLabel.setPosition(r.centerX, r.centerY + sink);
+      // Continue carries the same disc the map's next-level block does, on the right of
+      // the word: the level is over and this is the way on, not a retry.
+      const forward = this.actionCaption === 'Continue';
+      const discR = forward ? 30 * s : 0;
+      const span = this.actionLabel.width + (forward ? discR * 2 + 20 * s : 0);
+      this.actionLabel.setOrigin(0.5).setPosition(r.centerX - span / 2 + this.actionLabel.width / 2, r.centerY + sink);
+      if (forward) drawActionDisc(g, r.centerX + span / 2 - discR, r.centerY + sink, discR, s);
     }
     this.placeWaitCopy();
   }
 
+  /** The left half of the pair under Watch: the same five hearts, bought outright. */
   private drawRefill(press: number): void {
     const s = this.uiScale;
     const r = this.refillRect;
-    const refill = this.refill.clear();
-    drawPanel(refill, r, s, { fill: SHELL.bench, depth: 12, press });
+    const g = this.refill.clear();
+    if (r.width <= 0) { this.refillMark.clear(); return; }
+    drawPanel(g, r, s, { fill: SHELL.bench, depth: 12, press });
     const sink = 12 * s * press * 0.8;
-    this.refillLabel.setText('REFILL');
-    resize(this.refillLabel, 26 * s, PALETTE.ink);
-    this.refillLabel.setPosition(r.centerX, r.centerY - 14 * s + sink);
-    this.refillHint.setText('RESTORE 5');
-    resize(this.refillHint, 18 * s, PALETTE.ink, STYLE.current, false);
-    const priceText = monetization().productPrice(PRODUCT.heartRefill) ?? '';
-    const hintX = priceText.length > 0 ? r.centerX - 36 * s : r.centerX - 4 * s;
-    this.refillHint.setPosition(hintX, r.centerY + 20 * s + sink);
+    this.refillLabel.setText(`Refill ${HEALTH.max}`);
+    resize(this.refillLabel, 34 * s, PALETTE.ink, STYLE.current, false);
+    this.refillLabel.setPosition(r.centerX, r.centerY - 18 * s + sink);
+    const price = monetization().productPrice(PRODUCT.heartRefill) ?? '';
+    this.refillPrice.setText(price);
+    resize(this.refillPrice, 25 * s, PALETTE.muted, STYLE.current, false);
+    this.refillPrice.setPosition(r.centerX, r.centerY + 24 * s + sink).setVisible(price !== '');
+    this.refillHint.setVisible(false);
     this.refillMark.clear();
-    drawHeart(this.refillMark, hintX + 16 * s, r.centerY + 20 * s + sink, 9 * s, PALETTE.coral);
-    this.refillPrice.setText(priceText);
-    resize(this.refillPrice, 18 * s, PALETTE.muted, STYLE.current, false);
-    this.refillPrice.setPosition(r.centerX + 70 * s, r.centerY + 20 * s + sink);
-    this.refillPrice.setVisible(priceText.length > 0);
+  }
+
+  /** The right half: the offer that ends the wait rather than paying it off once. */
+  private drawPremium(press: number): void {
+    const s = this.uiScale;
+    const r = this.premiumRect;
+    const g = this.premiumPlate.clear();
+    if (r.width <= 0 || monetization().premium()) return;
+    drawPanel(g, r, s, { fill: BRASS, depth: 12, press, hero: true, frame: SHELL.cream });
+    const sink = 12 * s * press * 0.8;
+    const cream = SHELL.cream;
+    resize(this.premiumLabel, 36 * s, cream);
+    const markR = 20 * s;
+    const span = markR * 2 + 12 * s + this.premiumLabel.width;
+    drawInfinity(g, r.centerX - span / 2 + markR, r.centerY - 18 * s + sink, markR, cream);
+    this.premiumLabel.setPosition(r.centerX - span / 2 + markR * 2 + 12 * s + this.premiumLabel.width / 2, r.centerY - 18 * s + sink);
+    const price = monetization().productPrice(PRODUCT.premium);
+    this.premiumPrice.setText(price === null ? 'No ads' : `${price} · no ads`);
+    resize(this.premiumPrice, 23 * s, shade(BRASS, -0.62), STYLE.current, false);
+    this.premiumPrice.setPosition(r.centerX, r.centerY + 24 * s + sink);
   }
 
   private placeWaitCopy(): void {
     const s = this.uiScale;
-    const y = this.offeringHeart()
-      ? this.refillRect.y - 28 * s
-      : this.trackY + 28 * s;
+    const offering = this.offeringHeart();
+    const y = offering ? this.viewport.safe.top + 470 * s : this.trackY + 28 * s;
     this.accuracy.setPosition(this.viewport.safe.centerX, y);
+    // Cream on the dimmed vignette; the act's own ink everywhere else.
+    resize(this.accuracy, (offering ? 30 : 34) * s, offering ? SHELL.cream : this.definition.ink, STYLE.current, false);
   }
 
   private setAction(caption: string): void {
     if (this.actionCaption === caption) return;
     if (caption !== '' && this.actionCaption === '') this.actionShownAt = performance.now() / 1000;
     this.actionCaption = caption;
+    this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
   }
@@ -502,6 +644,13 @@ export class PlayScene extends BaseScene {
       void this.buyFill();
       return;
     }
+    if (this.offeringHeart() && !monetization().premium()
+      && Phaser.Geom.Rectangle.Contains(this.premiumRect, tap.x, tap.y)) {
+      this.premiumPressedAt = performance.now() / 1000;
+      this.actionPressDirty = true;
+      void this.buyPremium();
+      return;
+    }
     if (this.actionCaption !== '' && Phaser.Geom.Rectangle.Contains(this.actionRect, tap.x, tap.y)) {
       this.actionPressedAt = performance.now() / 1000;
       this.actionPressDirty = true;
@@ -623,10 +772,8 @@ export class PlayScene extends BaseScene {
     if (headlineSize !== this.headlineSize) { this.headlineSize = headlineSize; resize(this.headline, headlineSize, this.headlineColour); }
     this.headline.setAlpha(entry.alpha * endReveal).setY(this.headlineY + entry.rise * 16 * this.uiScale);
     this.drawTurnSign();
-    if (this.summaryShown) {
-      this.accuracy.setAlpha(still ? 1 : easeOut((now - this.summaryAt) / 0.45));
-      this.animateStars(now);
-    } else { this.accuracy.setAlpha(1); }
+    if (this.summaryShown) this.animateStars(now);
+    else this.accuracy.setAlpha(1);
     this.drawBeatTrack(now);
     const wall = performance.now() / 1000;
     const puckPress = pressAmount(wall, this.puckPressedAt);
@@ -637,10 +784,13 @@ export class PlayScene extends BaseScene {
     }
     const actionPress = pressAmount(wall, this.actionPressedAt);
     const refillPress = pressAmount(wall, this.refillPressedAt);
-    if (actionPress > 0.001 || refillPress > 0.001 || this.actionPressDirty) {
+    const premiumPress = pressAmount(wall, this.premiumPressedAt);
+    if (actionPress > 0.001 || refillPress > 0.001 || premiumPress > 0.001 || this.actionPressDirty) {
       this.drawAction(Math.max(0, actionPress), Math.max(0, refillPress));
-      this.actionPressDirty = actionPress > 0.001 || refillPress > 0.001;
+      this.drawPremium(Math.max(0, premiumPress));
+      this.actionPressDirty = actionPress > 0.001 || refillPress > 0.001 || premiumPress > 0.001;
     }
+    if (this.offeringHeart()) this.premiumSheen.update(wall, !monetization().premium());
     if (this.actionCaption !== '') {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(wall - this.actionShownAt, 0.5);
       this.actionRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
@@ -663,9 +813,9 @@ export class PlayScene extends BaseScene {
           void this.startRound();
           return;
         }
-        const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
-        const copy = wait === null ? HEALTH_COPY.playNote : `${HEALTH_COPY.playNote}\nNext heart ${wait}`;
+        const copy = this.waitCopy(health);
         if (this.accuracy.text !== copy) this.accuracy.setText(copy);
+        this.drawEmptyHearts();
       }
     }
     // The verdict word rises and fades; one instance, so a quick double replaces rather
@@ -696,7 +846,10 @@ export class PlayScene extends BaseScene {
   }
   private drawTurnSign(): void {
     const g = this.turnSign.clear();
-    if (this.headline.text === '') {
+    // The sign exists to tell Watch from Your turn as two objects rather than two colours.
+    // Outside a round there is no phase to tell apart, and a plate behind Cleared or No
+    // hearts only boxes in a headline that the backdrop already sets off.
+    if (this.headline.text === '' || this.turn === 'none') {
       this.turnSign.setAlpha(0);
       return;
     }
@@ -932,8 +1085,9 @@ export class PlayScene extends BaseScene {
     const outcome = this.outcome!;
     this.setTurn('none');
     this.changeHeadline(this.saveFailed ? 'Couldn’t save' : outcome.cleared ? 'Cleared' : 'Again?');
-    this.accuracy.setText(`${Math.round(accuracy)}%`);
-    this.kept.setText('HEART KEPT').setVisible(this.heartRefunded);
+    this.scoreValue.setText(`${Math.round(accuracy)}%`);
+    this.accuracy.setText('');
+    this.kept.setVisible(this.heartRefunded);
     this.setAction(outcome.cleared ? 'Continue' : 'Try again');
     this.drawStars();
     this.drawTaskMarks();
@@ -955,59 +1109,127 @@ export class PlayScene extends BaseScene {
       if (done || current) g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, y - r * 0.35, r * 0.28);
     }
   }
-  private starAt(k: number): { x: number; y: number } {
-    return { x: this.viewport.safe.centerX + (k - 1) * 64 * this.uiScale, y: this.trackY - 14 * this.uiScale };
-  }
-  private drawStars(): void {
-    this.stars.clear();
-    if (!this.summaryShown) {
-      this.kept.setVisible(false);
-      return;
-    }
+  /** Medal `k` in the plaque's own space, measured from the ceiling anchor. */
+  private medalLocal(k: number): { x: number; y: number } {
     const s = this.uiScale;
-    const { safe } = this.viewport;
-    // One cream plaque: stars above, the percentage below. They used to float on the
-    // timber of the bench, which is why empty outlines vanished and the score looked
-    // like a caption from another screen.
-    const plateW = 268 * s, plateH = (this.heartRefunded ? 128 : 100) * s;
-    const plateY = this.heartRefunded ? this.trackY - 50 * s : this.trackY - plateH / 2;
-    drawPanel(this.stars, new Rect(safe.centerX - plateW / 2, plateY, plateW, plateH), s, {
-      fill: SHELL.puck, depth: 6, radius: 22,
-    });
-    const now = this.now();
-    const earned = starsFor(meanAccuracy(this.results), this.spec);
-    const empty = starColour(false, this.definition.ink, SHELL.puck);
-    const exaggeration = STYLE.current.exaggeration;
+    return { x: (k - 1) * PLATE.medalGap * s, y: (PLATE.ropeLength + PLATE.medalY) * s };
+  }
+
+  /** The same point in world space, once the plaque has swung and taken its knocks. */
+  private hangAt(lx: number, ly: number, tilt: number, drop: number): { x: number; y: number } {
+    const cos = Math.cos(tilt), sin = Math.sin(tilt);
+    return { x: this.plaqueAt.x + lx * cos - ly * sin, y: this.plaqueAt.y + drop + lx * sin + ly * cos };
+  }
+
+  /** Hangs a text from the same anchor, so the whole rig moves as one object. */
+  private hangText(text: Phaser.GameObjects.Text, lx: number, ly: number, tilt: number, drop: number, alpha: number): void {
+    const at = this.hangAt(lx, ly, tilt, drop);
+    text.setPosition(at.x, at.y).setRotation(tilt).setAlpha(alpha);
+  }
+
+  /**
+   * The result plaque. It was a small cream plate parked on the beat track with three
+   * 20-unit stars in a row on it, which read as a caption rather than as the end of the
+   * level. It now hangs from the ceiling on two ropes, drops into place, and the medals —
+   * two and a half times the size, straddling its top edge — knock it down a little as
+   * each one stamps. Nothing here decides anything: `starsFor` has already scored the
+   * level and `starReveal.ts` supplies every pose as `f(t)`.
+   */
+  private drawStars(): void {
+    this.stars.clear().setPosition(0, 0).setRotation(0);
+    const shown = this.summaryShown;
+    this.kept.setVisible(shown && this.heartRefunded);
+    this.scoreValue.setVisible(shown);
+    this.scoreNote.setVisible(shown);
+    if (!shown) return;
+    const s = this.uiScale;
     const still = this.reducedMotion;
-    const chorus = still ? 0 : chorusGlow(now - this.summaryAt, earned);
-    const radius = 20 * s;
+    const age = this.now() - this.summaryAt;
+    const earned = starsFor(meanAccuracy(this.results), this.spec);
+    const exaggeration = STYLE.current.exaggeration;
+    const pose = plaquePose(age, still);
+    const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration);
+    const plaqueH = (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * s;
+    const drop = (pose.drop + jolt) * plaqueH;
+    const width = Math.min(PLATE.width * s, this.viewport.safe.width - 40 * s);
+    const top = PLATE.ropeLength * s;
+    const g = this.stars;
+    g.setPosition(this.plaqueAt.x, this.plaqueAt.y + drop).setRotation(pose.tilt).setAlpha(pose.alpha);
+
+    // The chorus: a fan of light behind the whole plaque, thrown by the third medal only.
+    const burst = still ? { scale: 0, alpha: 0, spin: 0 } : chorusBurst(age, earned);
+    if (burst.alpha > 0.01) {
+      const centre = { x: 0, y: top + plaqueH * 0.4 };
+      const reach = width * 0.92 * burst.scale;
+      for (let i = 0; i < 12; i++) {
+        const a = burst.spin + i * Math.PI / 6;
+        const spread = 0.09;
+        g.fillStyle(0xffe7a0, burst.alpha * 0.5);
+        g.fillTriangle(
+          centre.x + Math.cos(a) * reach * 0.3, centre.y + Math.sin(a) * reach * 0.3,
+          centre.x + Math.cos(a - spread) * reach, centre.y + Math.sin(a - spread) * reach,
+          centre.x + Math.cos(a + spread) * reach, centre.y + Math.sin(a + spread) * reach,
+        );
+      }
+    }
+
+    drawRopes(g, s, top, [-width / 2 + 62 * s, width / 2 - 62 * s], 7);
+    drawPanel(g, new Rect(-width / 2, top, width, plaqueH), s, {
+      fill: SHELL.cream, depth: 12, radius: 40, hero: true,
+    });
+
+    const empty = starColour(false, this.definition.ink, SHELL.cream);
+    const radius = PLATE.medalRadius * s;
     for (let k = 0; k < 3; k++) {
-      const at = this.starAt(k);
-      drawStarMark(this.stars, { x: at.x, y: at.y, radius, color: empty, pose: starPose(8, false, exaggeration) });
+      const at = this.medalLocal(k);
+      drawStarMark(g, { x: at.x, y: at.y, radius, color: empty, pose: starPose(8, false, exaggeration) });
       if (k >= earned) continue;
-      const age = starAge(now - this.summaryAt, k, still);
-      if (age <= 0) continue;
-      const pose = starPose(age, true, exaggeration);
-      drawStarMark(this.stars, {
-        x: at.x, y: at.y, radius, color: prizeColour(empty, pose.fill), pose,
-        impactAge: starImpactAge(age, true), chorus,
+      const local = starAge(age, k, still);
+      if (local <= 0) continue;
+      const medal = starPose(local, true, exaggeration);
+      drawStarMark(g, {
+        x: at.x, y: at.y, radius, color: prizeColour(empty, medal.fill), pose: medal,
+        impactAge: starImpactAge(local, true), chorus: still ? 0 : chorusGlow(age, earned),
       });
     }
+
+    reemboss(this.scoreValue, 104 * s, PALETTE.ink);
+    resize(this.scoreNote, 22 * s, PALETTE.muted, STYLE.current, false);
+    this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
+    this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
+    if (!this.heartRefunded) return;
+    // A refunded heart is brass on brass: a small struck plate, not a coral caption.
+    const keptW = PLATE.keptWidth * s, keptH = 60 * s, keptY = top + PLATE.keptY * s;
+    drawPanel(g, new Rect(-keptW / 2, keptY - keptH / 2, keptW, keptH), s, { fill: BRASS, depth: 5, radius: 18 });
+    drawHeart(g, -keptW / 2 + 42 * s, keptY, 17 * s, PALETTE.coral);
+    resize(this.kept, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
+    this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
   }
   /** Medals stamp left to right; an earned one throws confetti and sparks as it lands. */
   private animateStars(now: number): void {
     const earned = starsFor(meanAccuracy(this.results), this.spec);
     const still = this.reducedMotion;
+    const summaryAge = now - this.summaryAt;
+    const pose = plaquePose(summaryAge, still);
+    const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration)))
+      * (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * this.uiScale;
     for (let k = 0; k < 3; k++) {
-      const age = starAge(now - this.summaryAt, k, still);
-      const pose = starPose(age, k < earned, STYLE.current.exaggeration);
-      if (pose.landed && k >= this.starsLanded) {
-        this.starsLanded = k + 1;
-        const at = this.starAt(k);
-        if (k < earned && !still) {
-          this.starFx.burst('confetti', at.x, at.y - 8 * this.uiScale, [PALETTE.coral, SHELL.sun, SHELL.cream, STAR_PRIZE], 16);
-          this.starFx.burst('sparks', at.x, at.y, [SHELL.sun, 0xffe7a0, PALETTE.coral], 10);
-        }
+      const age = starAge(summaryAge, k, still);
+      const medal = starPose(age, k < earned, STYLE.current.exaggeration);
+      if (!medal.landed || k < this.starsLanded) continue;
+      this.starsLanded = k + 1;
+      if (k >= earned || still) continue;
+      // The burst leaves from where the medal actually struck, which on a swinging
+      // plaque is not where it was laid out.
+      const local = this.medalLocal(k);
+      const at = this.hangAt(local.x, local.y, pose.tilt, drop);
+      this.starFx.burst('confetti', at.x, at.y - 8 * this.uiScale, [PALETTE.coral, SHELL.sun, SHELL.cream, STAR_PRIZE], 16);
+      this.starFx.burst('sparks', at.x, at.y, [SHELL.sun, 0xffe7a0, PALETTE.coral], 10);
+      vibrate('stamp');
+      // A clean sweep throws one more burst, over the whole plaque rather than one medal.
+      if (k === 2 && earned >= 3) {
+        const crest = this.hangAt(0, PLATE.ropeLength * this.uiScale, pose.tilt, drop);
+        this.starFx.burst('confetti', crest.x, crest.y, [PALETTE.coral, SHELL.sun, SHELL.cream, STAR_PRIZE], 26);
       }
     }
     this.drawStars();
@@ -1029,9 +1251,7 @@ export class PlayScene extends BaseScene {
     this.setTurn('none');
     this.changeHeadline('No hearts');
     const health = loadHealth();
-    const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
-    const copy = wait === null ? HEALTH_COPY.playNote : `${HEALTH_COPY.playNote}\nNext heart ${wait}`;
-    if (!this.summaryShown) this.accuracy.setText(copy);
+    if (!this.summaryShown) this.accuracy.setText(this.waitCopy(health));
     this.setAction(canClaimDailyHeart(health) ? 'TODAY' : 'WATCH');
     if (!this.emptyTracked) {
       this.emptyTracked = true;
@@ -1045,6 +1265,16 @@ export class PlayScene extends BaseScene {
       this.purchaseOfferTracked = true;
       track('purchase_offer_shown', { product: PRODUCT.heartRefill });
     }
+  }
+
+  /**
+   * What the empty screen says under its headline. The countdown leads, because it is the
+   * one fact that changes while the player is looking at it; the reminder that finished
+   * levels stay open follows, since it is what makes waiting bearable.
+   */
+  private waitCopy(health: Health): string {
+    const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
+    return wait === null ? HEALTH_COPY.playNote : `Next one in ${wait}\n${HEALTH_COPY.playNote}`;
   }
 
   private offeringHeart(): boolean {
@@ -1110,6 +1340,29 @@ export class PlayScene extends BaseScene {
     }
   }
 
+  /**
+   * Premium from the mid-run offer. Entitlement lifts the heart cost entirely, so a
+   * successful purchase drops straight back into the level the player was stopped on —
+   * the same landing a refill gets, for the same reason.
+   */
+  private async buyPremium(): Promise<void> {
+    if (this.commerceBusy || this.curtain.active || monetization().premium()) return;
+    this.commerceBusy = true;
+    track('purchase_offer_shown', { product: PRODUCT.premium });
+    try {
+      const result = await monetization().purchase(PRODUCT.premium);
+      if (this.disposed) return;
+      if (!result.ok) {
+        this.accuracy.setText(purchaseFeedback(result.reason));
+        return;
+      }
+      vibrate('stamp');
+      void this.startRound();
+    } finally {
+      this.commerceBusy = false;
+    }
+  }
+
   private showPause(): void {
     this.vignette.pause();
     this.setTurn('none');
@@ -1162,6 +1415,7 @@ export class PlayScene extends BaseScene {
     this.vignette.destroy();
     this.fx.destroy();
     this.starFx.destroy();
+    this.premiumSheen.destroy();
     document.removeEventListener('visibilitychange', this.visibility);
     window.removeEventListener('pagehide', this.pageHide);
     this.scale.off(Phaser.Scale.Events.RESIZE, this.checkOrientation, this);

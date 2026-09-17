@@ -26,3 +26,26 @@ export function restoreFeedback(result: RestoreResult): string {
   }
   return result.premium ? 'Premium restored.' : 'No purchases to restore.';
 }
+
+/**
+ * The store's own words, in one place because the same offer is now made on three screens
+ * — settings, the map's rest sheet and the mid-run plaque — and an offer worded three ways
+ * reads as three different products.
+ */
+export const STORE_COPY = {
+  premiumTitle: 'Premium',
+  /** On the map, where the offer answers a wait rather than sitting in a list. */
+  premiumHeadline: 'Never wait again',
+  premiumTerms: 'Unlimited hearts · no ads · one payment',
+  premiumShort: 'Unlimited hearts, no ads',
+  premiumOwned: 'Premium · unlimited hearts',
+  refillTitle: 'Heart refill',
+  refillTerms: 'Fills all five',
+  refillShort: 'Refill all five',
+  dailyTitle: 'Daily heart',
+  dailyTerms: 'Free, once a day',
+  watchTitle: 'Watch',
+  /** Rewarded video length, as the networks sell it. Stated so the tap is not a surprise. */
+  watchTerms: '30 seconds',
+  watchNow: 'Keep playing now',
+} as const;

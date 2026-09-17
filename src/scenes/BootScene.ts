@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 
 import { SceneKey } from '@/config/scenes';
+import { setHaptics } from '@/core/haptics';
 import { isTouchPrimary, setOrientationPromptVisible } from '@/core/shell';
+import { loadSettings } from '@/game/settings';
 
 /**
  * First scene. Applies runtime input tuning and installs the orientation
@@ -17,6 +19,9 @@ export class BootScene extends Phaser.Scene {
 
   public create(): void {
     this.configureTouchInput();
+    // Haptics are read once here rather than per pulse: a vibration fires on a judged tap,
+    // which is the one place in the game that must not touch storage.
+    setHaptics(loadSettings().haptics);
     this.installOrientationGuard();
 
     this.scene.start(SceneKey.Preload);
