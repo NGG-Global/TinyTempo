@@ -119,11 +119,29 @@ over-instrument, which is the same instinct.
 | Session Replay | Off | Replay records the DOM. The game draws to a `<canvas>`, so a replay is a still frame of an empty page — and `blockAllMedia`, which Sentry recommends, blocks the canvas anyway. Large bundle addition, real privacy surface, nothing gained. |
 | Logs | Off | Out of scope for a first release. |
 
-Three of the SDK's default integrations are filtered out in `sentry.ts`:
-`GlobalHandlers` would double-report what `captureGlobalErrors` already sends and
-bypass its dedupe and redaction on the way; `Breadcrumbs` would bury the game's own
-trail in console and DOM noise; `BrowserSession` counts sessions this project does
-not use.
+Five of the SDK's default integrations are filtered out, listed in
+`diagnostics/integrations.ts` and asserted in `tests/sentryAdapter.test.ts`. Two of
+them were found by reading the envelopes the SDK actually posts, after the first live
+DSN went in:
+
+- **`BrowserApiErrors`** wraps `setTimeout`, `setInterval` and `addEventListener` and
+  reports from inside them. One thrown error arrived as **two issues**: one from this
+  integration with no tags, no context and no trail, and one from the sink with all
+  three. In a Phaser game that integration covers very nearly every code path.
+- **`Dedupe`** drops an event resembling the one before it — which is exactly the
+  power-of-two repeats that exist to show a fault is firing every frame.
+- `GlobalHandlers` would likewise double-report what `captureGlobalErrors` sends.
+- `Breadcrumbs` would bury the game's own trail in console and DOM noise.
+- `BrowserSession` counts sessions this project does not use.
+
+The lesson worth keeping: *anything that captures on its own has skipped
+`core/errors.ts`*, and filtering one such integration is not the same as filtering
+them all.
+
+A second bug surfaced the same way. Breadcrumb `at` is milliseconds since the page
+opened, and passing that to Sentry as a timestamp dated every crumb to **1970**, after
+which none of them arrived. `breadcrumbEpochMs` converts to wall-clock, and a test
+asserts the year is plausible rather than merely that a number was produced.
 
 PII is controlled through `dataCollection` rather than `sendDefaultPii`, which is
 deprecated and removed in SDK v11. The categories are named explicitly so a future

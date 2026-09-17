@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  breadcrumb, captureGlobalErrors, ERRORS, errorTrail, installErrorSink, redact,
-  reportError, resetErrorState, setErrorContext, type ErrorReport,
+  breadcrumb, breadcrumbEpochMs, captureGlobalErrors, ERRORS, errorTrail, installErrorSink,
+  redact, reportError, resetErrorState, setErrorContext, type ErrorReport,
 } from '../src/core/errors';
 
 let sent: ErrorReport[] = [];
@@ -105,6 +105,19 @@ describe('breadcrumbs', () => {
     expect(trail).toHaveLength(ERRORS.trail);
     expect(trail[0]!.message).toBe('step 10');
     expect(trail.at(-1)!.message).toBe(`step ${ERRORS.trail + 9}`);
+  });
+
+  it('dates a crumb in wall-clock time, not in milliseconds since the page opened', () => {
+    // Sending the relative value straight to a reporter dated every crumb to 1970 and
+    // silently dropped the lot — found by reading the envelopes Sentry actually posts.
+    const before = Date.now();
+    breadcrumb('step');
+    const at = errorTrail()[0]!.at;
+    const epoch = breadcrumbEpochMs(at);
+    expect(epoch).toBeGreaterThanOrEqual(before - 1);
+    expect(epoch).toBeLessThanOrEqual(Date.now() + 1);
+    // The year has to be plausible, which is the property that actually failed.
+    expect(new Date(epoch).getUTCFullYear()).toBeGreaterThan(2020);
   });
 
   it('hands the trail to a report as a copy, not as the live ring', () => {

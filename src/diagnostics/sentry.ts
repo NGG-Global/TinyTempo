@@ -3,7 +3,8 @@ import {
 } from '@sentry/browser';
 
 import { DIAGNOSTICS } from '@/config/diagnostics';
-import type { ErrorReport, ErrorSink } from '@/core/errors';
+import { breadcrumbEpochMs, type ErrorReport, type ErrorSink } from '@/core/errors';
+import { REMOVED_INTEGRATIONS } from './integrations';
 
 /**
  * The Sentry adapter.
@@ -22,12 +23,6 @@ import type { ErrorReport, ErrorSink } from '@/core/errors';
  * sets of rules fighting over what to drop is how a quota disappears quietly.
  */
 
-/**
- * Sentry's own global handlers would double-report what `captureGlobalErrors` sends, and
- * would bypass the dedupe and redaction it applies on the way. Its automatic breadcrumbs
- * would bury the game's own trail in console and DOM noise, and `BrowserSession` counts
- * sessions this project does not use.
- */
 const OPTIONS: BrowserOptions = {
   dsn: DIAGNOSTICS.dsn,
   release: DIAGNOSTICS.release,
@@ -62,9 +57,7 @@ const OPTIONS: BrowserOptions = {
     urlQueryParams: false,
   },
   integrations: integrations => integrations.filter(
-    integration => integration.name !== 'GlobalHandlers'
-      && integration.name !== 'BrowserSession'
-      && integration.name !== 'Breadcrumbs',
+    integration => !REMOVED_INTEGRATIONS.has(integration.name),
   ),
 };
 
@@ -85,7 +78,9 @@ export function createSentrySink(): ErrorSink {
       addBreadcrumb({
         message: crumb.message,
         level: 'info',
-        timestamp: crumb.at / 1000,
+        // Seconds since the epoch. `crumb.at` is milliseconds since the page opened,
+        // and sending that directly dated every crumb to 1970 and lost all of them.
+        timestamp: breadcrumbEpochMs(crumb.at) / 1000,
         ...(crumb.data === undefined ? {} : { data: { ...crumb.data } }),
       });
     }
