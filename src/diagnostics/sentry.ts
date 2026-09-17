@@ -86,8 +86,11 @@ export function createSentrySink(): ErrorSink {
     }
     // The stack is rebuilt rather than passed through: the capture layer redacted the
     // strings, and an Error carrying them is what the SDK knows how to symbolicate.
+    // The name is the thrown error's own — `ReferenceError`, `TypeError` — because that
+    // is half of how Sentry groups an issue and all of how a human reads one at a
+    // glance. Which capture path it arrived by is the `kind` tag's job, not the type's.
     const error = new Error(report.message);
-    error.name = `TinyTempo:${report.kind}`;
+    error.name = report.name;
     if (report.stack !== undefined) error.stack = report.stack;
     captureException(error);
   };

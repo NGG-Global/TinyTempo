@@ -26,6 +26,25 @@ describe('error capture', () => {
     expect(sent[0]!.stack).toContain('boom');
   });
 
+  it('keeps the thrown error\'s own type, which is half of how an issue is grouped', () => {
+    // Flattening every fault to one name made a missing function and a null dereference
+    // at the same line look like the same bug. Found with Sentry's own test snippet.
+    reportError(new ReferenceError('myUndefinedFunction is not defined'), { kind: 'error' });
+    reportError(new TypeError('x is not a function'));
+    reportError(new RangeError('out of range'));
+    expect(sent.map(r => r.name)).toEqual(['ReferenceError', 'TypeError', 'RangeError']);
+    // The capture path it arrived by stays separate, as the kind.
+    expect(sent[0]!.kind).toBe('error');
+  });
+
+  it('falls back to Error for a thrown value with no usable name', () => {
+    reportError('a string was thrown');
+    const nameless = new Error('odd');
+    Object.defineProperty(nameless, 'name', { value: '' });
+    reportError(nameless);
+    expect(sent.map(r => r.name)).toEqual(['Error', 'Error']);
+  });
+
   it('accepts a thrown value that is not an Error', () => {
     reportError('a string was thrown');
     reportError({ weird: true });

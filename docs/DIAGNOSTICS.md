@@ -65,6 +65,39 @@ trail   : boot -> scene {"key":"menu"} -> scene {"key":"map"}
           -> scene {"key":"play"} -> level started {"level":6,"act":"curl","attempt":1}
 ```
 
+## Verifying it works
+
+Development builds expose Sentry's own verification snippet. Open the console on
+`npm run dev` and call:
+
+```js
+__TINY_TEMPO_TEST_ERROR__()
+```
+
+It throws a genuine `ReferenceError` on a timer, so it travels the unhandled path a
+real fault takes rather than a caller's try/catch, and it tells you whether a DSN is
+configured. The hook is development-only — the same rule `window.__PHASER_GAME__`
+follows, and for a sharper reason: a verification hook that shipped would be a way to
+crash the game from a page console. A production build contains neither the hook nor
+the snippet, which `npm run build` is checked against.
+
+What lands in Sentry, confirmed against a live DSN:
+
+```
+type       : ReferenceError            <- the thrown error's own class
+value      : myUndefinedFunction is not defined
+level      : fatal | tags: {"kind":"error","seen":"1"}
+release    : tiny-tempo@0.1.0 | env: development
+game ctx   : {"release":"tiny-tempo@0.1.0","scene":"map"}
+trail      : boot -> diagnostics attached -> scene -> scene -> test error requested
+```
+
+The type is the thrown error's own — `ReferenceError`, `TypeError`, `RangeError` —
+because Sentry groups an issue by it. An earlier version of the sink overwrote it with
+`TinyTempo:<kind>`, which collapsed every fault in the project into one shape and told
+a reader nothing a tag was not already carrying. Which capture path an error arrived
+by is the `kind` tag's job.
+
 ## Releasing with sourcemaps
 
 Stack traces from a minified bundle are useless, so a release uploads sourcemaps

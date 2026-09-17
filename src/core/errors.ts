@@ -31,6 +31,12 @@ export interface Breadcrumb {
 
 export interface ErrorReport {
   readonly kind: ErrorKind;
+  /**
+   * The thrown error's own type — `ReferenceError`, `TypeError`, and so on. Kept because
+   * a reporter groups issues by it: flattening every fault to one name makes a missing
+   * function and a null dereference at the same line look like the same bug.
+   */
+  readonly name: string;
   readonly message: string;
   readonly stack?: string;
   /** True when the game cannot continue: the boot failure, or a frame that died. */
@@ -127,6 +133,7 @@ export interface ReportOptions {
 export function reportError(error: unknown, options: ReportOptions = {}): void {
   try {
     const wrapped = error instanceof Error ? error : new Error(String(error));
+    const name = typeof wrapped.name === 'string' && wrapped.name !== '' ? wrapped.name : 'Error';
     const message = redact(wrapped.message === '' ? String(error) : wrapped.message);
     const stack = wrapped.stack === undefined ? undefined : redact(wrapped.stack);
     const key = signature(message, stack);
@@ -136,6 +143,7 @@ export function reportError(error: unknown, options: ReportOptions = {}): void {
     sent += 1;
     sink({
       kind: options.kind ?? 'handled',
+      name,
       message,
       ...(stack === undefined ? {} : { stack }),
       fatal: options.fatal ?? false,

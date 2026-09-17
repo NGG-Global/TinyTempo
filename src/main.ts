@@ -14,6 +14,11 @@ declare global {
      * console; stripped from production so nothing can reach into the game.
      */
     __PHASER_GAME__?: Phaser.Game;
+    /**
+     * Throws Sentry's verification error, to confirm reporting works against a real
+     * project. Development builds only; see `diagnostics/boot.ts`.
+     */
+    __TINY_TEMPO_TEST_ERROR__?: () => string;
   }
 }
 
