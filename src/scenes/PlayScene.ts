@@ -33,7 +33,7 @@ import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback } from '@/ui/feedback';
 import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
-import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
+import { body, display, label, resize } from '@/ui/type';
 import { drawStarMark, prizeColour, STAR_PRIZE } from '@/ui/star';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -219,7 +219,7 @@ export class PlayScene extends BaseScene {
     this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
     this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
-    this.scoreValue = embossed(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.scoreValue = display(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreNote = label(this, 'On the beat', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
     this.actionRoot = this.add.container(0, 0).setDepth(10);
@@ -1193,7 +1193,7 @@ export class PlayScene extends BaseScene {
       });
     }
 
-    reemboss(this.scoreValue, 104 * s, PALETTE.ink);
+    resize(this.scoreValue, 104 * s, PALETTE.ink);
     resize(this.scoreNote, 22 * s, PALETTE.muted, STYLE.current, false);
     this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
     this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);

@@ -17,7 +17,7 @@ import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
+import { body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 const TUNE = {
@@ -92,11 +92,11 @@ export class CalibrateScene extends BaseScene {
     this.controls = this.add.graphics().setDepth(2);
     this.beats = this.add.graphics().setDepth(2);
     this.backMark = this.add.graphics().setDepth(3);
-    this.headline = embossed(this, 'Tap offset', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(1);
+    this.headline = display(this, 'Tap offset', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(1);
     this.instruction = body(this, 'Tap anywhere on every beat. Eight taps and the workshop knows your device.', {
       size: 30, colour: PALETTE.muted, align: 'center',
     }).setOrigin(0.5, 0).setDepth(1);
-    this.counted = embossed(this, '', { size: 132, colour: PALETTE.ink }).setOrigin(1, 0.5).setDepth(1);
+    this.counted = display(this, '', { size: 132, colour: PALETTE.ink }).setOrigin(1, 0.5).setDepth(1);
     this.countedOf = display(this, `/${CALIBRATION_TAPS}`, { size: 62, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(1);
     this.countedNote = label(this, 'Taps landed', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(1);
     this.current = body(this, '', { size: 27, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(1);
@@ -133,7 +133,7 @@ export class CalibrateScene extends BaseScene {
     // Header: the same puck-and-title pair Settings uses, so back is in one place.
     this.backAt = { x: left + CHROME.puckRadius * s, y: safe.top + 66 * s };
     this.backRect.setTo(this.backAt.x - control / 2, this.backAt.y - control / 2, control, control);
-    reemboss(this.headline, 56 * s, PALETTE.ink);
+    resize(this.headline, 56 * s, PALETTE.ink);
     this.headlineAt = { x: this.backAt.x + (CHROME.puckRadius + 26) * s, y: this.backAt.y };
     this.headline.setPosition(this.headlineAt.x, this.headlineAt.y);
 
@@ -163,7 +163,7 @@ export class CalibrateScene extends BaseScene {
     );
     // Flat, not dressed: at this size the headline's outline turns a reading into a logo,
     // and the card behind it is already doing the work of setting it off the paper.
-    reemboss(this.counted, 132 * s, PALETTE.ink);
+    resize(this.counted, 132 * s, PALETTE.ink);
     resize(this.countedOf, 62 * s, PALETTE.muted, STYLE.current, false);
     const span = this.counted.width + this.countedOf.width;
     const countY = this.countRect.centerY - 12 * s;

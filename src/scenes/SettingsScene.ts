@@ -22,7 +22,7 @@ import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { arrive } from '@/ui/spring';
 import { drawSwitch, SWITCH } from '@/ui/switch';
-import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
+import { body, display, label, resize } from '@/ui/type';
 import { formatOffset } from './CalibrateScene';
 
 /** Design-unit metrics. Sections are labelled bands of rows, not a flat list of cards. */
@@ -142,7 +142,7 @@ export class SettingsScene extends BaseScene {
     this.sheen = new Sheen(this, 3);
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
-    this.headline = embossed(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
+    this.headline = display(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
     for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress']) {
       this.eyebrows.push(this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     }
@@ -223,7 +223,7 @@ export class SettingsScene extends BaseScene {
     // Header: a back puck and the title, both pinned.
     const backAt = { x: left + CHROME.puckRadius * s, y: safe.top + 66 * s };
     this.headlineAt = { x: backAt.x + (CHROME.puckRadius + 26) * s, y: backAt.y };
-    reemboss(this.headline, 62 * s, PALETTE.ink);
+    resize(this.headline, 62 * s, PALETTE.ink);
     this.headline.setPosition(this.headlineAt.x, this.headlineAt.y);
     this.hits.push({ name: 'back', rect: new Phaser.Geom.Rectangle(backAt.x - control / 2, backAt.y - control / 2, control, control), pinned: true });
 

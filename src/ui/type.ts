@@ -15,22 +15,43 @@ import { hex, relativeLuminance, shade, typeStroke } from './colour';
 
 type TextStyle = Phaser.Types.GameObjects.Text.TextStyle;
 
-/** A hard drop under the letter and its outline: the printed-sticker look. Dark and close. */
+/**
+ * A hard drop under the letter, close enough to read as thickness rather than as a glow.
+ *
+ * Which way it goes follows the outline. A letter that carries one is a printed sticker
+ * and drops dark, under both the fill and the stroke. A letter that cannot carry one —
+ * the game's ink, an area's ink, the dark brown on brass — is ink pressed into paper, and
+ * a second dark tone under it would only repeat the problem the outline had. Those lift
+ * on the paper's own cream, which is what gives them an edge without a border.
+ */
 function shadowFor(colour: number, size: number): NonNullable<TextStyle['shadow']> {
-  const drop = relativeLuminance(colour) > 0.45 ? shade(PALETTE.ink, -0.25) : shade(colour, -0.7);
-  return { offsetX: 0, offsetY: Math.max(1, size * 0.07), color: hex(drop), blur: 0, fill: true, stroke: true };
+  const outlined = typeStroke(colour) !== null;
+  const drop = !outlined ? SHELL.cream
+    : relativeLuminance(colour) > 0.45 ? shade(PALETTE.ink, -0.25)
+    : shade(colour, -0.7);
+  return {
+    offsetX: 0,
+    offsetY: Math.max(1, size * (outlined ? 0.07 : 0.05)),
+    color: hex(drop),
+    blur: 0,
+    fill: true,
+    stroke: outlined,
+  };
 }
 
 /** Below this the outline is tapered; a headline at or above it carries its full weight. */
 const FULL_WEIGHT_SIZE = 44;
 
-function strokeFor(t: Treatment, size: number): number {
+function strokeFor(t: Treatment, size: number, colour: number, override?: number): number {
   // The outline weight tracks the treatment's silhouette weight so type and object agree.
   // It tapers below headline size, though: a stroke that stays proportional all the way
   // down fills in Fredoka's counters, and a 28px value reads as a smudge rather than a
   // word. The outline is there to give a large letter a cartoon silhouette, and a small
   // one has no silhouette to give.
   if (t.outline === 0) return 0;
+  // No weight at all where the fill cannot carry a legible one; `typeStroke` decides.
+  // An author who names an outline has already picked a tone and is taken at their word.
+  if (override === undefined && typeStroke(colour) === null) return 0;
   // Squared, because the stroke is laid on the outside of a stem that is itself only
   // linear in the size: proportional weight costs a 28px letter well over half its stem
   // again, and Fredoka's counters close up. A headline keeps every bit of its outline.
@@ -57,7 +78,7 @@ export interface TypeSpec {
 }
 
 function styleFor(t: Treatment, family: string, weight: number, spec: TypeSpec, dress: boolean): TextStyle {
-  const strokeThickness = dress ? strokeFor(t, spec.size) : 0;
+  const strokeThickness = dress ? strokeFor(t, spec.size, spec.colour, spec.outline) : 0;
   const s: TextStyle = {
     // Quoted, because Phaser assembles the canvas font shorthand verbatim and an unquoted
     // "Baloo 2" is not a valid family there: the canvas falls back to 10px sans-serif.
@@ -67,7 +88,7 @@ function styleFor(t: Treatment, family: string, weight: number, spec: TypeSpec, 
     color: hex(spec.colour),
     align: spec.align ?? 'left',
   };
-  if (strokeThickness > 0) { s.stroke = hex(spec.outline ?? typeStroke(spec.colour)); s.strokeThickness = strokeThickness; }
+  if (strokeThickness > 0) { s.stroke = hex(spec.outline ?? typeStroke(spec.colour) ?? PALETTE.ink); s.strokeThickness = strokeThickness; }
   if (dress) {
     s.shadow = shadowFor(spec.colour, spec.size);
     s.padding = dressPad(spec.size, strokeThickness);
@@ -79,33 +100,6 @@ function styleFor(t: Treatment, family: string, weight: number, spec: TypeSpec, 
 /** A headline or a value: the display face, fully dressed. */
 export function display(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
   return scene.add.text(0, 0, text, styleFor(t, t.display, t.displayWeight, spec, true));
-}
-
-/**
- * A headline on paper: the display face with no outline, lifted off the sheet by a pale
- * drop instead. The full dressing is built for cream type on timber or coral, where a
- * dark stroke is what gives the letter its silhouette; ink on cream already has one, and
- * the stroke only fills in Fredoka's counters and turns a word into a logo.
- */
-export function embossed(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STYLE.current): Phaser.GameObjects.Text {
-  const style = { ...styleFor(t, t.display, t.displayWeight, spec, false) };
-  style.shadow = embossFor(spec.size);
-  style.padding = { left: 2, right: 2, top: 2, bottom: Math.max(2, Math.ceil(spec.size * 0.09)) };
-  return scene.add.text(0, 0, text, style);
-}
-
-/** Re-emboss after a size change, the way `resize` re-dresses. */
-export function reemboss(text: Phaser.GameObjects.Text, size: number, colour: number): void {
-  text.setFontSize(size);
-  text.setColor(hex(colour));
-  text.setStroke('#000000', 0);
-  const sh = embossFor(size);
-  text.setShadow(sh.offsetX, sh.offsetY, sh.color, 0, false, true);
-  text.setPadding({ left: 2, right: 2, top: 2, bottom: Math.max(2, Math.ceil(size * 0.09)) });
-}
-
-function embossFor(size: number): NonNullable<TextStyle['shadow']> {
-  return { offsetX: 0, offsetY: Math.max(1, size * 0.05), color: hex(SHELL.cream), blur: 0, fill: true, stroke: false };
 }
 
 /** Running copy: the body face, undressed, so it sits back behind the display. */
@@ -134,8 +128,8 @@ export function resize(text: Phaser.GameObjects.Text, size: number, colour: numb
     text.setPadding(0);
     return;
   }
-  const stroke = strokeFor(t, size);
-  text.setStroke(hex(typeStroke(colour)), stroke);
+  const stroke = strokeFor(t, size, colour);
+  text.setStroke(hex(typeStroke(colour) ?? PALETTE.ink), stroke);
   const sh = shadowFor(colour, size);
   text.setShadow(sh.offsetX, sh.offsetY, sh.color, sh.blur, sh.stroke, sh.fill);
   text.setPadding(dressPad(size, stroke));
