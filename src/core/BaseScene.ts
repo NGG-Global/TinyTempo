@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { breadcrumb, setErrorContext } from '@/core/errors';
 import { Viewport } from '@/core/Viewport';
 
 /**
@@ -27,6 +28,10 @@ export abstract class BaseScene extends Phaser.Scene {
    * never accidentally dropped.
    */
   public create(): void {
+    // Every scene passes through here, so the trail on a crash report reads as the
+    // route the player took to reach it without a single call site saying so.
+    breadcrumb('scene', { key: this.scene.key });
+    setErrorContext('scene', this.scene.key);
     this.viewport = new Viewport(this.scale);
 
     this.scale.on(Phaser.Scale.Events.RESIZE, this.handleResize, this);

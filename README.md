@@ -224,3 +224,7 @@ RevenueCat for entitlements, no Tiny Tempo account. Contact on the pages is
   [cucumber](docs/CUCUMBER_KNIFE.md), [banana](docs/BANANA_KNIFE.md).
 - [Music](docs/MUSIC.md) — measured metadata, the premix, and open listening
   questions.
+- [Crash reporting](docs/DIAGNOSTICS.md) — the capture layer, the Sentry adapter,
+  and the release flow that uploads sourcemaps and then deletes them.
+- [Release readiness](docs/RELEASE_CHECKLIST.md) — what the product is missing
+  before a Play Console upload, and the checklist to get there.

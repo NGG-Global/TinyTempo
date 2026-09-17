@@ -29,7 +29,8 @@ pnpm-debug.log*
 # The premixed MP3 and the WAV masters are tracked; exported stem archives are not.
 bgm/**/*.zip
 
-# Local environment
+# Local environment. Every .env is ignored, not just the local ones: SENTRY_AUTH_TOKEN
+# is a write credential and .env.production is a file Vite reads by default.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example

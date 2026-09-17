@@ -11,6 +11,7 @@
     "lint": "oxlint src tests --deny-warnings",
     "test": "vitest run",
     "build": "tsc --noEmit && vite build",
+    "build:release": "SOURCEMAP=hidden npm run build && node scripts/upload-sourcemaps.mjs",
     "preview": "vite preview",
     "preview:host": "vite preview --host",
     "music:encode": "node scripts/encode-music.mjs",
@@ -26,6 +27,7 @@
     "@capacitor/android": "^8.5.1",
     "@capacitor/core": "^8.5.1",
     "@revenuecat/purchases-capacitor": "^13.5.1",
+    "@sentry/browser": "^10.75.0",
     "phaser": "^4.2.1"
   },
   "devDependencies": {
