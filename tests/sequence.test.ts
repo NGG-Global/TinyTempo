@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { TaskSequence } from '../src/game/TaskSequence';
+import { canPlaceNextTask, TaskSequence } from '../src/game/TaskSequence';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { PATTERNS } from '../src/rhythm/patterns';
 import { RHYTHM } from '../src/config/rhythm';
@@ -68,5 +68,41 @@ describe('musical task sequence', () => {
     sequence.advance(); sequence.complete(50);
     expect(sequence.results).toEqual([100, 50]);
     expect(sequence.accuracy).toBe(75);
+  });
+});
+
+describe('placing the next task on the grid', () => {
+  // The tick that reaches the swap runs on the audible clock, so the context clock it
+  // schedules against reads the swap beat plus the device's output latency.
+  const atSwap = (bpm: number, latencySec: number, holdBeats = 1): boolean => {
+    const { swap, next } = new TaskSequence(bpm, 0).ending(10, holdBeats);
+    return canPlaceNextTask(swap + latencySec, next);
+  };
+
+  it('still places the task through a Bluetooth output latency at every level tempo', () => {
+    // 120 BPM is the music's own tempo; 150 is the ceiling the difficulty curve ramps to.
+    for (const bpm of [120, 130, 140, 150]) {
+      // A2DP routinely delays output by 200-400 ms, and the beat between the swap and the
+      // next downbeat is 400-500 ms. Charging that delay to the task change interrupted
+      // the level on a headset every time one task handed over to the next.
+      for (const latencyMs of [10, 150, 250, 350]) expect(atSwap(bpm, latencyMs / 1000)).toBe(true);
+    }
+  });
+
+  it('keeps the same margin under a longer coda, which lengthens the hold and not the handover', () => {
+    for (const holdBeats of [1, 5]) {
+      const { swap, next } = new TaskSequence(150, 0).ending(10, holdBeats);
+      expect(next - swap).toBeCloseTo(60 / 150);
+      expect(atSwap(150, 0.35, holdBeats)).toBe(true);
+    }
+  });
+
+  it('gives up only once the next task’s downbeat has gone by', () => {
+    const { next } = new TaskSequence(150, 0).ending(10);
+    expect(canPlaceNextTask(next - 0.001, next)).toBe(true);
+    expect(canPlaceNextTask(next, next)).toBe(false);
+    expect(canPlaceNextTask(next + 0.25, next)).toBe(false);
+    expect(canPlaceNextTask(NaN, next)).toBe(false);
+    expect(canPlaceNextTask(0, NaN)).toBe(false);
   });
 });

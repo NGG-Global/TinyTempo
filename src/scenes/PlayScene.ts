@@ -5,7 +5,7 @@ import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { MUSIC } from '@/config/music';
-import { TaskSequence } from '@/game/TaskSequence';
+import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
 import { SceneKey } from '@/config/scenes';
 import { LAYOUT } from '@/config/design';
 import { RHYTHM } from '@/config/rhythm';
@@ -696,7 +696,9 @@ export class PlayScene extends BaseScene {
     this.audio.clock.refresh();
     const transition = this.transition;
     if (transition && this.now() >= transition.swap && !transition.swapped) {
-      if (this.audio.context.currentTime > transition.next - RHYTHM.leadSec) { this.interrupt(); return; }
+      // Read on the context clock, which is what the cues below are scheduled against;
+      // this tick arrived on the audible one, an output latency behind it.
+      if (!canPlaceNextTask(this.audio.context.currentTime, transition.next)) { this.interrupt(); return; }
       transition.swapped = true;
       this.taskIndex++;
       // The music speeds up on the same downbeat the next count-in starts, so the grid and

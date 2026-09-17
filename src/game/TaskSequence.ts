@@ -19,3 +19,22 @@ export class TaskSequence {
     return { contact: end + beat, slide: end + (1 + holdBeats) * beat, swap: end + (2 + holdBeats) * beat, next: end + (3 + holdBeats) * beat };
   }
 }
+
+/**
+ * Whether the next task can still be placed on the grid, given the context clock at the
+ * moment its swap beat is reached.
+ *
+ * The scene reaches the swap on the audible clock, because a level's phases, judgements
+ * and visuals all run on the sample the player is currently hearing. The cues it then
+ * schedules are placed on the context clock, which sits the device's output latency ahead
+ * of that. Through a speaker the two readings are milliseconds apart; through Bluetooth
+ * they are 200-400 ms apart, which is most of the single beat between `swap` and `next`.
+ *
+ * So the deadline is the next task's own downbeat, read on the clock the cues are
+ * scheduled against. Before it every cue still lands where the grid wants it, and a fixed
+ * cushion held back on top of it is charged to the headphones rather than to the stall it
+ * is there to catch — which interrupted the level at every task change on a headset.
+ */
+export function canPlaceNextTask(contextNow: number, next: number): boolean {
+  return Number.isFinite(contextNow) && Number.isFinite(next) && contextNow < next;
+}

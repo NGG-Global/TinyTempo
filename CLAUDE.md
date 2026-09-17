@@ -90,6 +90,15 @@ menu's PLAY tap. `AudioClock.calibrationMs` is the one place output latency is
 corrected, and it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay.
 
+**A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
+is the context time of the sample the player is hearing, so every phase, judgement and
+visual in `PlayScene` lands with the sound it belongs to. Anything the scene *schedules*
+is placed on `context.currentTime`, which sits the device's output latency ahead of that
+reading — milliseconds through a speaker, 200–400 ms through Bluetooth. A deadline read on
+one clock for a tick that arrived on the other charges that latency to the level: the task
+change did exactly that, and interrupted every level on a headset a beat before the next
+task. `canPlaceNextTask` is that deadline now, and it is the next task's own downbeat.
+
 A task is a demonstration phrase and then the player's response, back to back on
 the bar line: nothing waits between them, and nothing waits between one task and
 the next. The only pauses in a level are its opening `RHYTHM.leadInBeats` bar and,
