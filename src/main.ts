@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
 
 import { createGameConfig } from '@/config/game';
+import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
+import { installDiagnostics } from '@/diagnostics/boot';
 import { bootMonetization } from '@/monetization/boot';
 
 declare global {
@@ -23,6 +25,9 @@ declare global {
  * WebGL context the device declined to create.
  */
 function start(): void {
+  // Before anything that can throw, so the most likely failure on a strange device —
+  // a WebGL context the driver declines — is the first thing the reporter sees.
+  installDiagnostics();
   try {
     void bootMonetization();
     const game = new Phaser.Game(createGameConfig());
@@ -36,10 +41,16 @@ function start(): void {
     // the next one.
     window.addEventListener('pagehide', event => {
       // A cached page is restored with the same JS objects. Play interrupts its round.
-      if (!event.persisted) game.destroy(true);
+      if (!event.persisted) {
+        breadcrumb('pagehide');
+        game.destroy(true);
+      }
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
+    // Reported before the panel is drawn: `showBootError` touches the DOM, and on a
+    // device broken enough to fail here that is not a safe last action.
+    reportError(error, { kind: 'boot', fatal: true });
     showBootError(`The game could not start on this device. (${detail})`);
     throw error;
   }

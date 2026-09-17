@@ -16,12 +16,13 @@ read out of the repository and is accurate as of this audit.
 
 ### Things that would hurt after launch, in the order they would hurt
 
-**1. No crash reporting.** There is no Crashlytics, Sentry or equivalent. Play
-Vitals reports native ANRs and crashes, but almost nothing in this game runs
-natively: a JavaScript exception inside the WebView shows up as a black screen
-and a 1-star review, with no stack trace reaching anyone. `src/main.ts` reports
-boot failure to the DOM shell, and that is the whole safety net. This is the
-single biggest gap for a first release.
+**1. ~~No crash reporting.~~ Done — needs a Sentry account to switch on.**
+`core/errors.ts` captures window errors, unhandled rejections and explicit
+reports, with de-duplication, a session cap, breadcrumbs and redaction;
+`diagnostics/sentry.ts` is the vendor adapter, loaded only when a DSN was built
+in. See `docs/DIAGNOSTICS.md`. What is left is operational, not code: create the
+project, set the four environment variables, and run the sourcemap upload once
+for real — it has only been exercised on its failure path here.
 
 **2. Progress lives only on the device.** `game/progress.ts`, `game/settings.ts`
 and `game/health.ts` all write to `localStorage`. Uninstall, a factory reset or a
@@ -113,7 +114,26 @@ tells the player one version and the store another.
 - [ ] **Check the shipped AAB size and the sourcemap guard.** CI already fails if
       a sourcemap reaches `dist/`; confirm the same for the bundle.
 
-### B. Replace every placeholder — these are hard blockers
+### B. Turn crash reporting on
+
+The code is in and tested; these are the account-side steps.
+
+- [ ] Create a Sentry project (platform: Browser / JavaScript) and take its DSN.
+- [ ] Set `VITE_SENTRY_DSN` for release builds. It is a write credential for an
+      issue stream, so a debug build should not carry the production one.
+- [ ] Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the release
+      environment only — never in the bundle.
+- [ ] **Run `npm run build:release` once against the real project** and confirm a
+      test error arrives *symbolicated*. The upload step has only been run on its
+      failure path in this repository.
+- [ ] Confirm `dist/` holds no `.map` afterwards. The script deletes them even when
+      the upload fails, and CI checks the same thing on a plain build.
+- [ ] Set the issue retention period, and check the free-tier event quota against
+      `sampleRate: 1` in `src/config/diagnostics.ts`.
+- [ ] Decide whether native crash capture is worth `@sentry/capacitor` later;
+      `docs/DIAGNOSTICS.md` records why it was not taken now.
+
+### C. Replace every placeholder — these are hard blockers
 
 - [ ] **AdMob application ID** in `android/app/src/main/res/values/strings.xml`
       is Google's public test ID (`ca-app-pub-3940256099942544~3347511713`).
@@ -126,7 +146,7 @@ tells the player one version and the store another.
 - [ ] **Confirm the Play Billing Library version** the RevenueCat Capacitor
       plugin pulls in *(verify — Play enforces a minimum.)*
 
-### C. Play Console — products and services
+### D. Play Console — products and services
 
 - [ ] Create the Play Console app entry; claim `com.ngg.smallacts`.
 - [ ] Create the in-app products with the exact IDs the code uses:
@@ -141,7 +161,7 @@ tells the player one version and the store another.
       you may need a domain you control.
 - [ ] Set up a merchant account for paid distribution.
 
-### D. Store listing assets — none of these exist in the repo
+### E. Store listing assets — none of these exist in the repo
 
 - [ ] App icon, 512×512 PNG. `npm run icons` cuts the launcher and web sizes from
       `assets/icon/tiny-tempo-1024.jpg` but deliberately skips 512; add it to the
@@ -154,12 +174,13 @@ tells the player one version and the store another.
 - [ ] Optional but worth it: a 30-second promo video.
 - [ ] Category, tags, and a contact email that is not a personal Gmail.
 
-### E. Play Console — the forms that get apps rejected
+### F. Play Console — the forms that get apps rejected
 
 - [ ] **Data Safety.** Declare what the SDKs collect, not what your code does:
       AdMob collects device and advertising identifiers; RevenueCat collects a
-      purchase history and an anonymous app user ID. The game's own data never
-      leaves the device, which is worth stating accurately.
+      purchase history and an anonymous app user ID; **Sentry now receives crash
+      reports** — declare these under Crash logs and Diagnostics. The game's own
+      save data still never leaves the device, which is worth stating accurately.
 - [ ] **Content rating questionnaire.** Disclose ads and in-app purchases.
 - [ ] **Target audience and content.** The cartoon workshop look will read as
       child-appealing to a reviewer. If you select a child audience you enter the
@@ -171,9 +192,11 @@ tells the player one version and the store another.
 - [ ] **Account deletion** — the game has no accounts, so this likely does not
       apply *(verify how the requirement is phrased now.)*
 - [ ] Privacy policy URL: `https://ngg-global.github.io/TinyTempo/privacy/` is
-      live and already covers advertising, purchases, retention and children.
+      live and covers advertising, purchases, retention, children and — as of the
+      crash-reporting change — a section 6 on what a crash report contains and what
+      it does not. Re-publish Pages so the live page matches the app you submit.
 
-### F. Testing before you promote anything
+### G. Testing before you promote anything
 
 - [ ] Run the release AAB on a real handset — an APK built from `assembleDebug`
       does not prove the signed bundle works.
@@ -192,16 +215,16 @@ tells the player one version and the store another.
       required a period of closed testing with a minimum tester count for some
       new developer accounts.)*
 
-### G. Before the first public build
+### H. Before the first public build
 
-- [ ] Add crash reporting (gap 1).
+- [x] Add crash reporting (gap 1) — code done; account steps in section B.
 - [ ] Attach an analytics provider to the existing sink (gap 3).
 - [ ] Decide on cloud save, or accept and document that progress is device-local
       (gap 2).
 - [ ] Settle the `com.ngg.smallacts` application ID — it is permanent (gap 12).
 - [ ] Align `versionName`, `versionCode` and `package.json`.
 
-### H. After launch
+### I. After launch
 
 - [ ] Watch Play Vitals for ANRs and crash rate.
 - [ ] Watch the funnel from the events you are already firing.

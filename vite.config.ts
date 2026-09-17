@@ -41,10 +41,15 @@ export default defineConfig({
     /**
      * No sourcemaps in the shipped build. They were 10.8 MB — 38% of `dist/` — and
      * `cap sync` copies them verbatim into the APK, so every install carried readable
-     * engine and game source. If stack traces are wanted later, `'hidden'` plus an
-     * upload step keeps them out of the bundle; `npm run dev` is unaffected either way.
+     * engine and game source.
+     *
+     * `npm run build:release` sets `SOURCEMAP=hidden` to emit them for Sentry and then
+     * deletes them from `dist/` once they are uploaded, so the bundle never references
+     * them and the APK never carries them. CI's "no sourcemaps ship" check is what
+     * proves the deletion happened, and it runs against a plain `npm run build`, where
+     * this stays `false`. `npm run dev` is unaffected either way.
      */
-    sourcemap: false,
+    sourcemap: process.env.SOURCEMAP === 'hidden' ? 'hidden' : false,
     // Phaser is a large single dependency; the default 500 kB warning is noise here.
     chunkSizeWarningLimit: 2000,
     rollupOptions: {

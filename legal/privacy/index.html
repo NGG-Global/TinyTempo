@@ -39,7 +39,7 @@
             This policy describes how NGG Global (“we”, “us”) handles information
             in the Tiny Tempo Android app (package name <code>com.ngg.smallacts</code>).
           </p>
-          <p class="meta">Effective date: 16 September 2026 · Last updated: 16 September 2026</p>
+          <p class="meta">Effective date: 16 September 2026 · Last updated: 18 September 2026</p>
         </div>
 
         <article class="document">
@@ -49,6 +49,7 @@
             <li><a href="#on-device">Information stored on your device</a></li>
             <li><a href="#ads">Advertising</a></li>
             <li><a href="#purchases">Purchases</a></li>
+            <li><a href="#crash">Crash and error reports</a></li>
             <li><a href="#use">How information is used</a></li>
             <li><a href="#sharing">Sharing</a></li>
             <li><a href="#retention">Retention</a></li>
@@ -77,7 +78,11 @@
             <li>Level progress, audio calibration, mute, hearts and a Premium flag are saved locally on the device.</li>
             <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
             <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google and RevenueCat. We never see your full payment card details.</li>
-            <li>We do not currently send Tiny Tempo gameplay events to a first-party analytics product.</li>
+            <li>If the app hits an error, a crash report is sent to
+            <a href="https://sentry.io/">Sentry</a> so we can fix it; it contains the
+            technical fault and what you were doing in the game, not who you are.
+            We do not currently send Tiny Tempo gameplay events to a first-party
+            analytics product.</li>
             <li>We do not sell your personal information.</li>
           </ul>
 
@@ -166,7 +171,47 @@
             hearts or Premium.
           </p>
 
-          <h2 id="use">6. How information is used</h2>
+          <h2 id="crash">6. Crash and error reports</h2>
+          <p>
+            When something in Tiny Tempo fails — a screen that will not draw, a
+            purchase that errors, a level that cannot save — the app sends a
+            <strong>crash report</strong> to
+            <a href="https://sentry.io/">Sentry</a>, our error-monitoring provider,
+            so that the fault reaches us instead of only showing you a blank screen.
+          </p>
+          <p>A report contains:</p>
+          <ul>
+            <li>the error message and the technical stack trace inside our own code;</li>
+            <li>the app version, and the screen, level and act you were on;</li>
+            <li>
+              a short trail of the last few steps in the app — for example
+              “menu → map → level started” — including whether an ad or a purchase
+              had just been offered;
+            </li>
+            <li>
+              general information your device supplies to any website, such as the
+              browser engine and operating-system version.
+            </li>
+          </ul>
+          <p>
+            A report does <strong>not</strong> contain your name, your email, an
+            advertising identifier, your payment details or your location. There is no
+            account to identify you by. We have configured the reporter so that it does
+            not attach your IP address or other personal identifiers to a report, and
+            the app removes web addresses and device file paths from a report before it
+            is sent. We do not use crash reports to build a profile of you or for
+            advertising.
+          </p>
+          <p>
+            Sentry processes this data on our behalf under its
+            <a href="https://sentry.io/privacy/">privacy policy</a> and
+            <a href="https://sentry.io/legal/dpa/">data processing terms</a>. If you
+            would prefer not to send crash reports at all, you can use the app offline
+            or not install it; there is currently no in-app switch, and we will add one
+            if this section ever grows beyond diagnostics.
+          </p>
+
+          <h2 id="use">7. How information is used</h2>
           <ul>
             <li>On-device data: to run the game, remember progress, mute and calibration, hearts, and Premium on that device.</li>
             <li>Advertising data (by Google and partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
@@ -174,23 +219,26 @@
             <li>Email you send us: to answer you. We do not use it for marketing lists.</li>
           </ul>
           <p>
+            <strong>Crash reports (by us, through Sentry):</strong> to find and
+            fix a fault, tell one fault from another, and see whether a fix worked.
             We do not currently operate a Tiny Tempo analytics dashboard. Commerce
             events inside the app (for example that a rewarded offer was shown)
             stay in the client unless a future update connects them to a provider,
             in which case this policy will be updated before that ships.
           </p>
 
-          <h2 id="sharing">7. Sharing</h2>
+          <h2 id="sharing">8. Sharing</h2>
           <p>We share information only as follows:</p>
           <ul>
             <li><strong>Advertising:</strong> Google AdMob and its partners, when a rewarded ad is requested or shown.</li>
             <li><strong>Payments:</strong> Google Play and RevenueCat, when you buy or restore.</li>
+            <li><strong>Crash reporting:</strong> Sentry, when the app hits an error, as described in section 6.</li>
             <li><strong>Legal:</strong> if we are required to disclose information by law, regulation, or a valid legal process, or to protect the app, our users, or our rights.</li>
             <li><strong>Business transfer:</strong> if NGG Global is involved in a merger, acquisition, or sale of assets, on-device data is not a hosted customer database, but this policy and the app listing may transfer to a successor publisher.</li>
           </ul>
           <p>We do not sell personal information, and we do not share it for cross-context behavioural advertising for our own purposes beyond the AdMob rewarded-ad integration described here.</p>
 
-          <h2 id="retention">8. Retention</h2>
+          <h2 id="retention">9. Retention</h2>
           <p>
             Local game data remains until you reset it, clear app storage, or
             uninstall. Purchase records are kept by Google and RevenueCat for as
@@ -199,7 +247,7 @@
             handle the request.
           </p>
 
-          <h2 id="rights">9. Your choices and rights</h2>
+          <h2 id="rights">10. Your choices and rights</h2>
           <ul>
             <li>Play without watching ads: wait for hearts, buy a refill, or buy Premium.</li>
             <li>Advertising preferences: use the in-ad or consent form choices where shown, and Android’s ad settings.</li>
@@ -225,7 +273,7 @@
             the consent form.
           </p>
 
-          <h2 id="children">10. Children</h2>
+          <h2 id="children">11. Children</h2>
           <p>
             Tiny Tempo is a general-audience game. It is <strong>not directed at
             children under 13</strong> (or the equivalent minimum age in your
@@ -236,7 +284,7 @@
             and we will take appropriate steps.
           </p>
 
-          <h2 id="security">11. Security and international transfers</h2>
+          <h2 id="security">12. Security and international transfers</h2>
           <p>
             On-device data is only as protected as the device and any backup
             you enable. Traffic to Google and RevenueCat uses their HTTPS APIs.
@@ -250,7 +298,7 @@
             progress on our servers.
           </p>
 
-          <h2 id="changes">12. Changes</h2>
+          <h2 id="changes">13. Changes</h2>
           <p>
             We may update this policy, for example if we add a service, change
             partners, or the law changes. The “Last updated” date at the top
@@ -260,7 +308,7 @@
             listing or in the app).
           </p>
 
-          <h2 id="contact">13. Contact</h2>
+          <h2 id="contact">14. Contact</h2>
           <p>
             NGG Global — Tiny Tempo privacy questions:<br />
             <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>

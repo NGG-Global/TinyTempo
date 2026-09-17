@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
@@ -210,6 +211,9 @@ export class PlayScene extends BaseScene {
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
+    // The two facts that make a stack trace legible: which level, and which act drew it.
+    setErrorContext('level', this.spec.level);
+    setErrorContext('act', this.spec.vignette);
     this.vignette = this.definition.create(this, this.spec.lap);
     const ink = this.definition.ink;
     this.stars = this.add.graphics().setDepth(9);
@@ -520,6 +524,7 @@ export class PlayScene extends BaseScene {
       return;
     }
     const request = ++this.startRequest;
+    breadcrumb('level started', { level: this.spec.level, act: this.spec.vignette, attempt: this.attempts + 1 });
     this.replay = null;
     this.replayOffset = null;
     this.transition = null;
@@ -1069,6 +1074,13 @@ export class PlayScene extends BaseScene {
     this.outcome = outcome;
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
+    // The player is told, but nobody else was: a device whose storage is blocked loses
+    // every level it clears, and that is invisible from the outside without this.
+    if (this.saveFailed) {
+      reportError(new Error('Progress save failed'), {
+        context: { level: this.spec.level, unlocked: outcome.progress.unlocked },
+      });
+    }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);
       this.heartRefunded = finished.refunded;
@@ -1077,6 +1089,11 @@ export class PlayScene extends BaseScene {
   }
   private showSummary(): void {
     this.summaryShown = true;
+    breadcrumb('level finished', {
+      level: this.spec.level,
+      accuracy: Math.round(meanAccuracy(this.results)),
+      attempts: this.attempts,
+    });
     this.summaryAt = this.now();
     this.starsLanded = 0;
     this.replay = null;
