@@ -60,6 +60,13 @@ and no-ops off the canvas renderer — so a clipped region is a second camera's 
 never a mask. And a control inside a scrolling list fires on the pointer *release*:
 `TapInput` reports the press, which is right only where the press is the musical event.
 
+**A dressed letter only takes an outline its own fill can carry.** `typeStroke` returns
+`null` below `OUTLINE_CONTRAST`, and `ui/type.ts` then draws no stroke and lifts the letter
+on a pale drop. The workshop's thick border is for cream on timber or coral; the game's ink
+and every act's and area's ink self-shaded to a near-black border at under 2:1, which reads
+as a thicker, muddier stem and closes Fredoka's counters. A new act's ink is covered by
+`tests/ui.test.ts` without anyone remembering this.
+
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the

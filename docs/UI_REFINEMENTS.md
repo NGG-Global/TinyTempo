@@ -125,10 +125,32 @@ offer worded three ways reads as three products.
 | `ui/sheen.ts` | The band of light crossing a brass panel, clipped to its corners, still under reduced motion |
 | `ui/chrome.ts` | `drawActionDisc` (the cream play disc inside a coral block) and `drawHeartRow` |
 | `ui/icons.ts` | `drawChevron`, `drawInfinity`, `drawVibrate`, `fillHeart`, `strokeHeart` |
-| `ui/type.ts` | `embossed` / `reemboss`: a headline on paper, lifted by a pale drop instead of an outline |
+| `ui/colour.ts` | `OUTLINE_CONTRAST`, and a `typeStroke` that returns `null` rather than an illegible border |
 | `ui/panel.ts` | `PanelSpec.frame`, so a brass panel takes a cream accent line rather than brass on brass |
 
-`embossed` exists because the full dressing is built for cream type on timber or
-coral, where a dark stroke is what gives the letter its silhouette. Ink on cream
-already has one, and the stroke only fills in Fredoka's counters and turns a word
-into a logo.
+## The outline rule
+
+The workshop's thick outline is built for cream type on timber or coral, where a
+dark stroke is what gives the letter its silhouette. `typeStroke` derived that
+stroke by self-shading the fill — and for a dark fill there is nothing below it
+but black. Measured against the fills the game actually uses:
+
+| Fill | Old outline | Contrast |
+| --- | --- | --- |
+| Cream on timber | `#1c3029` | 12.8:1 |
+| Brass | `#3b2e15` | 5.9:1 |
+| Timber | `#3d2714` | 5.1:1 |
+| Coral | `#3a170f` | 3.7:1 |
+| **The game's ink** | `#0a110f` | **1.65:1** |
+| **Grass / Pavement / Sand / Snow ink** | near-black | **1.5–2.0:1** |
+
+Below about 3:1 the border stops being a silhouette and becomes a thicker,
+muddier stem: it closes Fredoka's counters and turns a word into a logo. So
+`typeStroke` now returns `null` when the outline it would produce cannot clear
+`OUTLINE_CONTRAST`, and `ui/type.ts` gives those letters no stroke and a pale
+drop instead — ink pressed into paper rather than a sticker laid on it. Nothing
+changed for a light or mid-tone fill.
+
+This is app-wide by construction, not screen by screen: every act's ink and every
+area's ink is a display fill somewhere, and `tests/ui.test.ts` walks the registry
+and the area list so a new act cannot reintroduce the border.

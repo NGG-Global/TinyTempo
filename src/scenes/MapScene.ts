@@ -24,7 +24,7 @@ import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
-import { body, display, embossed, label, reemboss, resize } from '@/ui/type';
+import { body, display, label, resize } from '@/ui/type';
 import { resizedScroll, scrollStep } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
@@ -197,7 +197,7 @@ export class MapScene extends BaseScene {
     this.restControls = this.add.graphics().setScrollFactor(0).setDepth(21);
     this.restSheen = new Sheen(this, 22);
     this.restSheen.node.setScrollFactor(0);
-    this.restTitle = embossed(this, 'Out of hearts', { size: 68, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
+    this.restTitle = display(this, 'Out of hearts', { size: 68, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
     this.restWait = body(this, '', { size: 28, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
     this.restTexts = {
       dailyTitle: this.restText(body(this, STORE_COPY.dailyTitle, { size: 30, colour: PALETTE.ink }), 0, 0.5),
@@ -859,7 +859,7 @@ export class MapScene extends BaseScene {
       filled: view.hearts, part: heartProgress(view),
       full: PALETTE.coral, empty: shade(SHELL.puck, -0.12), emptyOutline: shade(SHELL.puck, -0.45),
     });
-    reemboss(this.restTitle, 68 * s, PALETTE.ink);
+    resize(this.restTitle, 68 * s, PALETTE.ink);
     this.restTitle.setPosition(this.restRect.centerX, top + 148 * s);
     resize(this.restWait, 28 * s, PALETTE.muted, STYLE.current, false);
     this.restWait.setWordWrapWidth(width - 56 * s, false);

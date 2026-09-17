@@ -1,8 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { hex, mix, shade, contrastRatio, relativeLuminance, typeStroke, starColour } from '../src/ui/colour';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  hex, mix, shade, contrastRatio, OUTLINE_CONTRAST, relativeLuminance, typeStroke, starColour,
+} from '../src/ui/colour';
 import { PALETTE, SHELL } from '../src/config/theme';
+import { AREAS } from '../src/game/levels';
+import { VIGNETTES } from '../src/vignettes/registry';
 import { pressAmount } from '../src/ui/spring';
 import { dashes, pathLength, smoothPath, type Point } from '../src/ui/path';
+
+// The registry reaches the acts, and the acts import Phaser; the inks are plain numbers.
+vi.mock('phaser', () => ({ default: {} }));
 
 describe('colour helpers', () => {
   it('blends channel-wise and clamps the ratio', () => {
@@ -99,15 +106,45 @@ describe('workshop contrast', () => {
     expect(contrastRatio(PALETTE.ink, PALETTE.paper)).toBeGreaterThanOrEqual(7);
   });
   it('outlines cream paint in a darker ink rather than a muddy self-shade', () => {
-    expect(relativeLuminance(typeStroke(SHELL.cream))).toBeLessThan(relativeLuminance(PALETTE.ink));
-    expect(contrastRatio(typeStroke(SHELL.cream), SHELL.wood)).toBeGreaterThan(4.5);
+    const stroke = typeStroke(SHELL.cream);
+    expect(stroke).not.toBeNull();
+    expect(relativeLuminance(stroke!)).toBeLessThan(relativeLuminance(PALETTE.ink));
+    expect(contrastRatio(stroke!, SHELL.wood)).toBeGreaterThan(4.5);
     // The fill alone is not enough on the timber; that is why the outline exists.
     expect(contrastRatio(SHELL.cream, SHELL.wood)).toBeLessThan(3);
   });
-  it('keeps a darker self-shade on coral and ink fills', () => {
-    expect(relativeLuminance(typeStroke(PALETTE.coral))).toBeLessThan(relativeLuminance(PALETTE.coral));
-    expect(contrastRatio(typeStroke(PALETTE.coral), PALETTE.paper)).toBeGreaterThan(4.5);
-    expect(typeStroke(PALETTE.ink)).not.toBe(PALETTE.ink);
+  it('keeps a darker self-shade on a saturated mid-tone', () => {
+    const stroke = typeStroke(PALETTE.coral);
+    expect(stroke).not.toBeNull();
+    expect(relativeLuminance(stroke!)).toBeLessThan(relativeLuminance(PALETTE.coral));
+    expect(contrastRatio(stroke!, PALETTE.paper)).toBeGreaterThan(4.5);
+  });
+  it('refuses an outline the letter cannot carry', () => {
+    // The defect this rule exists for: dark green ink with a near-black border, which
+    // reads as a thicker, muddier stem rather than as a silhouette.
+    expect(typeStroke(PALETTE.ink)).toBeNull();
+    expect(typeStroke(PALETTE.muted)).toBeNull();
+    // A light or mid-tone fill still gets one, and it still clears the bar.
+    for (const fill of [SHELL.cream, SHELL.wood, PALETTE.coral, 0xd4a54a, 0xf3e7d8]) {
+      const stroke = typeStroke(fill);
+      expect(stroke).not.toBeNull();
+      expect(contrastRatio(fill, stroke!)).toBeGreaterThanOrEqual(OUTLINE_CONTRAST);
+    }
+  });
+  it('gives every ink in the game an outline that reads, or none at all', () => {
+    // App-wide, not screen by screen: an act's ink and an area's ink are display fills
+    // wherever a headline, a value or a verdict is set in them, so a new act or area
+    // cannot reintroduce the border this rule removed.
+    let refused = 0;
+    for (const ink of [...VIGNETTES.map(v => v.ink), ...AREAS.map(a => a.ink)]) {
+      const stroke = typeStroke(ink);
+      if (stroke === null) { refused += 1; continue; }
+      // Dusk's ink is a light cream on a dark sky, so it keeps a border — and earns it.
+      expect(relativeLuminance(ink)).toBeGreaterThan(0.45);
+      expect(contrastRatio(ink, stroke)).toBeGreaterThanOrEqual(OUTLINE_CONTRAST);
+    }
+    // Every dark one loses it; each used to carry a near-black border at under 2:1.
+    expect(refused).toBe(VIGNETTES.length + AREAS.length - 1);
   });
   it('keeps empty stars readable on their plate', () => {
     const areas = [
