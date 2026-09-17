@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 and below. Naming any <include> narrows the backup to exactly that, which
+  is the point: the default backs up the whole data directory, and this app's directory
+  also holds RevenueCat's receipt cache and whatever a plugin leaves behind. The game's
+  own saves live in the WebView's storage, under app_webview/ in the data-dir root.
+
+  Everything the game keeps is in one LevelDB store, so this cannot be selective about
+  which keys travel — see docs/SAVES.md for what follows from that, and for why the
+  premium cache is bounded rather than trusted.
+-->
+<full-backup-content>
+    <include domain="root" path="app_webview/" />
+</full-backup-content>

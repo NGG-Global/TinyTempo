@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadProgress, recordResult, saveProgress } from '../src/game/progress';
+import { loadProgress, mergeProgress, recordResult, saveProgress } from '../src/game/progress';
+import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -52,5 +53,39 @@ describe('progress', () => {
     const storage = memoryStorage();
     expect(saveProgress(outcome.progress, storage)).toBe(true);
     expect(loadProgress(storage)).toEqual(outcome.progress);
+  });
+});
+
+describe('restoring onto a device that already has progress', () => {
+  it('keeps the better of each side rather than overwriting one', () => {
+    const local = { unlocked: 30, best: { 1: 50, 2: 99, 40: 70 } };
+    const incoming = { unlocked: 12, best: { 1: 88, 3: 61 } };
+    const merged = mergeProgress(local, incoming);
+    // Level 1 improves, level 2 is left alone, and neither side's exclusive levels are lost.
+    expect(merged.best).toEqual({ 1: 88, 2: 99, 3: 61, 40: 70 });
+    // The frontier is the highest of the two, and never below what the clears imply.
+    expect(merged.unlocked).toBe(41);
+  });
+
+  it('cannot lose progress, whichever way round the merge runs', () => {
+    const local = { unlocked: 30, best: { 1: 50, 2: 99 } };
+    const incoming = { unlocked: 12, best: { 1: 88, 3: 61 } };
+    expect(mergeProgress(local, incoming)).toEqual(mergeProgress(incoming, local));
+  });
+
+  it('merges a decoded code the same way, round trip included', () => {
+    const local = { unlocked: 5, best: { 1: 100, 9: 44 } };
+    const result = decodeSaveCode(encodeSaveCode({
+      progress: { unlocked: 23, best: { 1: 92, 2: 78, 3: 100, 22: 61 } },
+      settings: { calibrationMs: -42, muted: false, haptics: true },
+      tutorialComplete: true,
+    }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const merged = mergeProgress(local, result.data.progress);
+    expect(merged.best[1]).toBe(100);
+    expect(merged.best[9]).toBe(44);
+    expect(merged.best[22]).toBe(61);
+    expect(merged.unlocked).toBe(23);
   });
 });

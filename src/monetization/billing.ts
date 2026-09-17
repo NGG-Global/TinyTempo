@@ -40,6 +40,21 @@ export interface RevenueCatBilling extends Billing {
 
 const LATE_TXN_MS = 2_000;
 const PREMIUM_CACHE_KEY = 'tiny-tempo.premium.v1';
+/**
+ * How long a cached entitlement is honoured without the store confirming it.
+ *
+ * The cache exists so premium does not flicker off while RevenueCat is asked on boot,
+ * and so a player who paid stays premium on a plane. It is not a licence, and until this
+ * bound it behaved like one: Android's Auto Backup carries the WebView store to a new
+ * device, so a backup taken while premium was active granted premium on restore — until
+ * RevenueCat answered, which offline is never.
+ *
+ * A month is long enough that a genuinely offline player is never cut off in practice,
+ * and short enough that a restored cache cannot be a standing entitlement. It is a
+ * mitigation, not a cure: the only real fix is the store's own answer, which is exactly
+ * what happens the moment the device has a network.
+ */
+const PREMIUM_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 const CATALOGUE = [PRODUCT.heartRefill, PRODUCT.premium] as const;
 
 export function classifyPurchaseError(error: unknown): PurchaseReason {
@@ -67,21 +82,28 @@ function entitlementsOf(info: CustomerSnapshot): readonly string[] {
   return info.entitlements;
 }
 
-function readPremiumCache(storage: Storage | null): boolean {
+export function readPremiumCache(storage: Storage | null, now: number = Date.now()): boolean {
   try {
     const raw = storage?.getItem(PREMIUM_CACHE_KEY);
     if (!raw) return false;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return false;
-    return (parsed as { entitled?: unknown }).entitled === true;
+    const { entitled, checkedAt } = parsed as { entitled?: unknown; checkedAt?: unknown };
+    if (entitled !== true) return false;
+    // A cache written before this field existed has no age to judge, so it is not
+    // trusted: the store re-grants it within a second of the first network call.
+    if (typeof checkedAt !== 'number' || !Number.isFinite(checkedAt)) return false;
+    // A clock that moved backwards, or a cache from the future, is not evidence.
+    const age = now - checkedAt;
+    return age >= 0 && age <= PREMIUM_CACHE_MAX_AGE_MS;
   } catch {
     return false;
   }
 }
 
-function writePremiumCache(storage: Storage | null, entitled: boolean): void {
+export function writePremiumCache(storage: Storage | null, entitled: boolean, now: number = Date.now()): void {
   try {
-    storage?.setItem(PREMIUM_CACHE_KEY, JSON.stringify({ version: 1, entitled }));
+    storage?.setItem(PREMIUM_CACHE_KEY, JSON.stringify({ version: 1, entitled, checkedAt: now }));
   } catch { /* private windows, blocked storage */ }
 }
 

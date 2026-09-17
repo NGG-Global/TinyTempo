@@ -1,3 +1,5 @@
+import { ANALYTICS } from '../config/analytics';
+
 /**
  * Persisted player settings. Same defensive shape as `game/progress.ts`: every field is
  * validated on read, storage is optional, and a write reports whether it landed.
@@ -15,6 +17,14 @@ export interface Settings {
    * cannot do it ignores the setting entirely.
    */
   readonly haptics: boolean;
+  /**
+   * Whether commerce events may be collected. This is a consent signal, not a preference:
+   * it starts wherever the build's `VITE_ANALYTICS_CONSENT` puts it, the player can change
+   * it at any time, and it deliberately does **not** travel in a save code — consent is a
+   * per-device, per-jurisdiction decision, and restoring a code must not grant it silently
+   * on a phone whose owner never answered the question.
+   */
+  readonly analytics: boolean;
 }
 
 const KEY = 'tiny-tempo.settings.v1';
@@ -28,7 +38,9 @@ const VERSION = 1;
 export const CALIBRATION_LIMIT_MS = 500;
 /** Below this many usable taps a median says more about the sample than the device. */
 export const CALIBRATION_TAPS = 8;
-const DEFAULTS: Settings = Object.freeze({ calibrationMs: 0, muted: false, haptics: true });
+const DEFAULTS: Settings = Object.freeze({
+  calibrationMs: 0, muted: false, haptics: true, analytics: ANALYTICS.consentGranted,
+});
 
 export function clampCalibration(ms: number): number {
   if (!Number.isFinite(ms)) return 0;
@@ -42,13 +54,19 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
-    const { calibrationMs, muted, haptics } = parsed as { calibrationMs?: unknown; muted?: unknown; haptics?: unknown };
+    const { calibrationMs, muted, haptics, analytics } = parsed as {
+      calibrationMs?: unknown; muted?: unknown; haptics?: unknown; analytics?: unknown;
+    };
     return Object.freeze({
       calibrationMs: typeof calibrationMs === 'number' ? clampCalibration(calibrationMs) : 0,
       muted: muted === true,
       // Absent in a v1 save written before the switch existed, and the default is on,
       // so only an explicit `false` turns it off.
       haptics: haptics !== false,
+      // The opposite rule, because this one is consent: a save written before the switch
+      // existed answered nothing, so it falls back to what the build was configured with
+      // rather than being read as a yes.
+      analytics: typeof analytics === 'boolean' ? analytics : ANALYTICS.consentGranted,
     });
   } catch { return DEFAULTS; }
 }

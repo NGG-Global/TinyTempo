@@ -24,21 +24,29 @@ in. See `docs/DIAGNOSTICS.md`. What is left is operational, not code: create the
 project, set the four environment variables, and run the sourcemap upload once
 for real — it has only been exercised on its failure path here.
 
-**2. Progress lives only on the device.** `game/progress.ts`, `game/settings.ts`
-and `game/health.ts` all write to `localStorage`. Uninstall, a factory reset or a
-new phone loses every cleared level. Premium itself survives — RevenueCat
-restores the entitlement — so the player who paid is exactly the player who will
-be angriest. `android:allowBackup="true"` is set with no `dataExtractionRules`,
-so Android's Auto Backup *may* carry the WebView's storage to Drive, but that is
-untested here and is not a substitute for a real save.
+**2. ~~Progress lives only on the device.~~ Done — needs one check on hardware.**
+Two answers, neither of them an account. Auto Backup is now declared rather than
+left to the platform default: `backup_rules.xml` and `data_extraction_rules.xml`
+name the WebView's storage directory, which covers a new phone and a reinstall
+with no player effort. And `TransferScene` shows progress as a checksummed save
+code and accepts one back, which covers cleared data, a lost device and a support
+email. Restoring merges, so it can only ever add. Backup rules are file-level and
+all seven keys share one store, so the premium cache could not be excluded — it
+is bounded instead, and a restored backup can no longer grant Premium forever.
+See `docs/SAVES.md`. What is left needs hardware: take and restore a real backup.
 
-**3. Analytics goes nowhere.** `monetization/analytics.ts` is a typed event bus
-with a default sink that logs in DEV and does nothing in a production build. Ten
-commerce events are already instrumented — `health_empty`,
-`rewarded_offer_shown`, `purchase_completed` and the rest — and every one of them
-is discarded. You would ship a monetization funnel and be unable to see it. The
-hook is deliberately provider-agnostic, so this is an afternoon's work, not a
-rebuild.
+**3. ~~Analytics goes nowhere.~~ Done — needs a Firebase project to switch on.**
+The ten events now reach Google Analytics for Firebase through
+`@capacitor-firebase/analytics`, behind the same two-layer split crash reporting
+uses: `analytics/eventShape.ts` holds Firebase's limits as pure functions, and
+`analytics/firebase.ts` is the only file that knows the vendor. Worth being
+precise about what this bought: RevenueCat already reported purchases and AdMob
+already reported impressions, so what was invisible was the **top** of the funnel
+— offers shown, and the players who declined. Settings → Privacy now carries a
+**Share usage data** switch, and consent deliberately does not travel in a save
+code. See `docs/ANALYTICS.md`. What is left is operational: create the project,
+drop in `google-services.json`, set the two build flags, and confirm an event in
+DebugView.
 
 **4. No in-app support route.** The store listing will carry a contact email, but
 a player who loses progress or is charged twice has no path from inside the game.
@@ -59,8 +67,9 @@ the scene that draws it. `android:supportsRtl="true"` is set but nothing is
 authored RTL. Hebrew is an obvious first candidate for an NGG title.
 
 **7. No Play Games Services.** No achievements, no leaderboards, and no Saved
-Games — which is the cheapest fix for gap 2, since it gives cloud save without
-you building a backend.
+Games. Saved Games was the obvious answer to gap 2 and is no longer needed for
+it; achievements and leaderboards are still worth having for their own sake, and
+would want a sign-in the game does not otherwise ask for.
 
 **8. No rate prompt, no share, no "what's new".** Nothing asks a happy player to
 review, which is what drives early ranking.
@@ -139,6 +148,50 @@ The code is in and tested; these are the account-side steps.
 - [ ] Decide whether native crash capture is worth `@sentry/capacitor` later;
       `docs/DIAGNOSTICS.md` records why it was not taken now.
 
+### B2. Prove the save survives a real device
+
+The code and the rules are in; these need a handset and cannot be done here.
+
+- [ ] Take and restore a backup against a debug build — `adb shell bmgr backupnow
+      <package>`, then wipe the app's data and `adb shell bmgr restore` — and
+      confirm levels, settings and hearts come back. Auto Backup is quota-limited
+      and throttled by the platform, so this is the only way to know it works.
+- [ ] Confirm the backup is off when the player has turned it off device-wide,
+      and that the game still starts cleanly with nothing to restore.
+- [ ] Check the Copy button inside a real Capacitor WebView. The Clipboard API
+      needs a secure context and a permission a WebView can decline; the failure
+      path is handled and the code stays readable on screen, but whether the
+      button works there is untested.
+- [ ] Type a code on a handset keyboard, not only paste one. The entry field is
+      DOM (`#code-overlay`) precisely so the system keyboard opens; confirm it
+      does, and that the layout survives the keyboard pushing the viewport.
+- [ ] Confirm a restored backup does **not** carry Premium past
+      `PREMIUM_CACHE_MAX_AGE_MS`, and that the store's own Restore still grants it.
+
+### B3. Turn analytics on
+
+The code is in and tested; these are the account-side steps.
+
+- [ ] Create a Firebase project and add an **Android** app whose package name matches
+      `android/app/build.gradle`. Download `google-services.json` into `android/app/`.
+      Capacitor's Gradle template applies the Google Services plugin only when that file
+      is present, so until it is, the build simply has no Firebase in it.
+- [ ] Set `VITE_ANALYTICS=on` for release builds. Leave it unset everywhere else, or a
+      machine under a desk will be in the funnel.
+- [ ] Decide `VITE_ANALYTICS_CONSENT`. It sets where the Settings switch *starts*, not
+      whether the player can change it.
+- [ ] **Confirm an event in DebugView before trusting the dashboard.**
+      `adb shell setprop debug.firebase.analytics.app <package>`, then watch DebugView in
+      the Firebase console. Firebase batches events for up to an hour otherwise, so an
+      empty dashboard proves nothing.
+- [ ] Link the Firebase project to AdMob and to Play, which is the reason for using the
+      native SDK rather than the web one.
+- [ ] Set the Firebase data-retention period. The privacy policy points at it rather than
+      naming a number, so the two cannot drift.
+- [ ] **EEA consent is not finished.** The in-app switch is a control, not a lawful
+      basis. Either configure the UMP message to cover analytics purposes, or do not
+      collect in the EEA. Decide this before the first public release, not after.
+
 ### C. Replace every placeholder — these are hard blockers
 
 - [ ] **AdMob application ID** in `android/app/src/main/res/values/strings.xml`
@@ -185,8 +238,13 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Data Safety.** Declare what the SDKs collect, not what your code does:
       AdMob collects device and advertising identifiers; RevenueCat collects a
       purchase history and an anonymous app user ID; **Sentry now receives crash
-      reports** — declare these under Crash logs and Diagnostics. The game's own
-      save data still never leaves the device, which is worth stating accurately.
+      reports** — declare these under Crash logs and Diagnostics. **Firebase
+      Analytics now receives ten commerce events** plus the device, app and
+      app-instance information Firebase collects itself — declare these under App
+      activity and Diagnostics, and note the Settings switch as the user control. The game's own
+      save data leaves the device only through Android's own backup, to the
+      player's Google account, which is worth stating accurately. The privacy
+      policy now says so, and describes the save code.
 - [ ] **Content rating questionnaire.** Disclose ads and in-app purchases.
 - [ ] **Target audience and content.** The cartoon workshop look will read as
       child-appealing to a reviewer. If you select a child audience you enter the
@@ -224,8 +282,8 @@ The code is in and tested; these are the account-side steps.
 ### H. Before the first public build
 
 - [x] Add crash reporting (gap 1) — code done; account steps in section B.
-- [ ] Attach an analytics provider to the existing sink (gap 3).
-- [ ] Decide on cloud save, or accept and document that progress is device-local
+- [ ] ~~Attach an analytics provider to the existing sink~~ — done, `docs/ANALYTICS.md`.
+- [ ] ~~Decide on cloud save~~ — done: Auto Backup plus a save code, `docs/SAVES.md`
       (gap 2).
 - [ ] Settle the `com.ngg.smallacts` application ID — it is permanent (gap 12).
 - [ ] Align `versionName`, `versionCode` and `package.json`.

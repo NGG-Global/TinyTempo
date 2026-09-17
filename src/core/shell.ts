@@ -78,3 +78,61 @@ export function setOrientationPromptVisible(visible: boolean): void {
 export function isTouchPrimary(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
+
+const CODE_OVERLAY_ID = 'code-overlay';
+const CODE_INPUT_ID = 'code-input';
+const CODE_CONFIRM_ID = 'code-confirm';
+const CODE_CANCEL_ID = 'code-cancel';
+
+/**
+ * Asks for a save code and resolves with what was typed, or null if it was dismissed.
+ *
+ * This is the one place the game takes typed text, and the one reason it is DOM. An
+ * `<input>` is what opens the system keyboard in an Android WebView, and it brings the
+ * platform's own paste, selection and cursor behaviour with it — a keypad drawn on the
+ * canvas would reimplement all of that and lose paste, which is how a code actually
+ * arrives. The overlay covers the canvas while it is up, so the scene underneath cannot
+ * be tapped through it.
+ *
+ * Resolves with null rather than rejecting when the markup is missing, so a caller never
+ * has to guard against the shell having changed under it.
+ */
+export function askForSaveCode(): Promise<string | null> {
+  const overlay = element(CODE_OVERLAY_ID);
+  const input = element(CODE_INPUT_ID);
+  const confirm = element(CODE_CONFIRM_ID);
+  const cancel = element(CODE_CANCEL_ID);
+  if (overlay === null || !(input instanceof HTMLInputElement) || confirm === null || cancel === null) {
+    return Promise.resolve(null);
+  }
+
+  return new Promise<string | null>(resolve => {
+    let done = false;
+    const finish = (value: string | null): void => {
+      if (done) return;
+      done = true;
+      confirm.removeEventListener('click', onConfirm);
+      cancel.removeEventListener('click', onCancel);
+      input.removeEventListener('keydown', onKey);
+      input.blur();
+      input.value = '';
+      overlay.setAttribute('hidden', '');
+      resolve(value);
+    };
+    const onConfirm = (): void => { finish(input.value.trim() === '' ? null : input.value); };
+    const onCancel = (): void => { finish(null); };
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Enter') { event.preventDefault(); onConfirm(); }
+      else if (event.key === 'Escape') { event.preventDefault(); onCancel(); }
+    };
+
+    confirm.addEventListener('click', onConfirm);
+    cancel.addEventListener('click', onCancel);
+    input.addEventListener('keydown', onKey);
+    input.value = '';
+    overlay.removeAttribute('hidden');
+    // Synchronous, because Android only opens the keyboard for a focus that is still
+    // inside the task the player's tap started. Deferring this to a frame loses it.
+    try { input.focus(); } catch { /* a field that will not take focus can still be typed into */ }
+  });
+}

@@ -50,6 +50,7 @@
             <li><a href="#ads">Advertising</a></li>
             <li><a href="#purchases">Purchases</a></li>
             <li><a href="#crash">Crash and error reports</a></li>
+            <li><a href="#analytics">Analytics</a></li>
             <li><a href="#use">How information is used</a></li>
             <li><a href="#sharing">Sharing</a></li>
             <li><a href="#retention">Retention</a></li>
@@ -75,14 +76,15 @@
           <h2 id="summary">2. Summary</h2>
           <ul>
             <li>We do not ask you to create an account or give us your name or email in the app.</li>
-            <li>Level progress, audio calibration, mute, hearts and a Premium flag are saved locally on the device.</li>
+            <li>Level progress, audio calibration, mute, hearts and a Premium flag are saved locally on the device, and are included in Android’s backup to your own Google account.</li>
             <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
             <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google and RevenueCat. We never see your full payment card details.</li>
             <li>If the app hits an error, a crash report is sent to
             <a href="https://sentry.io/">Sentry</a> so we can fix it; it contains the
             technical fault and what you were doing in the game, not who you are.
-            We do not currently send Tiny Tempo gameplay events to a first-party
-            analytics product.</li>
+            A small number of commerce events — offers shown, purchases, rewarded
+            ads — go to Google Analytics for Firebase so we can see how the store is
+            doing. They carry no name, no progress and no user id.</li>
             <li>We do not sell your personal information.</li>
           </ul>
 
@@ -112,10 +114,31 @@
           </p>
           <h3>Tutorial</h3>
           <p>Whether you have finished the how-to-play lesson.</p>
+          <h3>Android backup</h3>
+          <p>
+            On Android, the game data above is included in the system’s
+            Auto Backup. Android copies it to your own Google account so that
+            reinstalling the app, or setting up a new phone, restores your
+            progress. That copy is held by Google under your account and under
+            your device’s backup setting, which you can turn off in Android
+            Settings. NGG Global does not operate that backup and cannot read it.
+          </p>
+          <h3>Save code</h3>
+          <p>
+            Settings can show your progress as a short save code, and accept one
+            to restore from. The code is generated on the device and contains
+            only your levels, best accuracies, calibration offset, the sound and
+            haptics switches, and whether the tutorial is done. It does not
+            contain hearts, purchases or anything that identifies you, it is not
+            sent anywhere, and it leaves the device only if you choose to copy or
+            share it.
+          </p>
           <p>
             This on-device data is not a profile we host. Uninstalling Tiny Tempo,
             clearing the app’s storage, or using Reset in Settings (which clears
             saved progress) removes the corresponding local records on that device.
+            A copy already taken by Android’s backup is removed through Android’s
+            own backup settings.
           </p>
 
           <h2 id="ads">4. Advertising</h2>
@@ -211,7 +234,43 @@
             if this section ever grows beyond diagnostics.
           </p>
 
-          <h2 id="use">7. How information is used</h2>
+          <h2 id="analytics">7. Analytics</h2>
+          <p>
+            The app reports a small number of commerce events to
+            <a href="https://firebase.google.com/">Google Analytics for Firebase</a>,
+            so we can see how often an offer is shown and how often it is taken. Without
+            it we can see purchases, because the store reports those, but not the players
+            who declined — which is the part that tells us whether a price or a placement
+            is wrong.
+          </p>
+          <p>Ten events are sent. Each carries only the fields named here:</p>
+          <ul>
+            <li>Running out of hearts, with the level number.</li>
+            <li>A rewarded-ad offer being shown, started, completed or failing, with where
+            it was shown and, on a failure, why.</li>
+            <li>A purchase offer being shown, started, completed, cancelled or failing,
+            with which product and, on a failure, why.</li>
+          </ul>
+          <p>
+            No event carries a name, an email address, a save code, your progress, or
+            anything you typed. We do not set a user id or any user property, so events
+            are not tied to an identity we hold. Firebase itself collects device and app
+            information and an app-instance identifier, as described in
+            <a href="https://firebase.google.com/support/privacy">Firebase’s own privacy
+            documentation</a>.
+          </p>
+          <p>
+            You can turn this off at any time with the <strong>Share usage data</strong>
+            switch in Settings, under Privacy. The choice is stored on the device and
+            applies from the moment you make it.
+          </p>
+          <p>
+            Analytics consent is governed separately from the advertising consent the app
+            asks for: agreeing to personalised ads is not agreeing to analytics, and we do
+            not treat it as if it were.
+          </p>
+
+          <h2 id="use">8. How information is used</h2>
           <ul>
             <li>On-device data: to run the game, remember progress, mute and calibration, hearts, and Premium on that device.</li>
             <li>Advertising data (by Google and partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
@@ -221,36 +280,41 @@
           <p>
             <strong>Crash reports (by us, through Sentry):</strong> to find and
             fix a fault, tell one fault from another, and see whether a fix worked.
-            We do not currently operate a Tiny Tempo analytics dashboard. Commerce
-            events inside the app (for example that a rewarded offer was shown)
-            stay in the client unless a future update connects them to a provider,
-            in which case this policy will be updated before that ships.
+          </p>
+          <p>
+            <strong>Commerce events (through Google Analytics for Firebase):</strong> to
+            see how many players are shown an offer and how many take it, so the price and
+            the placement can be judged on something other than guesswork. Not to build a
+            profile of you, and not for advertising targeting.
           </p>
 
-          <h2 id="sharing">8. Sharing</h2>
+          <h2 id="sharing">9. Sharing</h2>
           <p>We share information only as follows:</p>
           <ul>
             <li><strong>Advertising:</strong> Google AdMob and its partners, when a rewarded ad is requested or shown.</li>
             <li><strong>Payments:</strong> Google Play and RevenueCat, when you buy or restore.</li>
             <li><strong>Crash reporting:</strong> Sentry, when the app hits an error, as described in section 6.</li>
+            <li><strong>Analytics:</strong> Google, through Google Analytics for Firebase, when one of the ten commerce events in section 7 occurs.</li>
             <li><strong>Legal:</strong> if we are required to disclose information by law, regulation, or a valid legal process, or to protect the app, our users, or our rights.</li>
             <li><strong>Business transfer:</strong> if NGG Global is involved in a merger, acquisition, or sale of assets, on-device data is not a hosted customer database, but this policy and the app listing may transfer to a successor publisher.</li>
           </ul>
           <p>We do not sell personal information, and we do not share it for cross-context behavioural advertising for our own purposes beyond the AdMob rewarded-ad integration described here.</p>
 
-          <h2 id="retention">9. Retention</h2>
+          <h2 id="retention">10. Retention</h2>
           <p>
             Local game data remains until you reset it, clear app storage, or
             uninstall. Purchase records are kept by Google and RevenueCat for as
             long as they need to operate billing, prevent fraud, and meet legal
-            obligations. Emails you send us are kept only as long as needed to
-            handle the request.
+            obligations. Analytics events are kept by Google for the retention
+            period set on the Firebase project. Emails you send us are kept only as
+            long as needed to handle the request.
           </p>
 
-          <h2 id="rights">10. Your choices and rights</h2>
+          <h2 id="rights">11. Your choices and rights</h2>
           <ul>
             <li>Play without watching ads: wait for hearts, buy a refill, or buy Premium.</li>
             <li>Advertising preferences: use the in-ad or consent form choices where shown, and Android’s ad settings.</li>
+            <li>Analytics: the <strong>Share usage data</strong> switch in Settings, under Privacy, turns commerce-event collection on and off at any time. Turning it off stops collection on that device.</li>
             <li>Progress: Reset in Settings clears saved level progress on that device.</li>
             <li>Purchases: manage Google Play purchases in your Google account. Restore Purchases restores Premium only.</li>
           </ul>
@@ -273,7 +337,7 @@
             the consent form.
           </p>
 
-          <h2 id="children">11. Children</h2>
+          <h2 id="children">12. Children</h2>
           <p>
             Tiny Tempo is a general-audience game. It is <strong>not directed at
             children under 13</strong> (or the equivalent minimum age in your
@@ -284,7 +348,7 @@
             and we will take appropriate steps.
           </p>
 
-          <h2 id="security">12. Security and international transfers</h2>
+          <h2 id="security">13. Security and international transfers</h2>
           <p>
             On-device data is only as protected as the device and any backup
             you enable. Traffic to Google and RevenueCat uses their HTTPS APIs.
@@ -298,7 +362,7 @@
             progress on our servers.
           </p>
 
-          <h2 id="changes">13. Changes</h2>
+          <h2 id="changes">14. Changes</h2>
           <p>
             We may update this policy, for example if we add a service, change
             partners, or the law changes. The “Last updated” date at the top
@@ -308,7 +372,7 @@
             listing or in the app).
           </p>
 
-          <h2 id="contact">14. Contact</h2>
+          <h2 id="contact">15. Contact</h2>
           <p>
             NGG Global — Tiny Tempo privacy questions:<br />
             <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>

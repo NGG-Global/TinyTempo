@@ -76,6 +76,15 @@ export default defineConfig({
     // Mirrors `paths` in tsconfig.json; change both together.
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      /*
+       * `@capacitor-firebase/analytics` declares `firebase` as an optional peer and loads
+       * its web implementation lazily. The game only ever uses the native one — on Android
+       * through the bridge, and in a browser not at all, because `analytics/boot.ts`
+       * returns before touching the plugin. Installing `firebase` to satisfy the import
+       * would put the whole JS SDK in a bundle that never calls it, so the unreachable
+       * branch resolves to a stub that throws if it is somehow reached.
+       */
+      'firebase/analytics': fileURLToPath(new URL('./src/analytics/firebaseWebStub.ts', import.meta.url)),
     },
   },
 

@@ -9,7 +9,11 @@ reachable from the menu and the map. `src/game/levels.ts` derives every level
 one curve in `src/config/progression.ts`; keep new difficulty knobs on that
 curve. `src/game/progress.ts` owns saved progress and `src/game/settings.ts`
 owns player settings; both validate every field on read, because storage can be
-blocked, stale or tampered with.
+blocked, stale or tampered with. Progress leaves the device two ways, neither of them an
+account: Android's Auto Backup, and the save code on `TransferScene` — a checksummed
+Crockford base32 string carrying levels, accuracies and settings, never hearts or
+purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
+`docs/SAVES.md`.
 
 Seventeen vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
@@ -66,6 +70,17 @@ on a pale drop. The workshop's thick border is for cream on timber or coral; the
 and every act's and area's ink self-shaded to a near-black border at under 2:1, which reads
 as a thicker, muddier stem and closes Fredoka's counters. A new act's ink is covered by
 `tests/ui.test.ts` without anyone remembering this.
+
+Commerce analytics is `monetization/analytics.ts` (a typed bus, no vendor) behind
+`analytics/` (the Firebase adapter), and the provider **wraps the installed sink rather
+than replacing it** — `diagnostics/boot.ts` has already put a crash-breadcrumb wrapper
+there, and replacing it would keep the events flowing while silently emptying every crash
+report of the purchase that caused it. **Firebase enforces its limits by discarding**, so
+`analytics/eventShape.ts` holds the name and parameter rules as pure functions and
+`tests/analytics.test.ts` checks every shipped event against them; a name Firebase
+dislikes is not an error, it is an event that never arrives. Consent is a stored setting
+with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` puts it, and
+it deliberately does not travel in a save code. See `docs/ANALYTICS.md`.
 
 Crash reporting is `core/errors.ts` (capture, no vendor) behind `diagnostics/` (the
 Sentry adapter), the same split `monetization/` uses — see `docs/DIAGNOSTICS.md`.
@@ -204,6 +219,10 @@ Four version-specific traps, all of which cost time if assumed away:
 ```
 src/
   main.ts              Entry point; creates the game, reports boot failure
+  analytics/
+    boot.ts            Attaches the provider on native; composes with the installed sink
+    eventShape.ts      Firebase's name and parameter limits, as pure functions
+    firebase.ts        The Firebase adapter; the only file that knows the vendor
   audio/
     AudioEngine.ts     The only AudioContext; SFX scheduling and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
@@ -217,6 +236,7 @@ src/
     progression.ts     The one difficulty curve and its knobs
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
+    analytics.ts       Whether a provider is attached, and the consent it starts under
     diagnostics.ts     Sentry DSN and release; empty DSN keeps reporting off
     style.ts           The workshop treatment: outline, exaggeration, faces, grain
     theme.ts           PALETTE: the four colours the shell, curtain and clear colour share
@@ -236,7 +256,8 @@ src/
     RoundController.ts Phase machine for one task
     TaskSequence.ts    Task ordering within a level
     scoring.ts         Pure weighted accuracy
-    progress.ts        Saved unlocks and best accuracies
+    progress.ts        Saved unlocks and best accuracies; merging two saves
+    saveCode.ts        Progress as a checksummed string, no Phaser import; never consent
     settings.ts        Saved audio offset and mute
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
@@ -255,6 +276,7 @@ src/
     PlayScene.ts       One level: hosts a vignette, never judges
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
+    TransferScene.ts   The save code: show it, copy it, restore from one
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -448,11 +470,23 @@ android:apk` builds, syncs and assembles a debug APK; it needs JDK 21 and an
 Android SDK (platform 36, build-tools 36.0.0) referenced from the untracked
 `android/local.properties`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
-is generated by `cap sync` and is not committed. No native plugins are used; the game
-depends on exactly three web APIs — Web Audio, pointer events, and `navigator.vibrate`
-for the Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE`
-permission. The vibration call was added deliberately rather than worked around (see
-`docs/UI_REFINEMENTS.md`): a rhythm game played with one thumb confirms a landed tap with
-sound the player may have muted and with motion the thumb is covering. It is
-feature-detected at every call, fails silently, and never fires for anything the player
-did not just do. A fourth web API is not covered by that reasoning.
+is generated by `cap sync` and is not committed. Three native Capacitor plugins are used — AdMob, RevenueCat and Firebase
+Analytics — each behind an adapter that is dynamically imported on a native platform only,
+so a browser build downloads none of them. Beyond those, the game
+depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
+Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
+and `navigator.clipboard` for the save code's Copy button. Each was added deliberately
+rather than worked around, and each meets the same three terms: feature-detected at every
+call, silent when it is not there, and never firing for anything the player did not just
+do. Vibration (see `docs/UI_REFINEMENTS.md`) is how a rhythm game played with one thumb
+confirms a landed tap, when the sound may be muted and the thumb is covering the motion.
+Clipboard (see `docs/SAVES.md`) is a convenience over a code that stays readable on screen
+without it, which is why the button can fail and the feature still works. A fifth is not
+covered by that reasoning.
+
+Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
+`res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
+because Android reads the first below API 31 and the second from 31 up. Backup rules are
+file-level and all seven storage keys share one LevelDB store, so nothing can be excluded
+selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
+a restored backup granting Premium forever.

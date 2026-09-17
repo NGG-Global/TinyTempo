@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 
+import { installAnalyticsProvider } from '@/analytics/boot';
 import { createGameConfig } from '@/config/game';
 import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
@@ -35,6 +36,10 @@ function start(): void {
   installDiagnostics();
   try {
     void bootMonetization();
+    // After `installDiagnostics`, which puts the crash-breadcrumb wrapper on the event
+    // bus: the provider composes with whatever is installed, so the later it attaches
+    // the more it inherits, and attaching first would leave it to be wrapped instead.
+    void installAnalyticsProvider();
     const game = new Phaser.Game(createGameConfig());
 
     if (import.meta.env.DEV) {
