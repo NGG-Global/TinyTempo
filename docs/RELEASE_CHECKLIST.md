@@ -50,10 +50,13 @@ code. See `docs/ANALYTICS.md`. What is left is operational: create the project,
 drop in `google-services.json`, set the two build flags, and confirm an event in
 DebugView.
 
-**4. No in-app support route.** The store listing will carry a contact email, but
-a player who loses progress or is charged twice has no path from inside the game —
-no address, no way to attach a save code, and nothing that tells support which
-build or device they are looking at.
+**4. ~~No in-app support route.~~ Done.** Settings → Help is an address plus the
+seven lines a reply would otherwise have to ask for — build, device, level,
+premium, hearts, reporting state and the save code — shown in full before
+anything is sent. The boot panel carries the address too, for the player who
+cannot reach Settings at all; because a device that refuses every canvas context
+kills Phaser's import-time detection and `/src/main.ts` never runs, that one is an
+inline script rather than bundle code. See `docs/SUPPORT.md`.
 
 The contact address, `dor1612@gmail.com`, is correct and stays: this is a personal
 project rather than an NGG product, whatever the repository host suggests.
@@ -204,6 +207,20 @@ The code is in and tested; these are the account-side steps.
 - [ ] **EEA consent is not finished.** The in-app switch is a control, not a lawful
       basis. Either configure the UMP message to cover analytics purposes, or do not
       collect in the EEA. Decide this before the first public release, not after.
+
+### B4. Check the support route on a handset
+
+Both buttons are conveniences over text that stays readable without them, so none of
+these is a blocker — but none has been run on a device.
+
+- [ ] Tap **Write to us** and confirm the WebView hands `mailto:` to a mail app with the
+      subject and details already filled in, and that nothing breaks when no mail app is
+      installed.
+- [ ] Tap **Copy details** and confirm the clipboard works inside the WebView.
+- [ ] Confirm the details block is legible on a small screen — it wraps with Phaser's
+      advanced word wrap because a save code has no spaces to break at.
+- [ ] Keep `dor1612@gmail.com` the same in `src/config/support.ts`, `index.html`'s inline
+      boot handler, both legal pages, and the Play listing. Five places, no shared source.
 
 ### C. Replace every placeholder — these are hard blockers
 

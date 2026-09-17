@@ -115,6 +115,18 @@ the demonstration from the response, **a vignette's demonstration must not consu
 its subject**: it plays the action in full and leaves the cumulative state alone,
 since there is no longer anywhere to restore it.
 
+Support is `SupportScene`, reached from Settings → Help: an address, and a block of
+details the player could not be expected to assemble — build, device, level, premium,
+hearts, and their save code. **What is sent is on the screen before it is sent**, which is
+the difference between a support report and telemetry. `game/supportReport.ts` is pure and
+holds the wording, including `describeDevice`, which parses the user-agent's platform block
+**by counting bracket depth** — a model name can contain brackets (`moto g(30)`) and a
+non-greedy match loses the rest of the block. A player whose game will not start cannot
+reach Settings, so the boot panel carries the address too — and because a device that
+refuses every canvas context kills Phaser's *import-time* detection, so `/src/main.ts`
+never evaluates, that handler is an inline `<script>` in `index.html` rather than anything
+in the bundle. See `docs/SUPPORT.md`.
+
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
 request** — a new entry in the registry reassigns every level.
@@ -227,6 +239,7 @@ src/
     progression.ts     The one difficulty curve and its knobs
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
+    support.ts         The address a player writes to; mirrored in the legal pages
     analytics.ts       Whether a provider is attached, and the consent it starts under
     diagnostics.ts     Sentry DSN and release; empty DSN keeps reporting off
     style.ts           The workshop treatment: outline, exaggeration, faces, grain
@@ -249,6 +262,7 @@ src/
     scoring.ts         Pure weighted accuracy
     progress.ts        Saved unlocks and best accuracies; merging two saves
     saveCode.ts        Progress as a checksummed string, no Phaser import; never consent
+    supportReport.ts   The details a support email carries, as pure text
     settings.ts        Saved audio offset and mute
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
@@ -268,6 +282,7 @@ src/
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
     TransferScene.ts   The save code: show it, copy it, restore from one
+    SupportScene.ts    The address, and the details worth sending with it
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/

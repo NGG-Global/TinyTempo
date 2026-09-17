@@ -8,6 +8,7 @@
 
 const BOOT_OVERLAY_ID = 'boot-overlay';
 const BOOT_ERROR_ID = 'boot-error';
+const BOOT_CONTACT_ID = 'boot-contact';
 const ORIENTATION_OVERLAY_ID = 'orientation-overlay';
 const GAME_ROOT_ID = 'game-root';
 
@@ -31,7 +32,7 @@ export function hideBootOverlay(): void {
  * Used when the game cannot start at all — most often a WebGL context that the
  * device refused to create. A visible reason beats an indefinite spinner.
  */
-export function showBootError(message: string): void {
+export function showBootError(message: string, address = ''): void {
   const overlay = element(BOOT_OVERLAY_ID);
   const target = element(BOOT_ERROR_ID);
 
@@ -50,6 +51,20 @@ export function showBootError(message: string): void {
 
   target.textContent = message;
   target.removeAttribute('hidden');
+
+  /*
+   * The address, here and nowhere else reachable. This player cannot open Settings, so
+   * the in-app support screen does not exist for them — and a boot failure is the single
+   * report most worth receiving, because it is the one the player cannot work around and
+   * the one no amount of crash reporting explains on its own.
+   *
+   * Built from a parameter rather than imported: `core/shell.ts` is reached from the
+   * catch block in `main.ts` on a device broken enough that an extra module might be why.
+   */
+  const contact = element(BOOT_CONTACT_ID);
+  if (contact === null || address === '') return;
+  contact.textContent = `Please tell us: ${address}`;
+  contact.removeAttribute('hidden');
 }
 
 /** Shows or hides the "rotate your device" prompt. */

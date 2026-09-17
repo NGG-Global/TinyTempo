@@ -13,6 +13,7 @@ export const SceneKey = {
   Settings: 'settings',
   Calibrate: 'calibrate',
   Transfer: 'transfer',
+  Support: 'support',
   Tutorial: 'tutorial',
 } as const;
 
