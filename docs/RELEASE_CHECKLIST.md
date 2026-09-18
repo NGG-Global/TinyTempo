@@ -101,7 +101,7 @@ almost entirely on the $4.99 Premium. Worth knowing before you model anything.
 The `applicationId` is now `com.tinytempo.app`, renamed from `com.ngg.smallacts`
 while that was still possible: **an application ID can never be changed once
 published**, and the old one carried both a company prefix this is not published
-under and the project's former name. The legal pages now name Tiny Tempo Games as
+under and the project's former name. The legal pages now name Dor Vadai as
 publisher and data controller, which has to match the Play developer account
 exactly.
 
@@ -304,11 +304,11 @@ these is a blocker — but none has been run on a device.
       what a crash report contains, and a section 7 on analytics. Re-publish Pages
       so the live page matches the app you submit — **the pages have changed since
       they were last published**, so this is now required, not routine.
-- [ ] **Developer name must match the legal pages.** They name *Tiny Tempo Games*
-      as publisher and data controller; the Play developer account has to say the
-      same thing, and Play verifies and displays it publicly.
-- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Tiny
-      Tempo Games. That is only where the repository lives and is not a claim about
+- [ ] **Confirm the developer name matches the legal pages.** Both name *Dor Vadai*
+      as publisher and data controller, which is the name on the Play account. Play
+      verifies it and displays it publicly, so if either ever changes, change both.
+- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Dor
+      Vadai. That is only where the repository lives and is not a claim about
       who publishes the app, but it reads oddly to anyone who looks. Moving the repo
       or pointing a domain at Pages would settle it; the URL in
       `SettingsScene.LEGAL` has to change with it.

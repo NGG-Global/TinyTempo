@@ -33,10 +33,10 @@ them. So do Phase 0 first, today, even if the game is not finished.
 ## Phase 0 — Accounts (start now, they all have waiting periods)
 
 1. 👤⏱ **Create the Play developer account.** One-off fee, and identity verification that
-   takes days rather than minutes. The developer name must be **Tiny Tempo Games** — the
-   privacy policy and terms name it as the publisher and data controller, and Play
-   verifies and publicly displays it. If you would rather be named personally, tell me and
-   I will change the legal pages instead; they have to agree.
+   takes days rather than minutes. The developer name is **Dor Vadai**, and the privacy
+   policy and terms now name that as the publisher and data controller. Play verifies the
+   name and displays it publicly, so the two have to stay in step: change one and the
+   other has to follow.
 2. 👤 **Create the AdMob account and app**, then one **rewarded** ad unit. You need the app
    ID and the unit ID in Phase 1.
 3. 👤 **Create the RevenueCat project**, add the Android app, and get the **public** SDK key.
@@ -208,7 +208,7 @@ So you do not spend time re-doing it:
   code the player can carry.
 - An in-app support route, with the details a reply would otherwise have to ask for — and
   the address on the boot-failure panel, for the player who cannot reach Settings.
-- Legal pages written, naming Tiny Tempo Games, covering ads, purchases, crash reports,
+- Legal pages written, naming Dor Vadai, covering ads, purchases, crash reports,
   analytics, backup and the save code. **They need re-publishing (step 28).**
 - The package name settled as `com.tinytempo.app`, before the first upload made it
   permanent.
