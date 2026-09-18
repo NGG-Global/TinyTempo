@@ -1,4 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
+
+/*
+ * The consent default comes from `VITE_ANALYTICS_CONSENT`, which `game/settings.ts` reads
+ * while its module body runs. Without this mock these tests answer to whatever `.env` the
+ * machine happens to have — green in CI, which has none, and red on any developer who has
+ * turned analytics on. Pinned rather than read, so the defaults under test are the ones
+ * written here. `vi.hoisted` because `vi.mock` is lifted above the file's own consts.
+ */
+const analyticsConfig = vi.hoisted(() => ({ enabled: false, consentGranted: false }));
+vi.mock('../src/config/analytics', () => ({ ANALYTICS: analyticsConfig }));
+
 import { AudioClock } from '../src/audio/AudioClock';
 import { createJudge, judgeTap } from '../src/rhythm/judge';
 import {

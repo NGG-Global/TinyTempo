@@ -19,10 +19,23 @@ const release = `tiny-tempo@${version}`;
  * plugin warns and carries on, which produces a release that looks fine and whose every
  * stack trace is minified — the failure you find out about from a crash you cannot read.
  */
-function uploadCredentials(): { org: string; project: string; authToken: string } {
-  const org = process.env.SENTRY_ORG ?? '';
-  const project = process.env.SENTRY_PROJECT ?? '';
-  const authToken = process.env.SENTRY_AUTH_TOKEN ?? '';
+function uploadCredentials(mode: string): { org: string; project: string; authToken: string } {
+  /*
+   * From the shell first, then from `.env`. Both, because `.env.example` documents these
+   * three and a reader reasonably puts them where it lists them — but Vite only loads
+   * `VITE_`-prefixed variables into `import.meta.env` and loads *none* of them into
+   * `process.env`, so reading `process.env` alone meant following this project's own
+   * documentation produced "SENTRY_UPLOAD=1 needs SENTRY_ORG, ...". A release step that
+   * fails when you did as you were told is worse than one that is merely undocumented.
+   *
+   * `loadEnv` with an empty prefix reads every key in the file. That does not put any of
+   * them in the bundle: what reaches `import.meta.env` is governed by `envPrefix`, which
+   * is `VITE_`, and an auth token has no business in a browser either way.
+   */
+  const file = loadEnv(mode, process.cwd(), '');
+  const org = process.env.SENTRY_ORG ?? file.SENTRY_ORG ?? '';
+  const project = process.env.SENTRY_PROJECT ?? file.SENTRY_PROJECT ?? '';
+  const authToken = process.env.SENTRY_AUTH_TOKEN ?? file.SENTRY_AUTH_TOKEN ?? '';
   const missing = [
     ['SENTRY_ORG', org], ['SENTRY_PROJECT', project], ['SENTRY_AUTH_TOKEN', authToken],
   ].filter(([, value]) => value === '').map(([name]) => name);
@@ -88,7 +101,7 @@ function uploadCredentials(): { org: string; project: string; authToken: string 
         // matching on a release name and a file path, and the reason this replaced a
         // hand-rolled `sentry-cli` step.
         sentryVitePlugin({
-          ...uploadCredentials(),
+          ...uploadCredentials(mode),
           release: { name: release },
           sourcemaps: {
             // The plugin's own cleanup. `scripts/check-no-sourcemaps.mjs` then refuses to

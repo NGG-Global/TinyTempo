@@ -16,7 +16,7 @@
     "preview:host": "vite preview --host",
     "music:encode": "node scripts/encode-music.mjs",
     "icons": "node scripts/generate-icons.mjs",
-    "android:sync": "npm run build && NODE_OPTIONS='--experimental-strip-types' npx cap sync android",
+    "android:sync": "npm run build && NODE_OPTIONS='--experimental-strip-types' npx cap sync android && node scripts/check-android-config.mjs",
     "android:apk": "npm run android:sync && node scripts/build-android.mjs"
   },
   "engines": {

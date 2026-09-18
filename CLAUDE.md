@@ -512,6 +512,14 @@ Clipboard (see `docs/SAVES.md`) is a convenience over a code that stays readable
 without it, which is why the button can fail and the feature still works. A fifth is not
 covered by that reasoning.
 
+`android/app/google-services.json` is **gitignored**, because this repository is public:
+the key inside it ships in every APK and Google calls the file safe to commit, but a
+Firebase key is unrestricted until somebody restricts it and publishing it cannot be
+undone. The cost is that a fresh clone builds an APK with no Firebase in it and nothing
+says so, which `scripts/check-android-config.mjs` now does after every `cap sync` — along
+with a config naming the *wrong* app, which is worse than none because the plugin applies
+and every event is filed elsewhere, and the AdMob test IDs still being in place.
+
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are

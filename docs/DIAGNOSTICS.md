@@ -201,11 +201,14 @@ Almost always one of three things, in this order:
 
 ## Still to do
 
-- **A successful upload is still unverified.** The failure paths are covered —
-  missing credentials, a bad token, and the cleanup — but this repository has no
-  Sentry credentials, so no upload has ever landed. Run `npm run build:release`
-  once against the real project and confirm a test error arrives *symbolicated*
-  before trusting a release.
+- ~~A successful upload is still unverified.~~ **Done.** `npm run build:release` ran
+  against the real project: nine maps uploaded with debug IDs, and the artifact bundle
+  is on the project under release `tiny-tempo@0.1.0` — which matches
+  `DIAGNOSTICS.release`, the thing that has to agree or every trace arrives
+  unsymbolicated. Verified afterwards that `dist/` holds no `.map`, that the bundles
+  still carry their debug IDs, and that neither the auth token nor the org and project
+  names appear anywhere in `dist/`. What has not been done is reading a *symbolicated*
+  stack trace in the dashboard; that needs a release build on a device.
 - ~~No event has been confirmed in Sentry.~~ **Confirmed, end to end.** The sandbox
   intercepts TLS, so a browser here cannot complete the POST; the envelope the app
   builds was captured at the network boundary and relayed with `curl`, which uses the

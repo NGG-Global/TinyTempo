@@ -101,7 +101,7 @@ almost entirely on the $4.99 Premium. Worth knowing before you model anything.
 The `applicationId` is now `com.tinytempo.app`, renamed from `com.ngg.smallacts`
 while that was still possible: **an application ID can never be changed once
 published**, and the old one carried both a company prefix this is not published
-under and the project's former name. The legal pages now name Tiny Tempo Games as
+under and the project's former name. The legal pages now name Dor Vadai as
 publisher and data controller, which has to match the Play developer account
 exactly.
 
@@ -149,11 +149,15 @@ The code is in and tested; these are the account-side steps.
       the repo, and following it would create a second initialisation.
 - [ ] Set `VITE_SENTRY_DSN` for release builds. It is a write credential for an
       issue stream, so a debug build should not carry the production one.
-- [ ] Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the release
-      environment only — never in the bundle.
-- [ ] **Run `npm run build:release` once against the real project** and confirm a
-      test error arrives *symbolicated*. Only the failure paths have been exercised
-      here — no upload has ever landed, because this repository has no credentials.
+- [x] ~~Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`.~~ In `.env`, which
+      is gitignored. The shell also works; the build reads both, because reading only
+      the shell made following `.env.example` fail.
+- [x] ~~Run `npm run build:release` once against the real project.~~ Done — nine maps
+      uploaded, bundle filed under `tiny-tempo@0.1.0`, `dist/` left with no `.map`, and
+      no credential anywhere in the output. Still to confirm: a *symbolicated* trace in
+      the dashboard, which needs a release build running on a device.
+- [ ] **Rotate `SENTRY_AUTH_TOKEN`** if it has ever been pasted anywhere but a secret
+      store. It carries project-write scope, and reissuing one is a click.
 - [x] ~~Confirm an event is actually visible in the Sentry dashboard.~~ Done — the
       event the app produced arrived, appeared, and alerted. Two events exist: one
       synthetic (`environment: verification`) and one from the app
@@ -192,12 +196,17 @@ The code and the rules are in; these need a handset and cannot be done here.
 
 The code is in and tested; these are the account-side steps.
 
-- [ ] Create a Firebase project and add an **Android** app whose package name matches
-      `android/app/build.gradle`. Download `google-services.json` into `android/app/`.
-      Capacitor's Gradle template applies the Google Services plugin only when that file
-      is present, so until it is, the build simply has no Firebase in it.
-- [ ] Set `VITE_ANALYTICS=on` for release builds. Leave it unset everywhere else, or a
-      machine under a desk will be in the funnel.
+- [x] ~~Create a Firebase project and add an Android app; download
+      `google-services.json`.~~ Done, for `com.tinytempo.app`. It is **gitignored** — the
+      repository is public — so a fresh clone needs it again, and
+      `scripts/check-android-config.mjs` warns after `cap sync` when it is missing, when
+      it names the wrong app, and while the AdMob test IDs are still in place.
+- [ ] **Restrict the Firebase API key** in the Google Cloud console: an Android
+      restriction (package name plus signing SHA-1) and an API restriction to the services
+      in use. The key ships in the APK regardless, so this is the real protection.
+- [x] ~~Set `VITE_ANALYTICS=on`~~ — set locally in `.env`, along with
+      `VITE_ANALYTICS_CONSENT=granted`. Leave both unset anywhere you do not want in the
+      funnel; `.env` is gitignored, so no other checkout inherits them.
 - [ ] Decide `VITE_ANALYTICS_CONSENT`. It sets where the Settings switch *starts*, not
       whether the player can change it.
 - [ ] **Confirm an event in DebugView before trusting the dashboard.**
@@ -242,6 +251,15 @@ these is a blocker — but none has been run on a device.
 ### D. Play Console — products and services
 
 - [ ] Create the Play Console app entry; claim `com.tinytempo.app`.
+- [ ] **Map the products in RevenueCat**, not just in Play. The SDK asks for the two IDs
+      below by name and treats Premium's entitlement as `tinytempo_premium`, so all three
+      strings have to match what the dashboard says. Both are **non-subscription**:
+      `purchases.ts` requests `PRODUCT_CATEGORY.NON_SUBSCRIPTION`, and a product created
+      as a subscription will not come back.
+      | Play product | Type | RevenueCat |
+      | --- | --- | --- |
+      | `tinytempo_premium` | one-time | entitlement `tinytempo_premium` |
+      | `heart_refill_full` | consumable | no entitlement; the receipt is the grant |
 - [ ] Create the in-app products with the exact IDs the code uses:
       `tinytempo_premium` (one-time) and `heart_refill_full` (consumable) —
       both from `src/monetization/types.ts`.
@@ -295,11 +313,11 @@ these is a blocker — but none has been run on a device.
       what a crash report contains, and a section 7 on analytics. Re-publish Pages
       so the live page matches the app you submit — **the pages have changed since
       they were last published**, so this is now required, not routine.
-- [ ] **Developer name must match the legal pages.** They name *Tiny Tempo Games*
-      as publisher and data controller; the Play developer account has to say the
-      same thing, and Play verifies and displays it publicly.
-- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Tiny
-      Tempo Games. That is only where the repository lives and is not a claim about
+- [ ] **Confirm the developer name matches the legal pages.** Both name *Dor Vadai*
+      as publisher and data controller, which is the name on the Play account. Play
+      verifies it and displays it publicly, so if either ever changes, change both.
+- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Dor
+      Vadai. That is only where the repository lives and is not a claim about
       who publishes the app, but it reads oddly to anyone who looks. Moving the repo
       or pointing a domain at Pages would settle it; the URL in
       `SettingsScene.LEGAL` has to change with it.

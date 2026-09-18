@@ -33,10 +33,10 @@ them. So do Phase 0 first, today, even if the game is not finished.
 ## Phase 0 — Accounts (start now, they all have waiting periods)
 
 1. 👤⏱ **Create the Play developer account.** One-off fee, and identity verification that
-   takes days rather than minutes. The developer name must be **Tiny Tempo Games** — the
-   privacy policy and terms name it as the publisher and data controller, and Play
-   verifies and publicly displays it. If you would rather be named personally, tell me and
-   I will change the legal pages instead; they have to agree.
+   takes days rather than minutes. The developer name is **Dor Vadai**, and the privacy
+   policy and terms now name that as the publisher and data controller. Play verifies the
+   name and displays it publicly, so the two have to stay in step: change one and the
+   other has to follow.
 2. 👤 **Create the AdMob account and app**, then one **rewarded** ad unit. You need the app
    ID and the unit ID in Phase 1.
 3. 👤 **Create the RevenueCat project**, add the Android app, and get the **public** SDK key.
@@ -68,9 +68,17 @@ Google's public test IDs, which is a policy violation if shipped.
    `.env` is gitignored on purpose — a DSN is a write credential — so it does not travel
    with the repo and a fresh clone has none of this. `npm run build` now warns when the
    DSN is missing and `npm run build:release` refuses outright.
-8. 👤 **Drop `google-services.json` into `android/app/`.** Capacitor's Gradle template
-   applies the Google Services plugin only when that file exists, so until it does, the
-   build simply has no Firebase in it and no analytics event can leave.
+8. ✅ ~~**Drop `google-services.json` into `android/app/`.**~~ Done — it is in place for
+   `com.tinytempo.app` and Gradle's conditional apply now resolves true. It is
+   **gitignored**, because this repository is public: the key is extractable from any APK
+   and Google calls the file safe to commit, but a Firebase key is unrestricted until
+   somebody restricts it and publishing it cannot be undone. A fresh clone therefore
+   needs it downloaded again, and `scripts/check-android-config.mjs` says so after every
+   `cap sync` rather than leaving an empty dashboard to imply it.
+8b. 👤 **Restrict the API key** in the Google Cloud console — an Android restriction
+   (package name plus signing SHA-1) and an API restriction to the services in use. The
+   key ships inside the APK whatever you do with the file, so restriction is the actual
+   protection and secrecy is not.
 
 ---
 
@@ -116,11 +124,13 @@ mid-frame. Everything below needs hardware and none of it has been done.
     `adb shell setprop debug.firebase.analytics.app com.tinytempo.app`, then watch
     DebugView in the Firebase console. Firebase batches for up to an hour otherwise, so an
     empty dashboard proves nothing.
-20. 👤 **Run `npm run build:release` once for real**, with `SENTRY_ORG`, `SENTRY_PROJECT`
-    and `SENTRY_AUTH_TOKEN` set, and confirm a test error arrives **symbolicated**. Only
-    the failure paths have ever been exercised; until this runs, every stack trace from a
-    release build arrives minified, which is the one thing that makes a crash report
-    useless.
+20. ✅ ~~**Run `npm run build:release` once for real.**~~ Done — maps uploaded and filed
+    under `tiny-tempo@0.1.0`, with nothing left in `dist/` and no credential in the
+    output. What remains is to read a **symbolicated** trace, which needs a release build
+    on a device: install it, trigger a crash, and check the frames in Sentry name real
+    files and lines rather than `index-9zeIT.js:1:48213`.
+20b. 👤 **Rotate the Sentry auth token** if it has been anywhere but a secret store. It
+    has project-write scope and reissuing takes a click.
 21. 👤 **Check the support route**: Settings → Help → *Write to us* should open a mail app
     with the details filled in, and *Copy details* should reach the clipboard. Both are
     conveniences over text that stays readable without them, so neither is a blocker.
@@ -198,7 +208,7 @@ So you do not spend time re-doing it:
   code the player can carry.
 - An in-app support route, with the details a reply would otherwise have to ask for — and
   the address on the boot-failure panel, for the player who cannot reach Settings.
-- Legal pages written, naming Tiny Tempo Games, covering ads, purchases, crash reports,
+- Legal pages written, naming Dor Vadai, covering ads, purchases, crash reports,
   analytics, backup and the save code. **They need re-publishing (step 28).**
 - The package name settled as `com.tinytempo.app`, before the first upload made it
   permanent.
