@@ -540,8 +540,12 @@ export class PlayScene extends BaseScene {
     this.emptyTracked = false;
     this.watchOfferTracked = false;
     this.purchaseOfferTracked = false;
-    this.kept.setVisible(false);
-    this.stars.clear();
+    // Not `kept.setVisible(false)` and `stars.clear()`: the plaque is a Graphics *and*
+    // three Text objects, and clearing the Graphics left the score and its caption — "On
+    // the beat" — hanging over the middle of the act until a resize happened to run
+    // `layout()`. `drawStars` is the one place that knows what the plaque is made of, so
+    // adding a fourth piece to it cannot reintroduce this.
+    this.drawStars();
     this.setTurn('none');
     this.controller?.dispose();
     this.audio?.cancel();

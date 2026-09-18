@@ -35,6 +35,36 @@ export function stampUsable(
   return ageMs > -RHYTHM.clockStampMaxAgeMs && ageMs < RHYTHM.clockStampMaxAgeMs;
 }
 
+/**
+ * The furthest output lag this will believe from the platform, in seconds.
+ *
+ * The same ceiling `clampCalibration` puts on a measured offset, and for the same reason:
+ * past half a second the player is not hearing the beat they are tapping, and a number
+ * that large is far likelier to be a broken report than a real device.
+ */
+const MAX_REPORTED_LAG_SEC = 0.5;
+
+/**
+ * How far behind `currentTime` the sample being heard right now is.
+ *
+ * `baseLatency` is the graph's own buffering and `outputLatency` is the path from there to
+ * the speaker; **they add**. Measured in Chrome across eight samples: `getOutputTimestamp`
+ * reported the heard sample lagging `currentTime` by 40–43 ms while `baseLatency` was 10
+ * and `outputLatency` 32 — a sum of 42, not the 32 that `outputLatency` alone would give.
+ * Subtracting only one of them would leave a third of the error in place.
+ *
+ * Both are optional, and a context that reports neither returns 0, which is exactly the
+ * behaviour this replaced.
+ */
+export function reportedOutputLag(context: Pick<AudioContext, 'baseLatency' | 'outputLatency'>): number {
+  const parts = [context.baseLatency, context.outputLatency];
+  let total = 0;
+  for (const part of parts) {
+    if (typeof part === 'number' && Number.isFinite(part) && part > 0) total += part;
+  }
+  return Math.min(total, MAX_REPORTED_LAG_SEC);
+}
+
 export class AudioClock {
   /**
    * Milliseconds the device's output lags the schedule, subtracted from every judged tap.
@@ -45,6 +75,8 @@ export class AudioClock {
   private performanceMs = 0;
   private audioSec = 0;
   public mode: 'output' | 'estimated' = 'estimated';
+  /** What the platform claims its output lag is, for the support report and Tap offset. */
+  public get reportedLagMs(): number { return Math.round(reportedOutputLag(this.context) * 1000); }
   public constructor(private readonly context: AudioContext) {}
 
   public refresh(): void {
@@ -61,7 +93,12 @@ export class AudioClock {
       // jump the scene forward by the headphone delay and miss every waiting target.
       return;
     }
-    this.audioSec = this.context.currentTime;
+    // `currentTime` is the sample being *written*, not the one being *heard* — they differ
+    // by the device's output lag, which on Bluetooth is a fifth of a second. Mapping a tap
+    // onto the written sample therefore judged every tap that much late, with nothing to
+    // correct it but the manual Tap offset, which defaults to zero. The output-stamp path
+    // above already reports the heard sample, so this is the only branch that needs it.
+    this.audioSec = this.context.currentTime - reportedOutputLag(this.context);
     this.performanceMs = now;
     this.mode = 'estimated';
   }

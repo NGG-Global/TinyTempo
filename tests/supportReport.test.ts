@@ -11,6 +11,7 @@ const facts = (over: Partial<SupportFacts> = {}): SupportFacts => ({
   level: 23,
   area: 'Sand',
   cleared: 22,
+  audio: 'output clock · device reports 42 ms · offset 0 ms',
   premium: false,
   hearts: '5/5',
   crashReports: true,
@@ -25,6 +26,7 @@ describe('the block a player sends', () => {
     for (const expected of [
       'App: 0.1.0 (com.tinytempo.app)',
       'Progress: level 23 (Sand), 22 cleared',
+      'Audio: output clock · device reports 42 ms · offset 0 ms',
       'Premium: no',
       'Hearts: 5/5',
       'Reporting: crash reports on, usage data off',

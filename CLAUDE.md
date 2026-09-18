@@ -59,6 +59,11 @@ Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Sett
 labelled sections scrolling between a pinned title and a pinned Done, with calibration on
 its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
 knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid-run.
+**A plaque is a Graphics *and* its Text.** `stars.clear()` empties the drawing and leaves
+every `Text` on it untouched, which left the score and its "On the beat" caption hanging
+over the middle of the act for a whole round after the summary closed. `drawStars` is the
+one place that knows what the plaque is made of, so hiding it is a call to that rather
+than a list of objects at the call site.
 Two version traps live there. **Phaser 4 dropped WebGL geometry masks** — `setMask` warns
 and no-ops off the canvas renderer — so a clipped region is a second camera's viewport,
 never a mask. And a control inside a scrolling list fires on the pointer *release*:
@@ -101,9 +106,17 @@ every trace is minified, so `vite.config.ts` throws on both and
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. `AudioClock.calibrationMs` is the one place output latency is
-corrected, and it applies to judged input only — never to cue scheduling or
-visuals, which the device does not delay.
+menu's PLAY tap. Output latency is corrected in two places, and they do not overlap.
+`AudioClock` maps a tap onto the sample the player is **hearing**: from
+`getOutputTimestamp()` where the platform gives a usable pair, and otherwise from
+`currentTime` minus `reportedOutputLag`, which is **`baseLatency` + `outputLatency`** —
+measured in Chrome, where the heard sample sat 40–43 ms behind `currentTime` against a
+sum of 42 and an `outputLatency` of 32 alone. Estimating from `currentTime` without that
+subtraction judged every tap late by the device's whole output lag, which on Bluetooth is
+a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
+the platform under-reports, it applies to judged input only — never to cue scheduling or
+visuals, which the device does not delay — and `CalibrateScene` names the reported lag
+when it is large enough to be the reason a player is failing levels.
 
 **A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
 is the context time of the sample the player is hearing, so every phase, judgement and

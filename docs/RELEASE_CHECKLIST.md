@@ -12,6 +12,10 @@ read out of the repository and is accurate as of this audit.
 
 ---
 
+**For the order to do all this in, see `docs/PLAY_UPLOAD.md`.** This file is the audit —
+what is missing and why it matters. That one is the sequence, including which steps have
+waiting periods and therefore have to start first.
+
 ## Part 1 — What the product is missing
 
 ### Things that would hurt after launch, in the order they would hurt
@@ -261,7 +265,8 @@ these is a blocker — but none has been run on a device.
 - [ ] Tablet screenshots, if you declare tablet support.
 - [ ] Short description (80 characters) and full description (4000).
 - [ ] Optional but worth it: a 30-second promo video.
-- [ ] Category, tags, and a contact email that is not a personal Gmail.
+- [ ] Category, tags, and the contact email — `dor1612@gmail.com`, which is correct
+      for a personal project and matches both legal pages.
 
 ### F. Play Console — the forms that get apps rejected
 

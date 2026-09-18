@@ -20,6 +20,16 @@ import { arrive } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one measurement this screen makes. */
+/**
+ * Past this, the platform's own reported lag is worth telling the player about.
+ *
+ * Wired output is a few tens of milliseconds and not worth a sentence. Bluetooth is a
+ * fifth of a second, which is the difference between a rhythm game and a broken one — and
+ * a player who has just been failing levels has no way to know that is why, or that this
+ * screen is the answer.
+ */
+const WORTH_MENTIONING_MS = 80;
+
 const TUNE = {
   countHeight: 300,
   countWidth: 432,
@@ -171,6 +181,9 @@ export class CalibrateScene extends BaseScene {
     this.countedOf.setPosition(this.counted.x, countY + 14 * s);
     resize(this.countedNote, 22 * s, PALETTE.muted, STYLE.current, false);
     this.countedNote.setPosition(this.countRect.centerX, this.countRect.bottom - 36 * s);
+    // Wrapped as a guard, not as a layout: the line fits on one at every offset the
+    // clamp allows, and this only stops a longer wording from running off the screen.
+    this.current.setWordWrapWidth(Math.min(620 * s, width), false);
     resize(this.current, 27 * s, PALETTE.muted, STYLE.current, false);
     this.current.setPosition(safe.centerX, this.countRect.bottom + 40 * s);
 
@@ -237,7 +250,10 @@ export class CalibrateScene extends BaseScene {
     const measured = this.phase === 'measured' || this.phase === 'failed';
     this.counted.setText(String(this.run?.count ?? (measured ? CALIBRATION_TAPS : 0)));
     this.countedNote.setText(this.phase === 'counting' ? 'Taps landed' : 'Tap on the beat');
-    this.current.setText(`Currently ${formatOffset(this.calibrationMs)}`);
+    const reported = currentAudio(this)?.clock.reportedLagMs ?? 0;
+    this.current.setText(reported >= WORTH_MENTIONING_MS
+      ? `Currently ${formatOffset(this.calibrationMs)} · your device adds about ${reported} ms`
+      : `Currently ${formatOffset(this.calibrationMs)}`);
     this.buttons.run.text.setText(this.phase === 'counting' ? 'Stop' : 'Start');
     this.resultNote.setText(this.phase === 'failed' ? 'Measurement unclear' : 'After eight taps');
     this.resultValue.setText(this.phase === 'failed' ? 'Try it again' : formatOffset(this.measuredMs ?? this.calibrationMs));
