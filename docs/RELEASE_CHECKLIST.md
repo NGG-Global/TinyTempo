@@ -149,11 +149,15 @@ The code is in and tested; these are the account-side steps.
       the repo, and following it would create a second initialisation.
 - [ ] Set `VITE_SENTRY_DSN` for release builds. It is a write credential for an
       issue stream, so a debug build should not carry the production one.
-- [ ] Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the release
-      environment only — never in the bundle.
-- [ ] **Run `npm run build:release` once against the real project** and confirm a
-      test error arrives *symbolicated*. Only the failure paths have been exercised
-      here — no upload has ever landed, because this repository has no credentials.
+- [x] ~~Set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT`.~~ In `.env`, which
+      is gitignored. The shell also works; the build reads both, because reading only
+      the shell made following `.env.example` fail.
+- [x] ~~Run `npm run build:release` once against the real project.~~ Done — nine maps
+      uploaded, bundle filed under `tiny-tempo@0.1.0`, `dist/` left with no `.map`, and
+      no credential anywhere in the output. Still to confirm: a *symbolicated* trace in
+      the dashboard, which needs a release build running on a device.
+- [ ] **Rotate `SENTRY_AUTH_TOKEN`** if it has ever been pasted anywhere but a secret
+      store. It carries project-write scope, and reissuing one is a click.
 - [x] ~~Confirm an event is actually visible in the Sentry dashboard.~~ Done — the
       event the app produced arrived, appeared, and alerted. Two events exist: one
       synthetic (`environment: verification`) and one from the app

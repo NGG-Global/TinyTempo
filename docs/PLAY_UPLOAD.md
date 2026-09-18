@@ -124,11 +124,13 @@ mid-frame. Everything below needs hardware and none of it has been done.
     `adb shell setprop debug.firebase.analytics.app com.tinytempo.app`, then watch
     DebugView in the Firebase console. Firebase batches for up to an hour otherwise, so an
     empty dashboard proves nothing.
-20. 👤 **Run `npm run build:release` once for real**, with `SENTRY_ORG`, `SENTRY_PROJECT`
-    and `SENTRY_AUTH_TOKEN` set, and confirm a test error arrives **symbolicated**. Only
-    the failure paths have ever been exercised; until this runs, every stack trace from a
-    release build arrives minified, which is the one thing that makes a crash report
-    useless.
+20. ✅ ~~**Run `npm run build:release` once for real.**~~ Done — maps uploaded and filed
+    under `tiny-tempo@0.1.0`, with nothing left in `dist/` and no credential in the
+    output. What remains is to read a **symbolicated** trace, which needs a release build
+    on a device: install it, trigger a crash, and check the frames in Sentry name real
+    files and lines rather than `index-9zeIT.js:1:48213`.
+20b. 👤 **Rotate the Sentry auth token** if it has been anywhere but a secret store. It
+    has project-write scope and reissuing takes a click.
 21. 👤 **Check the support route**: Settings → Help → *Write to us* should open a mail app
     with the details filled in, and *Copy details* should reach the clipboard. Both are
     conveniences over text that stays readable without them, so neither is a blocker.
