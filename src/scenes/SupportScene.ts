@@ -24,6 +24,22 @@ import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
 
+/**
+ * How the clock is tracking output, what the device says its lag is, and what the player
+ * has calibrated on top. Written for a support thread rather than for a log: "it feels
+ * delayed on Bluetooth" is unanswerable without these three, and unanswerable *with* a
+ * player's description of them.
+ *
+ * The engine may not exist yet — a player can reach Settings before ever pressing PLAY —
+ * and that is itself worth reporting rather than papering over.
+ */
+function describeAudio(scene: Phaser.Scene): string {
+  const engine = currentAudio(scene);
+  if (engine === null) return 'not started this session';
+  const offset = loadSettings().calibrationMs;
+  return `${engine.clock.mode} clock · device reports ${engine.clock.reportedLagMs} ms · offset ${offset} ms`;
+}
+
 /** Design-unit metrics for the block of detail this screen exists to show. */
 const HELP = {
   cardPadding: 40,
@@ -143,6 +159,7 @@ export class SupportScene extends BaseScene {
       cleared: Object.keys(progress.best).length,
       premium,
       hearts: premium ? 'unlimited' : `${view.hearts}/${HEALTH.max}`,
+      audio: describeAudio(this),
       crashReports: DIAGNOSTICS.dsn !== '',
       usageData: settings.analytics,
       saveCode: encodeSaveCode({

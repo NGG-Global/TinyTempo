@@ -12,6 +12,7 @@ The address is one line. The screen exists for the other seven.
 App: 0.1.0 (com.tinytempo.app)
 Running on: Android app — Android 14 · Pixel 7 · WebView · Chrome 120
 Progress: level 23 (Sand), 22 cleared
+Audio: estimated clock · device reports 210 ms · offset 0 ms
 Premium: no
 Hearts: 5/5
 Reporting: crash reports on, usage data off
@@ -26,6 +27,7 @@ day. Every line answers a question a reply would otherwise have to ask:
 | --- | --- |
 | App, Running on | "It is slow" / "it looks wrong" — needs a build and a device to reproduce on |
 | Progress | Where it happened, and which act |
+| Audio | "It feels delayed" — unanswerable without the clock mode, the platform's reported lag and the player's offset, and unanswerable *with* a player's description of them |
 | Premium, Hearts | Every billing complaint |
 | Reporting | Whether there is a crash report to go and look for |
 | Save code | "I lost my progress" — the only thing that can restore it |

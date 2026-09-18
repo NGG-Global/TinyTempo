@@ -25,6 +25,12 @@ export interface SupportFacts {
   readonly premium: boolean;
   /** "5/5", or "unlimited" with premium held. */
   readonly hearts: string;
+  /**
+   * How the audio clock is tracking the output, and what the device claims its lag is.
+   * The first thing to ask about any "it feels delayed" report, and the one thing a
+   * player has no way to find out for themselves.
+   */
+  readonly audio: string;
   readonly crashReports: boolean;
   readonly usageData: boolean;
   readonly saveCode: string;
@@ -104,6 +110,7 @@ export function supportReport(facts: SupportFacts): string {
     line('App', `${facts.version} (${facts.packageId})`),
     line('Running on', `${facts.platform} — ${device}`),
     line('Progress', `level ${facts.level} (${facts.area}), ${facts.cleared} cleared`),
+    line('Audio', facts.audio),
     line('Premium', facts.premium ? 'yes' : 'no'),
     line('Hearts', facts.hearts),
     line('Reporting', reporting),

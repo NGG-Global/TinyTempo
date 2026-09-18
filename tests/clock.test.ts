@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AudioClock, mapTimestamp, normalizeTimestamp, stampUsable } from '../src/audio/AudioClock';
+import { AudioClock, mapTimestamp, normalizeTimestamp, reportedOutputLag, stampUsable } from '../src/audio/AudioClock';
 import { createJudge, expireTargets, judgeTap } from '../src/rhythm/judge';
 
 it('normalizes modern/legacy timestamps and falls back for invalid ones', () => {
@@ -101,5 +101,66 @@ describe('Bluetooth output stamps', () => {
       expect(hit.grade).toBe('Perfect');
       expect(hit.deltaMs).toBeCloseTo(0, 5);
     } finally { vi.restoreAllMocks(); }
+  });
+});
+
+describe('the output lag a platform reports', () => {
+  it('adds the two latencies, because they are different parts of the same path', () => {
+    // Measured in Chrome: baseLatency 10 ms, outputLatency 32 ms, and getOutputTimestamp
+    // put the heard sample 40-43 ms behind currentTime. The sum, not either one alone.
+    expect(reportedOutputLag({ baseLatency: 0.01, outputLatency: 0.032 })).toBeCloseTo(0.042, 6);
+  });
+
+  it('treats a context that reports neither as reporting nothing', () => {
+    // Which is exactly what the clock did before this existed, so no device gets worse.
+    expect(reportedOutputLag({} as AudioContext)).toBe(0);
+    expect(reportedOutputLag({ baseLatency: 0, outputLatency: 0 } as AudioContext)).toBe(0);
+  });
+
+  it('ignores a value that is missing, negative or not a number', () => {
+    expect(reportedOutputLag({ baseLatency: 0.01 } as AudioContext)).toBeCloseTo(0.01, 6);
+    expect(reportedOutputLag({ baseLatency: -1, outputLatency: 0.02 } as AudioContext)).toBeCloseTo(0.02, 6);
+    expect(reportedOutputLag({ baseLatency: Number.NaN, outputLatency: 0.02 } as AudioContext)).toBeCloseTo(0.02, 6);
+    expect(reportedOutputLag({ outputLatency: Number.POSITIVE_INFINITY } as AudioContext)).toBe(0);
+  });
+
+  it('refuses to believe a lag past the ceiling a measurement is allowed', () => {
+    // Past half a second the player is not hearing the beat they are tapping, so a report
+    // that large is likelier to be broken than real.
+    expect(reportedOutputLag({ baseLatency: 0.1, outputLatency: 9 } as AudioContext)).toBe(0.5);
+  });
+});
+
+describe('a device whose output stamp cannot be trusted', () => {
+  it('maps a tap onto the sample being heard, not the one being written', () => {
+    // The Bluetooth case: no usable stamp, so the clock is estimating. Before this, a tap
+    // at the moment the player heard the beat was judged a fifth of a second late.
+    const lag = 0.2;
+    const context = {
+      currentTime: 10,
+      baseLatency: 0.01,
+      outputLatency: lag - 0.01,
+      getOutputTimestamp: undefined,
+    } as unknown as AudioContext;
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+    const clock = new AudioClock(context);
+    clock.refresh();
+    expect(clock.mode).toBe('estimated');
+    // The cue heard at this instant was written `lag` ago.
+    expect(clock.now()).toBeCloseTo(10 - lag, 6);
+    expect(clock.reportedLagMs).toBe(200);
+  });
+
+  it('leaves the manual offset as the correction on top, not instead', () => {
+    const context = {
+      currentTime: 10, baseLatency: 0, outputLatency: 0.2, getOutputTimestamp: undefined,
+    } as unknown as AudioContext;
+    vi.spyOn(performance, 'now').mockReturnValue(5000);
+    const clock = new AudioClock(context);
+    clock.refresh();
+    clock.calibrationMs = 50;
+    // performance.timeOrigin is subtracted inside `input`, so pass a stamp it will keep.
+    const judged = clock.input(5000);
+    expect(judged).toBeCloseTo(10 - 0.2 - 0.05, 5);
   });
 });
