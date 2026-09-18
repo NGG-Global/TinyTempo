@@ -192,12 +192,17 @@ The code and the rules are in; these need a handset and cannot be done here.
 
 The code is in and tested; these are the account-side steps.
 
-- [ ] Create a Firebase project and add an **Android** app whose package name matches
-      `android/app/build.gradle`. Download `google-services.json` into `android/app/`.
-      Capacitor's Gradle template applies the Google Services plugin only when that file
-      is present, so until it is, the build simply has no Firebase in it.
-- [ ] Set `VITE_ANALYTICS=on` for release builds. Leave it unset everywhere else, or a
-      machine under a desk will be in the funnel.
+- [x] ~~Create a Firebase project and add an Android app; download
+      `google-services.json`.~~ Done, for `com.tinytempo.app`. It is **gitignored** — the
+      repository is public — so a fresh clone needs it again, and
+      `scripts/check-android-config.mjs` warns after `cap sync` when it is missing, when
+      it names the wrong app, and while the AdMob test IDs are still in place.
+- [ ] **Restrict the Firebase API key** in the Google Cloud console: an Android
+      restriction (package name plus signing SHA-1) and an API restriction to the services
+      in use. The key ships in the APK regardless, so this is the real protection.
+- [x] ~~Set `VITE_ANALYTICS=on`~~ — set locally in `.env`, along with
+      `VITE_ANALYTICS_CONSENT=granted`. Leave both unset anywhere you do not want in the
+      funnel; `.env` is gitignored, so no other checkout inherits them.
 - [ ] Decide `VITE_ANALYTICS_CONSENT`. It sets where the Settings switch *starts*, not
       whether the player can change it.
 - [ ] **Confirm an event in DebugView before trusting the dashboard.**

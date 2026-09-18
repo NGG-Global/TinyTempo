@@ -145,12 +145,35 @@ the `com.google.gms.google-services` plugin **only when `google-services.json` e
 so a build without it is not broken — it simply has no Firebase in it, and the adapter's
 `try/catch` leaves the bus on the breadcrumb bridge.
 
+### `google-services.json` is not committed
+
+**This repository is public.** Google documents the file as safe to check in, and the key
+inside it is extractable from any shipped APK, so it is not a secret in the usual sense.
+But a Firebase API key is unrestricted until somebody restricts it, public repositories
+are scraped for exactly this, and publishing it is irreversible while committing it later
+is one line. So it is gitignored, like `.env`.
+
+**Restrict the key in the Google Cloud console rather than relying on it staying hidden**
+— an Android restriction (package name plus signing SHA-1) and an API restriction to the
+services actually in use. The key ships in the APK either way; restriction is the only
+thing that makes that safe, and it is worth doing whether or not the file is ever
+committed.
+
+The cost of not committing it is that a fresh clone builds an APK with no Firebase in it
+and nothing says so. `scripts/check-android-config.mjs` runs after `cap sync` and says it
+out loud, along with two neighbouring traps: a `google-services.json` from the **wrong**
+Firebase app, which is worse than none because the plugin applies and every event is filed
+under an app this is not, and the AdMob test IDs still being in place. Warnings rather
+than errors, because a quick debug APK is a legitimate thing to build without any of it.
+
 ## Not verified
 
-- **No event has ever reached a Firebase project.** There is no Firebase project and no
-  `google-services.json` in this repository, and no Android SDK on this machine to build
-  an APK with. What was verified is the shaping, the composition order, the chunking and
-  the browser's refusal to load any of it.
+- **No event has ever reached a Firebase project.** The project now exists and its
+  `google-services.json` is in place for `com.tinytempo.app`, so a release build will
+  carry Firebase — but there is no Android SDK on this machine to build an APK with, so
+  nothing has been run. What was verified is the shaping, the composition order, the
+  chunking, the browser's refusal to load any of it, and that Gradle's conditional apply
+  now resolves true.
 - **DebugView is the check to run first.** `adb shell setprop debug.firebase.analytics.app
   <package>` then watch DebugView in the Firebase console: Firebase batches events for up
   to an hour otherwise, and a first look at an empty dashboard proves nothing.

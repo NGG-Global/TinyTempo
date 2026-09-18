@@ -68,9 +68,17 @@ Google's public test IDs, which is a policy violation if shipped.
    `.env` is gitignored on purpose — a DSN is a write credential — so it does not travel
    with the repo and a fresh clone has none of this. `npm run build` now warns when the
    DSN is missing and `npm run build:release` refuses outright.
-8. 👤 **Drop `google-services.json` into `android/app/`.** Capacitor's Gradle template
-   applies the Google Services plugin only when that file exists, so until it does, the
-   build simply has no Firebase in it and no analytics event can leave.
+8. ✅ ~~**Drop `google-services.json` into `android/app/`.**~~ Done — it is in place for
+   `com.tinytempo.app` and Gradle's conditional apply now resolves true. It is
+   **gitignored**, because this repository is public: the key is extractable from any APK
+   and Google calls the file safe to commit, but a Firebase key is unrestricted until
+   somebody restricts it and publishing it cannot be undone. A fresh clone therefore
+   needs it downloaded again, and `scripts/check-android-config.mjs` says so after every
+   `cap sync` rather than leaving an empty dashboard to imply it.
+8b. 👤 **Restrict the API key** in the Google Cloud console — an Android restriction
+   (package name plus signing SHA-1) and an API restriction to the services in use. The
+   key ships inside the APK whatever you do with the file, so restriction is the actual
+   protection and secrecy is not.
 
 ---
 
