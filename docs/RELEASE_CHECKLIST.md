@@ -251,6 +251,15 @@ these is a blocker — but none has been run on a device.
 ### D. Play Console — products and services
 
 - [ ] Create the Play Console app entry; claim `com.tinytempo.app`.
+- [ ] **Map the products in RevenueCat**, not just in Play. The SDK asks for the two IDs
+      below by name and treats Premium's entitlement as `tinytempo_premium`, so all three
+      strings have to match what the dashboard says. Both are **non-subscription**:
+      `purchases.ts` requests `PRODUCT_CATEGORY.NON_SUBSCRIPTION`, and a product created
+      as a subscription will not come back.
+      | Play product | Type | RevenueCat |
+      | --- | --- | --- |
+      | `tinytempo_premium` | one-time | entitlement `tinytempo_premium` |
+      | `heart_refill_full` | consumable | no entitlement; the receipt is the grant |
 - [ ] Create the in-app products with the exact IDs the code uses:
       `tinytempo_premium` (one-time) and `heart_refill_full` (consumable) —
       both from `src/monetization/types.ts`.
