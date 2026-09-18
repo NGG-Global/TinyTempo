@@ -1,5 +1,5 @@
 {
-  "name": "ngg-phaser-mobile",
+  "name": "tiny-tempo",
   "version": "0.1.0",
   "private": true,
   "description": "Mobile-first Phaser 4 game project (portrait, touch-first, Android as target platform)",

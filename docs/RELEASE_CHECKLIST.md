@@ -16,13 +16,15 @@ read out of the repository and is accurate as of this audit.
 
 ### Things that would hurt after launch, in the order they would hurt
 
-**1. ~~No crash reporting.~~ Done — needs a Sentry account to switch on.**
+**1. ~~No crash reporting.~~ Done, and confirmed against the live project.**
 `core/errors.ts` captures window errors, unhandled rejections and explicit
 reports, with de-duplication, a session cap, breadcrumbs and redaction;
 `diagnostics/sentry.ts` is the vendor adapter, loaded only when a DSN was built
-in. See `docs/DIAGNOSTICS.md`. What is left is operational, not code: create the
-project, set the four environment variables, and run the sourcemap upload once
-for real — it has only been exercised on its failure path here.
+in. An event the game itself produced has now reached the dashboard and alerted.
+See `docs/DIAGNOSTICS.md`. One operational step remains: **run the sourcemap
+upload once for real**, because it has only ever been exercised on its failure
+path. Until then every stack trace from a release build arrives minified, which
+is the one thing that makes a crash report useless.
 
 **2. ~~Progress lives only on the device.~~ Done — needs one check on hardware.**
 Two answers, neither of them an account. Auto Backup is now declared rather than
@@ -48,11 +50,16 @@ code. See `docs/ANALYTICS.md`. What is left is operational: create the project,
 drop in `google-services.json`, set the two build flags, and confirm an event in
 DebugView.
 
-**4. No in-app support route.** The store listing will carry a contact email, but
-a player who loses progress or is charged twice has no path from inside the game.
-Related: the address in the published privacy policy and terms is
-`dor1612@gmail.com` — a personal Gmail on an NGG Global product. Worth moving to
-a role address before the listing goes live.
+**4. ~~No in-app support route.~~ Done.** Settings → Help is an address plus the
+seven lines a reply would otherwise have to ask for — build, device, level,
+premium, hearts, reporting state and the save code — shown in full before
+anything is sent. The boot panel carries the address too, for the player who
+cannot reach Settings at all; because a device that refuses every canvas context
+kills Phaser's import-time detection and `/src/main.ts` never runs, that one is an
+inline script rather than bundle code. See `docs/SUPPORT.md`.
+
+The contact address, `dor1612@gmail.com`, is correct and stays: this is a personal
+project rather than an NGG product, whatever the repository host suggests.
 
 ### Real gaps that are not launch blockers
 
@@ -64,7 +71,7 @@ cheaper than it looks.
 
 **6. English only.** No localization layer at all — every string is a literal in
 the scene that draws it. `android:supportsRtl="true"` is set but nothing is
-authored RTL. Hebrew is an obvious first candidate for an NGG title.
+authored RTL. Hebrew is an obvious first candidate given where this is written.
 
 **7. No Play Games Services.** No achievements, no leaderboards, and no Saved
 Games. Saved Games was the obvious answer to gap 2 and is no longer needed for
@@ -86,12 +93,17 @@ colour-vision check, there is no text-size option, and the judged-tap windows in
 player-friendly choice and I would not change it, but it means revenue leans
 almost entirely on the $4.99 Premium. Worth knowing before you model anything.
 
-**12. The identity is inconsistent, and one half of it is permanent.** The
-`applicationId` is `com.ngg.smallacts`; the app is called Tiny Tempo.
-**The application ID can never be changed once published.** Decide now whether
-you can live with it. `package.json` says `0.1.0`, Android says `versionName
-"1.0"`, and the settings footer reads from `package.json` — so the app currently
-tells the player one version and the store another.
+**12. ~~The identity is inconsistent~~ — half fixed; the version half remains.**
+The `applicationId` is now `com.tinytempo.app`, renamed from `com.ngg.smallacts`
+while that was still possible: **an application ID can never be changed once
+published**, and the old one carried both a company prefix this is not published
+under and the project's former name. The legal pages now name Tiny Tempo Games as
+publisher and data controller, which has to match the Play developer account
+exactly.
+
+Still open: `package.json` says `0.1.0`, Android says `versionName "1.0"`, and the
+settings footer reads from `package.json` — so the app tells the player one version
+and the store another.
 
 ---
 
@@ -138,8 +150,12 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Run `npm run build:release` once against the real project** and confirm a
       test error arrives *symbolicated*. Only the failure paths have been exercised
       here — no upload has ever landed, because this repository has no credentials.
-- [ ] Confirm an event is actually visible in the Sentry dashboard. Sentry's own
-      guidance is that the task is not done until you have seen one.
+- [x] ~~Confirm an event is actually visible in the Sentry dashboard.~~ Done — the
+      event the app produced arrived, appeared, and alerted. Two events exist: one
+      synthetic (`environment: verification`) and one from the app
+      (`environment: development`); the synthetic one can be deleted, it was only ever
+      a probe. **If a project ever looks empty again, check the environment filter**
+      before anything else — a dev session reports as `development`.
 - [ ] Confirm `dist/` holds no `.map` afterwards. `@sentry/vite-plugin` deletes
       them, `scripts/check-no-sourcemaps.mjs` fails the build if any survive, and
       CI checks the same thing on a plain build.
@@ -192,6 +208,20 @@ The code is in and tested; these are the account-side steps.
       basis. Either configure the UMP message to cover analytics purposes, or do not
       collect in the EEA. Decide this before the first public release, not after.
 
+### B4. Check the support route on a handset
+
+Both buttons are conveniences over text that stays readable without them, so none of
+these is a blocker — but none has been run on a device.
+
+- [ ] Tap **Write to us** and confirm the WebView hands `mailto:` to a mail app with the
+      subject and details already filled in, and that nothing breaks when no mail app is
+      installed.
+- [ ] Tap **Copy details** and confirm the clipboard works inside the WebView.
+- [ ] Confirm the details block is legible on a small screen — it wraps with Phaser's
+      advanced word wrap because a save code has no spaces to break at.
+- [ ] Keep `dor1612@gmail.com` the same in `src/config/support.ts`, `index.html`'s inline
+      boot handler, both legal pages, and the Play listing. Five places, no shared source.
+
 ### C. Replace every placeholder — these are hard blockers
 
 - [ ] **AdMob application ID** in `android/app/src/main/res/values/strings.xml`
@@ -207,7 +237,7 @@ The code is in and tested; these are the account-side steps.
 
 ### D. Play Console — products and services
 
-- [ ] Create the Play Console app entry; claim `com.ngg.smallacts`.
+- [ ] Create the Play Console app entry; claim `com.tinytempo.app`.
 - [ ] Create the in-app products with the exact IDs the code uses:
       `tinytempo_premium` (one-time) and `heart_refill_full` (consumable) —
       both from `src/monetization/types.ts`.
@@ -256,9 +286,18 @@ The code is in and tested; these are the account-side steps.
 - [ ] **Account deletion** — the game has no accounts, so this likely does not
       apply *(verify how the requirement is phrased now.)*
 - [ ] Privacy policy URL: `https://ngg-global.github.io/TinyTempo/privacy/` is
-      live and covers advertising, purchases, retention, children and — as of the
-      crash-reporting change — a section 6 on what a crash report contains and what
-      it does not. Re-publish Pages so the live page matches the app you submit.
+      live and covers advertising, purchases, retention, children, a section 6 on
+      what a crash report contains, and a section 7 on analytics. Re-publish Pages
+      so the live page matches the app you submit — **the pages have changed since
+      they were last published**, so this is now required, not routine.
+- [ ] **Developer name must match the legal pages.** They name *Tiny Tempo Games*
+      as publisher and data controller; the Play developer account has to say the
+      same thing, and Play verifies and displays it publicly.
+- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Tiny
+      Tempo Games. That is only where the repository lives and is not a claim about
+      who publishes the app, but it reads oddly to anyone who looks. Moving the repo
+      or pointing a domain at Pages would settle it; the URL in
+      `SettingsScene.LEGAL` has to change with it.
 
 ### G. Testing before you promote anything
 
@@ -285,7 +324,8 @@ The code is in and tested; these are the account-side steps.
 - [ ] ~~Attach an analytics provider to the existing sink~~ — done, `docs/ANALYTICS.md`.
 - [ ] ~~Decide on cloud save~~ — done: Auto Backup plus a save code, `docs/SAVES.md`
       (gap 2).
-- [ ] Settle the `com.ngg.smallacts` application ID — it is permanent (gap 12).
+- [x] ~~Settle the application ID~~ — `com.tinytempo.app`, renamed before first
+      publish because it is permanent afterwards (gap 12).
 - [ ] Align `versionName`, `versionCode` and `package.json`.
 
 ### I. After launch

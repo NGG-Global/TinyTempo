@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { installAnalyticsProvider } from '@/analytics/boot';
 import { createGameConfig } from '@/config/game';
+import { SUPPORT } from '@/config/support';
 import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
 import { installDiagnostics } from '@/diagnostics/boot';
@@ -61,7 +62,7 @@ function start(): void {
     // Reported before the panel is drawn: `showBootError` touches the DOM, and on a
     // device broken enough to fail here that is not a safe last action.
     reportError(error, { kind: 'boot', fatal: true });
-    showBootError(`The game could not start on this device. (${detail})`);
+    showBootError(`The game could not start on this device. (${detail})`, SUPPORT.address);
     throw error;
   }
 }

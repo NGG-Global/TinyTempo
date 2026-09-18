@@ -279,6 +279,11 @@
       <div class="spinner"></div>
       <p class="overlay__title" id="boot-title" hidden></p>
       <p class="overlay__note" id="boot-error" hidden></p>
+      <!--
+        A player whose game will not start cannot reach Settings, so this is the only
+        place they can be given an address. Hidden until there is a failure to report.
+      -->
+      <p class="overlay__note" id="boot-contact" hidden></p>
     </div>
 
     <!--
@@ -312,6 +317,46 @@
         <button type="button" class="code-button" id="code-confirm">Restore</button>
       </div>
     </div>
+
+    <!--
+      Last resort, and deliberately not a module.
+
+      A device that refuses every canvas context takes Phaser's import-time feature
+      detection down with it, so `/src/main.ts` never evaluates and nothing in the bundle
+      — not the error capture, not `showBootError` — ever runs. Measured in a browser: two
+      uncaught errors fire and the player is left watching the spinner turn, with no
+      message and no way to tell anyone. This is the only code that can still speak.
+
+      The address is duplicated from `src/config/support.ts` for the same reason the
+      palette above is duplicated from `config/theme.ts`: this has to work before anything
+      can be imported. Change them together.
+    -->
+    <script>
+      (function () {
+        var ADDRESS = 'dor1612@gmail.com';
+        function stranded(detail) {
+          var overlay = document.getElementById('boot-overlay');
+          var title = document.getElementById('boot-title');
+          var note = document.getElementById('boot-error');
+          var contact = document.getElementById('boot-contact');
+          if (!overlay || !title || !note || !contact) return;
+          // Gone means the game started; already titled means showBootError got there
+          // first, from a bundle that did load. Either way this has nothing to add.
+          if (overlay.hasAttribute('hidden') || !title.hasAttribute('hidden')) return;
+          var spinner = overlay.querySelector('.spinner');
+          if (spinner) spinner.remove();
+          title.textContent = 'Unable to start';
+          title.removeAttribute('hidden');
+          note.textContent = 'The game could not start on this device. (' + detail + ')';
+          note.removeAttribute('hidden');
+          contact.textContent = 'Please tell us: ' + ADDRESS;
+          contact.removeAttribute('hidden');
+        }
+        window.addEventListener('error', function (event) {
+          stranded((event && event.message) || 'unknown error');
+        });
+      })();
+    </script>
 
     <script type="module" src="/src/main.ts"></script>
   </body>

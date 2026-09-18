@@ -41,7 +41,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'reset' | 'analytics' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'reset' | 'analytics' | 'help' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -149,7 +149,7 @@ export class SettingsScene extends BaseScene {
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
     this.headline = display(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
-    for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy']) {
+    for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']) {
       this.eyebrows.push(this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     }
     this.buildTexts();
@@ -200,6 +200,9 @@ export class SettingsScene extends BaseScene {
       refill: rowTitle(STORE_COPY.refillTitle),
       refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
       refillPrice: chip(''),
+      help: rowTitle('Contact us'),
+      helpNote: rowNote('Report a problem, or ask for a hand'),
+      helpGo: chip('Open'),
       analytics: rowTitle('Share usage data'),
       // Kept short on purpose: the switch starts 150 units from the card's right edge, so
       // a note has about 450 design units — roughly forty characters at this size — before
@@ -426,6 +429,20 @@ export class SettingsScene extends BaseScene {
     this.texts.analyticsNote!.setPosition(left + 30 * s, privacy.centerY + 19 * s);
     this.hits.push({ name: 'analytics', rect: new Phaser.Geom.Rectangle(left, privacy.y, width, row), pinned: false });
 
+    // HELP — last, because it is where someone looks once something has gone wrong, and
+    // by then they have already scrolled past everything that might have prevented it.
+    y += SETTINGS.sectionGap * s;
+    eyebrow(6);
+    const help = plate(row);
+    this.rows.helpCard = help;
+    this.texts.help!.setPosition(left + 30 * s, help.centerY - 15 * s);
+    this.texts.helpNote!.setPosition(left + 30 * s, help.centerY + 19 * s);
+    const helpW = Math.max(150 * s, control);
+    const helpRect = new Phaser.Geom.Rectangle(help.right - 26 * s - helpW, help.centerY - control / 2, helpW, control);
+    this.rows.help = helpRect;
+    this.texts.helpGo!.setPosition(helpRect.centerX - 14 * s, helpRect.centerY);
+    this.hits.push({ name: 'help', rect: helpRect, pinned: false });
+
     // A store or reset message, under the last section rather than over a row.
     this.texts.notice!.setWordWrapWidth(width - 40 * s, false);
     resize(this.texts.notice!, 25 * s, PALETTE.coral, STYLE.current, false);
@@ -531,6 +548,12 @@ export class SettingsScene extends BaseScene {
       this.texts.transferGo!.setPosition(this.rows.transfer.centerX - 14 * s, this.rows.transfer.centerY + sink);
     }
     if (this.rows.analytics) drawSwitch(g, this.rows.analytics, s, this.switchAt.analytics);
+    if (this.rows.help) {
+      drawPanel(g, this.rows.help, s, { fill: SHELL.cream, depth: 8, press: sunk('help'), radius: 18 });
+      const sink = 8 * s * sunk('help') * 0.8;
+      drawChevron(g, this.rows.help.right - 30 * s, this.rows.help.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.helpGo!.setPosition(this.rows.help.centerX - 14 * s, this.rows.help.centerY + sink);
+    }
     if (this.rows.reset) {
       drawPanel(g, this.rows.reset, s, {
         fill: this.resetArmed ? PALETTE.coral : SHELL.cream, depth: 8, press: sunk('reset'), radius: 18,
@@ -739,6 +762,9 @@ export class SettingsScene extends BaseScene {
         return;
       case 'transfer':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Transfer, { from: this.from })));
+        return;
+      case 'help':
+        this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Support, { from: this.from })));
         return;
       case 'sound': this.toggleSound(); return;
       case 'haptics': this.toggleHaptics(); return;

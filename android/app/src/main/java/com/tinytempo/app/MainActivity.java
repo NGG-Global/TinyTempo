@@ -1,4 +1,4 @@
-package com.ngg.smallacts;
+package com.tinytempo.app;
 
 import com.getcapacitor.BridgeActivity;
 
