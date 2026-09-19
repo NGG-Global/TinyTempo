@@ -113,31 +113,38 @@ and the store another.
 
 ## Part 2 — The checklist
 
-### A. Build and signing — nothing here exists yet
+### A. Build and signing — the key is the only part left
 
-- [ ] **Create an upload keystore.** Back it up somewhere that is not this
-      repository and not one person's laptop; losing it means you cannot update
-      the app without Play's key-reset process.
-- [ ] **Uncomment the keystore ignores in `android/.gitignore`** (lines 56–58).
-      They ship commented out, so a `.keystore` dropped in `android/` would be
-      committed.
-- [ ] **Add a release `signingConfig`** to `android/app/build.gradle`. Read the
-      credentials from environment variables or an untracked
-      `android/keystore.properties`, never from the file itself.
+- [ ] **Create an upload keystore**, and write `android/keystore.properties`
+      pointing at it. Back the keystore up somewhere that is not this repository
+      and not one person's laptop; losing it means you cannot update the app
+      without Play's key-reset process. `docs/PLAY_UPLOAD.md` step 9 has the
+      `keytool` line and the file format.
+- [x] ~~**Uncomment the keystore ignores in `android/.gitignore`.**~~ Done —
+      `*.jks`, `*.keystore` and `keystore.properties` are all ignored, verified
+      by dropping one of each in and checking `git status`.
+- [x] ~~**Add a release `signingConfig`.**~~ Done — it reads the untracked
+      `android/keystore.properties` and applies only when that file exists, so a
+      machine without the key still builds a debug APK.
 - [ ] **Enrol in Play App Signing** *(verify — required for new apps)*.
-- [ ] **Produce an AAB, not an APK.** `scripts/build-android.mjs` runs
-      `assembleDebug` and nothing else; `npm run android:apk` is a debug path.
-      Add a `bundleRelease` script. *(verify — new apps must publish as AAB.)*
+- [x] ~~**Produce an AAB, not an APK.**~~ Done — `npm run android:bundle` runs
+      `build:release`, syncs and runs `bundleRelease`. It refuses to start
+      without a keystore rather than producing an unsigned bundle Play would
+      reject on upload. Verified end to end against a throwaway key, which was
+      destroyed afterwards.
 - [ ] **Decide on `minifyEnabled`.** It is `false` in the release build type.
       The game is one WebView, so R8 buys little, but leaving it off is a
       decision rather than an oversight — write down which.
-- [ ] **Wire `versionCode` / `versionName` to one source.** They are hardcoded to
-      `1` and `"1.0"` with no bump step; `package.json` is at `0.1.0` and is what
-      the settings footer prints.
-- [ ] **Confirm `targetSdkVersion`.** `android/variables.gradle` sets 36, which
-      is at or above any minimum I am aware of — *(verify the current floor.)*
+- [x] ~~**Wire `versionCode` / `versionName` to one source.**~~ Done —
+      `package.json` is that source. `versionName` is its version verbatim,
+      `versionCode` is derived (1.4.2 → 10402) and the build throws rather than
+      go backwards if minor or patch passes 99. **`0.1.0` gives versionCode 100;
+      bump it before the first upload if you mean to ship as 1.0.0.**
+- [x] ~~**Confirm `targetSdkVersion`.**~~ 36, and Play has required 36 for new
+      apps and updates since 31 August 2026.
 - [ ] **Check the shipped AAB size and the sourcemap guard.** CI already fails if
-      a sourcemap reaches `dist/`; confirm the same for the bundle.
+      a sourcemap reaches `dist/`; the release AAB was checked once and carried
+      none. Re-check on the bundle you actually upload.
 
 ### B. Turn crash reporting on
 
