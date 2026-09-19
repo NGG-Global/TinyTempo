@@ -126,7 +126,15 @@ and the store another.
 - [x] ~~**Add a release `signingConfig`.**~~ Done — it reads the untracked
       `android/keystore.properties` and applies only when that file exists, so a
       machine without the key still builds a debug APK.
-- [ ] **Enrol in Play App Signing** *(verify — required for new apps)*.
+- [ ] **Enrol in Play App Signing** when you create the Console entry. Verified:
+      it is required for every app created after August 2021, so this is not a
+      choice. Google then holds the app signing key and your keystore is only the
+      *upload* key — which means a lost or leaked upload key is recoverable
+      through a reset in Play Console, rather than the end of the app.
+- [ ] **Generate a keystore for this app, not ElmTrackr's.** Play permits one
+      upload key across several apps and advises against it: a leak would force a
+      reset on every app sharing it. The developer account is shared; the key
+      should not be.
 - [x] ~~**Produce an AAB, not an APK.**~~ Done — `npm run android:bundle` runs
       `build:release`, syncs and runs `bundleRelease`. It refuses to start
       without a keystore rather than producing an unsigned bundle Play would

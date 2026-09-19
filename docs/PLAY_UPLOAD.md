@@ -130,8 +130,13 @@ than building an unsigned bundle Play would reject on upload.
     as 1.0.0.**
 14. 👤 **Decide `minifyEnabled`.** It is `false`. The game is one WebView so R8 buys
     little, but write down which way you chose and why rather than leaving it a default.
-15. 👤 **Enrol in Play App Signing** when you create the Console entry *(verify — required
-    for new apps)*.
+15. 👤 **Enrol in Play App Signing** when you create the Console entry. Required for every
+    app created after August 2021, so it is not a choice — and it is what makes the
+    keystore in step 9 only an *upload* key. Google holds the app signing key, so a lost or
+    leaked upload key is a reset in Play Console rather than an app you can never update.
+    Generate a key for this app rather than reusing another app's: Play allows one key
+    across several, and advises against it, because a leak would force a reset on all of
+    them. The developer account is shared between apps; the key should not be.
 16. 👤 **Confirm the target API level.** `android/variables.gradle` sets 36, which is at or
     above any floor I know of *(verify the current one)*.
 
