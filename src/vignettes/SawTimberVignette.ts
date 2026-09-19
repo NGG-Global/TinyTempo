@@ -13,7 +13,7 @@ import { castShadow, faces } from '@/ui/light';
 import { fillContour, paintedContour, traceContour } from '@/ui/illustration';
 import type { Vignette } from './Vignette';
 import {
-  advanceBite, acceptDemoBeat, bladeVisibleDepth, clamp01, drawBack, dustFall, dustPile,
+  advanceBite, acceptDemoBeat, BLADE, bladeBackLine, bladeOutline, bladeSpan, bladeVisibleDepth, clamp01, drawBack, dustFall, dustPile,
   easeOut, kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from './sawMotion';
 import { handoverAt } from '@/game/beatTrack';
@@ -47,23 +47,28 @@ function grainTile(scene: Phaser.Scene, x: number, y: number, width: number, hei
   tile.setTileScale(0.42, 0.42);
   return tile;
 }
-// Half the blade reaches past the kerf at the bite; the rest carries the handle.
-const BLADE_BACK = 430;
-const BLADE_TIP = -170;
-const TOOTH_STEP = 18;
 /** Where the offcut lands in the successful coda, in stage space; the puff of dust rises here. */
 const LANDING = { x: TIMBER_X + (CUT_X + 180) * Math.cos(TILT), y: GROUND_Y - 2 } as const;
 // Graphics re-tessellate every frame, so the dust plume is a fixed small budget.
 const DUST_MOTES = 9;
 
-/** A convex quad as two triangles. `fillPoints` wants Vector2 instances, which would
-    mean importing Phaser at runtime for four corners. */
+/** A convex polygon as a triangle fan. `fillPoints` wants Vector2 instances, which would
+    mean building throwaway objects for a shape that is redrawn every frame. */
+function fan(g: Phaser.GameObjects.Graphics, points: readonly (readonly [number, number])[]): void {
+  const first = points[0];
+  if (!first) return;
+  for (let i = 1; i + 1 < points.length; i++) {
+    const a = points[i]!, b = points[i + 1]!;
+    g.fillTriangle(first[0], first[1], a[0], a[1], b[0], b[1]);
+  }
+}
+
+/** The same fan for a shape whose four corners are already to hand. */
 function quad(
   g: Phaser.GameObjects.Graphics,
   ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number,
 ): void {
-  g.fillTriangle(ax, ay, bx, by, cx, cy);
-  g.fillTriangle(ax, ay, cx, cy, dx, dy);
+  fan(g, [[ax, ay], [bx, by], [cx, cy], [dx, dy]]);
 }
 
 /** Owns an illustration and its motion. Judgement arrives already decided; it is never computed here. */
@@ -434,45 +439,64 @@ export class SawTimberVignette implements Vignette {
     fillContour(g, this.along([[h + 136, 40], [h + 520, 26], [h + 520, 40], [h + 138, 52]]));
   }
 
+  /**
+   * The blade, slid to `slide` board units from the bite and cut off where it enters the
+   * wood. Both ends travel: the steel is rigid, and what changes is how much of it the
+   * cut has swallowed, never how long it is.
+   */
   private drawSaw(slide: number): void {
     const g = this.sawG.clear();
-    const tip = Math.max(0, BLADE_TIP + slide);
-    const heel = BLADE_BACK + slide;
-    if (heel - tip < 40) return;
-    const [tx, ty] = this.blade(tip, 0);
+    const span = bladeSpan(slide);
+    const { heel, toothCut } = span;
+    if (heel - toothCut < 40) return;
+    // The steel is cut off along the board's top face, so it goes into the wood rather
+    // than ending in mid-air above it. The outline comes back with four corners for most
+    // of the stroke and five at the end of a push.
+    const steelPoints = bladeOutline(span).map(([axis, off]) => this.blade(axis, off));
+    const [tx, ty] = this.blade(toothCut, 0);
     const [hx, hy] = this.blade(heel, 0);
-    const [hbx, hby] = this.blade(heel, 64);
-    const [tbx, tby] = this.blade(tip, 26);
     const steel = faces(TIMBER.steel);
     const line = STYLE.current.outline * 1.4;
     const drop = castShadow(8);
     g.fillStyle(TIMBER.ink, drop.alpha);
-    quad(g, tx + drop.dx, ty + drop.dy, hx + drop.dx, hy + drop.dy, hbx + drop.dx, hby + drop.dy, tbx + drop.dx, tby + drop.dy);
+    fan(g, steelPoints.map(([x, y]) => [x + drop.dx, y + drop.dy] as const));
     if (line > 0) {
-      g.lineStyle(line, shade(TIMBER.steel, -0.6), 1).beginPath()
-        .moveTo(tx, ty).lineTo(hx, hy).lineTo(hbx, hby).lineTo(tbx, tby).closePath().strokePath();
+      g.lineStyle(line, shade(TIMBER.steel, -0.6), 1).beginPath();
+      steelPoints.forEach(([x, y], i) => (i === 0 ? g.moveTo(x, y) : g.lineTo(x, y)));
+      g.closePath().strokePath();
     }
     g.fillStyle(steel.face);
-    quad(g, tx, ty, hx, hy, hbx, hby, tbx, tby);
-    // A lit line down the blade's back keeps a flat polygon reading as sheet steel.
-    const [l1x, l1y] = this.blade(tip, 20);
-    const [l2x, l2y] = this.blade(heel, 56);
-    g.lineStyle(3, 0xd6dee2, 0.75).lineBetween(l1x, l1y, l2x, l2y);
-    // A maker's etch mid-blade, faint, so the sheet reads as steel rather than a grey polygon.
-    const mid = (tip + heel) / 2;
-    g.lineStyle(1.5, TIMBER.ink, 0.22);
-    traceContour(g, this.along([[mid - 60, 26], [mid - 20, 36], [mid + 40, 36], [mid + 70, 24], [mid + 40, 14], [mid - 20, 14]]));
-    g.closePath().strokePath();
-    const [e1x, e1y] = this.blade(mid - 40, 25), [e2x, e2y] = this.blade(mid + 50, 25);
-    g.lineBetween(e1x, e1y, e2x, e2y);
+    fan(g, steelPoints);
+    // A lit line down the blade's back keeps a flat polygon reading as sheet steel. It
+    // follows the taper, so it stays the same distance inside the back edge all the way.
+    const lit = bladeBackLine(span, 8);
+    if (lit) {
+      const [l1x, l1y] = this.blade(lit[0][0], lit[0][1]);
+      const [l2x, l2y] = this.blade(lit[1][0], lit[1][1]);
+      g.lineStyle(3, 0xd6dee2, 0.75).lineBetween(l1x, l1y, l2x, l2y);
+    }
+    // A maker's etch mid-blade, faint, so the sheet reads as steel rather than a grey
+    // polygon. It is stamped on the steel, so it travels with it and fades out as the cut
+    // takes it rather than popping off at the clip.
+    const etch = clamp01((span.mid - 60 - toothCut) / 40);
+    if (etch > 0.01) {
+      const mid = span.mid;
+      g.lineStyle(1.5, TIMBER.ink, 0.22 * etch);
+      traceContour(g, this.along([[mid - 60, 26], [mid - 20, 36], [mid + 40, 36], [mid + 70, 24], [mid + 40, 14], [mid - 20, 14]]));
+      g.closePath().strokePath();
+      const [e1x, e1y] = this.blade(mid - 40, 25), [e2x, e2y] = this.blade(mid + 50, 25);
+      g.lineBetween(e1x, e1y, e2x, e2y);
+    }
     g.lineStyle(2, TIMBER.ink, 0.35).lineBetween(tx, ty, hx, hy);
-    // Set teeth: alternate teeth lean opposite ways, as a real crosscut saw's do.
+    // Set teeth: alternate teeth lean opposite ways, as a real crosscut saw's do. They are
+    // phased to the blade, not to the cut, which is what makes the stroke read as a slide:
+    // pinned to the kerf they stood still and simply multiplied.
     g.fillStyle(TIMBER.ink, 0.85);
-    let parity = 0;
-    for (let a = tip + 4; a < heel - 30; a += TOOTH_STEP, parity ^= 1) {
+    let parity = Math.round((span.firstTooth - span.toe - BLADE.toothInset) / BLADE.toothStep) & 1;
+    for (let a = span.firstTooth; a < heel - 30; a += BLADE.toothStep, parity ^= 1) {
       const [ax, ay] = this.blade(a, 0);
-      const [bx, by] = this.blade(a + TOOTH_STEP * 0.6, 0);
-      const [cx, cy] = this.blade(a + TOOTH_STEP * (parity ? 0.42 : 0.18), -9);
+      const [bx, by] = this.blade(a + BLADE.toothStep * 0.6, 0);
+      const [cx, cy] = this.blade(a + BLADE.toothStep * (parity ? 0.42 : 0.18), -9);
       g.fillTriangle(ax, ay, bx, by, cx, cy);
     }
     this.drawHandle(g, heel, line);

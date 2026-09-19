@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  advanceBite, acceptDemoBeat, bladeVisibleDepth, drawBack, dustFall, dustPile,
+  advanceBite, acceptDemoBeat, BLADE, bladeBackLine, bladeOutline, bladeSpan, bladeVisibleDepth, drawBack, dustFall, dustPile,
   kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from '../src/vignettes/sawMotion';
 import { synthesizeSaw } from '../src/audio/sawSounds';
@@ -121,5 +121,82 @@ describe('saw presentation curves', () => {
     expect(samples.every(value => Number.isFinite(value) && Math.abs(value) <= 1)).toBe(true);
     expect(samples.some(value => Math.abs(value) > 0.1)).toBe(true);
     expect(synthesizeSaw(48000, kind)).toEqual(samples);
+  });
+});
+
+describe('the blade is one rigid piece of steel', () => {
+  // The same mapping the vignette draws with: axis runs along the teeth, off rises
+  // perpendicular to them, and the board's top face is y = 0.
+  const at = (axis: number, off: number): { x: number; y: number } => {
+    const c = Math.cos(-SAW_MOTION.bladeTiltRad), s = Math.sin(-SAW_MOTION.bladeTiltRad);
+    return { x: axis * c + off * s, y: axis * s - off * c };
+  };
+  const strokes = [-SAW_MOTION.travel, -100, -37, 0, 37, 100, SAW_MOTION.travel];
+
+  it('moves both ends by the whole stroke, so the steel never changes length', () => {
+    // The defect this replaces: the toe was pinned at the kerf and only the heel
+    // travelled, which stretched the drawn blade from 278 to 582 units across one stroke.
+    const rest = bladeSpan(0);
+    for (const slide of strokes) {
+      const span = bladeSpan(slide);
+      expect(span.toe).toBeCloseTo(rest.toe + slide);
+      expect(span.heel).toBeCloseTo(rest.heel + slide);
+      expect(span.heel - span.toe).toBeCloseTo(BLADE.heel - BLADE.toe);
+      expect(span.mid).toBeCloseTo(rest.mid + slide);
+    }
+  });
+
+  it('phases the teeth to the blade, so they travel with it instead of standing still', () => {
+    for (const slide of strokes) {
+      const span = bladeSpan(slide);
+      // Every tooth sits a whole number of steps from the toe: they are cut into the
+      // steel, not into the wood.
+      const steps = (span.firstTooth - span.toe - BLADE.toothInset) / BLADE.toothStep;
+      expect(steps).toBeCloseTo(Math.round(steps));
+      expect(steps).toBeGreaterThanOrEqual(0);
+      // The first one still above the wood, and no earlier.
+      expect(span.firstTooth).toBeGreaterThanOrEqual(span.toothCut);
+      expect(span.firstTooth - BLADE.toothStep).toBeLessThan(span.toothCut);
+    }
+    // A stroke of one whole tooth pitch brings the comb back into phase; anything else
+    // moves it. Pinned to the kerf it never moved at all.
+    expect(bladeSpan(BLADE.toothStep).firstTooth).toBeCloseTo(bladeSpan(0).firstTooth);
+    expect(bladeSpan(BLADE.toothStep / 2).firstTooth).not.toBeCloseTo(bladeSpan(0).firstTooth);
+  });
+
+  it('cuts the drawn blade off along the board’s top face, never below it', () => {
+    for (const slide of strokes) {
+      const outline = bladeOutline(bladeSpan(slide));
+      expect(outline.length).toBeGreaterThanOrEqual(4);
+      // No corner is below the face, so no uncut wood is ever covered by steel.
+      for (const [axis, off] of outline) expect(at(axis, off).y).toBeLessThanOrEqual(0.001);
+      // The cut end lies *on* the face rather than above it, which is what makes it
+      // horizontal: the blade goes into the wood instead of stopping over it.
+      const onFace = outline.filter(([axis, off]) => Math.abs(at(axis, off).y) < 0.001);
+      expect(onFace.length).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  it('takes a fifth corner only when the toe itself has risen clear of the wood', () => {
+    // Most of the stroke the toe end is entirely buried and the outline is a quad; at the
+    // end of a push the toe's own edge shows above the board and the shape gains a corner.
+    expect(bladeOutline(bladeSpan(0))).toHaveLength(4);
+    expect(bladeOutline(bladeSpan(-SAW_MOTION.travel))).toHaveLength(4);
+    expect(bladeOutline(bladeSpan(SAW_MOTION.travel)).length).toBeGreaterThanOrEqual(4);
+    // Held clear of the board altogether, the whole rigid quad shows and nothing is cut.
+    const clear = bladeSpan(-BLADE.toe + 400);
+    expect(bladeOutline(clear)).toHaveLength(4);
+    expect(bladeOutline(clear).map(([axis]) => axis)).toEqual([clear.toe, clear.heel, clear.heel, clear.toe]);
+  });
+
+  it('clips the lit line to the same face, and drops it once it is buried', () => {
+    for (const slide of strokes) {
+      const lit = bladeBackLine(bladeSpan(slide), 8);
+      expect(lit).not.toBeNull();
+      for (const [axis, off] of lit!) expect(at(axis, off).y).toBeLessThanOrEqual(0.001);
+      // It ends at the heel, where the blade is deepest, and starts no earlier than the toe.
+      expect(lit![1][0]).toBeCloseTo(bladeSpan(slide).heel);
+      expect(lit![0][0]).toBeGreaterThanOrEqual(bladeSpan(slide).toe - 0.001);
+    }
   });
 });
