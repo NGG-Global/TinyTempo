@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { samples } from '@/audio/samples';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -256,6 +257,9 @@ export class MenuScene extends BaseScene {
       this.playLabel.setText('…');
       await audio.music.load();
       if (this.disposed || request !== this.request) return;
+      // Warmed here and awaited where it is used. The map is several taps from a level,
+      // which is long enough to decode 180 KB without anyone waiting on it.
+      void samples.load(audio.context);
       this.playLabel.setText('Play');
       const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || tutorialComplete());
       this.curtain.cover(() => this.scene.start(needsTutorial ? SceneKey.Tutorial : SceneKey.Map));

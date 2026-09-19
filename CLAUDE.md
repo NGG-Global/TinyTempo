@@ -103,6 +103,15 @@ of failing** on a missing token or a failed upload, which would ship a release w
 every trace is minified, so `vite.config.ts` throws on both and
 `scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
+**A recorded beat is late by whatever silence was in front of it.** The delivered
+one-shots open with between 0.1 ms and 25 ms of room before the take, and a beat sound is
+scheduled *on* the grid — so that silence is not padding, it is lateness, charged to every
+demonstration beat and then to the player copying what they heard. `audio/samples.ts`
+drops it at decode, the same thing `detectLeadIn` already does to the music. An act may
+also give a voice more than one take (`Voice` in `AudioEngine`), which the engine
+alternates rather than layers, so a beat that repeats all level is not the identical
+sample eleven times running.
+
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
@@ -273,6 +282,7 @@ src/
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
+    samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
     design.ts          Design resolution, layout metrics, depth ordering
     game.ts            Phaser game config (every non-default value is justified)
@@ -454,7 +464,7 @@ All art is procedural: drawn as Phaser Graphics inside each vignette and scene,
 or generated at boot — material tiles in `textures/materials.ts`, particle and
 glow discs in `ui/feedback.ts` — and looked up by key. There are no image files.
 
-The typefaces are the exception to "nothing but the music is downloaded". Two
+The typefaces are one of the two exceptions to "the music and a handful of one-shots". Two
 variable fonts under `public/fonts/` — Fredoka for display, Nunito for body and
 labels, both under the SIL Open Font License with each family's `OFL.txt`
 committed beside it — load through Phaser's `load.font()` in
@@ -470,8 +480,12 @@ and `ui/icons.ts` rather than drawing a card or a glyph of its own.
 
 The repository does ship binary audio — the WAV masters in `bgm/` and the MP3s
 encoded from them — and that is the great majority of the checkout. Only the
-premixed MP3 reaches the bundle; sound effects are synthesized locally per
-vignette in `src/audio/`, so the game downloads one music track and nothing else.
+premixed MP3 reaches the bundle. Sound effects are synthesized locally per vignette in
+`src/audio/`, with one exception: four acts take a *recorded* beat from `sfx/` — the
+window's two wipes, the bug's shoe, the curl's grunt and the paper's scissors, 180 KB of
+WAV beside the 2.4 MB track. They are an enhancement over a game that already works, so
+`audio/samples.ts` never rejects and an act whose sample does not arrive keeps the
+synthesized voice it shipped with. See `docs/SOUND.md`.
 
 The one authored image in the repository is the icon master,
 `assets/icon/tiny-tempo-1024.jpg`. Every shipped icon — the five Android density

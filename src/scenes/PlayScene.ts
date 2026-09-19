@@ -4,6 +4,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
 import { SceneKey } from '@/config/scenes';
@@ -638,6 +639,11 @@ export class PlayScene extends BaseScene {
       await this.audio!.unlock();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       await this.audio!.music.load();
+      if (this.disposed || request !== this.startRequest || this.blocked()) return;
+      // The act's voices are built synchronously below, so the bank has to be decoded
+      // first. It never rejects: a sample that did not arrive leaves that act on the
+      // synthesized beat it shipped with, rather than starting the level silent.
+      await samples.load(this.audio!.context);
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));

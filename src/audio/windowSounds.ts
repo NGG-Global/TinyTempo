@@ -1,4 +1,5 @@
 import type { VignetteSounds } from './AudioEngine';
+import { recordedVoice } from './samples';
 
 const DURATION: Record<keyof VignetteSounds, number> = {
   action: 0.24, scrape: 0.22, judder: 0.28, success: 0.55, rough: 0.24,
@@ -39,7 +40,10 @@ export function createWindowSounds(context: AudioContext): VignetteSounds {
     return buffer;
   };
   return {
-    action: make('action'), success: make('success'), rough: make('rough'),
+    // Two takes, one stroke each way, alternated so a wiped pane is not the same
+    // 140 ms of squeegee eleven times running.
+    action: recordedVoice(() => make('action'), ['wipe1', 'wipe2']),
+    success: make('success'), rough: make('rough'),
     scrape: make('scrape'), judder: make('judder'),
   };
 }

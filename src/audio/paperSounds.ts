@@ -1,4 +1,5 @@
 import type { VignetteSounds } from './AudioEngine';
+import { recordedVoice } from './samples';
 
 const DURATION: Record<keyof VignetteSounds, number> = { action: 0.15, scrape: 0.19, judder: 0.23, success: 0.9, rough: 0.8 };
 
@@ -38,10 +39,10 @@ export function synthesizePaper(sampleRate: number, kind: keyof VignetteSounds):
 
 export function createPaperSounds(context: AudioContext): VignetteSounds {
   const make = (kind: keyof VignetteSounds): AudioBuffer => {
-    const samples = synthesizePaper(context.sampleRate, kind);
-    const buffer = context.createBuffer(1, samples.length, context.sampleRate);
-    buffer.getChannelData(0).set(samples);
+    const data = synthesizePaper(context.sampleRate, kind);
+    const buffer = context.createBuffer(1, data.length, context.sampleRate);
+    buffer.getChannelData(0).set(data);
     return buffer;
   };
-  return { action: make('action'), success: make('success'), rough: make('rough'), scrape: make('scrape'), judder: make('judder') };
+  return { action: recordedVoice(() => make('action'), ['scissors']), success: make('success'), rough: make('rough'), scrape: make('scrape'), judder: make('judder') };
 }

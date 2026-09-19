@@ -6,8 +6,15 @@ const TONE = { count: 440, ready: 660, action: 880 } as const;
 const DURATION = 0.065;
 /** A resume() that never settles (no gesture credit, blocked route) must not leave the scene waiting forever. */
 const UNLOCK_TIMEOUT_MS = 3000;
+/**
+ * One voice, which an act may give more than one take of. Consecutive plays rotate
+ * through them, so a beat that repeats all level does not fire the identical sample
+ * every time — the window's two wipes are one stroke each way.
+ */
+export type Voice = AudioBuffer | readonly AudioBuffer[];
+
 export interface VignetteSounds {
-  readonly action: AudioBuffer;
+  readonly action: Voice;
   readonly success: AudioBuffer;
   readonly rough: AudioBuffer;
   /**
@@ -33,6 +40,9 @@ export class AudioEngine implements SoundSink {
   public readonly music = new MusicSystem(this.context, this.master);
   private readonly sources = new Map<AudioScheduledSourceNode, GainNode>();
   private sounds: VignetteSounds | null = null;
+  /** The action voice's takes, and which one the next beat gets. */
+  private takes: readonly AudioBuffer[] = [];
+  private take = 0;
   private disposed = false;
   public muted = false;
   /**
@@ -48,7 +58,15 @@ export class AudioEngine implements SoundSink {
     this.master.connect(this.context.destination);
     this.context.addEventListener?.('sinkchange', this.onSink);
   }
-  public setSounds(sounds: VignetteSounds): void { this.cancel(); this.sounds = sounds; }
+  public setSounds(sounds: VignetteSounds): void {
+    this.cancel();
+    this.sounds = sounds;
+    // Rotation is per act, not per task: a level that changes tempo between tasks should
+    // not also restart the alternation and play the same take twice across the join.
+    const { action } = sounds;
+    this.takes = Array.isArray(action) ? action : [action];
+    this.take = 0;
+  }
   public async unlock(): Promise<void> {
     if (this.disposed) throw new Error('Audio has been disposed.');
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -73,7 +91,10 @@ export class AudioEngine implements SoundSink {
   public get activeSources(): number { return this.sources.size; }
   public play(time: number, kind: SoundKind): void {
     if (this.disposed) return;
-    if (kind === 'action' && this.sounds) { this.playBuffer(time, this.sounds.action, 0.65); return; }
+    if (kind === 'action' && this.takes.length > 0) {
+      this.playBuffer(time, this.takes[this.take++ % this.takes.length]!, 0.65);
+      return;
+    }
     const source = this.context.createOscillator();
     const envelope = this.context.createGain();
     const start = Math.max(time, this.context.currentTime);
