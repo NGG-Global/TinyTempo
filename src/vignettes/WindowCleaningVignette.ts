@@ -10,7 +10,8 @@ import { shade } from '@/ui/colour';
 import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
-import { easeOut, isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { easeOut, isPlayerTurn, turnOpen } from './motion';
 
 export const GLASS = { paper: 0xe9e4e7, ink: 0x49394e, frame: 0x82718a, blue: 0xb7d9db, light: 0xfff5df, glove: 0xdc9775, sill: 0xd1c1cd };
 export const strokeProgress = (age: number): number => easeOut(age / 0.23);
@@ -38,8 +39,11 @@ export class WindowCleaningVignette implements Vignette {
   private readonly bursts: Feedback;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  /** When the player's turn began; the stage light opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private cleanAt: number[] = [];
   private strokeAt = -100;
   private lane = 0;
@@ -192,17 +196,16 @@ export class WindowCleaningVignette implements Vignette {
     this.plan = plan; this.phase = 'prepare'; this.cleanAt = plan.targets.map(() => Infinity);
     this.strokeAt = -100; this.strokes = 0; this.lane = 0; this.lastDemo = -Infinity;
     this.finishAt = null; this.finished = false; this.successful = false;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.dirtDirty = true;
   }
-  public onPhase(phase: Phase, now: number): void {
+  public onPhase(phase: Phase, _now: number): void {
     this.phase = phase;
     // The demonstration wipes without clearing the grime, so the pane the player is given
     // is the one they watched and nothing has to be re-dirtied in the instant before
     // their turn.
     if (phase === 'respond') {
       this.cleanAt.fill(Infinity);
-      this.respondAt = now;
       this.dirtDirty = true;
     }
   }
@@ -256,8 +259,7 @@ export class WindowCleaningVignette implements Vignette {
    * the demonstration from the response.
    */
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;

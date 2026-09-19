@@ -46,7 +46,17 @@ happens. The blade stands 30° inside the plane of the cut, plunging into the ke
 than lying along the face; the kerf stays vertical because the tilt is within the cut
 plane. The blade is never drawn below the depth it has actually sawn — the in-kerf slice
 is bounded by `bladeVisibleDepth`, and the blade above the board is clipped at the top
-face, so a slide can shorten what shows but never reveal uncut wood. Display titles
+face, so a slide can shorten what shows but never reveal uncut wood.
+
+**The blade is one rigid piece of steel, and a stroke moves all of it.** `bladeSpan` puts
+the toe and the heel both `slide` units along, so `heel - toe` is the same 600 units at
+every point in a stroke; `bladeOutline` then clips that quad against the board's top face
+and is the only thing that changes shape. The distinction is the whole illusion, and it
+was got wrong once: pinning the toe at the kerf and letting only the heel travel took the
+drawn steel from 278 units to 582 across one stroke and left every tooth standing exactly
+where it was, so the saw read as being stretched rather than pushed. The teeth are phased
+to the blade for the same reason — they are cut into the steel, not into the wood, and
+they are the repeated feature the eye actually tracks. Display titles
 frame the opening and ending; the illustration stays dominant during play and there are
 no UI panels. Board, sawhorses, grain and the saw itself are Phaser Graphics with
 deterministic local geometry: no external assets, no dynamic masks, no per-stroke
@@ -140,10 +150,14 @@ Under `prefers-reduced-motion: reduce` the board neither travels nor flexes, sti
 place, and a clean response still reaches full response depth (three bites over six
 strokes) — the stroke, the cut and the judgement all read.
 
-Two defects were found and fixed this way rather than by reading the code: the per-frame
+Three defects were found and fixed this way rather than by reading the code: the per-frame
 timber flex was assigning the container's `y` outright and destroying the board's own
-anchor, and the blade's perpendicular pointed into the wood, putting the teeth on the
-blade's upper edge.
+anchor; the blade's perpendicular pointed into the wood, putting the teeth on the blade's
+upper edge; and the stroke scaled the blade instead of sliding it, because the toe was
+clamped to the kerf while the heel travelled. The clamp was also cutting the steel along
+the kerf's own perpendicular rather than along the board's top face — the two coincide
+only at the tooth edge, so the blade ended in mid-air above uncut wood instead of going
+into the cut. Both are one fix: a rigid quad, clipped to the face.
 
 Not established here, and not claimed: physical-device touch latency and digitiser
 behaviour, audio latency, and acoustic output — none of which a browser can demonstrate,

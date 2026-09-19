@@ -12,7 +12,8 @@ import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { anticipation, clamp01, easeOut, HAMMER_MOTION, nailHeight, recoil } from './hammerMotion';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 
 export const WORKSHOP = {
   paper: 0xeee8d8, ink: 0x243e35, muted: 0x788074, sun: 0xdfc37f,
@@ -58,8 +59,11 @@ export class HammerNailVignette implements Vignette {
   private scale = 1;
   private lastNow = 0;
   private lastDemoStrike = -Infinity;
-  /** When the player's turn began. The spotlight opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
@@ -150,7 +154,7 @@ export class HammerNailVignette implements Vignette {
     this.bend = 0;
     this.finishAt = null;
     this.finishDone = false;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.lastDemoStrike = -Infinity;
     this.phase = 'prepare';
   }
@@ -160,7 +164,6 @@ export class HammerNailVignette implements Vignette {
     // already standing proud when their turn arrives; this only anchors the spotlight.
     if (phase === 'respond') {
       this.setDepth(0, now);
-      this.respondAt = now;
     }
   }
   private setDepth(value: number, now: number): void {
@@ -247,15 +250,14 @@ export class HammerNailVignette implements Vignette {
     this.wood.y = this.bench.y = this.reducedMotion ? 0 : pressure * 1.6;
     this.drawNail(now);
     this.drawDust(age);
-    // The spotlight opens toward the player's side the instant their turn starts. It is
-    // the handover now that no bar separates the demonstration from the response.
-    const transfer = easeOut((now - this.respondAt) / TURN_OPEN_SEC);
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.disc.setPosition(270 + (offered ? transfer * 40 : 0), -285 + (offered ? transfer * 28 : 0));
-    this.disc.setScale(offered ? 1 + transfer * 0.09 : 1).setAlpha(offered ? 0.5 + transfer * 0.22 : 0.5);
+    // The spotlight opens toward the player's side across the handover, so it has
+    // finished moving before the downbeat it announces rather than starting there.
+    const transfer = turnOpen(now, this.handoverAt, this.phase);
+    this.disc.setPosition(270 + transfer * 40, -285 + transfer * 28);
+    this.disc.setScale(1 + transfer * 0.09).setAlpha(0.5 + transfer * 0.22);
     // The stage behind the bench comes up with it. Level 1 is where the handover has to be
     // clearest, so it carries the same cue as the other four rather than a weaker one.
-    this.backdrop.open(offered ? transfer : 0);
+    this.backdrop.open(transfer);
   }
   private drawNail(now: number): void {
     const t = STYLE.current;

@@ -9,7 +9,8 @@ import { Backdrop } from '@/ui/backdrop';
 import { mix, shade } from '@/ui/colour';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 import {
   acceptDemoBeat, clamp01, easeOut, PAPER_CONTOURS, paperCutPoint, paperHandoff, paperOutcome, paperReveal,
   paperShape, scissorOpening, type PaperOutcome, type PaperPoint, type PaperShape,
@@ -77,6 +78,11 @@ export class ScissorsPaperVignette implements Vignette {
   private strikeAt = -100;
   private judderAt = -100;
   private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private finishAt: number | null = null;
   private finished = false;
   private lastNow = 0;
@@ -161,6 +167,7 @@ export class ScissorsPaperVignette implements Vignette {
     this.outcome = 'fail';
     this.progress = this.progressFrom = this.hitCount = this.demoCount = this.handoffFrom = this.mistakes = 0;
     this.strikeAt = this.judderAt = this.progressAt = this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.lastDemo = -Infinity;
     this.finishAt = null;
     this.finished = false;
@@ -214,7 +221,7 @@ export class ScissorsPaperVignette implements Vignette {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;
     const still = reducedMotion();
     this.stage.setPosition(this.baseX, this.baseY);
-    this.backdrop.open(isPlayerTurn(this.phase) || this.phase === 'result' ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
     const demo = this.phase === 'prepare' || this.phase === 'demonstrate';
     if (demo) for (const cue of this.plan?.cues ?? []) if (cue.kind === 'action' && cue.time <= now) this.onDemonstrationBeat(cue.time);
     const age = this.finishAt === null ? -1 : now - this.finishAt;

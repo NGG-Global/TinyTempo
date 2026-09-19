@@ -28,7 +28,8 @@ import {
   REFERENCE_BEAT,
   sliceTumble,
 } from './bananaMotion';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 
 /**
  * A warm cream kitchen. The banana is the only saturated yellow in it, so it is the
@@ -108,7 +109,11 @@ export class BananaKnifeVignette implements Vignette {
   private readonly rings: Phaser.GameObjects.Graphics;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastDemo = -Infinity;
   private strikes = 0;
   private strikeAt = -100;
@@ -196,7 +201,7 @@ export class BananaKnifeVignette implements Vignette {
     this.strikes = this.slices = 0;
     this.strikeAt = -100;
     this.strikeX = bananaAt(1).x;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.sliceAt = [];
     this.sliceFrom = [];
     this.sliceFromY = [];
@@ -216,7 +221,6 @@ export class BananaKnifeVignette implements Vignette {
     this.phase = phase;
     if (phase === 'respond') {
       this.setCut(0, now);
-      this.respondAt = now;
     }
   }
 
@@ -292,8 +296,7 @@ export class BananaKnifeVignette implements Vignette {
   }
 
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
 
   public update(now: number): void {

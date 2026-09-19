@@ -7,6 +7,15 @@ export const RHYTHM = {
   beatsPerBar: 4,
   /** One bar, once at the start of a level. Tasks after the first have no lead-in at all. */
   leadInBeats: 4,
+  /**
+   * How far before the player's first target the turn starts changing hands.
+   *
+   * Nothing is added to the loop: these are the last beats of the demonstration's own
+   * bar, and the handover is a rendering change keyed to times the plan already carries.
+   * Two beats is enough for a player to be winding up rather than reacting; on the
+   * densest patterns it may crowd, which is why it is a knob rather than a literal.
+   */
+  runwayBeats: 2,
   pumpMs: 20,
   stallMs: 250,
   /**

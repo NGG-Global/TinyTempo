@@ -4,6 +4,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
 import { SceneKey } from '@/config/scenes';
@@ -12,21 +13,23 @@ import { RHYTHM } from '@/config/rhythm';
 import { BaseScene } from '@/core/BaseScene';
 import { isTouchPrimary } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
+import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, markFor, trackGeometry, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Handover, type Mark } from '@/game/beatTrack';
 import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { loadProgress, recordResult, saveProgress, type LevelOutcome } from '@/game/progress';
+import { guidedLevel, loadProgress, markDemonstrationSeen, recordResult, saveProgress, seenDemonstration, type LevelOutcome } from '@/game/progress';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
+import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
 import { mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
@@ -40,16 +43,45 @@ import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { VIGNETTES } from '@/vignettes/registry';
 import type { Vignette } from '@/vignettes/Vignette';
-import { clamp01, easeOut } from '@/vignettes/motion';
-
-/** Watch is a timber plaque; Your turn is the coral block the thumb already knows. */
-type TurnCue = 'none' | 'watch' | 'play';
+import { easeOut } from '@/vignettes/motion';
 
 /**
- * The beat track's metrics, in design units at scale 1. The beads are deliberately larger
- * than the map's area pips: this row is the only thing on screen that says whose turn it
- * is, so it has to read at arm's length rather than merely be present.
+ * The first-run demonstration pass: one whole cycle at a teaching tempo, played by the
+ * game before the player's first task ever begins.
+ *
+ * Deliberately not a scene, a modal or a script. It is the same block, the same act and
+ * the same grid the level runs on, slowed down and answered by the game, so what the
+ * player watches is exactly the thing they are about to be asked to do: struck above,
+ * carried down, answered below. The turn cue is what teaches; this only runs it once
+ * where nothing is at stake.
  */
+const TEACH = {
+  /** Fraction of the level's own tempo the pass plays at. */
+  tempo: 0.75,
+  /**
+   * Whole bars, at the teaching tempo: one to count in, one demonstrated, one answered,
+   * and one to let it land. Whole bars matter because the music's rate goes back to the
+   * level's at the end of them, and a rate change off the bar line shifts the loop
+   * against the grid every task afterwards runs on.
+   */
+  bars: 4,
+  /**
+   * How far ahead of the real task's downbeat the grid is handed to the controller. One
+   * beat, the same headroom a task change takes — and at the teaching tempo a beat is
+   * longer in wall-clock than the level's own, so the schedule has at least as much room.
+   */
+  swapBeats: 1,
+} as const;
+
+/**
+ * Which half of the pass is on screen. The same three phases the controller reports, read
+ * straight off the plan's own boundaries rather than kept anywhere — there is no second
+ * phase machine, and the block cannot tell which one it is being driven by.
+ */
+function teachPhase(plan: RoundPlan, now: number): Phase {
+  return now < plan.demo ? 'prepare' : now < plan.response ? 'demonstrate' : 'respond';
+}
+
 /**
  * The result plaque, in design units at scale 1. It hangs from two ropes above the
  * vignette and the medals straddle its top edge, half on the board and half off it, so
@@ -69,16 +101,6 @@ const PLATE = {
   height: 268,
   keptHeight: 328,
   keptWidth: 300,
-} as const;
-
-const TRACK = {
-  beadGap: 58,
-  beadRadius: 19,
-  plateHeight: 72,
-  plateDepth: 7,
-  plateRadius: 28,
-  pipGap: 30,
-  pipRadius: 6,
 } as const;
 
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
@@ -112,11 +134,33 @@ export class PlayScene extends BaseScene {
   /** Ceiling anchor the plaque and its ropes swing about; local (0,0) of `stars`. */
   private plaqueAt = { x: 0, y: 0 };
   private headline!: Phaser.GameObjects.Text;
-  /** Hung behind the phase word so Watch and Your turn are different objects, not just colours. */
-  private turnSign!: Phaser.GameObjects.Graphics;
   private accuracy!: Phaser.GameObjects.Text;
   private kept!: Phaser.GameObjects.Text;
-  private turn: TurnCue = 'none';
+  /** The room stepping back as the turn passes, so the block at the thumb comes forward. */
+  private roomDim!: Phaser.GameObjects.Graphics;
+  /** This level still shows the guiding ring, because the player has not cleared it yet. */
+  private guided = false;
+  /**
+   * The first-run pass, while it is running. It owns the block and the grid until it
+   * hands both to the controller; there is no new phase machine, only a plan and a
+   * cursor over the cues and targets it already carries.
+   */
+  private teach: {
+    readonly plan: RoundPlan;
+    /** The real first task's downbeat, a whole number of bars after the pass began. */
+    readonly taskAt: number;
+    /** When the grid is handed over, far enough ahead of `taskAt` to schedule it. */
+    readonly swapAt: number;
+    /**
+     * The pass's own row. `this.outcomes` belongs to the task the controller starts at
+     * the swap, a beat before the pass lets go of the block.
+     */
+    readonly marks: Mark[];
+    cue: number;
+    answered: number;
+    phase: Phase;
+    swapped: boolean;
+  } | null = null;
   /** Judgements that scored in the early window while the example was still on screen. */
   private heldJudgements: Judgement[] = [];
   /** The three pucks — map, restart, mute — drawn as one baked graphic. */
@@ -167,6 +211,8 @@ export class PlayScene extends BaseScene {
   private summaryAt = -Infinity;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
+  /** The one task a miss is not reported on: the first of the level that still teaches. */
+  private get unfailable(): boolean { return this.guided && this.taskIndex === 0; }
   private debug!: Phaser.GameObjects.Text;
   private controlSize = 96;
   private uiScale = 1;
@@ -181,7 +227,6 @@ export class PlayScene extends BaseScene {
   private struckIndex = -1;
   private struckAt = -Infinity;
   private extraAt = -Infinity;
-  private turnAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
   private headlineColour = SHELL.cream;
@@ -219,7 +264,6 @@ export class PlayScene extends BaseScene {
     this.stars = this.add.graphics().setDepth(9);
     this.fx = new Feedback(this, 5);
     this.starFx = new Feedback(this, 12);
-    this.turnSign = this.add.graphics().setDepth(11);
     this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
     this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
@@ -247,6 +291,9 @@ export class PlayScene extends BaseScene {
     this.premiumPrice = label(this, '', { size: 23, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5);
     this.premiumSheen = new Sheen(this, 10);
     this.premiumRoot.add([this.premiumPlate, this.premiumLabel, this.premiumPrice]);
+    // Under the scrim and over the act: the workshop steps back for the turn, it is not
+    // covered over. A vignette's own objects sit at negative depths.
+    this.roomDim = this.add.graphics().setDepth(6).setAlpha(0);
     this.scrim = this.add.graphics().setDepth(7).setVisible(false);
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
@@ -285,7 +332,6 @@ export class PlayScene extends BaseScene {
     this.headlineSize = (this.controller?.active ? 48 : 88) * s;
     resize(this.headline, this.headlineSize, this.headlineColour);
     this.headline.setPosition(safe.centerX, this.headlineY).setLineSpacing(-12 * s);
-    this.drawTurnSign();
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
     const gap = Math.max(88 * s, this.controlSize + 4 * s);
     this.muteAt = { x: safe.right - 56 * s, y: top + 66 * s };
@@ -297,14 +343,21 @@ export class PlayScene extends BaseScene {
     // Same offset as the old drag track: an absolute distance from the thumb, so a tall
     // handset does not leave the beads floating in the middle of the frame.
     this.trackY = safe.bottom - LAYOUT.trackOffsetFromBottom * s;
-    this.trackWidth = Math.min(620 * s, safe.width - 80 * s);
-    this.verdictY = this.trackY - TRACK.plateHeight * s / 2 - 34 * s;
+    // The columns are centred on the rows and the owner slot eats a row's left end, so
+    // what the beads may use is the row less that allowance. Without it the slot landed
+    // on the first socket on a dense pattern, which is the one case where the answer is
+    // not simply a wider row.
+    this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
+    // Above the shelf, not above the face: the demonstration row now occupies the band
+    // the verdict word used to sit in, and a word over the beads is a word over the cue.
+    this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
     this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
     this.scrim.clear().fillStyle(0x1a201c, 0.5).fillRect(full.x, full.y, full.width, full.height);
+    this.roomDim.clear().fillStyle(PALETTE.ink, 1).fillRect(full.x, full.y, full.width, full.height);
     resize(this.accuracy, 34 * s, ink, STYLE.current, false);
     this.accuracy.setWordWrapWidth(Math.min(560 * s, safe.width - 64 * s), false);
     this.accuracy.setLineSpacing(-4 * s);
@@ -528,6 +581,7 @@ export class PlayScene extends BaseScene {
     this.replay = null;
     this.replayOffset = null;
     this.transition = null;
+    this.teach = null;
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -546,7 +600,6 @@ export class PlayScene extends BaseScene {
     // `layout()`. `drawStars` is the one place that knows what the plaque is made of, so
     // adding a fourth piece to it cannot reintroduce this.
     this.drawStars();
-    this.setTurn('none');
     this.controller?.dispose();
     this.audio?.cancel();
     this.audio?.music.stop();
@@ -587,6 +640,11 @@ export class PlayScene extends BaseScene {
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       await this.audio!.music.load();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
+      // The act's voices are built synchronously below, so the bank has to be decoded
+      // first. It never rejects: a sample that did not arrive leaves that act on the
+      // synthesized beat it shipped with, rather than starting the level silent.
+      await samples.load(this.audio!.context);
+      if (this.disposed || request !== this.startRequest || this.blocked()) return;
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));
       const origin = this.audio!.music.start(); // fresh sources: every level starts at the base tempo
@@ -605,8 +663,10 @@ export class PlayScene extends BaseScene {
       saveHealth(begun.health);
       this.attemptId = attemptId;
       this.heartRefunded = false;
+      this.guided = guidedLevel(loadProgress()) === this.spec.level;
       this.sequence = new TaskSequence(this.task.bpm, origin, 1);
-      this.beginTask(origin);
+      if (this.guided && !seenDemonstration()) this.beginTeach(origin);
+      else this.beginTask(origin);
     } catch (error) {
       if (this.disposed || request !== this.startRequest) return;
       this.starting = false;
@@ -614,10 +674,75 @@ export class PlayScene extends BaseScene {
       this.audio?.cancel();
       this.audio?.music.stop();
       console.error('Unable to start round', error);
-      this.setTurn('none');
       this.changeHeadline('No sound');
       this.setAction('Retry');
     }
+  }
+  /**
+   * Play the loop once, in full, before the level's first task: four demonstrated beats,
+   * the handover, four answered beats, and a bar to let it land. The game plays both
+   * halves; the player watches.
+   *
+   * The music slows with it and goes back to the level's tempo on the bar line the real
+   * task starts on, which is why the pass is whole bars. Nothing here judges, scores or
+   * spends anything — the controller is not even running.
+   */
+  private beginTeach(origin: number): void {
+    const bpm = this.task.bpm * TEACH.tempo;
+    const beat = 60 / bpm;
+    const plan = createRoundPlan(0, this.task.pattern, bpm, origin, RHYTHM.leadInBeats);
+    const taskAt = origin + TEACH.bars * RHYTHM.beatsPerBar * beat;
+    this.teach = {
+      plan, taskAt, swapAt: taskAt - TEACH.swapBeats * beat,
+      marks: this.task.pattern.hits.map(() => 'pending'),
+      cue: 0, answered: 0, phase: 'prepare', swapped: false,
+    };
+    this.struckIndex = -1;
+    this.struckAt = this.extraAt = this.verdictAt = -Infinity;
+    this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
+    // The demonstration half is the plan's own cues; the answered half is the game
+    // sounding each target itself. Both go in ahead of time, like every other phrase.
+    for (const cue of plan.cues) this.audio!.play(cue.time, cue.kind);
+    for (const target of plan.targets) this.audio!.play(target, 'action');
+    this.vignette.reset(plan);
+    this.vignette.onPhase('prepare', origin);
+    this.drawTaskMarks();
+  }
+
+  /** Advances the pass from the audio clock, and hands the grid to the controller. */
+  private teachTick(now: number): void {
+    const teach = this.teach;
+    if (!teach) return;
+    const { plan } = teach;
+    while (teach.cue < plan.cues.length && plan.cues[teach.cue]!.time <= now) {
+      const cue = plan.cues[teach.cue++]!;
+      if (cue.kind === 'action') this.vignette.onDemonstrationBeat(cue.time);
+    }
+    const phase = teachPhase(plan, now);
+    if (phase !== teach.phase) { teach.phase = phase; this.vignette.onPhase(phase, now); }
+    while (teach.answered < plan.targets.length && plan.targets[teach.answered]! <= now) {
+      this.struckIndex = teach.answered;
+      this.struckAt = now;
+      teach.marks[teach.answered++] = 'perfect';
+      this.vignette.onPlayerHit(now);
+      // Played, never judged: the act reacts exactly as it would to a perfect answer,
+      // and the beat it answered travels with it, because some acts place by index.
+      this.vignette.onAccuracy({ kind: 'hit', grade: 'Perfect', index: teach.answered - 1, deltaMs: 0 }, now);
+    }
+    if (!teach.swapped && now >= teach.swapAt) {
+      // Same deadline the task change uses, on the clock the cues are scheduled against.
+      if (!canPlaceNextTask(this.audio!.context.currentTime, teach.taskAt)) { this.interrupt(); return; }
+      teach.swapped = true;
+      // Seen, once the whole cycle has played. Marking it at the start would have spent
+      // the one showing on a player who backed out during the count-in.
+      markDemonstrationSeen();
+      this.audio!.music.setRate(this.task.bpm / MUSIC.sourceBpm, teach.taskAt);
+      this.sequence = new TaskSequence(this.task.bpm, teach.taskAt, 1);
+      this.beginTask(teach.taskAt);
+    }
+    // The pass keeps the block until the real task's downbeat, so the answered row holds
+    // rather than blinking back to empty a bar early.
+    if (now >= teach.taskAt) this.teach = null;
   }
   private beginTask(startAt: number): void {
     this.attempts++;
@@ -667,6 +792,9 @@ export class PlayScene extends BaseScene {
       if (this.actionCaption === 'WATCH') { void this.watchAd(); return; }
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
     }
+    // The pass is the game showing the loop. A tap during it is a player reaching for a
+    // turn that is not theirs yet, not a request to start the level over.
+    if (this.teach) return;
     const phase = this.controller?.phase ?? 'idle';
     if (phase === 'idle' || phase === 'paused') {
       if (this.offeringHeart()) return;
@@ -698,6 +826,7 @@ export class PlayScene extends BaseScene {
       return;
     }
     this.audio.clock.refresh();
+    if (this.teach) this.teachTick(this.now());
     const transition = this.transition;
     if (transition && this.now() >= transition.swap && !transition.swapped) {
       // Read on the context clock, which is what the cues below are scheduled against;
@@ -782,7 +911,6 @@ export class PlayScene extends BaseScene {
     const headlineSize = (playing ? 48 : 88) * this.uiScale;
     if (headlineSize !== this.headlineSize) { this.headlineSize = headlineSize; resize(this.headline, headlineSize, this.headlineColour); }
     this.headline.setAlpha(entry.alpha * endReveal).setY(this.headlineY + entry.rise * 16 * this.uiScale);
-    this.drawTurnSign();
     if (this.summaryShown) this.animateStars(now);
     else this.accuracy.setAlpha(1);
     this.drawBeatTrack(now);
@@ -849,57 +977,28 @@ export class PlayScene extends BaseScene {
     this.headlineColour = colour;
     this.headline.setText(text).setAlpha(0).setY(this.headlineY + 16 * this.uiScale);
     resize(this.headline, this.headlineSize, colour);
-    this.drawTurnSign();
   }
-  private setTurn(turn: TurnCue): void {
-    this.turn = turn;
-    this.drawTurnSign();
-  }
-  private drawTurnSign(): void {
-    const g = this.turnSign.clear();
-    // The sign exists to tell Watch from Your turn as two objects rather than two colours.
-    // Outside a round there is no phase to tell apart, and a plate behind Cleared or No
-    // hearts only boxes in a headline that the backdrop already sets off.
-    if (this.headline.text === '' || this.turn === 'none') {
-      this.turnSign.setAlpha(0);
-      return;
-    }
-    const s = this.uiScale;
-    const padX = 26 * s;
-    const padY = 10 * s;
-    const w = Math.max(this.headline.displayWidth + padX * 2, 168 * s);
-    const h = Math.max(this.headline.displayHeight + padY * 2, 52 * s);
-    const x = this.viewport.safe.centerX - w / 2;
-    const y = this.headline.y - padY;
-    drawPanel(g, new Rect(x, y, w, h), s, {
-      fill: this.turn === 'play' ? PALETTE.coral : SHELL.wood,
-      depth: 8,
-      radius: 22,
-      hero: this.turn === 'play',
-    });
-    this.turnSign.setAlpha(this.headline.alpha);
-  }
+  /**
+   * No word says whose turn it is any more.
+   *
+   * Watch and Your turn were a headline at the top of the screen that flipped on the same
+   * frame as the downbeat it announced, while the player's eyes were on the act and their
+   * thumb was at the bottom. The block at the thumb says it instead, and says it
+   * `RHYTHM.runwayBeats` early. The headline is kept for outcomes — Cleared, Again?, Paused, No hearts — which
+   * are results rather than cues, and for the breather, which is the one place in a level
+   * where nothing at all is being asked.
+   */
   private showPhase(phase: Phase): void {
     this.vignette.onPhase(phase, this.now());
-    // A lead-in longer than the level's opening bar is the breather, and it is the only
-    // place in a level where nothing is being asked of the player.
+    // A lead-in longer than the level's opening bar is the breather.
     const resting = this.task.leadBeats > RHYTHM.leadInBeats;
     if (phase === 'prepare') {
-      this.setTurn('watch');
-      this.changeHeadline(resting ? 'Breathe' : 'Watch', SHELL.cream);
+      this.changeHeadline(resting ? 'Breathe' : '', SHELL.cream);
       this.setAction('');
     }
-    if (phase === 'demonstrate') {
-      this.setTurn('watch');
-      this.changeHeadline('Watch', SHELL.cream);
-    }
-    // The demonstration runs straight into the response, so this flip is the only thing
-    // that tells the player their turn has started. It cannot be deferred a frame. The
-    // plaque, the word and the beat track's beads all turn over together.
+    if (phase === 'demonstrate') this.changeHeadline('');
     if (phase === 'respond') {
-      this.turnAt = this.now();
-      this.setTurn('play');
-      this.changeHeadline('Your turn', SHELL.cream);
+      this.changeHeadline('');
       this.setAction('');
       this.demoCount = 0;
       this.struckIndex = -1;
@@ -908,6 +1007,11 @@ export class PlayScene extends BaseScene {
   }
   private showJudgement(result: Judgement): void {
     this.lastJudgement = `${result.kind} ${result.grade} ${result.deltaMs?.toFixed(0) ?? '—'} ms`;
+    // A missed beat on the level's very first task says nothing: no mark on the socket,
+    // no judder, no Miss. The player cannot lose the loop before they have understood
+    // it, and on this level nothing was spent to attempt it either — `protectedThrough`
+    // already covers the opening levels, so there is no heart to skip.
+    if (this.unfailable && result.kind === 'omission') return;
     if (result.index !== null) this.outcomes[result.index] = markFor(result);
     // An extra tap belongs to no beat, so it shakes the whole row rather than marking one.
     // Held until respond: sinking the nail or flashing Perfect during Watch is the glitch.
@@ -957,97 +1061,100 @@ export class PlayScene extends BaseScene {
     return result.grade === 'Perfect' ? PALETTE.coral : result.grade === 'Good' ? this.definition.ink : PALETTE.muted;
   }
   /** The bead centres the track is drawn at, so a burst lands on the bead it belongs to. */
-  private beads(): { readonly centres: readonly number[]; readonly radius: number } {
-    return trackGeometry(this.outcomes.length, this.trackWidth, TRACK.beadGap * this.uiScale, TRACK.beadRadius * this.uiScale);
+  private beads(count = this.outcomes.length): { readonly centres: readonly number[]; readonly radius: number } {
+    return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.uiScale, TRACK.beadRadius * this.uiScale);
   }
   /**
-   * The beat track. During the example the beads fill as the pattern sounds; on the
-   * player's turn the plate turns coral, they empty, and each is struck as it is answered.
-   * It replaces a row of dots that only a DEV build with `?debug` ever drew, which is why
-   * a shipping player could not tell a Perfect from a Miss — or tell whose turn it was.
+   * The turn block: the demonstration's shelf, the player's face, and the baton between
+   * them. Everything on it is derived per frame from values the plan already carries —
+   * there is no new state machine and no new timing source.
+   *
+   * The one property worth protecting in review: by the response downbeat *nothing new
+   * appears*. The face has warmed, the sockets have lit left to right and the baton has
+   * landed, all inside the demonstration's own last beats, because a cue that arrives on
+   * the beat it announces arrives too late to wind up for.
    */
   private drawBeatTrack(now: number): void {
     const g = this.marks.clear();
-    const phase = this.controller?.phase;
+    // The first-run pass owns the block until it hands the grid over; after that the
+    // controller does. The block cannot tell the difference, and does not need to.
+    const teach = this.teach;
+    const phase = teach ? teachPhase(teach.plan, now) : this.controller?.phase;
     // The finished row stays up through the ending and goes only when the summary claims
     // the band: the moment the last beat lands is exactly when a player wants to read it.
-    if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) return;
+    if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) {
+      this.roomDim.setAlpha(0);
+      return;
+    }
     const { safe } = this.viewport;
     const s = this.uiScale;
     const still = this.reducedMotion;
-    const plan = this.controller?.plan ?? null;
-    const ink = this.definition.ink;
-    const watching = phase === 'prepare' || phase === 'demonstrate';
-    const answering = phase === 'respond';
-    const { centres, radius } = this.beads();
-    // An extra tap rattles the whole row: it answered no beat, so it marks none.
+    const plan = teach ? teach.plan : this.controller?.plan ?? null;
+    const marks = teach ? teach.marks : this.outcomes;
+    const { centres, radius } = this.beads(marks.length);
+    const turn = handover(plan, now);
+    // An extra tap rattles both rows: it answered no beat, so it marks none, and the two
+    // rows are one object.
     const rattle = still ? 0 : settle(now - this.extraAt, 90, 18) * 3 * s;
-    const played = beatsPlayed(plan, now);
-    const y = this.trackY;
 
-    // The plate. Paper while the game is playing, warmed to coral the moment the turn
-    // passes over: the second signal behind the headline, and the one in the player's
-    // eyeline, since that is where the beads they are about to strike already are. It is
-    // cut to its own phrase rather than to the frame, so a long phrase reads as a long one.
-    const span = (centres.at(-1) ?? 0) + radius + 34 * s;
-    const width = Math.min(Math.max(span * 2, 220 * s), safe.width - 48 * s);
-    const height = TRACK.plateHeight * s;
-    const plate = new Rect(safe.centerX - width / 2 + rattle, y - height / 2, width, height);
-    const heat = answering ? (still ? 1 : clamp01((now - this.turnAt) / 0.12)) : 0;
-    const rest = mix(PALETTE.paper, SHELL.wood, 0.34);
-    const hot = mix(PALETTE.paper, PALETTE.coral, 0.42);
-    const face = mix(rest, hot, easeOut(heat));
-    drawPanel(g, plate, s, { fill: face, depth: TRACK.plateDepth, radius: TRACK.plateRadius });
-    if (answering) {
-      // A painted line inside the face, the same device the menu's one action carries.
-      const inset = 7 * s;
-      g.lineStyle(2 * s, PALETTE.coral, 0.7)
-        .strokeRoundedRect(plate.x + inset, plate.y + inset, plate.width - inset * 2, plate.height - inset * 2, (TRACK.plateRadius - 7) * s);
-    }
+    // The rows are cut to the phrase rather than to the frame, so a long phrase reads as
+    // a long one — and widened, where they must be, to keep the owner slot off the first
+    // socket.
+    const last = centres.at(-1) ?? 0;
+    const span = last + radius + 34 * s;
+    const beadSpan = last - (centres[0] ?? 0) + radius * 2;
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * s);
+    const geo = blockGeometry(safe.centerX, this.trackY, width, s);
 
-    for (let i = 0; i < centres.length; i++) {
-      const x = safe.centerX + centres[i]! + rattle;
-      const mark = this.outcomes[i] ?? 'pending';
-      // A bead swells when the player's tap lands on it.
-      const swell = !still && i === this.struckIndex ? squash(now - this.struckAt, 0.22, 0.45) : 0;
-      const r = radius * (1 + swell);
-      // A miss keeps the empty socket — nothing was put there — and is struck through.
-      const lit = watching ? i < played : mark === 'perfect' || mark === 'good';
-      const colour = mark === 'perfect' ? PALETTE.coral : ink;
-      if (lit) {
-        // Good sits inside a full ring, so a Perfect and a Good read apart at a glance.
-        const f = faces(colour);
-        const fill = mark === 'good' ? r * 0.62 : r;
-        g.fillStyle(f.edge, 1).fillCircle(x, y + 2.5 * s, fill);
-        g.fillStyle(f.face, 1).fillCircle(x, y, fill);
-        g.fillStyle(f.rim, 0.85).fillCircle(x - fill * 0.3, y - fill * 0.35, fill * 0.3);
-        if (mark === 'good') g.lineStyle(2.5 * s, shade(ink, -0.1), 0.7).strokeCircle(x, y, r);
-      } else {
-        // Waiting: a socket sunk into the plate, ringed in coral while it is the player's.
-        // Sunk rather than filled: a socket the beat has not arrived in yet.
-        g.fillStyle(shade(face, -0.22), 1).fillCircle(x, y, r);
-        g.fillStyle(shade(face, 0.04), 1).fillCircle(x, y + r * 0.1, r * 0.88);
-        const ring = mark === 'miss' ? PALETTE.muted : answering ? PALETTE.coral : shade(ink, 0.1);
-        g.lineStyle(3.5 * s, ring, mark === 'miss' ? 0.95 : answering ? 1 : 0.4).strokeCircle(x, y, r);
-        // Struck out in the ink rather than in the grey of the ring, or the bar vanishes
-        // into the very bead it is there to cancel.
-        if (mark === 'miss') g.lineStyle(4 * s, shade(PALETTE.ink, -0.1), 1).lineBetween(x - r * 1.2, y, x + r * 1.2, y);
-      }
-    }
+    drawBlock(g, geo, s, {
+      centres,
+      socketRadius: radius,
+      played: beatsPlayed(plan, now),
+      marks,
+      turn,
+      struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45) },
+      rattle,
+      still,
+      ghost: this.ghostFor(plan, marks, turn, now),
+      ink: this.definition.ink,
+    });
 
     // The count-in: the last four ticks before the example, so the opening bar is not
     // dead air. A breather shows nothing until its final four beats.
     const pips = countIn(plan, now);
     if (pips !== null) {
+      const ink = this.definition.ink;
       const gap = TRACK.pipGap * s;
-      const pipY = plate.y - 22 * s;
+      const pipY = geo.shelf.y - 22 * s;
       for (let i = 0; i < 4; i++) {
         const x = safe.centerX + (i - 1.5) * gap;
         if (i < pips) g.fillStyle(ink, 0.9).fillCircle(x, pipY, TRACK.pipRadius * s);
         else g.lineStyle(2.5 * s, ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
+    // The workshop steps back as the turn arrives, so the block comes forward without
+    // anything on it having to get brighter.
+    this.roomDim.setAlpha(turn.yours * 0.17);
   }
+
+  /**
+   * The guiding ring, on the level the player has not cleared yet: it contracts onto the
+   * next socket over the beat before that socket is due. The ring says *where*; the beat
+   * says *when*, which is why it never anticipates further than one beat and never shows
+   * more than one at a time.
+   */
+  private ghostFor(plan: RoundPlan | null, marks: readonly Mark[], turn: Handover, now: number): Ghost | null {
+    if (!this.guided || !plan || turn.yours <= 0.2) return null;
+    // The next beat still ahead, not merely the next unanswered socket. A socket stays
+    // unanswered until the judge expires it — and on the unfailable first task it is
+    // never marked at all, which left the ring parked on a beat that had already gone.
+    const index = marks.findIndex((mark, i) => mark === 'pending' && (plan.targets[i] ?? -Infinity) >= now - GHOST_FADE);
+    const target = plan.targets[index];
+    if (index < 0 || target === undefined) return null;
+    const ring = ghostRing(target, 60 / plan.bpm, now);
+    return ring.alpha <= 0.01 ? null : { index, radius: ring.radius, alpha: ring.alpha };
+  }
+
   private showResult(result: RoundResult): void {
     const strong = result.accuracy >= this.definition.successAccuracy;
     this.sequence!.complete(result.accuracy);
@@ -1068,7 +1175,6 @@ export class PlayScene extends BaseScene {
     }
     const partial = this.definition.partial;
     const copy = strong ? this.definition.success : partial && result.accuracy >= partial.minAccuracy ? partial.copy : this.definition.rough;
-    this.setTurn('none');
     this.changeHeadline(copy[0]);
     this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
     this.setAction('');
@@ -1106,7 +1212,6 @@ export class PlayScene extends BaseScene {
     const accuracy = meanAccuracy(this.results);
     this.recordOutcome();
     const outcome = this.outcome!;
-    this.setTurn('none');
     this.changeHeadline(this.saveFailed ? 'Couldn’t save' : outcome.cleared ? 'Cleared' : 'Again?');
     this.scoreValue.setText(`${Math.round(accuracy)}%`);
     this.accuracy.setText('');
@@ -1271,7 +1376,6 @@ export class PlayScene extends BaseScene {
   private showNoHearts(): void {
     this.starting = false;
     if (monetization().premium()) return;
-    this.setTurn('none');
     this.changeHeadline('No hearts');
     const health = loadHealth();
     if (!this.summaryShown) this.accuracy.setText(this.waitCopy(health));
@@ -1388,7 +1492,6 @@ export class PlayScene extends BaseScene {
 
   private showPause(): void {
     this.vignette.pause();
-    this.setTurn('none');
     this.changeHeadline('Paused');
     this.setAction('Resume');
   }
@@ -1397,17 +1500,19 @@ export class PlayScene extends BaseScene {
     this.replay = null;
     this.replayOffset = null;
     this.transition = null;
+    const wasTeaching = this.teach !== null;
+    this.teach = null;
     const wasStarting = this.starting;
     this.starting = false;
     this.taps.reset();
     const wasEnding = this.controller?.phase === 'result';
     const wasRunning = this.controller !== null && this.controller.phase !== 'idle';
     this.controller?.interrupt('Paused');
-    if (wasEnding || wasStarting) { this.controller?.dispose(); this.showPause(); }
+    if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     this.audio?.cancel();
     this.audio?.music.stop();
     // Freezing the idle illustration would leave it stuck until the next round begins.
-    if (wasRunning || wasStarting) this.vignette.pause();
+    if (wasRunning || wasStarting || wasTeaching) this.vignette.pause();
   }
   private persistAbandonedAttempt(): void {
     if (this.attemptId === null) return;

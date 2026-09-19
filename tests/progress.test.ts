@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { loadProgress, mergeProgress, recordResult, saveProgress } from '../src/game/progress';
+import { guidedLevel, loadProgress, markDemonstrationSeen, mergeProgress, recordResult, saveProgress, seenDemonstration } from '../src/game/progress';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -87,5 +87,38 @@ describe('restoring onto a device that already has progress', () => {
     expect(merged.best[9]).toBe(44);
     expect(merged.best[22]).toBe(61);
     expect(merged.unlocked).toBe(23);
+  });
+});
+
+describe('the first-run teach', () => {
+  it('shows the demonstration once, and not again after it has played', () => {
+    const storage = memoryStorage();
+    expect(seenDemonstration(storage)).toBe(false);
+    expect(markDemonstrationSeen(storage)).toBe(true);
+    expect(seenDemonstration(storage)).toBe(true);
+  });
+
+  it('plays again rather than throwing when storage is blocked or corrupt', () => {
+    // A private window is not a reason to fail to start; the pass simply runs once more.
+    expect(seenDemonstration(null)).toBe(false);
+    expect(markDemonstrationSeen(null)).toBe(false);
+    expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': '{not json' }))).toBe(false);
+    expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': 'null' }))).toBe(false);
+    expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': '{"seen":"yes"}' }))).toBe(false);
+  });
+
+  it('guides the first level until it has been cleared, and then stops', () => {
+    expect(guidedLevel({ unlocked: 1, best: {} })).toBe(1);
+    // Unlocking level 2 without a recorded best cannot happen, but the ring follows the
+    // clear rather than the frontier either way: `best` is what a clear writes.
+    expect(guidedLevel({ unlocked: 1, best: { 1: 64 } })).toBeNull();
+    expect(guidedLevel({ unlocked: 4, best: { 2: 80 } })).toBe(1);
+  });
+
+  it('drops the guidance a restored save has already earned past', () => {
+    // Derived from `best`, so a save code that carries a cleared level 1 brings the
+    // ring's absence with it rather than resetting the training wheels.
+    const restored = mergeProgress({ unlocked: 1, best: {} }, { unlocked: 3, best: { 1: 71, 2: 66 } });
+    expect(guidedLevel(restored)).toBeNull();
   });
 });
