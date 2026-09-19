@@ -77,7 +77,7 @@ function emptyHealth(): Health {
 }
 
 describe('AdMob rewarded adapter', () => {
-  it('initializes once, asks consent, then preloads the official test unit', async () => {
+  it('initializes once, asks consent, then preloads the rewarded unit', async () => {
     const client = fakeClient();
     const ads = createAdMobAds(client);
     await ads.boot();
@@ -160,9 +160,12 @@ describe('AdMob rewarded adapter', () => {
     expect(client.prepares.every(id => id === ADMOB.rewardedUnitId)).toBe(true);
   });
 
-  it('uses Google\'s official sample app and rewarded unit ids', () => {
-    expect(ADMOB.appId).toBe('ca-app-pub-3940256099942544~3347511713');
-    expect(ADMOB.rewardedUnitId).toBe('ca-app-pub-3940256099942544/5224354917');
+  it('requests the live rewarded unit, from the same account as the app', () => {
+    expect(ADMOB.appId).toBe('ca-app-pub-6818267616933452~3245294136');
+    expect(ADMOB.rewardedUnitId).toBe('ca-app-pub-6818267616933452/9892619657');
+    // A unit from another publisher parses and installs fine, and then never fills.
+    const publisher = ADMOB.appId.slice(0, ADMOB.appId.indexOf('~'));
+    expect(ADMOB.rewardedUnitId.startsWith(`${publisher}/`)).toBe(true);
   });
 });
 

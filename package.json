@@ -27,7 +27,6 @@
     "@capacitor-firebase/analytics": "^8.5.2",
     "@capacitor/android": "^8.5.1",
     "@capacitor/core": "^8.5.1",
-    "@revenuecat/purchases-capacitor": "^13.5.1",
     "@sentry/browser": "^10.75.0",
     "phaser": "^4.2.1"
   },

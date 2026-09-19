@@ -11,7 +11,9 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- RevenueCat requires standard or singleTop: singleTask cancels a Play purchase that hops to a bank app. -->
+        <!-- Play Billing needs standard or singleTop: singleTask tears the activity down and
+             back up when a purchase returns from the Play sheet or a bank app, which loses
+             the flow the PurchasesUpdatedListener is waiting on. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"
@@ -38,7 +40,8 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Google's official test app id. A production APPLICATION_ID must not ship while rewarded ads are still in development. -->
+        <!-- The live AdMob app id, indirected through @string/admob_app_id so the Android
+             side has one place to edit. Must match ADMOB.appId in src/config/ads.ts. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="@string/admob_app_id" />

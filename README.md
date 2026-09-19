@@ -203,8 +203,8 @@ safety form, which must match the privacy policy):
 - Terms of Service: `https://ngg-global.github.io/TinyTempo/terms/`
 
 The pages state the current product as it is in code: on-device progress,
-optional AdMob rewarded ads, optional Google Play heart refill and Premium,
-RevenueCat for entitlements, no Tiny Tempo account. Contact on the pages is
+optional AdMob rewarded ads, optional Google Play heart refill and Premium
+bought and held through Google Play itself, no Tiny Tempo account. Contact on the pages is
 `dor1612@gmail.com`. Preview locally with any static server, for example
 `python3 -m http.server --directory legal 4174`.
 

@@ -39,7 +39,9 @@ them. So do Phase 0 first, today, even if the game is not finished.
    other has to follow.
 2. 👤 **Create the AdMob account and app**, then one **rewarded** ad unit. You need the app
    ID and the unit ID in Phase 1.
-3. 👤 **Create the RevenueCat project**, add the Android app, and get the **public** SDK key.
+3. ✅ ~~Create a billing provider account.~~ Not needed — purchases go straight to Google
+   Play Billing from the app. There is no SDK key, no dashboard and no second place to
+   define the products; Play Console is the only one. See step 30.
 4. 👤 **Create the Firebase project** and add an Android app with package name
    `com.tinytempo.app`. Download `google-services.json`.
 5. 👤 **Get the Sentry values**: the DSN is already working, but a release also needs
@@ -49,17 +51,23 @@ them. So do Phase 0 first, today, even if the game is not finished.
 
 ## Phase 1 — Put the real keys in
 
-Nothing here is optional. Every one of these is a placeholder today, and two of them are
-Google's public test IDs, which is a policy violation if shipped.
+Nothing here is optional. Anything still unticked is a placeholder today.
 
-6. 👤🔧 **Replace the AdMob IDs.** Currently `ca-app-pub-3940256099942544~…`, which is
-   Google's test app. In two places, and they must match:
+6. ✅ ~~**Replace the AdMob IDs.**~~ Done — the live app `…6818267616933452~3245294136`
+   and rewarded unit `…6818267616933452/9892619657` are in both places that carry them,
+   and `scripts/check-android-config.mjs` now compares the two after every `cap sync`
+   rather than trusting them to stay in step:
    - `android/app/src/main/res/values/strings.xml` → `admob_app_id`
    - `src/config/ads.ts` → `appId` and `rewardedUnitId`
+
+   Two things follow from these being live. Confirm in the AdMob console that the unit is
+   a **rewarded** unit — the ID does not say, and the adapter only ever calls
+   `prepareRewardVideoAd`, so a unit of any other format simply never loads. And register
+   any handset you tap ads on as a test device before you do: a live unit on the bench
+   serves real inventory, which is invalid traffic.
 7. 👤 **Create `.env` from `.env.example`** and fill in:
 
    ```
-   VITE_REVENUECAT_GOOGLE_API_KEY=…   # empty keeps billing on the stub — nobody can pay
    VITE_SENTRY_DSN=…                  # empty disables crash reporting silently
    VITE_ANALYTICS=on                  # anything else sends no events
    VITE_ANALYTICS_CONSENT=…           # where the Settings switch starts
@@ -162,7 +170,9 @@ mid-frame. Everything below needs hardware and none of it has been done.
     is not routine this time.**
 29. 👤 **Data Safety.** Declare what the SDKs collect, not what your code does:
     - AdMob — device and advertising identifiers
-    - RevenueCat — purchase history and an anonymous app user ID
+    - Google Play Billing — the purchase itself. Play is the processor; the app stores no
+      purchase history of its own beyond an opaque digest that stops a refill being
+      granted twice
     - Sentry — crash logs and diagnostics
     - Firebase Analytics — the ten commerce events, plus device, app and app-instance
       information, with the Settings switch named as the user control
@@ -215,7 +225,7 @@ So you do not spend time re-doing it:
 
 ## The shortest honest summary
 
-Three things block an upload no matter what else happens: **the AdMob test IDs must go**
-(step 6), **the repo cannot sign or bundle a release** (steps 9–12), and **the legal pages
-must be re-published** (step 28). Everything else is either an account you can open today
+Two things block an upload no matter what else happens: **the repo cannot sign or bundle
+a release** (steps 9–12), and **the legal pages must be re-published** (step 28). The
+AdMob test IDs are gone (step 6). Everything else is either an account you can open today
 or a form you fill in once.

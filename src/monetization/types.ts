@@ -1,17 +1,17 @@
 /**
- * Commerce ports. Scenes talk to these types, never to AdMob or RevenueCat.
+ * Commerce ports. Scenes talk to these types, never to AdMob or Play Billing.
  * Native SDKs implement the same contracts; the stub keeps the browser and
  * every failed native call on the safe path.
  */
 
+/**
+ * The two Play one-time products. `premium` is non-consumable and is never consumed:
+ * owning it in the player's Play account is itself the entitlement, so there is no
+ * separate entitlement id to keep in step.
+ */
 export const PRODUCT = {
   premium: 'tinytempo_premium',
   heartRefill: 'heart_refill_full',
-} as const;
-
-/** RevenueCat entitlement identifiers. Premium is the store product of the same id. */
-export const ENTITLEMENT = {
-  premium: 'tinytempo_premium',
 } as const;
 
 export type ProductId = typeof PRODUCT[keyof typeof PRODUCT];
@@ -38,7 +38,7 @@ export interface RewardedAds {
   show(): Promise<RewardedResult>;
 }
 
-/** RevenueCat implements this on native. Restore restores Premium; it never fills consumable hearts. */
+/** Play Billing implements this on native. Restore restores Premium; it never fills consumed hearts. */
 export interface Billing {
   available(): boolean;
   premium(): boolean;

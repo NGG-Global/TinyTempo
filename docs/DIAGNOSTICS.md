@@ -38,7 +38,7 @@ so development builds and forks never download it.
 ## Why `@sentry/browser` and not `@sentry/capacitor`
 
 `@sentry/capacitor` adds native crash capture, a Gradle dependency, a plugin sync
-and a third initialisation order to get right beside AdMob's and RevenueCat's. It
+and a third initialisation order to get right beside AdMob's and Play Billing's. It
 buys native crashes, which for this game are rare and already visible in Play
 Vitals. The browser SDK catches what actually breaks here, with the stack traces
 that matter, and touches no native code. If native capture is ever wanted for its

@@ -4,6 +4,7 @@
     <string name="title_activity_main">Tiny Tempo</string>
     <string name="package_name">com.tinytempo.app</string>
     <string name="custom_url_scheme">com.tinytempo.app</string>
-    <!-- Google sample AdMob app id. Pairs with the rewarded test unit in src/config/ads.ts. -->
-    <string name="admob_app_id">ca-app-pub-3940256099942544~3347511713</string>
+    <!-- Live AdMob app id. Must stay identical to ADMOB.appId in src/config/ads.ts;
+         scripts/check-android-config.mjs compares the two after every cap sync. -->
+    <string name="admob_app_id">ca-app-pub-6818267616933452~3245294136</string>
 </resources>
