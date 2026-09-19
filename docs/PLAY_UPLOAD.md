@@ -49,13 +49,20 @@ them. So do Phase 0 first, today, even if the game is not finished.
 
 ## Phase 1 — Put the real keys in
 
-Nothing here is optional. Every one of these is a placeholder today, and two of them are
-Google's public test IDs, which is a policy violation if shipped.
+Nothing here is optional. Anything still unticked is a placeholder today.
 
-6. 👤🔧 **Replace the AdMob IDs.** Currently `ca-app-pub-3940256099942544~…`, which is
-   Google's test app. In two places, and they must match:
+6. ✅ ~~**Replace the AdMob IDs.**~~ Done — the live app `…6818267616933452~3245294136`
+   and rewarded unit `…6818267616933452/9892619657` are in both places that carry them,
+   and `scripts/check-android-config.mjs` now compares the two after every `cap sync`
+   rather than trusting them to stay in step:
    - `android/app/src/main/res/values/strings.xml` → `admob_app_id`
    - `src/config/ads.ts` → `appId` and `rewardedUnitId`
+
+   Two things follow from these being live. Confirm in the AdMob console that the unit is
+   a **rewarded** unit — the ID does not say, and the adapter only ever calls
+   `prepareRewardVideoAd`, so a unit of any other format simply never loads. And register
+   any handset you tap ads on as a test device before you do: a live unit on the bench
+   serves real inventory, which is invalid traffic.
 7. 👤 **Create `.env` from `.env.example`** and fill in:
 
    ```
@@ -215,7 +222,7 @@ So you do not spend time re-doing it:
 
 ## The shortest honest summary
 
-Three things block an upload no matter what else happens: **the AdMob test IDs must go**
-(step 6), **the repo cannot sign or bundle a release** (steps 9–12), and **the legal pages
-must be re-published** (step 28). Everything else is either an account you can open today
+Two things block an upload no matter what else happens: **the repo cannot sign or bundle
+a release** (steps 9–12), and **the legal pages must be re-published** (step 28). The
+AdMob test IDs are gone (step 6). Everything else is either an account you can open today
 or a form you fill in once.

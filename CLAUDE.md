@@ -518,7 +518,10 @@ Firebase key is unrestricted until somebody restricts it and publishing it canno
 undone. The cost is that a fresh clone builds an APK with no Firebase in it and nothing
 says so, which `scripts/check-android-config.mjs` now does after every `cap sync` — along
 with a config naming the *wrong* app, which is worse than none because the plugin applies
-and every event is filed elsewhere, and the AdMob test IDs still being in place.
+and every event is filed elsewhere. The live AdMob app ID is checked there too: it is
+written in `strings.xml` and in `src/config/ads.ts`, nothing keeps the two in step, and
+the manifest is what the SDK reads — so a half-finished edit runs the build as a
+different app and says nothing.
 
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist

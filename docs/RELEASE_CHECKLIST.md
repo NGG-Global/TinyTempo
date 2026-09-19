@@ -200,7 +200,7 @@ The code is in and tested; these are the account-side steps.
       `google-services.json`.~~ Done, for `com.tinytempo.app`. It is **gitignored** — the
       repository is public — so a fresh clone needs it again, and
       `scripts/check-android-config.mjs` warns after `cap sync` when it is missing, when
-      it names the wrong app, and while the AdMob test IDs are still in place.
+      it names the wrong app, and when the two copies of the AdMob app ID disagree.
 - [ ] **Restrict the Firebase API key** in the Google Cloud console: an Android
       restriction (package name plus signing SHA-1) and an API restriction to the services
       in use. The key ships in the APK regardless, so this is the real protection.
@@ -237,10 +237,15 @@ these is a blocker — but none has been run on a device.
 
 ### C. Replace every placeholder — these are hard blockers
 
-- [ ] **AdMob application ID** in `android/app/src/main/res/values/strings.xml`
-      is Google's public test ID (`ca-app-pub-3940256099942544~3347511713`).
-- [ ] **AdMob rewarded unit ID** in `src/config/ads.ts` is the matching test
-      unit. Both must become real IDs from your own AdMob account.
+- [x] ~~**AdMob application ID** and **rewarded unit ID**.~~ Done — the live
+      `ca-app-pub-6818267616933452~3245294136` is in
+      `android/app/src/main/res/values/strings.xml`, and it and
+      `ca-app-pub-6818267616933452/9892619657` are in `src/config/ads.ts`. The app ID
+      still lives in two files with no shared source, so
+      `scripts/check-android-config.mjs` compares them after `cap sync`.
+- [ ] **Confirm the unit is a rewarded unit** in the AdMob console. An ad unit ID does
+      not encode its format, the adapter only ever calls `prepareRewardVideoAd`, and a
+      unit of any other format fails to load rather than saying why.
 - [ ] **RevenueCat public key.** `VITE_REVENUECAT_GOOGLE_API_KEY` is unset, and
       `src/monetization/boot.ts` deliberately keeps billing on the stub when it
       is empty — so a release built today would show the store and sell nothing.
@@ -328,6 +333,9 @@ these is a blocker — but none has been run on a device.
       does not prove the signed bundle works.
 - [ ] **Buy each product end to end with a licence tester account.** Premium,
       then a refill, then Restore on a fresh install.
+- [ ] **Register the handset as a test device in AdMob first.** The unit is live, so
+      every ad you tap through on the bench is real inventory and counts as invalid
+      traffic.
 - [ ] Watch a real rewarded ad and confirm the heart lands.
 - [ ] Exercise the AdMob consent form in an EEA/UK locale.
 - [ ] Test with no network, and with the store unavailable — the code is written
