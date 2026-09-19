@@ -127,6 +127,22 @@ one clock for a tick that arrived on the other charges that latency to the level
 change did exactly that, and interrupted every level on a headset a beat before the next
 task. `canPlaceNextTask` is that deadline now, and it is the next task's own downbeat.
 
+**Whose turn it is is an object at the thumb, not a word at the top.** `ui/turnBlock.ts`
+draws two rows sharing one set of column centres — the demonstration's recessed shelf above,
+the player's raised face below, where the beat track already was — and one coral baton that
+leaves a sunken slot on the shelf and lands in the slot on the face. It all runs on
+`handover(plan, now)` from `game/beatTrack.ts`, which opens `RHYTHM.runwayBeats` before the
+player's first target, **inside the demonstration's own bar**: nothing is added to the loop
+and no cue moves. **By the downbeat nothing new appears** — the face has warmed, the sockets
+have rung up left to right and the baton has landed. That is the property to protect; a cue
+that arrives on the beat it announces arrives too late to wind up for. The stage light moves
+with it (`turnOpen` in `vignettes/motion.ts`, keyed to the plan in each act's `reset`) and is
+the only thing that does: the demonstration is still running, so nothing that consumes the
+act's subject may start there. `showPhase` sets no turn words. The first run adds one 0.75×
+demonstration pass before level 1's first task and a guiding ring on that level's sockets —
+no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
+coral on a coral plate is invisible. See `docs/TURN_CUE.md`.
+
 A task is a demonstration phrase and then the player's response, back to back on
 the bar line: nothing waits between them, and nothing waits between one task and
 the next. The only pauses in a level are its opening `RHYTHM.leadInBeats` bar and,
@@ -148,6 +164,9 @@ reach Settings, so the boot panel carries the address too — and because a devi
 refuses every canvas context kills Phaser's *import-time* detection, so `/src/main.ts`
 never evaluates, that handler is an inline `<script>` in `index.html` rather than anything
 in the bundle. See `docs/SUPPORT.md`.
+
+The separate `TutorialScene` (`game/TutorialRun.ts`, the menu's "How to play", a first
+Play) still exists alongside the first-run pass, deliberately and pending a decision.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
@@ -286,6 +305,7 @@ src/
     saveCode.ts        Progress as a checksummed string, no Phaser import; never consent
     supportReport.ts   The details a support email carries, as pure text
     settings.ts        Saved audio offset and mute
+    beatTrack.ts       What the two rows show, and the handover, as pure functions
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -317,6 +337,7 @@ src/
     path.ts            Catmull-Rom smoothing and dash spacing
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
+    turnBlock.ts       The two rows and the baton: whose turn it is, as an object
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
@@ -531,6 +552,6 @@ different app and says nothing.
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are
-file-level and all seven storage keys share one LevelDB store, so nothing can be excluded
+file-level and all eight storage keys share one LevelDB store, so nothing can be excluded
 selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
 a restored backup granting Premium forever.

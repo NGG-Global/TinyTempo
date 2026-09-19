@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatsPlayed, countIn, markFor, trackGeometry } from '../src/game/beatTrack';
+import { beatsPlayed, countIn, fuse, ghostRing, handover, handoverAt, markFor, trackGeometry } from '../src/game/beatTrack';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { parsePattern } from '../src/rhythm/patterns';
 import type { Judgement } from '../src/rhythm/judge';
@@ -76,5 +76,74 @@ describe('what the beat track is showing', () => {
     expect(countIn(plan, 11 * beat)).toBe(0);
     expect(countIn(plan, 12 * beat)).toBe(1);
     expect(countIn(plan, 15 * beat)).toBe(4);
+  });
+});
+
+describe('the handover', () => {
+  const plan = (bpm = 120, lead = 4) => createRoundPlan(1, parsePattern('p', 'X X - X'), bpm, 100, lead);
+
+  it('opens inside the demonstration, two beats before the first target', () => {
+    const p = plan();
+    const beat = 60 / p.bpm;
+    expect(handoverAt(p)).toBeCloseTo(p.targets[0]! - 2 * beat);
+    // The point of the whole design: it is the example's own last beats, not new ones.
+    expect(handoverAt(p)).toBeGreaterThan(p.demo);
+    expect(handoverAt(p)).toBeLessThan(p.response);
+  });
+
+  it('has finished arriving by the downbeat, and has not started before it opens', () => {
+    const p = plan();
+    const first = p.targets[0]!;
+    expect(handover(p, handoverAt(p) - 0.001).runway).toBe(0);
+    expect(handover(p, handoverAt(p)).runway).toBe(0);
+    // Nothing new may appear on the beat it announces.
+    expect(handover(p, first).runway).toBe(1);
+    expect(handover(p, first).yours).toBe(0);
+    expect(handover(p, first + 60 / p.bpm * 0.18).yours).toBe(1);
+  });
+
+  it('is a fraction of the runway at the midpoint, whatever the tempo', () => {
+    for (const bpm of [80, 120, 150]) {
+      const p = plan(bpm);
+      const mid = handoverAt(p) + (p.targets[0]! - handoverAt(p)) / 2;
+      expect(handover(p, mid).runway).toBeCloseTo(0.5);
+      expect(handover(p, mid).yours).toBe(0);
+    }
+  });
+
+  it('survives a missing plan and a clock that has not started', () => {
+    expect(handoverAt(null)).toBe(Infinity);
+    expect(handover(null, 10)).toEqual({ runway: 0, yours: 0 });
+    expect(handover(plan(), Number.NaN)).toEqual({ runway: 0, yours: 0 });
+  });
+
+  it('lights the sockets left to right, and all of them once the turn has arrived', () => {
+    const early = { runway: 0.2, yours: 0 };
+    expect(fuse(early, 0)).toBeGreaterThan(fuse(early, 1));
+    expect(fuse(early, 1)).toBeGreaterThanOrEqual(fuse(early, 2));
+    expect(fuse({ runway: 1, yours: 0 }, 3)).toBe(1);
+    // An interrupted or stepped handover still ends with every socket lit.
+    for (let i = 0; i < 8; i++) expect(fuse({ runway: 0, yours: 1 }, i)).toBe(1);
+  });
+});
+
+describe('the guiding ring', () => {
+  it('contracts onto its socket over the beat before it is due, then goes', () => {
+    const beat = 0.5;
+    const target = 10;
+    expect(ghostRing(target, beat, target - beat).alpha).toBe(0);
+    const closing = ghostRing(target, beat, target - beat * 0.45);
+    expect(closing.alpha).toBeGreaterThan(0.5);
+    expect(closing.radius).toBeLessThan(1);
+    expect(closing.radius).toBeGreaterThan(0);
+    expect(ghostRing(target, beat, target).radius).toBeCloseTo(0);
+    expect(ghostRing(target, beat, target).alpha).toBeCloseTo(1);
+    // It says where, not when: it is gone well inside the beat it pointed at.
+    expect(ghostRing(target, beat, target + 0.14).alpha).toBe(0);
+  });
+
+  it('shows nothing rather than throwing on a degenerate plan', () => {
+    expect(ghostRing(Number.NaN, 0.5, 1).alpha).toBe(0);
+    expect(ghostRing(10, 0, 1).alpha).toBe(0);
   });
 });

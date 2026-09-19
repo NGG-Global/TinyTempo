@@ -16,7 +16,8 @@ import {
   advanceBite, acceptDemoBeat, bladeVisibleDepth, clamp01, drawBack, dustFall, dustPile,
   easeOut, kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from './sawMotion';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 
 /** Cold linen and slate. Sawdust is the only warm note, so the accent doubles as the reward. */
 export const TIMBER = {
@@ -84,8 +85,11 @@ export class SawTimberVignette implements Vignette {
   private readonly bursts: Feedback;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  /** When the player's turn began; the stage light opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastDemo = -Infinity;
   private strokes = 0;
   private bites = 0;
@@ -223,7 +227,7 @@ export class SawTimberVignette implements Vignette {
     this.strokes = this.bites = 0;
     this.strokeAt = -100;
     this.kerf = this.kerfFrom = this.kerfTo = 0;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.kerfAt = -100;
     this.drift = 0;
     this.scuffs = [];
@@ -241,7 +245,7 @@ export class SawTimberVignette implements Vignette {
     // Keep the last demonstration stroke on the blade. Zeroing strokeAt here parked it
     // at rest in the same instant the player's first bite had to start, and a half-beat
     // gap is shorter than the follow-through.
-    if (phase === 'respond') { this.setKerf(0, now); this.respondAt = now; }
+    if (phase === 'respond') { this.setKerf(0, now); }
   }
 
   private setKerf(value: number, now: number): void {
@@ -327,8 +331,7 @@ export class SawTimberVignette implements Vignette {
    * the demonstration from the response.
    */
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;

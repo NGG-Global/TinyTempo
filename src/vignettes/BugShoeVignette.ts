@@ -12,7 +12,8 @@ import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { bugLook, type BugLook } from './bugLooks';
-import { clamp01, easeOut, isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { clamp01, easeOut, isPlayerTurn, turnOpen } from './motion';
 
 export const GARDEN = { paper: 0xe4e7ce, ink: 0x303f43, tile: 0xb8c2a0, plum: 0x8b6085, cream: 0xfff5dc, coral: 0xd87d62 };
 export function shoeLift(age: number): number { return 245 * easeOut((age - 0.035) / 0.28); }
@@ -39,8 +40,11 @@ export class BugShoeVignette implements Vignette {
   private readonly bursts: Feedback;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  /** When the player's turn began; the stage light opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastDemo = -Infinity;
   private strikeAt = -100;
   private finishAt: number | null = null;
@@ -130,15 +134,15 @@ export class BugShoeVignette implements Vignette {
     this.plan = plan; this.phase = 'prepare'; this.lastDemo = -Infinity;
     this.strikeAt = -100; this.finishAt = null; this.finished = false; this.hit = false;
     this.contactX = this.previousX = this.steps = 0;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
   }
-  public onPhase(phase: Phase, now: number): void {
+  public onPhase(phase: Phase, _now: number): void {
     this.phase = phase;
     // The bug is never consumed, so this only returns the shoe to the first stop of its
     // cycle for the player's turn.
     // The next stomp starts the player's cycle. Leaving the shoe where the example
     // landed lets it travel to that first stop instead of teleporting mid-lift.
-    if (phase === 'respond') { this.steps = 0; this.respondAt = now; }
+    if (phase === 'respond') { this.steps = 0; }
   }
   private strike(time: number): void {
     this.previousX = this.contactX;
@@ -169,8 +173,7 @@ export class BugShoeVignette implements Vignette {
    * the demonstration from the response.
    */
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;

@@ -102,6 +102,48 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
   try { storage?.removeItem(KEY); return storage !== null; } catch { return false; }
 }
 
+/**
+ * The first-run teach, which is two flags and neither of them is earned progress.
+ *
+ * They live here because they are read next to `Progress` and written on the same
+ * events, but deliberately not *inside* it: `mergeProgress` takes the better of two
+ * saves level by level, and "has this player seen the demonstration" has no better. The
+ * save code carries what a player earned, and the same reasoning already keeps the
+ * tutorial flag out of it.
+ */
+const TEACH_KEY = 'small-acts.teach.v1';
+
+/** Has the one-cycle demonstration pass already played? It runs once, ever. */
+export function seenDemonstration(storage: Storage | null = safeStorage()): boolean {
+  try {
+    const raw = storage?.getItem(TEACH_KEY);
+    if (!raw) return false;
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null && (parsed as { seen?: unknown }).seen === true;
+  } catch { return false; }
+}
+
+/** False means nothing was written, and the pass will simply play again next time. */
+export function markDemonstrationSeen(storage: Storage | null = safeStorage()): boolean {
+  try { storage?.setItem(TEACH_KEY, JSON.stringify({ seen: true })); return storage !== null; } catch { return false; }
+}
+
+/**
+ * Which level still shows the guiding ring, or null once none does.
+ *
+ * Derived rather than stored. "Level 1 until it has been cleared" is exactly what
+ * `best[1]` already records, and a second copy of that fact could only ever disagree
+ * with it — a restored save code that carried a cleared level 1 would otherwise bring
+ * back the training wheels with it.
+ */
+export function guidedLevel(progress: Progress): number | null {
+  const cleared = progress.best[GUIDED_LEVEL];
+  return typeof cleared === 'number' && Number.isFinite(cleared) ? null : GUIDED_LEVEL;
+}
+
+/** The one level that teaches. The ring and the unfailable first task belong to it. */
+const GUIDED_LEVEL = 1;
+
 function safeStorage(): Storage | null {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; }
 }

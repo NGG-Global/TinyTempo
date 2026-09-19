@@ -6,7 +6,8 @@ import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
 import { Backdrop } from '@/ui/backdrop';
 import type { Vignette } from './Vignette';
-import { acceptDemoBeat, easeOut, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { acceptDemoBeat, turnOpen } from './motion';
 
 /** Lifecycle only. Each act owns its art; the round controller owns every verdict. */
 export abstract class HouseholdVignette implements Vignette {
@@ -22,7 +23,11 @@ export abstract class HouseholdVignette implements Vignette {
   protected taps = 0;
   protected finishAt: number | null = null;
   protected successful = false;
-  private respondAt = Infinity;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastNow = 0;
   /**
    * Where `layout` put the stage. `translate` is an absolute per-frame offset from this
@@ -61,13 +66,12 @@ export abstract class HouseholdVignette implements Vignette {
     this.taps = 0;
     this.finishAt = null;
     this.successful = false;
-    this.respondAt = Infinity;
+    this.handoverAt = handoverAt(plan);
   }
 
-  public onPhase(phase: Phase, now: number): void {
+  public onPhase(phase: Phase, _now: number): void {
     this.phase = phase;
     if (phase === 'respond') {
-      this.respondAt = now;
       // The example has its own temporary state, and never consumes the player's subject.
       this.strikeAt = -Infinity;
     }
@@ -103,7 +107,7 @@ export abstract class HouseholdVignette implements Vignette {
         if (cue.kind === 'action' && cue.time <= now) this.onDemonstrationBeat(cue.time);
       }
     }
-    this.backdrop.open(easeOut((now - this.respondAt) / TURN_OPEN_SEC));
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
     const ending = this.finishAt === null ? -Infinity : now - this.finishAt;
     this.draw(now, ending);
   }

@@ -175,3 +175,62 @@ export function drawVibrate(g: Phaser.GameObjects.Graphics, x: number, y: number
     g.lineBetween(x + side * r * 0.72, y - r * 0.4, x + side * r * 0.72, y + r * 0.4);
   }
 }
+
+/**
+ * A rounded rectangle as a point list, rotated about `(ox, oy)`.
+ *
+ * Graphics can fill a rounded rect and it can fill a polygon, but it cannot rotate
+ * either without a canvas transform. The turn glyphs are drawn at an angle and are the
+ * only marks here that are, so the rotation happens in the points rather than in the
+ * renderer — the same approach `heartPoints` already takes to a shape Graphics has no
+ * primitive for.
+ */
+function rotatedRoundedRect(
+  cx: number, cy: number, w: number, h: number, radius: number, angle: number, ox: number, oy: number,
+): Phaser.Math.Vector2[] {
+  const r = Math.min(radius, w / 2, h / 2);
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const points: Phaser.Math.Vector2[] = [];
+  const corners: readonly (readonly [number, number, number])[] = [
+    [cx + w / 2 - r, cy - h / 2 + r, -Math.PI / 2],
+    [cx + w / 2 - r, cy + h / 2 - r, 0],
+    [cx - w / 2 + r, cy + h / 2 - r, Math.PI / 2],
+    [cx - w / 2 + r, cy - h / 2 + r, Math.PI],
+  ];
+  for (const [kx, ky, from] of corners) {
+    for (let i = 0; i <= 4; i++) {
+      const a = from + (i / 4) * (Math.PI / 2);
+      const px = kx + Math.cos(a) * r, py = ky + Math.sin(a) * r;
+      points.push(new Phaser.Math.Vector2(
+        ox + (px - ox) * cos - (py - oy) * sin,
+        oy + (px - ox) * sin + (py - oy) * cos,
+      ));
+    }
+  }
+  return points;
+}
+
+/** The angle the hammer mark is carried at. Level, it reads as a mallet lying down. */
+const HAMMER_TILT = -36 * Math.PI / 180;
+
+/**
+ * The tool's turn: a hammer in profile, head low-left.
+ *
+ * Paired with {@link drawTapMark} on the two owner slots and on the baton, so whose turn
+ * it is is a picture of the thing acting rather than a word that has to be translated.
+ */
+export function drawHammerMark(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  g.fillStyle(colour, alpha);
+  g.fillPoints(rotatedRoundedRect(x - r * 0.28, y, r * 0.71, r * 1.0, r * 0.18, HAMMER_TILT, x, y), true);
+  g.fillPoints(rotatedRoundedRect(x + r * 0.33, y, r * 1.0, r * 0.35, r * 0.18, HAMMER_TILT, x, y), true);
+}
+
+/** The player's turn: a fingertip on the surface, two ripples above it. */
+export function drawTapMark(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const cy = y + r * 0.28;
+  g.fillStyle(colour, alpha).fillCircle(x, cy, r * 0.42);
+  g.lineStyle(r * 0.2, colour, alpha);
+  g.beginPath(); g.arc(x, cy, r * 0.7, -2.55, -0.59); g.strokePath();
+  g.lineStyle(r * 0.2, colour, alpha * 0.6);
+  g.beginPath(); g.arc(x, cy, r * 1.05, -2.42, -0.72); g.strokePath();
+}

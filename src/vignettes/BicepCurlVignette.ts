@@ -31,7 +31,8 @@ import {
   REFERENCE_BEAT,
 } from './curlMotion';
 import { curlLook, type CurlLook } from './curlLooks';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 
 /**
  * Concrete, rubber and iron, with one warm body in the middle of it. The tank is the only
@@ -90,8 +91,11 @@ export class BicepCurlVignette implements Vignette {
   private readonly bursts: Feedback;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  /** When the player's turn began; the stage light opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastDemo = -Infinity;
   private repAt = -100;
   /** How high the current rep gets. A wasted tap only makes half of one. */
@@ -544,7 +548,7 @@ export class BicepCurlVignette implements Vignette {
     this.reps = 0;
     this.pump = this.pumpFrom = this.pumpTo = 0;
     this.pumpAt = -100;
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.strain = 0;
     this.judderAt = -100;
     this.clankAt = -100;
@@ -563,7 +567,6 @@ export class BicepCurlVignette implements Vignette {
     if (phase === 'respond') {
       this.reps = 0;
       this.setPump(0, now);
-      this.respondAt = now;
     }
   }
 
@@ -665,8 +668,7 @@ export class BicepCurlVignette implements Vignette {
    * the demonstration from the response.
    */
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
 
   public update(now: number): void {

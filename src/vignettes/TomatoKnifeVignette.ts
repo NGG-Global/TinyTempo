@@ -15,7 +15,8 @@ import {
   acceptDemoBeat, advanceSlice, clamp01, cutFraction, easeOut, juiceFall, knifeLift, knifeWindup,
   REFERENCE_BEAT, sliceTumble, TOMATO_MOTION, tomatoTiming,
 } from './tomatoMotion';
-import { isPlayerTurn, TURN_OPEN_SEC } from './motion';
+import { handoverAt } from '@/game/beatTrack';
+import { isPlayerTurn, turnOpen } from './motion';
 
 /** A white-tiled kitchen. The tomato is the only saturated thing in it, so it is the subject. */
 export const KITCHEN = {
@@ -84,8 +85,11 @@ export class TomatoKnifeVignette implements Vignette {
   private readonly rings: Phaser.GameObjects.Graphics;
   private plan: RoundPlan | null = null;
   private phase: Phase = 'idle';
-  /** When the player's turn began; the stage light opens toward them from here. */
-  private respondAt = -100;
+  /**
+   * When the turn starts changing hands: two beats before the player's first target,
+   * inside the demonstration's own bar. Only the stage light moves this early.
+   */
+  private handoverAt = Infinity;
   private lastDemo = -Infinity;
   private strikes = 0;
   private strikeAt = -100;
@@ -221,7 +225,7 @@ export class TomatoKnifeVignette implements Vignette {
     this.strikes = this.slices = 0;
     this.strikeAt = -100;
     this.strikeX = this.cutStart();
-    this.respondAt = -100;
+    this.handoverAt = handoverAt(plan);
     this.sliceAt = [];
     this.sliceFrom = [];
     this.sliceWobble = [];
@@ -240,7 +244,7 @@ export class TomatoKnifeVignette implements Vignette {
     // The demonstration rocks the knife over the fruit without cutting it, so the player
     // starts on the tomato they watched. The last chop is left on the blade — zeroing
     // strikeAt here parked it at rest in the half-beat before the first response.
-    if (phase === 'respond') { this.setCut(0, now); this.respondAt = now; }
+    if (phase === 'respond') { this.setCut(0, now); }
   }
 
   private setCut(fraction: number, now: number): void {
@@ -320,8 +324,7 @@ export class TomatoKnifeVignette implements Vignette {
    * the demonstration from the response.
    */
   private openStage(now: number): void {
-    const offered = this.phase === 'respond' || this.phase === 'result';
-    this.backdrop.open(offered ? easeOut((now - this.respondAt) / TURN_OPEN_SEC) : 0);
+    this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
   }
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;
