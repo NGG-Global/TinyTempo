@@ -1,90 +1,131 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PRODUCT, classifyPurchaseError, createMonetization, createRevenueCatBilling } from '../src/monetization';
+import {
+  BILLING_RESPONSE, PRODUCT, claimIdFor, classifyPurchaseError, createMonetization, createPlayBilling,
+} from '../src/monetization';
+import type {
+  PlayBillingClient, PurchaseUpdate, StoreProduct, StorePurchase,
+} from '../src/monetization';
 import { claimFill, type Health } from '../src/game/health';
-import type { CatalogProduct, CustomerSnapshot, PurchasesClient, PurchaseReceipt } from '../src/monetization';
-import { readPremiumCache, writePremiumCache } from '../src/monetization/billing';
+import { readPremiumCache, writePremiumCache } from '../src/monetization/playBilling';
 
 vi.mock('phaser', () => ({ default: {} }));
 
-const PRICE = '€2.49';
-const PRODUCT_ID = PRODUCT.heartRefill;
-const ITEM: CatalogProduct = { identifier: PRODUCT_ID, priceString: PRICE, handle: { id: PRODUCT_ID } };
+const REFILL_PRICE = '€2.49';
+const PREMIUM_PRICE = '€7.99';
+const REFILL_PRODUCT: StoreProduct = { productId: PRODUCT.heartRefill, formattedPrice: REFILL_PRICE };
+const PREMIUM_PRODUCT: StoreProduct = { productId: PRODUCT.premium, formattedPrice: PREMIUM_PRICE };
 
-function receipt(id: string, extra: StoreTxn[] = [], entitlements: readonly string[] = []): PurchaseReceipt {
-  return {
-    productIdentifier: PRODUCT_ID,
-    transactionId: id,
-    customer: { transactions: [{ id, productId: PRODUCT_ID }, ...extra], entitlements: [...entitlements] },
-  };
+function paid(productId: string, token: string, acknowledged = false): StorePurchase {
+  return { productIds: [productId], purchaseToken: token, state: 'purchased', acknowledged };
 }
 
-type StoreTxn = { id: string; productId: string };
+function pendingPurchase(productId: string, token: string): StorePurchase {
+  return { productIds: [productId], purchaseToken: token, state: 'pending', acknowledged: false };
+}
 
 interface FakeOptions {
-  readonly products?: readonly CatalogProduct[];
-  readonly history?: CustomerSnapshot;
-  readonly purchase?: 'ok' | 'cancel' | 'fail' | 'pending' | 'ok-twice' | 'cancel-then-info' | 'pending-then-info' | 'empty-txn' | 'slow' | 'premium-ok' | 'already-owned';
-  readonly restore?: 'ok' | 'fail';
-  readonly customerInfo?: 'ok' | 'fail';
+  readonly products?: readonly StoreProduct[];
+  /** Queued answers for successive queryPurchases calls; the last one repeats. */
+  readonly owned?: readonly (readonly StorePurchase[])[];
+  readonly connect?: 'ok' | 'fail' | 'fail-once';
+  readonly queryProducts?: 'ok' | 'fail';
+  readonly queryPurchases?: 'ok' | 'fail';
+  readonly consume?: 'ok' | 'fail' | 'fail-once';
+  readonly acknowledge?: 'ok' | 'fail';
+  /** What launchPurchase resolves with, and what the listener then reports. */
+  readonly launch?: number;
+  readonly update?: (token: string) => PurchaseUpdate | null;
 }
 
-function fakeClient(options: FakeOptions = {}): PurchasesClient & {
-  readonly configures: number;
-  emit(info: CustomerSnapshot): void;
-} {
-  const listeners: ((info: CustomerSnapshot) => void)[] = [];
-  let configures = 0;
-  const client: PurchasesClient & { configures: number; emit: (info: CustomerSnapshot) => void } = {
-    get configures() { return configures; },
-    emit(info) { for (const listener of listeners) listener(info); },
-    async configure() { configures += 1; },
-    async getProducts() { return options.products ?? [ITEM]; },
-    async customerInfo() {
-      if (options.customerInfo === 'fail') throw new Error('offline');
-      return options.history ?? { transactions: [], entitlements: [] };
+interface Fake extends PlayBillingClient {
+  readonly connects: number;
+  readonly consumed: readonly string[];
+  readonly acknowledged: readonly string[];
+  readonly purchaseQueries: number;
+  emit(update: PurchaseUpdate): void;
+}
+
+function fakeClient(options: FakeOptions = {}): Fake {
+  const listeners: ((update: PurchaseUpdate) => void)[] = [];
+  const consumed: string[] = [];
+  const acknowledged: string[] = [];
+  const ownedQueue = [...(options.owned ?? [[]])];
+  let connects = 0;
+  let purchaseQueries = 0;
+  let consumeCalls = 0;
+
+  const client: Fake = {
+    get connects() { return connects; },
+    get consumed() { return consumed; },
+    get acknowledged() { return acknowledged; },
+    get purchaseQueries() { return purchaseQueries; },
+    emit(update) { for (const listener of listeners) listener(update); },
+
+    async connect() {
+      connects += 1;
+      if (options.connect === 'fail') throw new Error('no service');
+      if (options.connect === 'fail-once' && connects === 1) throw new Error('no service');
     },
+
+    async queryProducts() {
+      if (options.queryProducts === 'fail') throw new Error('catalogue down');
+      return options.products ?? [REFILL_PRODUCT, PREMIUM_PRODUCT];
+    },
+
+    async queryPurchases() {
+      purchaseQueries += 1;
+      if (options.queryPurchases === 'fail') throw new Error('offline');
+      return ownedQueue.length > 1 ? (ownedQueue.shift() ?? []) : (ownedQueue[0] ?? []);
+    },
+
+    async launchPurchase(productId) {
+      const code = options.launch ?? BILLING_RESPONSE.ok;
+      if (code === BILLING_RESPONSE.ok && options.update) {
+        const update = options.update(`token-${productId}`);
+        if (update) queueMicrotask(() => { client.emit(update); });
+      }
+      return { code };
+    },
+
+    async acknowledge(purchaseToken) {
+      if (options.acknowledge === 'fail') throw new Error('acknowledge failed');
+      acknowledged.push(purchaseToken);
+    },
+
+    async consume(purchaseToken) {
+      consumeCalls += 1;
+      if (options.consume === 'fail') throw new Error('consume failed');
+      if (options.consume === 'fail-once' && consumeCalls === 1) throw new Error('consume failed');
+      consumed.push(purchaseToken);
+    },
+
     async listen(listener) { listeners.push(listener); },
-    async purchase() {
-      const mode = options.purchase ?? 'ok';
-      if (mode === 'fail') throw { code: '2', userCancelled: false };
-      if (mode === 'pending') throw { code: '20', userCancelled: false };
-      if (mode === 'cancel') throw { code: '1', userCancelled: true };
-      if (mode === 'slow') {
-        await new Promise(resolve => { globalThis.setTimeout(resolve, 40); });
-        return receipt('txn-slow');
-      }
-      if (mode === 'empty-txn') {
-        return { productIdentifier: PRODUCT_ID, transactionId: '', customer: { transactions: [], entitlements: [] } };
-      }
-      if (mode === 'premium-ok') {
-        return {
-          productIdentifier: PRODUCT.premium,
-          transactionId: 'prem-1',
-          customer: { transactions: [], entitlements: [PRODUCT.premium] },
-        };
-      }
-      if (mode === 'already-owned') throw { code: '6', userCancelled: false };
-      if (mode === 'cancel-then-info') {
-        queueMicrotask(() => client.emit({ transactions: [{ id: 'late-txn', productId: PRODUCT_ID }], entitlements: [] }));
-        throw { code: '1', userCancelled: true };
-      }
-      if (mode === 'pending-then-info') {
-        queueMicrotask(() => client.emit({ transactions: [{ id: 'pending-txn', productId: PRODUCT_ID }], entitlements: [] }));
-        throw { code: '20', userCancelled: false };
-      }
-      if (mode === 'ok-twice') {
-        const paid = receipt('dup-txn');
-        queueMicrotask(() => client.emit(paid.customer));
-        return paid;
-      }
-      return receipt('txn-1');
-    },
-    async restore() {
-      if (options.restore === 'fail') throw new Error('restore failed');
-      return options.history ?? { transactions: [{ id: 'old', productId: PRODUCT_ID }], entitlements: [] };
-    },
   };
   return client;
+}
+
+/** Counts grants the way health.ts does: idempotent per claim id. */
+function refillRecorder(): { readonly claims: string[]; fulfil: (claimId: string) => void } {
+  const claims: string[] = [];
+  const granted = new Set<string>();
+  return {
+    claims,
+    fulfil(claimId: string) {
+      if (granted.has(claimId)) return;
+      granted.add(claimId);
+      claims.push(claimId);
+    },
+  };
+}
+
+function billingUnder(options: FakeOptions = {}, refill = refillRecorder()): {
+  readonly client: Fake;
+  readonly refill: ReturnType<typeof refillRecorder>;
+  readonly billing: ReturnType<typeof createPlayBilling>;
+} {
+  const client = fakeClient(options);
+  const billing = createPlayBilling(client, { fulfilRefill: refill.fulfil, cache: null });
+  return { client, refill, billing };
 }
 
 function emptyHealth(): Health {
@@ -92,313 +133,392 @@ function emptyHealth(): Health {
 }
 
 describe('classifyPurchaseError', () => {
-  it('maps RevenueCat codes onto cancel, pending and failure', () => {
-    expect(classifyPurchaseError({ userCancelled: true, code: '2' })).toBe('cancelled');
-    expect(classifyPurchaseError({ code: '1' })).toBe('cancelled');
-    expect(classifyPurchaseError({ code: '20' })).toBe('pending');
-    expect(classifyPurchaseError({ code: '5' })).toBe('unavailable');
-    expect(classifyPurchaseError({ code: '2' })).toBe('failed');
-    expect(classifyPurchaseError('boom')).toBe('failed');
+  it('maps Play response codes onto cancel and the unavailable family', () => {
+    expect(classifyPurchaseError(BILLING_RESPONSE.userCanceled)).toBe('cancelled');
+    expect(classifyPurchaseError(BILLING_RESPONSE.billingUnavailable)).toBe('unavailable');
+    expect(classifyPurchaseError(BILLING_RESPONSE.serviceUnavailable)).toBe('unavailable');
+    expect(classifyPurchaseError(BILLING_RESPONSE.serviceDisconnected)).toBe('unavailable');
+    expect(classifyPurchaseError(BILLING_RESPONSE.featureNotSupported)).toBe('unavailable');
+    expect(classifyPurchaseError(BILLING_RESPONSE.itemUnavailable)).toBe('unavailable');
+    expect(classifyPurchaseError(BILLING_RESPONSE.error)).toBe('failed');
+    expect(classifyPurchaseError(BILLING_RESPONSE.developerError)).toBe('failed');
+    expect(classifyPurchaseError(BILLING_RESPONSE.networkError)).toBe('failed');
   });
 });
 
-describe('RevenueCat heart refill', () => {
-  it('exposes the localized store price and never a guessed amount', async () => {
-    const billing = createRevenueCatBilling(fakeClient(), { apiKey: 'goog_test', lateMs: 5 });
+describe('claim ids', () => {
+  it('is stable per token, differs between tokens, and never contains the token', () => {
+    const token = 'opaque-purchase-token-abc123';
+    expect(claimIdFor(token)).toBe(claimIdFor(token));
+    expect(claimIdFor(token)).not.toBe(claimIdFor(`${token}x`));
+    expect(claimIdFor(token)).not.toContain(token);
+    expect(claimIdFor(token).startsWith('play:')).toBe(true);
+  });
+});
+
+describe('1. billing unavailable', () => {
+  it('reports unavailable and neither grants nor prices anything', async () => {
+    const { billing } = billingUnder({ connect: 'fail' });
+    await billing.boot();
+    expect(billing.available()).toBe(false);
+    expect(billing.price(PRODUCT.premium)).toBeNull();
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'unavailable',
+    });
+    await expect(billing.restore()).resolves.toEqual({ ok: false, reason: 'unavailable' });
+    expect(billing.premium()).toBe(false);
+  });
+});
+
+describe('2. product query succeeds', () => {
+  it('takes both localized prices from Play rather than hardcoding them', async () => {
+    const { billing } = billingUnder();
     await billing.boot();
     expect(billing.available()).toBe(true);
-    expect(billing.price(PRODUCT.heartRefill)).toBe(PRICE);
+    expect(billing.price(PRODUCT.heartRefill)).toBe(REFILL_PRICE);
+    expect(billing.price(PRODUCT.premium)).toBe(PREMIUM_PRICE);
+  });
+});
+
+describe('3. product query fails', () => {
+  it('keeps the store available but offers no price, and refuses to launch a sheet', async () => {
+    const { billing } = billingUnder({ queryProducts: 'fail' });
+    await billing.boot();
+    expect(billing.available()).toBe(true);
     expect(billing.price(PRODUCT.premium)).toBeNull();
-  });
-
-  it('stays unavailable without an API key or a catalogue product', async () => {
-    const missingKey = createRevenueCatBilling(fakeClient(), { apiKey: '', lateMs: 5 });
-    await missingKey.boot();
-    expect(missingKey.available()).toBe(false);
-    await expect(missingKey.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'unavailable',
-    });
-
-    const missingProduct = createRevenueCatBilling(fakeClient({ products: [] }), { apiKey: 'goog_test', lateMs: 5 });
-    await missingProduct.boot();
-    expect(missingProduct.available()).toBe(true);
-    expect(missingProduct.price(PRODUCT.heartRefill)).toBeNull();
-    await expect(missingProduct.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'unavailable',
-    });
-  });
-
-  it('returns a claim id on success so a caller can fill once', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'ok-twice' }), { apiKey: 'goog_test', lateMs: 5 });
-    const result = await billing.purchase(PRODUCT.heartRefill);
-    expect(result).toEqual({ ok: true, product: PRODUCT.heartRefill, claimId: 'dup-txn' });
-    const first = claimFill(emptyHealth(), result.ok ? result.claimId : '', 1_700_000_000_000);
-    const again = claimFill(first.health, result.ok ? result.claimId : '', 1_700_000_000_000);
-    expect(first.granted).toBe(true);
-    expect(first.health.hearts).toBe(5);
-    expect(again.granted).toBe(false);
-  });
-
-  it('does not fill hearts when the player cancels', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'cancel' }), { apiKey: 'goog_test', lateMs: 5 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'cancelled',
-    });
-    expect(emptyHealth().hearts).toBe(0);
-  });
-
-  it('does not fill hearts when the store reports a pending payment', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'pending' }), { apiKey: 'goog_test', lateMs: 5 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'pending',
-    });
-  });
-
-  it('does not fill from a CustomerInfo update that races a pending sheet', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'pending-then-info' }), { apiKey: 'goog_test', lateMs: 30 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'pending',
-    });
-    expect(emptyHealth().hearts).toBe(0);
-  });
-
-  it('does not fill hearts when the store fails', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'fail' }), { apiKey: 'goog_test', lateMs: 5 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'failed',
-    });
-  });
-
-  it('treats a cancelled sheet that later reports a paid transaction as success', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'cancel-then-info' }), { apiKey: 'goog_test', lateMs: 30 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: true, product: PRODUCT.heartRefill, claimId: 'late-txn',
-    });
-  });
-
-  it('does not restore consumable refills as a permanent purchase', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      history: { transactions: [{ id: 'old-fill', productId: PRODUCT_ID }], entitlements: [] },
-    }), { apiKey: 'goog_test', lateMs: 5 });
-    await billing.boot();
-    await expect(billing.restore()).resolves.toEqual({ ok: true, premium: false });
-    expect(billing.premium()).toBe(false);
-    expect(emptyHealth().hearts).toBe(0);
-  });
-
-  it('configures once', async () => {
-    const client = fakeClient();
-    const billing = createRevenueCatBilling(client, { apiKey: 'goog_test', lateMs: 5 });
-    await billing.boot();
-    await billing.boot();
-    expect(client.configures).toBe(1);
-  });
-
-  it('rejects a second purchase while one is already in flight', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'slow' }), { apiKey: 'goog_test', lateMs: 5 });
-    const first = billing.purchase(PRODUCT.heartRefill);
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'failed',
-    });
-    await expect(first).resolves.toEqual({ ok: true, product: PRODUCT.heartRefill, claimId: 'txn-slow' });
-  });
-
-  it('does not grant when the store omits a transaction id', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'empty-txn' }), { apiKey: 'goog_test', lateMs: 5 });
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: false, product: PRODUCT.heartRefill, reason: 'failed',
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'unavailable',
     });
   });
 });
 
-describe('heart refill through the facade', () => {
-  it('records success and still requires a claim id to fill', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ purchase: 'ok' }), { apiKey: 'goog_test', lateMs: 5 });
-    const commerce = createMonetization({ billing });
-    expect(commerce.productPrice(PRODUCT.heartRefill)).toBeNull();
-    await billing.boot();
-    expect(commerce.productPrice(PRODUCT.heartRefill)).toBe(PRICE);
-    const result = await commerce.purchase(PRODUCT.heartRefill);
-    expect(result).toEqual({ ok: true, product: PRODUCT.heartRefill, claimId: 'txn-1' });
+describe('4. premium purchase succeeds', () => {
+  it('grants premium, acknowledges once and never consumes', async () => {
+    const { billing, client } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.premium, token)] }),
+    });
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toMatchObject({
+      ok: true, product: PRODUCT.premium,
+    });
+    expect(billing.premium()).toBe(true);
+    expect(client.acknowledged).toHaveLength(1);
+    expect(client.consumed).toEqual([]);
+  });
+
+  it('does not acknowledge a purchase Play already acknowledged', async () => {
+    const { billing, client } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.premium, token, true)] }),
+    });
+    await billing.purchase(PRODUCT.premium);
+    expect(billing.premium()).toBe(true);
+    expect(client.acknowledged).toEqual([]);
   });
 });
 
-const PREMIUM_ITEM: CatalogProduct = { identifier: PRODUCT.premium, priceString: '€4.99', handle: { id: PRODUCT.premium } };
-
-function memoryStorage(initial: Record<string, string> = {}): Storage {
-  const map = new Map(Object.entries(initial));
-  return {
-    getItem: k => map.get(k) ?? null,
-    setItem: (k, v) => { map.set(k, String(v)); },
-    removeItem: k => { map.delete(k); },
-    clear: () => map.clear(),
-    key: () => null,
-    length: 0,
-  } as Storage;
-}
-
-describe('RevenueCat Premium entitlement', () => {
-  it('exposes the localized Premium price', async () => {
-    const billing = createRevenueCatBilling(fakeClient({ products: [ITEM, PREMIUM_ITEM] }), {
-      apiKey: 'goog_test', lateMs: 5, cache: memoryStorage(),
+describe('5. premium purchase is pending', () => {
+  it('grants nothing while Play is still checking the payment', async () => {
+    const { billing, client } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [pendingPurchase(PRODUCT.premium, token)] }),
     });
-    await billing.boot();
-    expect(billing.price(PRODUCT.premium)).toBe('€4.99');
-  });
-
-  it('unlocks Premium from active entitlement state', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      history: { transactions: [], entitlements: [PRODUCT.premium] },
-    }), { apiKey: 'goog_test', lateMs: 5, cache: memoryStorage() });
-    await billing.boot();
-    expect(billing.premium()).toBe(true);
-  });
-
-  it('restores Premium on a new device and never fills hearts', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      history: { transactions: [{ id: 'old-fill', productId: PRODUCT_ID }], entitlements: [PRODUCT.premium] },
-    }), { apiKey: 'goog_test', lateMs: 5, cache: memoryStorage() });
-    await expect(billing.restore()).resolves.toEqual({ ok: true, premium: true });
-    expect(billing.premium()).toBe(true);
-    expect(emptyHealth().hearts).toBe(0);
-  });
-
-  it('keeps cached Premium when customer info cannot be fetched', async () => {
-    const cache = memoryStorage();
-    const entitled = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      history: { transactions: [], entitlements: [PRODUCT.premium] },
-    }), { apiKey: 'goog_test', lateMs: 5, cache });
-    await entitled.boot();
-    expect(entitled.premium()).toBe(true);
-
-    const offline = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      customerInfo: 'fail',
-    }), { apiKey: 'goog_test', lateMs: 5, cache });
-    await offline.boot();
-    expect(offline.premium()).toBe(true);
-  });
-
-  it('grants Premium after a confirmed purchase', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      purchase: 'premium-ok',
-    }), { apiKey: 'goog_test', lateMs: 5, cache: memoryStorage() });
     await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
-      ok: true, product: PRODUCT.premium, claimId: 'prem-1',
+      ok: false, product: PRODUCT.premium, reason: 'pending',
     });
-    expect(billing.premium()).toBe(true);
-  });
-
-  it('treats an already-owned product as Premium when the entitlement is active', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      purchase: 'already-owned',
-      history: { transactions: [], entitlements: [PRODUCT.premium] },
-    }), { apiKey: 'goog_test', lateMs: 5, cache: memoryStorage() });
-    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
-      ok: true, product: PRODUCT.premium, claimId: PRODUCT.premium,
-    });
-    expect(billing.premium()).toBe(true);
-  });
-
-  it('does not revoke Premium when a heart refill reports no entitlements', async () => {
-    const client = fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      history: { transactions: [], entitlements: [PRODUCT.premium] },
-      purchase: 'ok-twice',
-    });
-    const billing = createRevenueCatBilling(client, {
-      apiKey: 'goog_test', lateMs: 5, cache: memoryStorage(),
-    });
-    await billing.boot();
-    expect(billing.premium()).toBe(true);
-    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
-      ok: true, product: PRODUCT.heartRefill, claimId: 'dup-txn',
-    });
-    expect(billing.premium()).toBe(true);
-  });
-
-  it('clears cached Premium when live customer info has no entitlement', async () => {
-    const cache = memoryStorage({
-      'tiny-tempo.premium.v1': JSON.stringify({ version: 1, entitled: true }),
-    });
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      history: { transactions: [], entitlements: [] },
-    }), { apiKey: 'goog_test', lateMs: 5, cache });
-    await billing.boot();
     expect(billing.premium()).toBe(false);
+    expect(client.acknowledged).toEqual([]);
   });
+});
 
-  it('does not unlock Premium when the player cancels', async () => {
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      purchase: 'cancel',
-    }), { apiKey: 'goog_test', lateMs: 5, cache: memoryStorage() });
+describe('6. premium purchase is cancelled', () => {
+  it('reports cancellation from the listener and grants nothing', async () => {
+    const { billing } = billingUnder({
+      update: () => ({ code: BILLING_RESPONSE.userCanceled, purchases: [] }),
+    });
     await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
       ok: false, product: PRODUCT.premium, reason: 'cancelled',
     });
     expect(billing.premium()).toBe(false);
   });
 
-  it('ignores a corrupt Premium cache rather than trusting it', async () => {
-    const cache = memoryStorage({ 'tiny-tempo.premium.v1': '{not json' });
-    const billing = createRevenueCatBilling(fakeClient({
-      products: [ITEM, PREMIUM_ITEM],
-      customerInfo: 'fail',
-    }), { apiKey: 'goog_test', lateMs: 5, cache });
+  it('reports cancellation when the sheet itself refuses to open', async () => {
+    const { billing } = billingUnder({ launch: BILLING_RESPONSE.userCanceled });
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'cancelled',
+    });
+  });
+});
+
+describe('7. premium is already owned', () => {
+  it('turns ITEM_ALREADY_OWNED into a granted premium by asking Play what is owned', async () => {
+    const { billing } = billingUnder({
+      launch: BILLING_RESPONSE.itemAlreadyOwned,
+      owned: [[], [paid(PRODUCT.premium, 'owned-token')]],
+    });
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: true, product: PRODUCT.premium, claimId: PRODUCT.premium,
+    });
+    expect(billing.premium()).toBe(true);
+  });
+
+  it('settles immediately without a second sheet once premium is known', async () => {
+    const { billing, client } = billingUnder({ owned: [[paid(PRODUCT.premium, 'owned-token')]] });
+    await billing.boot();
+    expect(billing.premium()).toBe(true);
+    const before = client.purchaseQueries;
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: true, product: PRODUCT.premium, claimId: PRODUCT.premium,
+    });
+    expect(client.purchaseQueries).toBe(before);
+  });
+
+  it('enables premium on startup even when local state said otherwise', async () => {
+    const { billing } = billingUnder({ owned: [[paid(PRODUCT.premium, 'owned-token')]] });
+    expect(billing.premium()).toBe(false);
+    await billing.boot();
+    expect(billing.premium()).toBe(true);
+  });
+});
+
+describe('8. restore detects existing premium ownership', () => {
+  it('restores premium and acknowledges it if Play never saw an acknowledgement', async () => {
+    const { billing, client } = billingUnder({ owned: [[paid(PRODUCT.premium, 'owned-token')]] });
+    await expect(billing.restore()).resolves.toEqual({ ok: true, premium: true });
+    expect(billing.premium()).toBe(true);
+    expect(client.acknowledged).toEqual(['owned-token']);
+  });
+});
+
+describe('9. restore finds no premium purchase', () => {
+  it('reports no purchases and never restores a consumed refill', async () => {
+    const { billing, refill } = billingUnder({ owned: [[]] });
+    await expect(billing.restore()).resolves.toEqual({ ok: true, premium: false });
+    expect(billing.premium()).toBe(false);
+    expect(refill.claims).toEqual([]);
+  });
+
+  it('reports failure rather than "not owned" when the query itself fails', async () => {
+    const { billing } = billingUnder({ queryPurchases: 'fail' });
+    await expect(billing.restore()).resolves.toEqual({ ok: false, reason: 'failed' });
+  });
+});
+
+describe('10. heart refill purchase succeeds and is consumed', () => {
+  it('grants once, then consumes, and never acknowledges separately', async () => {
+    const { billing, client, refill } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.heartRefill, token)] }),
+    });
+    const result = await billing.purchase(PRODUCT.heartRefill);
+    expect(result).toMatchObject({ ok: true, product: PRODUCT.heartRefill });
+    expect(refill.claims).toHaveLength(1);
+    expect(client.consumed).toHaveLength(1);
+    expect(client.acknowledged).toEqual([]);
+    // The claim id the scene receives is the one already fulfilled, so redeemFill is a no-op.
+    if (result.ok) expect(result.claimId).toBe(refill.claims[0]);
+  });
+
+  it('fills the bar through health.ts and refuses the same claim twice', () => {
+    const claimId = claimIdFor('token-heart_refill_full');
+    const first = claimFill(emptyHealth(), claimId, 1_700_000_000_000, null);
+    const again = claimFill(first.health, claimId, 1_700_000_000_000, null);
+    expect(first.granted).toBe(true);
+    expect(first.health.hearts).toBe(5);
+    expect(again.granted).toBe(false);
+    expect(again.health.hearts).toBe(5);
+  });
+});
+
+describe('11. heart refill remains pending and is not granted', () => {
+  it('grants nothing and consumes nothing while the payment is pending', async () => {
+    const { billing, client, refill } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [pendingPurchase(PRODUCT.heartRefill, token)] }),
+    });
+    await expect(billing.purchase(PRODUCT.heartRefill)).resolves.toEqual({
+      ok: false, product: PRODUCT.heartRefill, reason: 'pending',
+    });
+    expect(refill.claims).toEqual([]);
+    expect(client.consumed).toEqual([]);
+  });
+
+  it('grants it later, once the same purchase clears to purchased', async () => {
+    const token = 'slow-payment';
+    const { billing, refill, client } = billingUnder({
+      owned: [[pendingPurchase(PRODUCT.heartRefill, token)], [paid(PRODUCT.heartRefill, token)]],
+    });
+    await billing.boot();
+    expect(refill.claims).toEqual([]);
+    await billing.reconcile();
+    expect(refill.claims).toEqual([claimIdFor(token)]);
+    expect(client.consumed).toEqual([token]);
+  });
+});
+
+describe('12. duplicate heart purchase callback does not grant twice', () => {
+  it('ignores a replayed listener update for a purchase already fulfilled', async () => {
+    const token = 'token-heart_refill_full';
+    const update: PurchaseUpdate = { code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.heartRefill, token)] };
+    const { billing, client, refill } = billingUnder({ update: () => update });
+    await billing.purchase(PRODUCT.heartRefill);
+    client.emit(update);
+    client.emit(update);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(refill.claims).toHaveLength(1);
+    expect(client.consumed).toHaveLength(1);
+  });
+
+  it('ignores the same purchase arriving again from a later reconcile', async () => {
+    const token = 'replayed';
+    const { billing, refill } = billingUnder({ owned: [[paid(PRODUCT.heartRefill, token)]] });
+    await billing.boot();
+    await billing.reconcile();
+    await billing.reconcile();
+    expect(refill.claims).toEqual([claimIdFor(token)]);
+  });
+});
+
+describe('13. consume failure can be safely retried', () => {
+  it('keeps the grant, leaves the purchase unconsumed, and consumes on the next reconcile', async () => {
+    const token = 'stubborn';
+    const { billing, client, refill } = billingUnder({
+      consume: 'fail-once',
+      owned: [[paid(PRODUCT.heartRefill, token)]],
+    });
+    await billing.boot();
+    expect(refill.claims).toEqual([claimIdFor(token)]);
+    expect(client.consumed).toEqual([]);
+
+    await billing.reconcile();
+    // Granted once in total, consumed on the retry.
+    expect(refill.claims).toEqual([claimIdFor(token)]);
+    expect(client.consumed).toEqual([token]);
+  });
+});
+
+describe('14. billing reconnects after service interruption', () => {
+  it('retries a failed connection rather than latching the store off', async () => {
+    const { billing, client } = billingUnder({ connect: 'fail-once' });
+    await billing.boot();
+    expect(billing.available()).toBe(false);
+    expect(client.connects).toBe(1);
+
+    await billing.boot();
+    expect(billing.available()).toBe(true);
+    expect(client.connects).toBe(2);
+    expect(billing.price(PRODUCT.premium)).toBe(PREMIUM_PRICE);
+  });
+
+  it('keeps the store available when an ownership query fails, and recovers later', async () => {
+    // The native client reconnects itself, so a failed query must not take the store
+    // offline — it only means this question went unanswered.
+    const client = fakeClient({ queryPurchases: 'fail' });
+    const billing = createPlayBilling(client, { fulfilRefill: () => {}, cache: null });
+    await billing.boot();
+    expect(billing.available()).toBe(true);
+    expect(billing.price(PRODUCT.premium)).toBe(PREMIUM_PRICE);
+    await expect(billing.restore()).resolves.toEqual({ ok: false, reason: 'failed' });
+
+    const recovered = fakeClient({ owned: [[paid(PRODUCT.premium, 'owned-token')]] });
+    const after = createPlayBilling(recovered, { fulfilRefill: () => {}, cache: null });
+    await after.reconcile();
+    expect(after.premium()).toBe(true);
+  });
+});
+
+describe('premium is Play ownership, not a local flag', () => {
+  it('revokes a cached entitlement only when Play successfully says it is not owned', async () => {
+    const cache: Storage = memoryStorage();
+    writePremiumCache(cache, true);
+    const client = fakeClient({ owned: [[]] });
+    const billing = createPlayBilling(client, { fulfilRefill: () => {}, cache });
+    expect(billing.premium()).toBe(true);
     await billing.boot();
     expect(billing.premium()).toBe(false);
+    expect(readPremiumCache(cache)).toBe(false);
+  });
+
+  it('keeps a cached entitlement when the ownership query fails', async () => {
+    const cache: Storage = memoryStorage();
+    writePremiumCache(cache, true);
+    const client = fakeClient({ queryPurchases: 'fail' });
+    const billing = createPlayBilling(client, { fulfilRefill: () => {}, cache });
+    await billing.boot();
+    expect(billing.premium()).toBe(true);
+    expect(readPremiumCache(cache)).toBe(true);
+  });
+
+  it('expires a cache older than a month, so a restored backup is not an entitlement', () => {
+    const cache: Storage = memoryStorage();
+    const now = 1_700_000_000_000;
+    writePremiumCache(cache, true, now - 31 * 24 * 60 * 60 * 1000);
+    expect(readPremiumCache(cache, now)).toBe(false);
   });
 });
 
-describe('the cached entitlement', () => {
-  const KEY = 'tiny-tempo.premium.v1';
-  const DAY = 24 * 60 * 60 * 1000;
-  const NOW = 1_800_000_000_000;
-
-  it('honours a recent cache, so premium does not flicker off on a slow boot', () => {
-    const storage = memoryStorage();
-    writePremiumCache(storage, true, NOW);
-    expect(readPremiumCache(storage, NOW)).toBe(true);
-    expect(readPremiumCache(storage, NOW + 29 * DAY)).toBe(true);
-  });
-
-  it('stops honouring one the store has not confirmed in a month', () => {
-    // The bound is the whole reason this is a grace period and not a licence.
-    const storage = memoryStorage();
-    writePremiumCache(storage, true, NOW);
-    expect(readPremiumCache(storage, NOW + 31 * DAY)).toBe(false);
-  });
-
-  it('does not grant premium from a restored backup', () => {
-    // Auto Backup carries the WebView store to a new device. Before the timestamp this
-    // read `entitled === true` and nothing else, so a backup was a permanent entitlement
-    // on any device that never reached the network.
-    const restored = memoryStorage({ [KEY]: JSON.stringify({ version: 1, entitled: true }) });
-    expect(readPremiumCache(restored, NOW)).toBe(false);
-  });
-
-  it('refuses a cache from the future or from a clock that moved back', () => {
-    const storage = memoryStorage();
-    writePremiumCache(storage, true, NOW);
-    expect(readPremiumCache(storage, NOW - DAY)).toBe(false);
-  });
-
-  it('refuses a malformed cache rather than reading it optimistically', () => {
-    for (const raw of ['', 'null', '{}', '[]', 'not json', JSON.stringify({ entitled: 'yes', checkedAt: NOW })]) {
-      expect(readPremiumCache(memoryStorage({ [KEY]: raw }), NOW)).toBe(false);
-    }
-    expect(readPremiumCache(null, NOW)).toBe(false);
-  });
-
-  it('writes nothing it would then refuse to read', () => {
-    const storage = memoryStorage();
-    writePremiumCache(storage, false, NOW);
-    expect(readPremiumCache(storage, NOW)).toBe(false);
+describe('15. browser and development mode', () => {
+  it('starts with no Play Billing at all and sells nothing', async () => {
+    const commerce = createMonetization();
+    expect(commerce.purchasesAvailable()).toBe(false);
+    expect(commerce.premium()).toBe(false);
+    expect(commerce.productPrice(PRODUCT.premium)).toBeNull();
+    await expect(commerce.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'unavailable',
+    });
+    await expect(commerce.restorePurchases()).resolves.toEqual({ ok: true, premium: false });
   });
 });
+
+describe('a sheet that is never settled by Play', () => {
+  it('releases the purchase lock instead of failing every later purchase', async () => {
+    const client = fakeClient(); // launch resolves OK, no listener update ever arrives
+    const billing = createPlayBilling(client, {
+      fulfilRefill: () => {}, cache: null, sheetTimeoutMs: 20,
+    });
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'failed',
+    });
+    // The store is usable again: the lock released with the timer.
+    await expect(billing.purchase(PRODUCT.premium)).resolves.toEqual({
+      ok: false, product: PRODUCT.premium, reason: 'failed',
+    });
+  });
+});
+
+describe('the facade over Play Billing', () => {
+  it('refuses a second sheet while one purchase is in flight', async () => {
+    const { billing } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.premium, token)] }),
+    });
+    await billing.boot();
+    const first = billing.purchase(PRODUCT.premium);
+    const second = billing.purchase(PRODUCT.premium);
+    await expect(second).resolves.toEqual({ ok: false, product: PRODUCT.premium, reason: 'failed' });
+    await expect(first).resolves.toMatchObject({ ok: true });
+  });
+
+  it('reports an unknown product as unavailable without touching Play', async () => {
+    const { billing, client } = billingUnder();
+    const result = await billing.purchase('not_a_product' as never);
+    expect(result).toEqual({ ok: false, product: 'not_a_product', reason: 'unavailable' });
+    expect(client.connects).toBe(0);
+  });
+
+  it('carries a successful purchase through createMonetization unchanged', async () => {
+    const { billing } = billingUnder({
+      update: token => ({ code: BILLING_RESPONSE.ok, purchases: [paid(PRODUCT.premium, token)] }),
+    });
+    const commerce = createMonetization({ billing });
+    await expect(commerce.purchase(PRODUCT.premium)).resolves.toMatchObject({ ok: true });
+    expect(commerce.premium()).toBe(true);
+  });
+});
+
+function memoryStorage(): Storage {
+  const map = new Map<string, string>();
+  return {
+    get length() { return map.size; },
+    clear: () => map.clear(),
+    getItem: (key: string) => map.get(key) ?? null,
+    key: (index: number) => [...map.keys()][index] ?? null,
+    removeItem: (key: string) => { map.delete(key); },
+    setItem: (key: string, value: string) => { map.set(key, value); },
+  };
+}

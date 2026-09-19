@@ -12,14 +12,14 @@ Worth being precise about, because it decides what this is for.
 
 | Signal | Already reported by | Authority |
 | --- | --- | --- |
-| Purchases, revenue, conversion, refunds | RevenueCat dashboard | Store receipts — better than a client event |
+| Purchases, revenue, conversion, refunds | Play Console | Store receipts — better than a client event |
 | Rewarded impressions, eCPM, fill | AdMob dashboard | The ad server itself |
 | **Offers shown, and who did not take them** | nothing | — |
 
 So the gap was never "we cannot count purchases". It was the **top of the funnel**: how
 many players ran out of hearts, how many saw an offer, and how many walked away from it.
 That ratio is the number that says whether the price is wrong or the placement is, and
-neither RevenueCat nor AdMob can see it because neither is present when a player declines.
+neither Play nor AdMob can see it because neither is present when a player declines.
 
 ## Shape
 
@@ -75,8 +75,8 @@ that exceeding one loses data quietly.
 
 `@capacitor-firebase/analytics` talks to the native SDK, so events arrive as **Android**
 events and line up with Play Console and AdMob. The web SDK in a WebView reports as a web
-data stream, which does not. The project already carried two native Capacitor plugins
-(AdMob and RevenueCat), so the plugin itself was not a new kind of dependency.
+data stream, which does not. The project already carried a native Capacitor plugin
+(AdMob), so the plugin itself was not a new kind of dependency.
 
 ### The optional peer, and the stub
 

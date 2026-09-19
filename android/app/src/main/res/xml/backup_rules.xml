@@ -2,7 +2,7 @@
 <!--
   Android 11 and below. Naming any <include> narrows the backup to exactly that, which
   is the point: the default backs up the whole data directory, and this app's directory
-  also holds RevenueCat's receipt cache and whatever a plugin leaves behind. The game's
+  also holds whatever the Play Billing and AdMob plugins leave behind. The game's
   own saves live in the WebView's storage, under app_webview/ in the data-dir root.
 
   Everything the game keeps is in one LevelDB store, so this cannot be selective about

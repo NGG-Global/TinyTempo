@@ -39,7 +39,9 @@ them. So do Phase 0 first, today, even if the game is not finished.
    other has to follow.
 2. 👤 **Create the AdMob account and app**, then one **rewarded** ad unit. You need the app
    ID and the unit ID in Phase 1.
-3. 👤 **Create the RevenueCat project**, add the Android app, and get the **public** SDK key.
+3. ✅ ~~Create a billing provider account.~~ Not needed — purchases go straight to Google
+   Play Billing from the app. There is no SDK key, no dashboard and no second place to
+   define the products; Play Console is the only one. See step 30.
 4. 👤 **Create the Firebase project** and add an Android app with package name
    `com.tinytempo.app`. Download `google-services.json`.
 5. 👤 **Get the Sentry values**: the DSN is already working, but a release also needs
@@ -66,7 +68,6 @@ Nothing here is optional. Anything still unticked is a placeholder today.
 7. 👤 **Create `.env` from `.env.example`** and fill in:
 
    ```
-   VITE_REVENUECAT_GOOGLE_API_KEY=…   # empty keeps billing on the stub — nobody can pay
    VITE_SENTRY_DSN=…                  # empty disables crash reporting silently
    VITE_ANALYTICS=on                  # anything else sends no events
    VITE_ANALYTICS_CONSENT=…           # where the Settings switch starts
@@ -169,7 +170,9 @@ mid-frame. Everything below needs hardware and none of it has been done.
     is not routine this time.**
 29. 👤 **Data Safety.** Declare what the SDKs collect, not what your code does:
     - AdMob — device and advertising identifiers
-    - RevenueCat — purchase history and an anonymous app user ID
+    - Google Play Billing — the purchase itself. Play is the processor; the app stores no
+      purchase history of its own beyond an opaque digest that stops a refill being
+      granted twice
     - Sentry — crash logs and diagnostics
     - Firebase Analytics — the ten commerce events, plus device, app and app-instance
       information, with the Settings switch named as the user control

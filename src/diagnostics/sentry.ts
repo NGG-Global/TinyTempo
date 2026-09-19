@@ -13,7 +13,7 @@ import { REMOVED_INTEGRATIONS } from './integrations';
  * natively — the Capacitor shell starts a WebView and hands it a megabyte and a half
  * of JavaScript — so the browser SDK catches what actually breaks, with the stack
  * traces that matter, and needs no Gradle change, no plugin sync and no second
- * initialisation order to get wrong beside AdMob's and RevenueCat's. Play Vitals
+ * initialisation order to get wrong beside AdMob's and Play Billing's. Play Vitals
  * already reports native crashes and ANRs in the shell. If native capture is ever
  * wanted for its own sake, `@sentry/capacitor` wraps this same SDK and only this
  * file changes.

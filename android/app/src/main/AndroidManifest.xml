@@ -11,7 +11,9 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
 
-        <!-- RevenueCat requires standard or singleTop: singleTask cancels a Play purchase that hops to a bank app. -->
+        <!-- Play Billing needs standard or singleTop: singleTask tears the activity down and
+             back up when a purchase returns from the Play sheet or a bank app, which loses
+             the flow the PurchasesUpdatedListener is waiting on. -->
         <activity
             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"
             android:name=".MainActivity"

@@ -42,16 +42,23 @@ if (services === null) {
 }
 
 /*
- * A RevenueCat key names the store it talks to. A Google Play key begins `goog_`;
- * anything else configures the SDK against a different store, which is a perfectly good
- * thing to develop against and a silent disaster to ship — the SDK starts, the catalogue
- * loads, and nobody can actually pay through Play.
+ * Billing is a plugin in this module rather than an npm package, which buys directness and
+ * costs the two guarantees a package would have given. Nothing makes Gradle pull the
+ * Billing Library in, and nothing makes Capacitor register the plugin — `cap` regenerates
+ * MainActivity from its own template if the file is ever lost. Either omission compiles,
+ * installs and runs; the only symptom is a store that reports itself unavailable forever.
  */
-const key = (/^VITE_REVENUECAT_GOOGLE_API_KEY=(.*)$/m.exec(read('.env') ?? '')?.[1] ?? '').trim();
-if (key !== '' && !key.startsWith('goog_')) {
-  notes.push(`VITE_REVENUECAT_GOOGLE_API_KEY does not start with "goog_", so it is not a\n`
-    + '    Google Play key and this build cannot take money through Play. Fine while you are\n'
-    + '    developing against another store; check it before you ship.');
+const mainActivity = read('android/app/src/main/java/com/tinytempo/app/MainActivity.java') ?? '';
+if (!mainActivity.includes('registerPlugin(PlayBillingPlugin.class)')) {
+  notes.push('MainActivity.java does not register PlayBillingPlugin, so this build has no\n'
+    + '    billing in it — every purchase would report the store as unavailable. Add\n'
+    + '    registerPlugin(PlayBillingPlugin.class) before super.onCreate.');
+}
+
+const appGradle = read('android/app/build.gradle') ?? '';
+if (!appGradle.includes('com.android.billingclient:billing')) {
+  notes.push('android/app/build.gradle has no com.android.billingclient:billing dependency,\n'
+    + '    so PlayBillingPlugin cannot compile. See docs/BILLING.md.');
 }
 
 /*

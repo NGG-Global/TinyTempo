@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  ANALYTICS_EVENTS, ENTITLEMENT, PRODUCT, createMonetization, installAnalytics, installMonetization,
+  ANALYTICS_EVENTS, PRODUCT, createMonetization, installAnalytics, installMonetization,
   monetization, purchaseFeedback, restoreFeedback, rewardedFeedback, stubAds, stubBilling, track,
   type AnalyticsEvent, type Billing, type RewardedAds,
 } from '../src/monetization';
@@ -218,8 +218,9 @@ describe('heart refill copy', () => {
 
 describe('premium', () => {
   it('names the store product tinytempo_premium', () => {
+    // Owning this Play product is itself the entitlement; there is no second identifier.
     expect(PRODUCT.premium).toBe('tinytempo_premium');
-    expect(ENTITLEMENT.premium).toBe('tinytempo_premium');
+    expect(PRODUCT.heartRefill).toBe('heart_refill_full');
   });
 
   it('hides rewarded ads once the entitlement is active', async () => {
