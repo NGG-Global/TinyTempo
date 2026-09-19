@@ -11,7 +11,7 @@ import { SceneKey } from '@/config/scenes';
 import { LAYOUT } from '@/config/design';
 import { RHYTHM } from '@/config/rhythm';
 import { BaseScene } from '@/core/BaseScene';
-import { isTouchPrimary } from '@/core/shell';
+import { wrongOrientation } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
@@ -566,7 +566,7 @@ export class PlayScene extends BaseScene {
     this.drawAction(0);
     this.actionPressDirty = true;
   }
-  private blocked(): boolean { return document.hidden || (isTouchPrimary() && this.scale.isLandscape); }
+  private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
   private async startRound(): Promise<void> {

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 
 import { SceneKey } from '@/config/scenes';
 import { setHaptics } from '@/core/haptics';
-import { isTouchPrimary, setOrientationPromptVisible } from '@/core/shell';
+import { setOrientationPromptVisible, wrongOrientation } from '@/core/shell';
 import { loadSettings } from '@/game/settings';
 
 /**
@@ -50,7 +50,7 @@ export class BootScene extends Phaser.Scene {
    */
   private installOrientationGuard(): void {
     const update = (): void => {
-      setOrientationPromptVisible(isTouchPrimary() && this.scale.isLandscape);
+      setOrientationPromptVisible(wrongOrientation(this.scale.isLandscape));
     };
 
     this.scale.on(Phaser.Scale.Events.ORIENTATION_CHANGE, update);

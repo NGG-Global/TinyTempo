@@ -224,6 +224,7 @@ rather than working around it.
 | `npm run music:encode` | Premix the WAV masters to the shipped MP3 |
 | `npm run icons` | Cut every launcher and web icon from the 1024px master |
 | `npm run android:apk` | Build, sync and assemble a debug APK |
+| `npm run android:bundle` | Release-build, sync and produce the signed AAB Play takes |
 
 The first four are the gate. CI runs exactly those on every push and pull
 request, and also fails if a sourcemap reaches `dist/`.
@@ -503,14 +504,33 @@ is nearly free, scaling up is visibly soft.
 
 ## Orientation
 
-The game is portrait-only. On the web this can only be requested, not enforced:
-the Screen Orientation API can lock orientation only from fullscreen on
-Android, and fullscreen needs a user gesture. `BootScene` therefore shows the
-`#orientation-overlay` prompt while a **touch** device is held in landscape —
-gated on `pointer: coarse` so a landscape desktop window, a normal development
-setup, is never nagged.
+Portrait on a handset, either way up on a tablet. On the web portrait can only be
+requested, not enforced — the Screen Orientation API locks orientation only from
+fullscreen on Android, and fullscreen needs a user gesture — so `BootScene` raises the
+`#orientation-overlay` prompt instead.
 
-A native build declares the lock in its manifest and never shows this prompt.
+**`wrongOrientation` in `core/shell.ts` is the one place that decides**, because three
+scenes act on it: Boot raises the prompt, and `PlayScene.blocked` and
+`TutorialScene.blocked` hold the level behind the same question. It is landscape, *and* a
+coarse pointer — so a landscape desktop window, a normal development setup, is never
+nagged — *and* a display whose shorter side is under 600 CSS pixels.
+
+That last term is the tablet rule, and it follows the platform rather than fighting it.
+**Android ignores an activity's `screenOrientation` on a display of 600dp or more for an
+app targeting API 36**, so a tablet can be held in landscape and the app has no say. The
+manifest keeps `android:screenOrientation="portrait"` regardless: below 600dp the platform
+still enforces it, which is the handset case, and it is what keeps older Android versions
+portrait-locked everywhere. Without the tablet term the game asked a tablet player to
+rotate back — something the OS would not let them do — and the two `blocked()` checks
+stopped the level outright.
+
+600 CSS pixels is the same measurement Android makes in dp: both take the shorter edge.
+Game units are not, since the scaling model makes them a function of the design box and
+the aspect ratio, so `viewport` cannot answer a question about the physical device.
+
+A tablet in landscape is wide — a 4:3 tablet gives a logical box near 1707x1280 — and every
+screen is laid out from a portrait design box. It adapts because `layout()` is idempotent
+and reruns on resize, but it has not been looked at on a real tablet.
 
 ## Style
 
@@ -529,9 +549,16 @@ A native build declares the lock in its manifest and never shows this prompt.
 ## Android packaging
 
 Capacitor 8 wraps the web build (`capacitor.config.ts`, `android/`). `npm run
-android:apk` builds, syncs and assembles a debug APK; it needs JDK 21 and an
+android:apk` builds, syncs and assembles a debug APK; `npm run android:bundle` is the
+release path and produces the signed AAB, refusing to start without a keystore rather than
+building an unsigned bundle. Both need JDK 21 and an
 Android SDK (platform 36, build-tools 36.0.0) referenced from the untracked
-`android/local.properties`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
+`android/local.properties`. **`package.json` is the only version.** `versionName` is its
+version verbatim and `versionCode` is derived from it (1.4.2 → 10402), because the same
+string already feeds `__APP_VERSION__` — the Settings footer, the support subject and every
+Sentry release tag — and a hardcoded Gradle version filed each crash under a release no
+Play track matched. Release signing reads the untracked `android/keystore.properties` and
+applies only when it exists, so a machine with no upload key still builds a debug APK. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
 is generated by `cap sync` and is not committed. Two native Capacitor plugins are used — AdMob and Firebase
 Analytics — each behind an adapter that is dynamically imported on a native platform only,

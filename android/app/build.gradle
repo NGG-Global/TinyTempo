@@ -1,4 +1,52 @@
+import groovy.json.JsonSlurper
+
 apply plugin: 'com.android.application'
+
+/*
+ * One version, and package.json holds it.
+ *
+ * It already feeds `__APP_VERSION__` — the Settings footer, the support email subject and
+ * every Sentry release tag — so hardcoding it here made the app tell the player one
+ * version and the store another, and filed each crash under a release no Play track
+ * matched. Bumping package.json now moves all of them together.
+ *
+ * versionCode has to be an integer that only ever increases, so it is derived rather than
+ * tracked separately: 1.4.2 becomes 10402. Two digits each for minor and patch is the
+ * whole of the scheme, which is why going past 99 of either throws instead of silently
+ * producing a code below the one already published.
+ */
+def appVersion = new JsonSlurper().parse(file("$rootDir/../package.json")).version
+def versionParts = appVersion.toString().split('-')[0].split('\\.')
+def versionMajor = versionParts[0] as int
+def versionMinor = versionParts.size() > 1 ? versionParts[1] as int : 0
+def versionPatch = versionParts.size() > 2 ? versionParts[2] as int : 0
+if (versionMinor > 99 || versionPatch > 99) {
+    throw new GradleException(
+        "package.json version ${appVersion} cannot become a versionCode: minor and patch " +
+        "must stay below 100. Raise the major version, or change the scheme in " +
+        "android/app/build.gradle deliberately.")
+}
+def appVersionCode = versionMajor * 10000 + versionMinor * 100 + versionPatch
+
+/*
+ * Release signing, from an untracked android/keystore.properties:
+ *
+ *     storeFile=/absolute/path/outside/this/repo/upload.jks
+ *     storePassword=…
+ *     keyAlias=…
+ *     keyPassword=…
+ *
+ * Absent, the release build type is simply left unsigned — a debug APK is a legitimate
+ * thing to build on a machine that has no upload key. `npm run android:bundle` refuses
+ * before it starts rather than producing an unsigned AAB that Play would reject later.
+ * Keep the keystore itself outside the checkout; the passwords never belong in this file.
+ */
+def keystorePropertiesFile = rootProject.file('keystore.properties')
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystorePropertiesFile.withInputStream { keystoreProperties.load(it) }
+}
+def canSignRelease = keystoreProperties.containsKey('storeFile')
 
 android {
     namespace = "com.tinytempo.app"
@@ -7,8 +55,8 @@ android {
         applicationId "com.tinytempo.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode appVersionCode
+        versionName appVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,8 +64,19 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (canSignRelease) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
+            signingConfig canSignRelease ? signingConfigs.release : null
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }

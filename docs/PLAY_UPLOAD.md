@@ -92,28 +92,51 @@ Nothing here is optional. Anything still unticked is a placeholder today.
 
 ## Phase 2 — Make the repo able to produce an uploadable file
 
-**It cannot today.** `buildTypes.release` in `android/app/build.gradle` has no
-`signingConfig`, and `scripts/build-android.mjs` runs `assembleDebug` and nothing else.
-There is no path from this repository to a file Play will accept.
+**It can now**, and everything in this phase but the key itself is done. `npm run
+android:bundle` produces a signed AAB; it refuses to start if there is no keystore, rather
+than building an unsigned bundle Play would reject on upload.
 
 9. 👤 **Generate an upload keystore** and back it up somewhere that is neither this
    repository nor one laptop. Losing it means you cannot update the app without Play's key
    reset process. **I will not generate this for you** — a signing key should not pass
    through a tool's hands, and it should not exist in a session transcript.
-10. 🔧 **Uncomment the keystore ignores** in `android/.gitignore` (lines 56–58). They ship
-    commented out, so a `.keystore` dropped in `android/` would be committed.
-11. 🔧 **Add a release `signingConfig`** reading from an untracked
-    `android/keystore.properties`, never from hardcoded values.
-12. 🔧 **Add an `android:bundle` script** that runs `bundleRelease` and produces an **AAB**.
-    *(verify — new apps must publish as an App Bundle, not an APK.)*
-13. 🔧 **Align the version numbers.** `build.gradle` hardcodes `versionCode 1` /
-    `versionName "1.0"`; `package.json` says `0.1.0` and is what the Settings footer
-    prints. The app currently tells the player one version and the store another. They
-    should come from one source with a bump step.
+
+   ```
+   keytool -genkeypair -v -keystore upload.jks -alias upload \
+     -keyalg RSA -keysize 2048 -validity 10000
+   ```
+
+   Then write `android/keystore.properties`, which is gitignored:
+
+   ```
+   storeFile=/absolute/path/outside/this/repo/upload.jks
+   storePassword=…
+   keyAlias=upload
+   keyPassword=…
+   ```
+10. ✅ ~~**Uncomment the keystore ignores.**~~ Done — `*.jks`, `*.keystore` and
+    `keystore.properties` are ignored, and they stay that way because this repository is
+    public and a published upload key cannot be taken back.
+11. ✅ ~~**Add a release `signingConfig`.**~~ Done — it reads `android/keystore.properties`
+    and is applied only when that file exists, so a machine without the key still builds a
+    debug APK.
+12. ✅ ~~**Add an `android:bundle` script.**~~ Done — it runs `build:release` (so Sentry
+    gets the sourcemaps), syncs, and runs `bundleRelease`. New apps must publish as an App
+    Bundle, which is why there is no release APK path.
+13. ✅ ~~**Align the version numbers.**~~ Done — `package.json` is the one source.
+    `versionName` is its version verbatim and `versionCode` is derived from it (1.4.2 →
+    10402), so a release is a `package.json` bump and nothing else. Today that is
+    `0.1.0` → `versionCode 100`. **Raise it before the first upload if you want to ship
+    as 1.0.0.**
 14. 👤 **Decide `minifyEnabled`.** It is `false`. The game is one WebView so R8 buys
     little, but write down which way you chose and why rather than leaving it a default.
-15. 👤 **Enrol in Play App Signing** when you create the Console entry *(verify — required
-    for new apps)*.
+15. 👤 **Enrol in Play App Signing** when you create the Console entry. Required for every
+    app created after August 2021, so it is not a choice — and it is what makes the
+    keystore in step 9 only an *upload* key. Google holds the app signing key, so a lost or
+    leaked upload key is a reset in Play Console rather than an app you can never update.
+    Generate a key for this app rather than reusing another app's: Play allows one key
+    across several, and advises against it, because a leak would force a reset on all of
+    them. The developer account is shared between apps; the key should not be.
 16. 👤 **Confirm the target API level.** `android/variables.gradle` sets 36, which is at or
     above any floor I know of *(verify the current one)*.
 
