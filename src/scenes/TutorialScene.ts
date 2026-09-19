@@ -6,7 +6,7 @@ import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
-import { isTouchPrimary } from '@/core/shell';
+import { wrongOrientation } from '@/core/shell';
 import { completeTutorial, TUTORIAL, TutorialRun } from '@/game/TutorialRun';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
@@ -126,7 +126,7 @@ export class TutorialScene extends BaseScene {
   }
 
   private now(): number { this.audio.clock.refresh(); return this.audio.clock.now(); }
-  private blocked(): boolean { return document.hidden || (isTouchPrimary() && this.scale.isLandscape); }
+  private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
   private get demo(): boolean { return this.run.step === 'slow-demo' || this.run.step === 'fast-demo'; }
 
   private async startDemo(fast: boolean): Promise<void> {

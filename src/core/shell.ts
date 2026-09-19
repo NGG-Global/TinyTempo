@@ -94,6 +94,38 @@ export function isTouchPrimary(): boolean {
   return window.matchMedia('(pointer: coarse)').matches;
 }
 
+/**
+ * Whether the display is large enough that Android stops honouring the portrait lock.
+ *
+ * For an app targeting API 36, Android ignores an activity's `screenOrientation` on any
+ * display whose smallest side is 600dp or more, so a tablet can be held in landscape and
+ * the app has no say in it. 600 CSS pixels is the same measurement from this side of the
+ * WebView: both take the *shorter* edge, and a CSS pixel is the dp Android is counting.
+ *
+ * Game units are not this. The scaling model makes them a function of the design box and
+ * the aspect ratio, so `viewport` cannot answer a question about the physical device.
+ */
+const TABLET_MIN_SIDE_PX = 600;
+
+export function isTabletSized(): boolean {
+  return Math.min(window.innerWidth, window.innerHeight) >= TABLET_MIN_SIDE_PX;
+}
+
+/**
+ * Whether the game should be asking to be turned back to portrait.
+ *
+ * The one place that is decided, because three scenes act on it: Boot raises the prompt,
+ * and Play and Tutorial hold the level behind the same question. A tablet fails it. Since
+ * Android stopped honouring the lock on a large display, landscape there is a position the
+ * player chose and the platform allows — so the prompt would be asking for something they
+ * cannot do, and the two `blocked()` checks would stop the game outright rather than let
+ * it run wide. Phones are unaffected: the platform still enforces portrait below 600dp, so
+ * this never fires on a handset in a native build.
+ */
+export function wrongOrientation(isLandscape: boolean): boolean {
+  return isLandscape && isTouchPrimary() && !isTabletSized();
+}
+
 const CODE_OVERLAY_ID = 'code-overlay';
 const CODE_INPUT_ID = 'code-input';
 const CODE_CONFIRM_ID = 'code-confirm';
