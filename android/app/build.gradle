@@ -102,6 +102,9 @@ dependencies {
     // Play In-App Updates, used directly by PlayUpdatePlugin. 2.1.0 is the current
     // partitioned artifact and the one that targets API 36.
     implementation "com.google.android.play:app-update:$playAppUpdateVersion"
+    // Play Games Services v2, used directly by PlayGamesPlugin. v2 only: the deprecated
+    // com.google.android.gms:play-services-games (v1) must never be added beside it.
+    implementation "com.google.android.gms:play-services-games-v2:$playGamesVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

@@ -7,4 +7,9 @@
     <!-- Live AdMob app id. Must stay identical to ADMOB.appId in src/config/ads.ts;
          scripts/check-android-config.mjs compares the two after every cap sync. -->
     <string name="admob_app_id">ca-app-pub-6818267616933452~3245294136</string>
+    <!-- The numeric Play Games Services project id from the Play Console. Not the OAuth
+         client id, not the Google Cloud project name, not the Firebase app id and not the
+         AdMob app id — the Games SDK reads this one and fails to sign in against any other.
+         scripts/check-android-config.mjs pins the value. -->
+    <string translatable="false" name="game_services_project_id">863268283344</string>
 </resources>

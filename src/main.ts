@@ -8,6 +8,7 @@ import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
 import { installDiagnostics } from '@/diagnostics/boot';
 import { bootMonetization } from '@/monetization/boot';
+import { bootPlayGames } from '@/playgames/boot';
 import { bootUpdates } from '@/updates/boot';
 
 declare global {
@@ -39,6 +40,9 @@ function start(): void {
   installDiagnostics();
   try {
     void bootMonetization();
+    // Nothing waits on this: Play Games is an enhancement, and a device without it plays
+    // the game exactly as before.
+    void bootPlayGames();
     // After `installDiagnostics`, which puts the crash-breadcrumb wrapper on the event
     // bus: the provider composes with whatever is installed, so the later it attaches
     // the more it inherits, and attaching first would leave it to be wrapped instead.

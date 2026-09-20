@@ -114,3 +114,52 @@ composer; verify the detected lead-in and the loop seam by ear on Android and iO
 including whether either trims the encoder delay via the LAME header; check the premix's
 relative loudness and headroom against the SFX by ear now that `masterGain` compensates for
 normalisation; and test iOS/Android unlock, interruption and output routing.
+
+## The title theme
+
+A second track, `bgm/theme/cozy-quest.mp3`, plays on the title screen and nowhere else.
+Going to the map, into a level, or into Settings stops it. The premixed loop then
+continues as the shell bed on the map and settings (`audio/musicBed.ts`), and is
+still the only thing a level ever hears. Returning to the title hushes that loop
+so the two tracks cannot overlap.
+
+It has its own player, `audio/ThemeMusic.ts`, rather than a second mode inside
+`MusicSystem`. Everything that makes that system trustworthy is a promise about a beat
+grid — a measured downbeat, a loop that is exactly whole bars, a tempo that changes task
+by task — and a level is judged against all three. The menu judges nothing, so sharing the
+code would have meant making each of those guarantees optional in the one place they must
+not be. The theme only has to start, loop and get out of the way.
+
+| | Gameplay loop | Title theme |
+| --- | --- | --- |
+| Length | 120.000 s, exactly 60 bars | 152.0 s, as delivered |
+| Loop | whole bars, lead-in detected and dropped | the file's own ends, which fade |
+| Tempo | `setRate` per task | fixed |
+| Gain | 0.5632 | 0.4 |
+| Size | 2.4 MB | 3.5 MB |
+
+`THEME.gain` is measured rather than judged by ear: the theme sits at −18.2 dB RMS against
+the premix's −21.2 dB, so 0.4 against the premix's 0.5632 puts the two at the same heard
+level and the move from the title screen into a level is not a jump. Both hang off the
+engine's master bus, so the mute switch covers the theme like everything else.
+
+**A browser will not play it until the page has been touched.** That is the autoplay
+policy and not something the code can route around: on a cold start the context is
+suspended, so `enter()` does nothing and — importantly — fetches nothing. Every tap on the
+title screen that leaves the player there asks again, and a return from the map finds the
+engine already unlocked and starts immediately. Where a platform does allow playback
+without a gesture, which a packaged WebView can, the attempt made when the menu opens
+succeeds on its own.
+
+The corollary is worth keeping: **the 3.5 MB is only spent by a player who hears it.**
+Tapping straight through from a cold start to a level downloads the gameplay track and the
+recorded beats and not the theme. The trap on the way there was that a `resume()` left
+pending from the menu's own create resolves the instant PLAY grants the gesture credit it
+was waiting for — which is exactly when the player is leaving — so the wake path checks
+`busy` as well as `disposed` before it starts anything.
+
+Not settled here: the loop seam. The file neither starts nor ends in silence but does fade
+at both ends, so the join is a dip rather than a click, and at 152 s most players will
+never reach it. Whether that dip is acceptable, and whether 3.5 MB is the right price for
+a title loop — a shorter edit or a lower bitrate would cut it substantially — are both
+calls for the composer rather than for a headless browser.
