@@ -15,7 +15,7 @@ Crockford base32 string carrying levels, accuracies and settings, never hearts o
 purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
-Seventeen vignettes rotate strictly by registry order: `levelSpec` picks
+Eighteen vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -27,7 +27,7 @@ rotation has come round before a level, PlayScene passes it to `create(scene, la
 and the act indexes its own list with it: bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), and scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`).
-Lap 0 is always the original look, so the first seventeen levels are unchanged. Add
+Lap 0 is always the original look, so the first eighteen levels are unchanged. Add
 variety this way, as a new look inside an existing act, rather than as a registry
 entry. See `docs/VARIANTS.md`.
 
@@ -49,6 +49,13 @@ lifecycle: one Graphics each, curves in `errandMotion.ts`, voices in
 `audio/errandSounds.ts`, and the same five-beat hold. The roller's picture is a
 coarse grid so a stripe of any width is whole columns; the balloon grows only on
 judged hits and bursts on a rough coda. See `docs/ERRAND_ACTS.md`.
+
+The fisherman is act 18, on the same lifecycle: one Graphics, curves in
+`fishingMotion.ts`, voices in `audio/fishingSounds.ts`, and the same five-beat hold. The
+beat is a pull on a hooked line, not a reel, so `rodHeave` is deliberately not monotonic.
+It is the second act with three endings from the round accuracy: a big fish at 70%+, one
+of three that each leave the water their own way, a small fish at 40–69%, and a boot or
+tyre below. See `docs/FISHERMAN.md`.
 
 `HouseholdVignette.update` re-anchors the stage to its laid-out home every frame,
 as every other act does in its own `update`. `Vignette.translate` is the

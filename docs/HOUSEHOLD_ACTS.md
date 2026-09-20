@@ -1,8 +1,8 @@
 # Household acts
 
 Four procedural vignettes are appended to the rotation. Levels 1–9 retain their
-introductions; later levels cycle through the whole registry, seventeen entries
-now that the errand acts follow these four.
+introductions; later levels cycle through the whole registry, eighteen entries
+now that the errand acts and the fisherman follow these four.
 
 | First level | Act | Each beat | Successful finale | Rough finale |
 | --- | --- | --- | --- | --- |

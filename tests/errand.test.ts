@@ -12,11 +12,11 @@ vi.mock('phaser', () => ({ default: {} }));
 
 describe('errand acts', () => {
   it('appends four acts after the household ones and keeps every earlier level', () => {
-    expect(VIGNETTES.map(v => v.id).slice(13)).toEqual(['roller', 'bell', 'balloon', 'stapler']);
+    expect(VIGNETTES.map(v => v.id).slice(13, 17)).toEqual(['roller', 'bell', 'balloon', 'stapler']);
     expect([14, 15, 16, 17].map(n => levelSpec(n).vignette)).toEqual(['roller', 'bell', 'balloon', 'stapler']);
     expect([1, 4, 9, 13].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'saw', 'paper', 'doorbell']);
     // A five-beat hold, so every finale completes and the next task stays on the downbeat.
-    for (const definition of VIGNETTES.slice(13)) {
+    for (const definition of VIGNETTES.slice(13, 17)) {
       expect(definition.endingHoldBeats).toBe(5);
       expect(definition.endingSec).toBe(ERRAND_REVEAL_SEC);
       for (const bpm of [120, 136, 150]) {
