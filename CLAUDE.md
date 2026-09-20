@@ -103,6 +103,20 @@ of failing** on a missing token or a failed upload, which would ship a release w
 every trace is minified, so `vite.config.ts` throws on both and
 `scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
+Play Games Services is `playgames/`, on the same adapter split and **authentication only** —
+the SDK is initialized, v2 signs the player in itself, and the game can ask who they are. No
+snapshot is written; `docs/PLAY_GAMES.md` carries the Saved Games plan and the reason it is a
+plan. **Play Games is never required to play.** Every call resolves, so a device without it,
+a declined prompt and a plugin that rejects are one answer — signed out — and the browser
+keeps `stubPlayGames`, which *cannot* report anyone authenticated. That is a different object
+rather than a flag, which is what stops a development mock standing in for the real thing in a
+release. Two ids in one strings.xml are not interchangeable and both fail silently when
+crossed: `game_services_project_id` is the numeric Games project id the manifest's
+`com.google.android.gms.games.APP_ID` points at, and is neither the AdMob app id beside it nor
+the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, which exists for
+that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
+would be keyed on it, and reaches no log, crash report or analytics event.
+
 **A recorded beat is late by whatever silence was in front of it.** The delivered
 one-shots open with between 0.1 ms and 25 ms of room before the take, and a beat sound is
 scheduled *on* the grid — so that silence is not padding, it is lateness, charged to every
@@ -329,6 +343,10 @@ src/
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
   objects/
     Player.ts          Unused starter code
+  playgames/
+    playGames.ts       Signed in or not, and who; pure, and the inert browser stub
+    native.ts          The PlayGames bridge; validates the payload rather than casting it
+    boot.ts            Native-only gate; the browser never leaves the stub
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling
@@ -583,7 +601,16 @@ so a browser build downloads none of them. Billing is the third native capabilit
 directly, registered by hand in `MainActivity` and reached through `monetization/purchases.ts`.
 Every decision about a purchase lives in `monetization/playBilling.ts`, which imports no
 native code and is therefore tested under node — the native side only relays what Play says
-and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Beyond those, the game
+and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Play Games
+Services v2 is the fourth and is hand-written for the same reason: `PlayGamesPlugin.java`
+relays `GamesSignInClient` and `PlayersClient`, registered beside Billing in `MainActivity`,
+and `PlayGamesSdk.initialize` runs in `TinyTempoApplication` because v2 wants it in
+`Application.onCreate`. The artifact is pinned (`playGamesVersion` in `variables.gradle`) and
+is **`play-services-games-v2` only** — the deprecated v1 `play-services-games` and the legacy
+`GoogleSignIn` APIs must never be added beside it, which `scripts/check-android-config.mjs`
+enforces along with the Games project id, the meta-data, the Application class and both
+`registerPlugin` calls: `cap sync` rewrites `MainActivity` from its own template if the file
+is ever lost, taking both registrations with it. See `docs/PLAY_GAMES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately

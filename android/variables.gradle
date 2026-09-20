@@ -14,4 +14,9 @@ ext {
     androidxEspressoCoreVersion = '3.7.0'
     cordovaAndroidVersion = '14.0.1'
     playBillingVersion = '9.1.0'
+    // Play Games Services v2. Pinned rather than '+': this is the SDK an
+    // authentication path depends on, and a dynamic version makes two builds of the
+    // same commit differ. The deprecated v1 artifact (play-services-games) is not
+    // used and must not be added — v2 pulls only base, basement and tasks.
+    playGamesVersion = '22.1.0'
 }
