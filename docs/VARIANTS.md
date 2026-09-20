@@ -1,15 +1,15 @@
 # Act variants
 
 Three acts change their look on each return visit, so the endless map does not
-show the same nineteen scenes over and over. No registry entry was added: the
+show the same twenty scenes over and over. No registry entry was added: the
 standing rule that a new entry reassigns every level still holds, and every level
 keeps the act it had.
 
 ## How a look is chosen
 
 `levelSpec` exposes `lap`, the number of completed passes through the rotation
-before this level: `floor((level - 1) / VIGNETTES.length)`. With nineteen acts,
-levels 1 to 19 are lap 0, 20 to 38 are lap 1, and so on. `PlayScene` passes it to
+before this level: `floor((level - 1) / VIGNETTES.length)`. With twenty acts,
+levels 1 to 20 are lap 0, 21 to 40 are lap 1, and so on. `PlayScene` passes it to
 `VignetteDefinition.create(scene, lap)`; an act with one look ignores it, an act
 with several indexes its list modulo the list's length. Lap 0 is always the
 original look, so nothing a player has already seen changes.
@@ -19,9 +19,9 @@ but within the set the lap selected.
 
 | Act | Lap 0 | Lap 1 | Lap 2 | Data |
 | --- | --- | --- | --- | --- |
-| Bug & shoe (level 3, 22, 41…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | `src/vignettes/bugLooks.ts` |
-| Bicep curl (level 6, 25, 44…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | `src/vignettes/curlLooks.ts` |
-| Scissors & paper (level 9, 28, 47…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
+| Bug & shoe (level 3, 23, 43…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | `src/vignettes/bugLooks.ts` |
+| Bicep curl (level 6, 26, 46…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | `src/vignettes/curlLooks.ts` |
+| Scissors & paper (level 9, 29, 49…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
 
 ## What a look may change
 
@@ -50,7 +50,7 @@ cleared. Keep new records to colours and feature flags; if a variant needs new
 motion, it is a new act and needs a request.
 
 The pure modules are unit-tested under node (`tests/bug.test.ts`,
-`tests/curl.test.ts`, `tests/paper.test.ts`). In DEV, `?debug&level=22`,
-`?debug&level=25` and `?debug&level=28` open the lap 1 looks directly. The lap
+`tests/curl.test.ts`, `tests/paper.test.ts`). In DEV, `?debug&level=23`,
+`?debug&level=26` and `?debug&level=29` open the lap 1 looks directly. The lap
 numbers move whenever an act is appended, since the rotation gets longer; the
 look a level shows is `lap % looks`, so appending never changes lap 0.

@@ -37,6 +37,9 @@ import { FISHING_MOTION, FISHING_REVEAL_SEC } from './fishingMotion';
 import { DjScratchVignette, BOOTH } from './DjScratchVignette';
 import { createScratchSounds } from '@/audio/scratchSounds';
 import { SCRATCH_REVEAL_SEC } from './scratchMotion';
+import { TromboneVignette, ROOFTOP } from './TromboneVignette';
+import { createTromboneSounds } from '@/audio/tromboneSounds';
+import { TROMBONE_REVEAL_SEC } from './tromboneMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -162,5 +165,12 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     success: ['Hands\nup.', 'The whole room heard that.'], rough: ['Needle\nskip.', 'The record has opinions.'],
     endingSec: SCRATCH_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
     create: scene => new DjScratchVignette(scene), sounds: createScratchSounds,
+  },
+  // Act 20, appended at request: levels 1 to 19 keep their acts.
+  {
+    id: 'trombone', title: 'Trombone', intro: 'Play it\nloud.', ink: ROOFTOP.ink,
+    success: ['Bravo,\nmaestro.', 'The neighbours are applauding.'], rough: ['Wah\nwah.', 'The neighbours have closed the shutters.'],
+    endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new TromboneVignette(scene), sounds: createTromboneSounds,
   },
 ];
