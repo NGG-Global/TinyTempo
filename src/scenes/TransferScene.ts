@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyCalibration, currentAudio, sharedAudio } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -116,6 +116,7 @@ export class TransferScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
+    ensureShellMusic(this);
   }
 
   private button(caption: string, hero: boolean, size: number): Button {

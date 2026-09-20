@@ -118,8 +118,10 @@ normalisation; and test iOS/Android unlock, interruption and output routing.
 ## The title theme
 
 A second track, `bgm/theme/cozy-quest.mp3`, plays on the title screen and nowhere else.
-Going to the map, into a level, or into Settings stops it; the premixed loop above is
-still the only thing a level ever hears.
+Going to the map, into a level, or into Settings stops it. The premixed loop then
+continues as the shell bed on the map and settings (`audio/musicBed.ts`), and is
+still the only thing a level ever hears. Returning to the title hushes that loop
+so the two tracks cannot overlap.
 
 It has its own player, `audio/ThemeMusic.ts`, rather than a second mode inside
 `MusicSystem`. Everything that makes that system trustworthy is a promise about a beat

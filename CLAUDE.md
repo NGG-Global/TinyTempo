@@ -135,7 +135,14 @@ about a beat grid a level is judged against and the menu is judged against nothi
 browser will not sound it until the page has been touched, so it fetches nothing on a cold
 start and every tap that leaves the player on the title screen asks again.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. Output latency is corrected in two places, and they do not overlap.
+menu's PLAY tap. The same loop is the **shell bed** on settings and the map
+(`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
+reuse the one source, a level fades it out and starts a fresh source on its own
+downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
+the track from a scene without going through the bed is how a leftover level
+and the menu overlap.
+
+Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from
 `getOutputTimestamp()` where the platform gives a usable pair, and otherwise from
 `currentTime` minus `reportedOutputLag`, which is **`baseLatency` + `outputLatency`** —
@@ -301,6 +308,7 @@ src/
     AudioEngine.ts     The only AudioContext; SFX scheduling and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
+    musicBed.ts        Shell, level or silent: which job the one loop is doing
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings

@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
 import { AudioEngine } from './AudioEngine';
-import { loadSettings, saveSettings } from '../game/settings';
+import { clampCalibration, loadSettings, saveSettings } from '../game/settings';
+import { setMusicBed } from './musicBed';
 
 const KEY = 'audio';
 
 /**
  * One AudioEngine for the whole game, held in the registry so the menu can unlock it
  * inside the PLAY gesture and the play scene can start immediately without a second tap.
- * Music keeps running across scene changes; only game destruction disposes the context.
+ * The loop is one source, switched by `musicBed` between the shell, a level and silence;
+ * only game destruction disposes the context.
  */
 export function sharedAudio(scene: Phaser.Scene): AudioEngine {
   const existing = currentAudio(scene);
@@ -43,8 +45,27 @@ export function toggleMute(engine: AudioEngine): boolean {
   return engine.muted;
 }
 
-/** Applies a calibration offset to the live clock and persists it. */
-export function applyCalibration(engine: AudioEngine, calibrationMs: number): boolean {
-  engine.clock.calibrationMs = calibrationMs;
-  return saveSettings({ ...loadSettings(), calibrationMs });
+/**
+ * Applies a calibration offset to the live clock, when there is one, and persists it.
+ * Settings can reset the offset before PLAY has ever created the engine; the save is
+ * still the source of truth for the next boot.
+ */
+export function applyCalibration(engine: AudioEngine | null, calibrationMs: number): boolean {
+  const value = clampCalibration(calibrationMs);
+  if (engine) engine.clock.calibrationMs = value;
+  return saveSettings({ ...loadSettings(), calibrationMs: value });
+}
+
+/** Shell scenes call this on create. No-ops until PLAY has unlocked the context. */
+export function ensureShellMusic(scene: Phaser.Scene): void {
+  const audio = currentAudio(scene);
+  if (!audio || audio.context.state !== 'running') return;
+  void setMusicBed(audio, 'shell');
+}
+
+/** Tap offset, and the curtain into a level. `fadeSec` 0 is an immediate cut. */
+export function hushMusic(scene: Phaser.Scene, fadeSec = 0): void {
+  const audio = currentAudio(scene);
+  if (!audio) return;
+  void setMusicBed(audio, 'silent', { fadeSec });
 }

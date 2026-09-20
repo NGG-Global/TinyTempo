@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setAnalyticsConsent } from '@/analytics/boot';
-import { isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, ensureShellMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -40,7 +40,7 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'unlock' | 'restore' | 'refill'
+type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
   | 'transfer' | 'reset' | 'analytics' | 'help' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
@@ -170,6 +170,7 @@ export class SettingsScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
+    ensureShellMusic(this);
   }
 
   /** Every text inside the scrolling band belongs to the container, not the camera. */
@@ -191,9 +192,10 @@ export class SettingsScene extends BaseScene {
       haptics: rowTitle('Haptics'),
       hapticsNote: rowNote('Not on this device'),
       offset: rowTitle('Tap offset'),
-      offsetNote: rowNote('Measured on this device'),
+      offsetNote: rowNote('· Measured on this device'),
       offsetValue: this.banded(display(this, '', { size: 48, colour: ink })).setOrigin(1, 0.5),
       tune: chip('Tune'),
+      offsetReset: chip('Reset'),
       heartCount: this.banded(display(this, '', { size: 42, colour: ink })).setOrigin(1, 0.5),
       heartWait: rowNote(''),
       premium: this.banded(display(this, STORE_COPY.premiumTitle, { size: 48, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
@@ -327,20 +329,34 @@ export class SettingsScene extends BaseScene {
     this.hits.push({ name: 'sound', rect: new Phaser.Geom.Rectangle(left, audio.y, width, row), pinned: false });
     this.hits.push({ name: 'haptics', rect: new Phaser.Geom.Rectangle(left, audio.y + row, width, row), pinned: false });
 
-    // TIMING — the measured offset, and the screen that measures it.
+    // TIMING — the measured offset, the screen that measures it, and a way back to zero.
+    // A kept measurement adds to the offset already in force, so without Reset a bad
+    // run can only be undone by measuring the opposite error.
     eyebrow(1);
     const timing = plate(tall);
     this.rows.timing = timing;
-    const tuneW = Math.max(176 * s, control);
+    const tuneW = Math.max(150 * s, control);
     const tuneRect = new Phaser.Geom.Rectangle(timing.right - 24 * s - tuneW, timing.centerY - control / 2, tuneW, control);
     this.rows.tune = tuneRect;
     this.texts.tune!.setPosition(tuneRect.centerX - 16 * s, tuneRect.centerY);
-    // Title and value share the top line; the note sits under both, so the widest possible
-    // measurement ("−500 ms") still cannot reach the copy beside it.
-    resize(this.texts.offsetValue!, 40 * s, PALETTE.ink, STYLE.current, false);
-    this.texts.offsetValue!.setPosition(tuneRect.x - 22 * s, timing.centerY - 20 * s);
+    const offset = loadSettings().calibrationMs;
+    if (offset !== 0) {
+      const resetW = Math.max(132 * s, control);
+      const resetRect = new Phaser.Geom.Rectangle(tuneRect.x - 12 * s - resetW, tuneRect.y, resetW, control);
+      this.rows.offsetReset = resetRect;
+      this.texts.offsetReset!.setPosition(resetRect.centerX, resetRect.centerY);
+      this.hits.push({ name: 'offsetReset', rect: resetRect, pinned: false });
+    } else {
+      delete this.rows.offsetReset;
+    }
+    // Value lives on the note line, not beside the title: Reset + Tune on the right would
+    // otherwise run "+120 ms" into "Tap offset" on a 393-wide handset.
     this.texts.offset!.setPosition(left + 28 * s, timing.centerY - 20 * s);
-    this.texts.offsetNote!.setPosition(left + 28 * s, timing.centerY + 22 * s);
+    resize(this.texts.offsetValue!, 32 * s, PALETTE.ink, STYLE.current, false);
+    this.texts.offsetValue!.setOrigin(0, 0.5).setPosition(left + 28 * s, timing.centerY + 22 * s);
+    this.texts.offsetNote!.setPosition(
+      left + 28 * s + this.texts.offsetValue!.width + 12 * s, timing.centerY + 22 * s,
+    );
     this.hits.push({ name: 'tune', rect: tuneRect, pinned: false });
 
     // HEARTS — the status, not an offer. The offers are the section below.
@@ -481,6 +497,14 @@ export class SettingsScene extends BaseScene {
       const sink = 8 * s * sunk('tune') * 0.8;
       drawChevron(g, this.rows.tune.right - 30 * s, this.rows.tune.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.tune!.setY(this.rows.tune.centerY + sink);
+    }
+    const offsetReset = this.rows.offsetReset;
+    const offsetResetText = this.texts.offsetReset!;
+    if (offsetReset) {
+      drawPanel(g, offsetReset, s, { fill: SHELL.cream, depth: 8, press: sunk('offsetReset'), radius: 18 });
+      offsetResetText.setVisible(true).setY(offsetReset.centerY + 8 * s * sunk('offsetReset') * 0.8);
+    } else {
+      offsetResetText.setVisible(false);
     }
     // Hearts: the row, then the bar the next one is filling.
     const hearts = this.rows.hearts;
@@ -765,6 +789,7 @@ export class SettingsScene extends BaseScene {
       case 'tune':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Calibrate, { from: this.from })));
         return;
+      case 'offsetReset': this.resetOffset(); return;
       case 'transfer':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Transfer, { from: this.from })));
         return;
@@ -810,6 +835,13 @@ export class SettingsScene extends BaseScene {
     this.switchedAt.analytics = performance.now() / 1000;
     void setAnalyticsConsent(this.analyticsOn);
     this.refreshCopy();
+  }
+
+  /** Back to an uncalibrated clock. Unlike progress reset, this is one tap: Tune can put it back. */
+  private resetOffset(): void {
+    applyCalibration(currentAudio(this), 0);
+    this.refreshCopy();
+    this.layout();
   }
 
   /** Two taps, because there is no undo: the second one destroys every cleared level. */

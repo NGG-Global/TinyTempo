@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
-import { currentAudio, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { setMusicBed } from '@/audio/musicBed';
+import { currentAudio, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
+import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -292,6 +294,10 @@ export class MenuScene extends BaseScene {
     // that is precisely when the player is on their way out. Without this the theme
     // fetched 3.5 MB to start a track behind a closing curtain.
     if (this.disposed || this.busy || audio.context.state !== 'running') return;
+    // The gameplay loop is the shell on the map and settings. Coming back to the title
+    // with it still running is the overlap this screen used to ship: hush it, then the
+    // theme is the only thing the menu plays.
+    hushMusic(this, MUSIC.bedFadeSec);
     await audio.theme.enter();
   }
 
@@ -311,6 +317,11 @@ export class MenuScene extends BaseScene {
       if (this.disposed || request !== this.request) return;
       this.playLabel.setText('…');
       await audio.music.load();
+      if (this.disposed || request !== this.request) return;
+      // The gameplay loop is the shell bed from here: start it on the tap that unlocked
+      // audio, so the map and settings share it rather than each starting a copy. The
+      // title theme is a second track and leaves on closeTheme below.
+      await setMusicBed(audio, 'shell');
       if (this.disposed || request !== this.request) return;
       // Warmed here and awaited where it is used. The map is several taps from a level,
       // which is long enough to decode 180 KB without anyone waiting on it.

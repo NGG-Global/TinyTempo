@@ -22,6 +22,12 @@ export const MUSIC = {
   pickupBeats: 0,
   startLeadSec: 0.2,
   gainRampSec: 0.025,
+  /**
+   * Cross-screen duck: long enough to sit under the 320 ms scene curtain, short enough
+   * that a level's first downbeat is not still fading in. Instant cuts stay on
+   * `gainRampSec`; this is only the shell ↔ level ↔ silent hand-off.
+   */
+  bedFadeSec: 0.35,
   // The premix is normalised to 0.97 peak for signal-to-noise, which took 0.710 off a sum
   // that peaked at +2.7 dBFS. This gain gives that back: 0.4 / 0.710, so the track sits at
   // exactly the level the seven stems did, and the bus still supplies SFX headroom.

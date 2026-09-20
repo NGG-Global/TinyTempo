@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { currentAudio } from '@/audio/sharedAudio';
+import { currentAudio, ensureShellMusic } from '@/audio/sharedAudio';
 import { DIAGNOSTICS } from '@/config/diagnostics';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -130,6 +130,7 @@ export class SupportScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
+    ensureShellMusic(this);
   }
 
   private button(caption: string, hero: boolean, size: number): Button {

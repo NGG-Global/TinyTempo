@@ -16,7 +16,9 @@ beside "Mute".
 - **Sound & feel** — two switches (`ui/switch.ts`). A switch states the value and
   the action at once; the knob's side is the state and the track's colour is
   whether it is on. Haptics is new; see below.
-- **Timing** — the measured offset, and `TUNE` into its own screen.
+- **Timing** — the measured offset, `TUNE` into its own screen, and `RESET` back
+  to zero. A kept measurement adds to the offset already in force, so without a
+  reset a bad run can only be undone by measuring the opposite error.
 - **Hearts** — status, not an offer: the five hearts, the count, and a bar the
   next heart is filling (`heartProgress` in `game/health.ts`).
 - **Workshop store** — the one brass object on the screen, because it is the one
@@ -69,7 +71,11 @@ to hold a beat for sixteen seconds.
 residual against the offset already in force — and this scene owns only the screen
 and the audio. Start and the result share the footer: the run button is the thing
 to press until there is a measurement, and then the measurement is, so the screen
-never carries an empty strip where the other one will be.
+never carries an empty strip where the other one will be. **Reset** on this screen
+and on the Settings row writes zero without another measurement, which is the only
+way back to an uncalibrated clock short of measuring the inverse. Music is silent
+here so the metronome is the only beat, and the four beads pulse on the heard clock
+rather than `currentTime`, or they would lead the clicks by the device's output lag.
 
 ## Star reveal
 
