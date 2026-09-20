@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyCalibration, currentAudio, sharedAudio } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, hushMusic, sharedAudio } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -50,7 +50,9 @@ interface Button { readonly rect: Phaser.Geom.Rectangle; readonly text: Phaser.G
  * the game that needs the screen to itself, so it has it, and Settings keeps the result.
  *
  * The measurement is a *residual* against the offset already in force, so running it twice
- * refines the first result rather than starting over. `CalibrationRun` owns that maths;
+ * refines the first result rather than starting over. Reset writes zero without a second
+ * run, which is the only way back to an uncalibrated clock short of measuring the inverse.
+ * Music is silent here so the metronome is the only beat. `CalibrationRun` owns the maths;
  * this scene owns the screen and the audio.
  */
 export class CalibrateScene extends BaseScene {
@@ -67,7 +69,7 @@ export class CalibrateScene extends BaseScene {
   private resultNote!: Phaser.GameObjects.Text;
   private resultValue!: Phaser.GameObjects.Text;
   private backMark!: Phaser.GameObjects.Graphics;
-  private buttons: Record<'run' | 'keep' | 'retry', Button> = null!;
+  private buttons: Record<'run' | 'keep' | 'retry' | 'reset', Button> = null!;
   private backAt = { x: 0, y: 0 };
   private backRect = new Phaser.Geom.Rectangle();
   private countRect = new Phaser.Geom.Rectangle();
@@ -116,6 +118,7 @@ export class CalibrateScene extends BaseScene {
       run: this.button('Start', true, 48),
       keep: this.button('Keep', false, 24),
       retry: this.button('Retry', false, 24),
+      reset: this.button('Reset', false, 24),
     };
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.curtain = new SceneCurtain(this);
@@ -123,6 +126,9 @@ export class CalibrateScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
+    // The metronome is the only pulse on this screen: leftover shell or level music
+    // would be a second beat, and the measurement would chase it.
+    hushMusic(this);
   }
 
   private button(caption: string, hero: boolean, size: number): Button {
@@ -193,6 +199,10 @@ export class CalibrateScene extends BaseScene {
     const smallY = this.resultRect.centerY - smallH / 2;
     this.buttons.retry.rect.setTo(this.resultRect.right - 20 * s - smallW, smallY, smallW, smallH);
     this.buttons.keep.rect.setTo(this.buttons.retry.rect.x - 12 * s - smallW, smallY, smallW, smallH);
+    const resetW = Math.max(176 * s, control);
+    this.buttons.reset.rect.setTo(
+      safe.centerX - resetW / 2, this.buttons.run.rect.y - 20 * s - smallH, resetW, smallH,
+    );
     this.resultNote.setPosition(this.resultRect.x + 26 * s, this.resultRect.centerY - 24 * s);
     resize(this.resultNote, 19 * s, PALETTE.muted, STYLE.current, false);
     this.resultValue.setPosition(this.resultRect.x + 26 * s, this.resultRect.centerY + 18 * s);
@@ -230,13 +240,15 @@ export class CalibrateScene extends BaseScene {
       g.lineStyle(2 * s, BRASS, 0.5).strokeRoundedRect(r.x + 7 * s, r.y + 7 * s, r.width - 14 * s, r.height - 14 * s, radius - 7 * s);
     }
     for (const [name, button] of Object.entries(this.buttons)) {
-      const shown = name === 'run' ? !measured : measured && (name === 'retry' || this.phase === 'measured');
+      const shown = name === 'run' ? !measured
+        : name === 'reset' ? this.phase === 'idle' && this.calibrationMs !== 0
+        : measured && (name === 'retry' || this.phase === 'measured');
       button.text.setVisible(shown);
       if (!shown) continue;
       const p = this.pressed === button ? press : 0;
       const depth = button.hero ? CHROME.block.depth : 10;
       drawPanel(g, button.rect, s, {
-        fill: button.hero ? PALETTE.coral : name === 'keep' ? SHELL.cream : SHELL.bench,
+        fill: button.hero ? PALETTE.coral : name === 'retry' ? SHELL.bench : SHELL.cream,
         depth, press: p, hero: button.hero,
         radius: Math.min(button.rect.height / 2, STYLE.current.radius * 1.4),
       });
@@ -276,14 +288,18 @@ export class CalibrateScene extends BaseScene {
     this.drawBeats();
   }
 
-  /** Four beads on the count-in's own pulse, so the beat can be seen before it is heard. */
+  /** Four beads on the count-in's own pulse, so the beat can be seen with the sound. */
   private drawBeats(): void {
     if (this.phase !== 'counting') { this.beats.clear(); return; }
     const audio = currentAudio(this);
     if (!audio || !this.run) return;
+    audio.clock.refresh();
     const g = this.beats.clear();
     const s = this.uiScale;
-    const elapsed = this.run.beatAt(audio.context.currentTime);
+    // Heard clock, not currentTime: the clicks are scheduled on the write clock and reach
+    // the speaker an output-lag later. Beads on currentTime pulse before the sound, and a
+    // player tapping those would measure a negative offset that undoes a real calibration.
+    const elapsed = this.run.beatAt(audio.clock.now());
     const beat = Math.floor(Math.max(0, elapsed));
     const phase = Math.max(0, elapsed) % 1;
     const still = this.reducedMotion;
@@ -296,7 +312,7 @@ export class CalibrateScene extends BaseScene {
       g.fillStyle(f.face, 1).fillCircle(x, this.beadRow.y, r);
       g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, this.beadRow.y - r * 0.35, r * 0.3);
     }
-    if (audio.context.currentTime > this.run.end) this.finish();
+    if (audio.clock.now() > this.run.end) this.finish();
   }
 
   /** Anywhere on the screen is a beat while counting; only the controls opt out. */
@@ -317,6 +333,7 @@ export class CalibrateScene extends BaseScene {
       this.press(button);
       if (name === 'run') void this.runTapped();
       else if (name === 'keep') this.keep();
+      else if (name === 'reset') this.resetOffset();
       else this.retry();
       return;
     }
@@ -392,6 +409,19 @@ export class CalibrateScene extends BaseScene {
     this.phase = 'idle';
     this.refreshCopy();
     void this.start();
+  }
+
+  /**
+   * Drop a kept offset without measuring the inverse. The next Start still samples as a
+   * residual against zero, so a second run is a fresh measurement rather than a refinement
+   * of a number the player just threw away.
+   */
+  private resetOffset(): void {
+    applyCalibration(currentAudio(this), 0);
+    this.calibrationMs = 0;
+    this.measuredMs = null;
+    this.phase = 'idle';
+    this.refreshCopy();
   }
 
   private leave(): void {

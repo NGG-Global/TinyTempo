@@ -134,14 +134,16 @@ export class MusicSystem {
     this.source?.playbackRate.setValueAtTime(rate, Math.max(at, this.context.currentTime));
     this.rate = rate;
   }
-  public setGain(value: number): void {
+  public setGain(value: number, rampSec: number = MUSIC.gainRampSec): void {
     if (this.disposed) return;
     if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error('Music gain must be between zero and one.');
+    if (!Number.isFinite(rampSec) || rampSec < 0) throw new Error('Gain ramp must be a non-negative duration.');
     const parameter = this.bus.gain;
     const now = this.context.currentTime;
     parameter.cancelScheduledValues(now);
     parameter.setValueAtTime(parameter.value, now);
-    parameter.linearRampToValueAtTime(value, now + MUSIC.gainRampSec);
+    if (rampSec <= 0) parameter.setValueAtTime(value, now);
+    else parameter.linearRampToValueAtTime(value, now + rampSec);
     this.level = value;
     // Zero gain is not a lifecycle event. The buffer source keeps running.
   }

@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { reducedMotion } from '@/core/motionPreference';
-import { sharedAudio, isMuted, toggleMute } from '@/audio/sharedAudio';
+import { MUSIC } from '@/config/music';
+import { ensureShellMusic, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -227,6 +228,7 @@ export class MapScene extends BaseScene {
     window.addEventListener('pointercancel', this.cancelDrag);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+    ensureShellMusic(this);
   }
 
   /** Deterministic per index, so the terrain and scenery are identical on every layout. */
@@ -1310,6 +1312,7 @@ export class MapScene extends BaseScene {
       return;
     }
     this.velocity = 0;
+    hushMusic(this, MUSIC.bedFadeSec);
     this.curtain.cover(() => this.scene.start(SceneKey.Play, { level, autoStart: true }));
   }
   private shutdown(): void {

@@ -90,6 +90,9 @@ describe('the premixed music loop', () => {
     await system.load(); system.start(12);
     expect(system.gain).toBe(MUSIC.masterGain);
     system.setGain(0); expect(system.gain).toBe(0);
+    system.setGain(MUSIC.masterGain, 0);
+    expect(gains[0]!.gain.setValueAtTime).toHaveBeenCalledWith(MUSIC.masterGain, context.currentTime);
+    expect(system.gain).toBe(MUSIC.masterGain);
     context.currentTime = 12 + system.duration * 3; // three whole loops after the scheduled start
     system.setGain(MUSIC.masterGain);
     expect(system.gain).toBe(MUSIC.masterGain);

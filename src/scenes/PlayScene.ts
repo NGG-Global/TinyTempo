@@ -3,6 +3,7 @@ import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
+import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
@@ -648,6 +649,7 @@ export class PlayScene extends BaseScene {
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));
       const origin = this.audio!.music.start(); // fresh sources: every level starts at the base tempo
+      void setMusicBed(this.audio!, 'level');
       if (this.disposed || request !== this.startRequest || this.blocked()) {
         this.audio!.music.stop();
         return;
@@ -1365,7 +1367,8 @@ export class PlayScene extends BaseScene {
   private leaveForMap(): void {
     if (this.curtain.active) return;
     this.persistAbandonedAttempt();
-    // Stop outgoing action voices immediately; the shared music remains the bedding.
+    // Stop outgoing action voices immediately. The map will claim this loop as the
+    // shell bed at rate 1 rather than starting a second source over it.
     this.controller?.dispose();
     this.transition = null;
     this.replay = null;

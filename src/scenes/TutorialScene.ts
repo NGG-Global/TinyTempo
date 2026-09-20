@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { AudioEngine } from '@/audio/AudioEngine';
-import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { hushMusic, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -67,7 +67,7 @@ export class TutorialScene extends BaseScene {
     this.pressedAt = this.struckAt = -Infinity;
     this.illustration = new HammerNailVignette(this, true);
     this.audio = sharedAudio(this);
-    this.audio.music.stop();
+    hushMusic(this);
     this.audio.setSounds(VIGNETTES[0]!.sounds(this.audio.context));
     this.panels = this.add.graphics().setDepth(10);
     this.signSurface = surface(this, MaterialKey.wood, this.sign, 1, SHELL.wood, 0.5).setDepth(11);

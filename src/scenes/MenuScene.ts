@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { setMusicBed } from '@/audio/musicBed';
+import { ensureShellMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -105,6 +106,7 @@ export class MenuScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+    ensureShellMusic(this);
   }
 
   protected override layout(): void {
@@ -256,6 +258,10 @@ export class MenuScene extends BaseScene {
       if (this.disposed || request !== this.request) return;
       this.playLabel.setText('…');
       await audio.music.load();
+      if (this.disposed || request !== this.request) return;
+      // The same loop is the shell bed: start it here, on the tap that unlocked audio,
+      // so the menu, the map and settings share it rather than each starting a copy.
+      await setMusicBed(audio, 'shell');
       if (this.disposed || request !== this.request) return;
       // Warmed here and awaited where it is used. The map is several taps from a level,
       // which is long enough to decode 180 KB without anyone waiting on it.

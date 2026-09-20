@@ -65,6 +65,9 @@ describe('stored settings', () => {
     // A round trip through storage is the shape the game actually uses.
     saveSettings({ calibrationMs: -40, muted: false, haptics: false, analytics: false }, storage);
     expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, haptics: false, analytics: false });
+    // Reset is writing zero, not measuring the inverse of a kept offset.
+    saveSettings({ ...loadSettings(storage), calibrationMs: 0 }, storage);
+    expect(loadSettings(storage).calibrationMs).toBe(0);
   });
 });
 
@@ -90,6 +93,9 @@ describe('the calibration measurement', () => {
     expect(calibrationFrom(150, Array.from({ length: CALIBRATION_TAPS }, () => -8))).toBe(142);
     expect(calibrationFrom(480, Array.from({ length: CALIBRATION_TAPS }, () => 200))).toBe(CALIBRATION_LIMIT_MS);
     expect(calibrationFrom(0, Array.from({ length: CALIBRATION_TAPS }, () => NaN))).toBeNull();
+    // After a reset to zero the next run is a fresh measurement, not a refinement of the
+    // thrown-away offset.
+    expect(calibrationFrom(0, Array.from({ length: CALIBRATION_TAPS }, () => 40))).toBe(40);
   });
 });
 
