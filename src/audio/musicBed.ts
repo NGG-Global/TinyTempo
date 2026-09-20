@@ -4,9 +4,10 @@ import type { AudioEngine } from './AudioEngine';
 /**
  * Which loop is supposed to be audible.
  *
- * There is only one track. The bed is which *job* it is doing: the shell on the menu,
- * settings and map; the level's own source, started on a downbeat PlayScene owns; or
- * silence, so tap offset can hear its metronome. Scenes name the bed. Starting a second
+ * There is only one gameplay track. The bed is which *job* it is doing: the shell
+ * on settings and the map; the level's own source, started on a downbeat PlayScene
+ * owns; or silence, so tap offset can hear its metronome. The title screen has a
+ * second track and does not use this. Scenes name the bed. Starting a second
  * source without going through here is how the menu and a leftover level overlap.
  */
 export type MusicBed = 'shell' | 'level' | 'silent';

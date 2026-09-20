@@ -36,6 +36,27 @@ export const MUSIC = {
   // bgm/. Nothing mixes stems at runtime, and seven decodes cost ~307 MiB of float PCM.
   url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
 } as const;
+/**
+ * The title theme. A second track, and deliberately not part of the model above.
+ *
+ * Nothing on the menu is judged, scheduled or counted against it, so it needs none of
+ * what `MUSIC` describes: no measured downbeat, no whole-bar loop, no tempo changes. It
+ * only has to start, loop and get out of the way — which is why it has its own small
+ * player rather than a second mode inside `MusicSystem`, where every one of those
+ * guarantees would have to be made optional.
+ *
+ * `gain` matches it to the gameplay track by measurement rather than by ear: the mix
+ * sits at −18.2 dB RMS against the premix's −21.2 dB, so at 0.4 the two are heard at the
+ * same level and the switch from the title screen into a level is not a jump.
+ */
+export const THEME = {
+  gain: 0.4,
+  /** Long enough not to be a cut, short enough that leaving the menu feels immediate. */
+  fadeInSec: 1.2,
+  fadeOutSec: 0.45,
+  url: new URL('../../bgm/theme/cozy-quest.mp3', import.meta.url).href,
+} as const;
+
 export const pickupSeconds = (bpm: number, beats: number): number => beats * 60 / bpm;
 /** Exact loop length in seconds: whole bars at the source tempo. */
 export const loopSeconds = (): number => MUSIC.bars * MUSIC.beatsPerBar * 60 / MUSIC.sourceBpm;

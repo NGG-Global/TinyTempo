@@ -103,6 +103,20 @@ of failing** on a missing token or a failed upload, which would ship a release w
 every trace is minified, so `vite.config.ts` throws on both and
 `scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
+Play Games Services is `playgames/`, on the same adapter split and **authentication only** —
+the SDK is initialized, v2 signs the player in itself, and the game can ask who they are. No
+snapshot is written; `docs/PLAY_GAMES.md` carries the Saved Games plan and the reason it is a
+plan. **Play Games is never required to play.** Every call resolves, so a device without it,
+a declined prompt and a plugin that rejects are one answer — signed out — and the browser
+keeps `stubPlayGames`, which *cannot* report anyone authenticated. That is a different object
+rather than a flag, which is what stops a development mock standing in for the real thing in a
+release. Two ids in one strings.xml are not interchangeable and both fail silently when
+crossed: `game_services_project_id` is the numeric Games project id the manifest's
+`com.google.android.gms.games.APP_ID` points at, and is neither the AdMob app id beside it nor
+the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, which exists for
+that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
+would be keyed on it, and reaches no log, crash report or analytics event.
+
 **A recorded beat is late by whatever silence was in front of it.** The delivered
 one-shots open with between 0.1 ms and 25 ms of room before the take, and a beat sound is
 scheduled *on* the grid — so that silence is not padding, it is lateness, charged to every
@@ -114,12 +128,19 @@ sample eleven times running.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
+**The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
+`bgm/theme/cozy-quest.mp3` on `MenuScene` and stops on every way out, with its own player
+rather than a mode inside `MusicSystem`, because every guarantee that system makes is
+about a beat grid a level is judged against and the menu is judged against nothing. A
+browser will not sound it until the page has been touched, so it fetches nothing on a cold
+start and every tap that leaves the player on the title screen asks again.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. The same loop is the **shell bed** on the menu, settings and map
-(`audio/musicBed.ts`): PLAY starts it, those screens reuse the one source, a level
-fades it out and starts a fresh source on its own downbeat, and Tap offset cuts it
-so the metronome is the only pulse. Starting the track from a scene without going
-through the bed is how a leftover level and the menu overlap.
+menu's PLAY tap. The same loop is the **shell bed** on settings and the map
+(`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
+reuse the one source, a level fades it out and starts a fresh source on its own
+downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
+the track from a scene without going through the bed is how a leftover level
+and the menu overlap.
 
 Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from
@@ -288,6 +309,7 @@ src/
     AudioClock.ts      DOM event time to output time, plus the input offset
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
     musicBed.ts        Shell, level or silent: which job the one loop is doing
+    ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
@@ -329,6 +351,10 @@ src/
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
   objects/
     Player.ts          Unused starter code
+  playgames/
+    playGames.ts       Signed in or not, and who; pure, and the inert browser stub
+    native.ts          The PlayGames bridge; validates the payload rather than casting it
+    boot.ts            Native-only gate; the browser never leaves the stub
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling
@@ -410,9 +436,18 @@ that no coordinate can be hardcoded.
 
 Scenes that lay anything out extend `BaseScene` and implement two methods:
 
-- `build()` — create game objects. Runs **once**.
+- `build()` — create game objects. Runs **once per entry into the scene**.
 - `layout()` — position and size them. Runs on create **and on every viewport
   change**.
+
+**"Once" means once per entry, not once per instance.** Phaser constructs a Scene
+object one time and reuses it for every `scene.start`, destroying the display list
+in between — so `build()` runs again on a second visit while **field initializers
+do not**. A field that collects game objects must therefore be *assigned* in
+`build()`, never appended to: `this.eyebrows.push(...)` left Settings holding seven
+destroyed Texts behind seven live ones, and the second visit threw inside
+`Text.setColor` during `create`, which killed the game wherever the player happened
+to open Settings from.
 
 `layout()` must be idempotent: no object creation, no event listeners, no
 tweens started. `BaseScene` handles the resize subscription, the camera resize,
@@ -574,7 +609,16 @@ so a browser build downloads none of them. Billing is the third native capabilit
 directly, registered by hand in `MainActivity` and reached through `monetization/purchases.ts`.
 Every decision about a purchase lives in `monetization/playBilling.ts`, which imports no
 native code and is therefore tested under node — the native side only relays what Play says
-and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Beyond those, the game
+and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Play Games
+Services v2 is the fourth and is hand-written for the same reason: `PlayGamesPlugin.java`
+relays `GamesSignInClient` and `PlayersClient`, registered beside Billing in `MainActivity`,
+and `PlayGamesSdk.initialize` runs in `TinyTempoApplication` because v2 wants it in
+`Application.onCreate`. The artifact is pinned (`playGamesVersion` in `variables.gradle`) and
+is **`play-services-games-v2` only** — the deprecated v1 `play-services-games` and the legacy
+`GoogleSignIn` APIs must never be added beside it, which `scripts/check-android-config.mjs`
+enforces along with the Games project id, the meta-data, the Application class and both
+`registerPlugin` calls: `cap sync` rewrites `MainActivity` from its own template if the file
+is ever lost, taking both registrations with it. See `docs/PLAY_GAMES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately
