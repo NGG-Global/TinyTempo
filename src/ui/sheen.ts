@@ -2,34 +2,34 @@ import Phaser from 'phaser';
 import { reducedMotion } from '@/core/motionPreference';
 
 /**
- * A band of light travelling across a brass surface, clipped to its rounded corners.
+ * A band of light travelling across a brass surface, clipped to the panel face.
  *
  * The premium offers are the only objects in the game that are meant to catch the eye
  * on their own, and brass with no highlight moving over it reads as a brown card. The
- * band is a masked Graphics rather than a tinted image so it costs one quad and takes
- * the panel's exact corner radius; it stops entirely under reduced motion, where a
- * repeating animation with no player input is exactly what the preference asks about.
+ * band is drawn into the same Graphics as the glint and clipped to the panel rectangle
+ * — not masked. Phaser 4 dropped WebGL geometry masks (`setMask` warns and no-ops), and
+ * `FilterList#addMask` on a Graphics with no bounds is a full-screen DynamicTexture,
+ * which is the cost Settings already refused for a clip. A square clip misses the last
+ * few pixels of the corner radius; a mask that does not run is worse. It stops entirely
+ * under reduced motion, where a repeating animation with no player input is exactly
+ * what the preference asks about.
  */
 export class Sheen {
   private readonly band: Phaser.GameObjects.Graphics;
-  private readonly shape: Phaser.GameObjects.Graphics;
   private readonly rect = new Phaser.Geom.Rectangle();
   private period = 4.6;
 
   public constructor(scene: Phaser.Scene, depth: number) {
-    this.shape = scene.make.graphics({}, false);
     this.band = scene.add.graphics().setDepth(depth).setVisible(false);
-    this.band.setMask(this.shape.createGeometryMask());
   }
 
   /** The band itself, so a caller can add it to a container that scrolls or moves. */
   public get node(): Phaser.GameObjects.Graphics { return this.band; }
 
   /** Lay the sheen over a panel face. Call from `layout`, or wherever the panel moves. */
-  public place(r: Phaser.Geom.Rectangle, radius: number, period = 4.6): void {
+  public place(r: Phaser.Geom.Rectangle, _radius: number, period = 4.6): void {
     this.rect.setTo(r.x, r.y, r.width, r.height);
     this.period = period;
-    this.shape.clear().fillStyle(0xffffff, 1).fillRoundedRect(r.x, r.y, r.width, r.height, radius);
   }
 
   /** Redraw at `now` seconds. Hidden while the panel has no size or motion is reduced. */
@@ -44,14 +44,22 @@ export class Sheen {
     const x = this.rect.x - width * 2 + travel * (this.rect.width + width * 4);
     const lean = this.rect.height * 0.3;
     const g = this.band.clear();
+    const fade = 1 - Math.abs(travel - 0.5) * 0.6;
     for (const [offset, alpha] of [[-width * 0.5, 0.16], [0, 0.34], [width * 0.5, 0.16]] as const) {
-      g.fillStyle(0xffffff, alpha * (1 - Math.abs(travel - 0.5) * 0.6));
-      g.fillPoints([
-        new Phaser.Math.Vector2(x + offset + lean, this.rect.y),
-        new Phaser.Math.Vector2(x + offset + lean + width * 0.5, this.rect.y),
-        new Phaser.Math.Vector2(x + offset - lean + width * 0.5, this.rect.bottom),
-        new Phaser.Math.Vector2(x + offset - lean, this.rect.bottom),
-      ], true);
+      const clipped = clipQuadToRect(
+        [
+          x + offset + lean, this.rect.y,
+          x + offset + lean + width * 0.5, this.rect.y,
+          x + offset - lean + width * 0.5, this.rect.bottom,
+          x + offset - lean, this.rect.bottom,
+        ],
+        this.rect,
+      );
+      if (clipped.length < 6) continue;
+      g.fillStyle(0xffffff, alpha * fade);
+      const points: Phaser.Math.Vector2[] = [];
+      for (let i = 0; i < clipped.length; i += 2) points.push(new Phaser.Math.Vector2(clipped[i]!, clipped[i + 1]!));
+      g.fillPoints(points, true);
     }
   }
 
@@ -60,8 +68,50 @@ export class Sheen {
   }
 
   public destroy(): void {
-    this.band.clearMask(true);
     this.band.destroy();
-    this.shape.destroy();
   }
+}
+
+/**
+ * Sutherland–Hodgman clip of a convex quad (x,y pairs) against an axis-aligned rect.
+ * Pure so a missing Phaser mask cannot take the glint off the brass.
+ */
+export function clipQuadToRect(points: readonly number[], rect: { x: number; y: number; width: number; height: number; right: number; bottom: number }): number[] {
+  const edges: readonly (readonly [number, number, number, number])[] = [
+    [rect.x, rect.y, rect.right, rect.y],
+    [rect.right, rect.y, rect.right, rect.bottom],
+    [rect.right, rect.bottom, rect.x, rect.bottom],
+    [rect.x, rect.bottom, rect.x, rect.y],
+  ];
+  let output = points.slice();
+  for (const [ax, ay, bx, by] of edges) {
+    const input = output;
+    output = [];
+    if (input.length < 2) return [];
+    for (let i = 0; i < input.length; i += 2) {
+      const px = input[i]!, py = input[i + 1]!;
+      const qx = input[(i + 2) % input.length]!, qy = input[(i + 3) % input.length]!;
+      const pIn = inside(px, py, ax, ay, bx, by);
+      const qIn = inside(qx, qy, ax, ay, bx, by);
+      if (pIn && qIn) output.push(qx, qy);
+      else if (pIn && !qIn) output.push(...intersect(px, py, qx, qy, ax, ay, bx, by));
+      else if (!pIn && qIn) output.push(...intersect(px, py, qx, qy, ax, ay, bx, by), qx, qy);
+    }
+  }
+  return output;
+}
+
+function inside(px: number, py: number, ax: number, ay: number, bx: number, by: number): boolean {
+  return (bx - ax) * (py - ay) - (by - ay) * (px - ax) >= 0;
+}
+
+function intersect(
+  px: number, py: number, qx: number, qy: number,
+  ax: number, ay: number, bx: number, by: number,
+): readonly [number, number] {
+  const dx = qx - px, dy = qy - py, ex = bx - ax, ey = by - ay;
+  const denom = dx * ey - dy * ex;
+  if (denom === 0) return [qx, qy];
+  const t = ((ax - px) * ey - (ay - py) * ex) / denom;
+  return [px + t * dx, py + t * dy];
 }
