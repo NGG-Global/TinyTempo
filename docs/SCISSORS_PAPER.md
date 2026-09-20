@@ -18,7 +18,7 @@ or consuming the player's sheet. Gameplay remains one tap anywhere per hit.
 
 Star, heart and angel cycle deterministically by round ID, with the shape chosen
 at reset so the cutting template matches its ending. They are the first of two
-shape sets: the act's second visit (level 26, with seventeen acts) cuts a lilac butterfly, a green fir
+shape sets: the act's second visit (level 28, with nineteen acts) cuts a lilac butterfly, a green fir
 tree and a pink tulip instead, and the third visit returns to the first set.
 `PAPER_SHAPE_SETS` in `paperMotion.ts` holds both; see `docs/VARIANTS.md`. `PlayScene` passes the
 authoritative weighted accuracy to the presentation; the new thresholds never

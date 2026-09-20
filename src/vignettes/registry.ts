@@ -31,6 +31,12 @@ import { BalloonPumpVignette } from './BalloonPumpVignette';
 import { StaplerVignette } from './StaplerVignette';
 import { createErrandSounds } from '@/audio/errandSounds';
 import { ERRAND_REVEAL_SEC } from './errandMotion';
+import { FishermanVignette, LAKESIDE } from './FishermanVignette';
+import { createFishingSounds } from '@/audio/fishingSounds';
+import { FISHING_MOTION, FISHING_REVEAL_SEC } from './fishingMotion';
+import { DjScratchVignette, BOOTH } from './DjScratchVignette';
+import { createScratchSounds } from '@/audio/scratchSounds';
+import { SCRATCH_REVEAL_SEC } from './scratchMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -140,5 +146,21 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     success: ['Neatly\nbound.', 'One pile, one piece.'], rough: ['Jammed\nagain.', 'A pile of loose ends.'],
     endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
     create: scene => new StaplerVignette(scene), sounds: context => createErrandSounds(context, 'stapler'),
+  },
+  // Act 18, appended at request: levels 1 to 17 keep their acts.
+  {
+    id: 'fisherman', title: 'Fisherman', intro: 'Something\'s\nbiting.', ink: LAKESIDE.ink,
+    success: ['What a\ncatch.', 'Dinner, and a story to go with it.'],
+    partial: { minAccuracy: FISHING_MOTION.partialAccuracy, copy: ['A little\none.', 'Back it goes. Give it a year.'] },
+    rough: ['Oh.\nThat.', 'The lake keeps its fish.'],
+    endingSec: FISHING_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: FISHING_MOTION.successAccuracy,
+    create: scene => new FishermanVignette(scene), sounds: createFishingSounds,
+  },
+  // Act 19, appended at request: levels 1 to 18 keep their acts.
+  {
+    id: 'scratch', title: 'DJ scratch', intro: 'Bring the\nnoise.', ink: BOOTH.ink,
+    success: ['Hands\nup.', 'The whole room heard that.'], rough: ['Needle\nskip.', 'The record has opinions.'],
+    endingSec: SCRATCH_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new DjScratchVignette(scene), sounds: createScratchSounds,
   },
 ];
