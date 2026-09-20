@@ -98,8 +98,8 @@ a.chip {
 
 .floater {
   position: absolute;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border: 3px solid var(--ink);
   background: var(--cream);
   animation: drift 9s ease-in-out infinite;
@@ -464,25 +464,38 @@ main {
 
 .stand {
   position: absolute;
-  left: 58%;
-  bottom: 22%;
-  width: 16px;
-  height: 26%;
+  left: 62%;
+  bottom: 26%;
+  width: 10px;
+  height: 18%;
   background: var(--iron);
   border: 3px solid #15241e;
-  border-radius: 6px;
+  border-radius: 5px;
+}
+
+.stand::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -10px;
+  width: 28px;
+  height: 8px;
+  border: 3px solid #15241e;
+  border-radius: 50%;
+  background: transparent;
+  transform: translateX(-50%);
 }
 
 .stand::after {
   content: "";
   position: absolute;
   left: 50%;
-  top: -14px;
-  width: 34px;
-  height: 16px;
+  top: -12px;
+  width: 22px;
+  height: 12px;
   border: 3px solid #15241e;
   border-radius: 8px;
-  background: #314740;
+  background: #3d5850;
   transform: translateX(-50%);
 }
 
@@ -731,16 +744,16 @@ main {
 
 .baton {
   position: absolute;
-  top: 18px;
+  top: 0;
+  left: 0;
   width: 14px;
   height: 14px;
-  margin-left: -7px;
   border-radius: 50%;
   background: var(--coral);
   border: 3px solid var(--ink);
   box-shadow: 0 4px 0 rgba(36, 62, 53, 0.2);
-  transition: left 80ms linear;
   pointer-events: none;
+  will-change: transform;
 }
 
 .grade {
@@ -858,13 +871,27 @@ main {
 }
 
 .thumb {
-  width: 34px;
-  height: 46px;
+  width: 28px;
+  height: 40px;
   border: 4px solid var(--ink);
-  border-radius: 16px 16px 12px 12px;
+  border-radius: 14px 14px 10px 10px;
   background: #dc9775;
   animation: tap-thumb var(--bar) ease-in-out infinite;
   transform-origin: 50% 100%;
+  position: relative;
+}
+
+.thumb::before {
+  content: "";
+  position: absolute;
+  left: 6px;
+  top: -14px;
+  width: 12px;
+  height: 18px;
+  border: 4px solid var(--ink);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: #dc9775;
 }
 
 @keyframes tap-thumb {
@@ -896,7 +923,7 @@ main {
   inset: 24px;
   border-color: var(--ink);
   animation: none;
-  background: var(--ink);
+  background: var(--coral);
 }
 
 @keyframes ring-out {
@@ -1076,15 +1103,22 @@ main {
 }
 
 .mini-curl { background: #dad4cb; }
+.mini-curl .torso {
+  left: 38%; top: 28%; width: 24%; height: 42%; background: #5c4033; border: 3px solid #2b2733;
+  border-radius: 12px 12px 8px 8px;
+}
+.mini-curl .head {
+  left: 40%; top: 12%; width: 20%; height: 22%; background: #dc9775; border: 3px solid #2b2733; border-radius: 50%;
+}
 .mini-curl .bar {
-  left: 18%; top: 42%; width: 64%; height: 10px; background: #3b3e47; border-radius: 6px;
+  left: 14%; top: 40%; width: 72%; height: 10px; background: #3b3e47; border-radius: 6px;
   animation: curl 1.4s ease-in-out infinite;
 }
 .mini-curl .plate {
-  left: 14%; top: 34%; width: 18px; height: 26px; background: #bcc3ca; border-radius: 4px;
+  left: 10%; top: 32%; width: 16px; height: 26px; background: #bcc3ca; border: 3px solid #2b2733; border-radius: 4px;
   animation: curl 1.4s ease-in-out infinite;
 }
-.mini-curl .plate.r { left: auto; right: 14%; }
+.mini-curl .plate.r { left: auto; right: 10%; }
 @keyframes curl {
   0%, 100% { transform: translateY(10px); }
   50% { transform: translateY(-10px); }
@@ -1122,12 +1156,12 @@ main {
 
 .mini-paper { background: #eee8d8; }
 .mini-paper .sheet {
-  left: 28%; top: 24%; width: 44%; height: 52%; background: #fffaf0; border: 3px solid #30493f;
+  left: 26%; top: 18%; width: 48%; height: 58%; background: #f0ce7e; border: 3px solid #30493f;
   clip-path: polygon(50% 8%, 61% 38%, 94% 38%, 67% 58%, 78% 92%, 50% 72%, 22% 92%, 33% 58%, 6% 38%, 39% 38%);
   animation: snip 1.8s ease-in-out infinite;
 }
 .mini-paper .shears {
-  left: 18%; top: 46%; width: 64%; height: 8px; background: #c7d4d2; border: 3px solid #30493f;
+  left: 16%; top: 48%; width: 68%; height: 10px; background: #c7d4d2; border: 3px solid #30493f;
   animation: wipe 1.8s ease-in-out infinite;
 }
 @keyframes snip {
@@ -1177,12 +1211,24 @@ main {
 }
 
 .mini-door { background: #cbb7a0; }
+.mini-door .frame {
+  left: 24%; top: 10%; width: 52%; height: 80%; background: #6b4a2e; border: 4px solid #493c39;
+}
 .mini-door .door {
-  left: 28%; top: 14%; width: 44%; height: 72%; background: #8b5a3c; border: 4px solid #493c39;
+  left: 28%; top: 14%; width: 44%; height: 72%; background: #8b5a3c; border: 3px solid #493c39;
   transform-origin: 0 50%; animation: door 2.4s ease-in-out infinite;
 }
 .mini-door .btn {
-  left: 46%; top: 48%; width: 12px; height: 12px; border-radius: 50%; background: #e8d48a; border: 3px solid #493c39;
+  left: 58%; top: 48%; width: 12px; height: 12px; border-radius: 50%; background: #e8d48a; border: 3px solid #493c39;
+  z-index: 1;
+}
+.mini-door .cat {
+  left: 38%; bottom: 18%; width: 18px; height: 14px; background: #d98a48; border-radius: 8px 8px 4px 4px;
+  opacity: 0; animation: cat 2.4s ease-in-out infinite;
+}
+@keyframes cat {
+  0%, 55%, 100% { opacity: 0; transform: translateX(-8px); }
+  70%, 85% { opacity: 1; transform: translateX(6px); }
 }
 @keyframes door {
   0%, 45%, 100% { transform: perspective(200px) rotateY(0); }
@@ -1194,6 +1240,14 @@ main {
   inset: 16px 18px 28px; background: repeating-linear-gradient(90deg, #7eb8c9 0 12px, #f2efe6 12px 24px);
   border: 3px solid #493c39; animation: paint 2s linear infinite;
   background-size: 200% 100%;
+}
+.mini-roller .roll {
+  left: 58%; top: 22%; width: 18px; height: 42px; background: #cf5134; border: 3px solid #493c39; border-radius: 8px;
+  animation: roll-move 2s linear infinite;
+}
+@keyframes roll-move {
+  0% { transform: translateX(-36px); }
+  100% { transform: translateX(8px); }
 }
 @keyframes paint {
   from { background-position: 0 0; }

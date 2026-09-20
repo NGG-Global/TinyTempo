@@ -28,6 +28,9 @@
   let demoed = new Set();
   let score = { perfect: 0, good: 0, miss: 0 };
   let armed = false;
+  let engaged = false;
+  let visible = false;
+  let tappedThisPlay = false;
 
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -124,8 +127,16 @@
     pending = new Set(PATTERN);
   }
 
+  function cycleAt(nowMs) {
+    return Math.floor((nowMs / 1000 - origin) / (BAR * 2));
+  }
+
   function loop(nowMs) {
     if (!armed) {
+      requestAnimationFrame(loop);
+      return;
+    }
+    if (!visible) {
       requestAnimationFrame(loop);
       return;
     }
@@ -135,18 +146,23 @@
     const playing = inCycle >= BAR;
     const local = ((playing ? inCycle - BAR : inCycle) / BEAT);
 
-    if (cycle !== lastCycle && lastCycle >= 0) expireMisses();
+    if (cycle !== lastCycle && lastCycle >= 0 && engaged && tappedThisPlay) expireMisses();
     if (cycle !== lastCycle) {
       lastCycle = cycle;
       resetSockets(socketsWatch);
       resetSockets(socketsPlay);
       pending = new Set(PATTERN);
       demoed = new Set();
+      tappedThisPlay = false;
     }
 
     stage?.classList.toggle('is-play', playing);
     stage?.classList.toggle('is-watch', !playing);
-    if (hint) hint.textContent = playing ? 'Your turn — tap anywhere' : 'Watch the pattern';
+    if (hint) {
+      hint.textContent = engaged
+        ? (playing ? 'Your turn — tap anywhere' : 'Watch the pattern')
+        : 'Tap the stage when you are ready';
+    }
 
     const beatIndex = Math.min(3, Math.floor(local));
     for (const [i, socket] of socketsWatch.entries()) socket.classList.toggle('is-now', !playing && i === beatIndex);
@@ -156,7 +172,7 @@
       for (const beat of PATTERN) {
         if (local >= beat) {
           mark(socketsWatch, beat, 'hit');
-          if (!demoed.has(beat)) {
+          if (engaged && !demoed.has(beat)) {
             demoed.add(beat);
             blip('demo', true);
           }
@@ -170,8 +186,7 @@
       if (socket) {
         const stageBox = stage.getBoundingClientRect();
         const box = socket.getBoundingClientRect();
-        baton.style.left = `${box.left - stageBox.left + box.width / 2}px`;
-        baton.style.top = `${box.top - stageBox.top - 10}px`;
+        baton.style.transform = `translate(${box.left - stageBox.left + box.width / 2 - 7}px, ${box.top - stageBox.top - 10}px)`;
       }
     }
 
@@ -189,6 +204,8 @@
 
   stage?.addEventListener('pointerdown', (event) => {
     event.preventDefault();
+    engaged = true;
+    visible = true;
     startClock();
     const elapsed = performance.now() / 1000 - origin;
     const inCycle = elapsed % (BAR * 2);
@@ -197,6 +214,7 @@
       return;
     }
     const local = (inCycle - BAR) / BEAT;
+    tappedThisPlay = true;
     judge(local);
   });
 
@@ -217,10 +235,10 @@
 
   const io = new IntersectionObserver((entries) => {
     for (const entry of entries) {
-      if (entry.isIntersecting) {
+      visible = entry.isIntersecting;
+      if (visible) {
         startClock();
-        io.disconnect();
-        break;
+        lastCycle = cycleAt(performance.now());
       }
     }
   }, { threshold: 0.35 });
@@ -238,8 +256,4 @@
     };
     requestAnimationFrame(pulse);
   }
-
-  document.querySelectorAll('[data-demo-hit]').forEach((el) => {
-    el.addEventListener('pointerdown', () => blip('demo', true));
-  });
 })();
