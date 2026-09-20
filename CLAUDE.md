@@ -114,6 +114,12 @@ sample eleven times running.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
+**The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
+`bgm/theme/cozy-quest.mp3` on `MenuScene` and stops on every way out, with its own player
+rather than a mode inside `MusicSystem`, because every guarantee that system makes is
+about a beat grid a level is judged against and the menu is judged against nothing. A
+browser will not sound it until the page has been touched, so it fetches nothing on a cold
+start and every tap that leaves the player on the title screen asks again.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
 menu's PLAY tap. Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from
@@ -280,6 +286,7 @@ src/
     AudioEngine.ts     The only AudioContext; SFX scheduling and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
+    ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     samples.ts         The recorded one-shots: fetch, decode, align to the beat

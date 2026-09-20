@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -102,7 +102,7 @@ export class MenuScene extends BaseScene {
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.enteredAt = performance.now() / 1000;
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
+    this.events.once(Phaser.Scenes.Events.CREATE, () => { this.curtain.reveal(); this.openTheme(); });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
   }
@@ -229,12 +229,16 @@ export class MenuScene extends BaseScene {
       this.puckPressed = 'mute';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
+      // Unmuting on the title screen should leave something to hear, and this tap is
+      // itself the gesture a cold start was missing.
+      this.openTheme();
       return;
     }
     if (Math.abs(tap.x - this.setupAt.x) < half && Math.abs(tap.y - this.setupAt.y) < half) {
       this.puckPressed = 'setup';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
+      this.closeTheme();
       this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: SceneKey.Menu }));
       return;
     }
@@ -242,9 +246,60 @@ export class MenuScene extends BaseScene {
       this.pressedAt = performance.now() / 1000;
       this.pressDirty = true;
       void this.play();
+      return;
     }
-    if (Phaser.Geom.Rectangle.Contains(this.tutorialRect, tap.x, tap.y)) void this.play(true);
+    if (Phaser.Geom.Rectangle.Contains(this.tutorialRect, tap.x, tap.y)) { void this.play(true); return; }
+    // Anything else is a tap that stays on the title screen, and on a cold start it is
+    // the first gesture the page has had — which is all a browser was waiting for.
+    this.openTheme();
   }
+  /**
+   * Play the theme, if the platform will let us yet.
+   *
+   * On a return to the title screen the engine is already unlocked and this simply
+   * starts. On a cold start there has been no gesture, so no audio may sound at all: the
+   * attempt is silent, and the first tap on the menu tries again. Where a platform allows
+   * playback without a gesture — a packaged WebView can — the unlock below succeeds and
+   * the theme comes up on its own.
+   */
+  private openTheme(): void {
+    if (!this.disposed && !this.busy) void this.wakeTheme();
+  }
+
+  /**
+   * Bring the engine up far enough to sound, then play.
+   *
+   * Not `unlock()`: that races a three-second timeout, because it is called from a
+   * gesture and a context that will not resume from one has genuinely failed. Here a
+   * suspended context is the ordinary answer — a browser refuses audio until the page has
+   * been touched — so the attempt is quiet and every tap on the menu asks again. Where
+   * the platform does allow it, which a packaged WebView can, this is what lets the theme
+   * come up on its own.
+   *
+   * This does construct the AudioContext before the PLAY gesture, which the menu used to
+   * avoid. The reason it avoided it was that the mute puck must read a stored setting
+   * rather than an engine — `isMuted` still does, so that reason is intact, and a title
+   * screen with a theme is a title screen that has something to do with a context.
+   */
+  private async wakeTheme(): Promise<void> {
+    if (this.disposed || this.busy) return;
+    const audio = sharedAudio(this);
+    if (audio.context.state !== 'running') {
+      try { await audio.context.resume(); } catch { return; }
+    }
+    // `busy` as well as `disposed`: a resume left pending from the title screen's own
+    // create resolves the moment PLAY grants the gesture credit it was waiting for, and
+    // that is precisely when the player is on their way out. Without this the theme
+    // fetched 3.5 MB to start a track behind a closing curtain.
+    if (this.disposed || this.busy || audio.context.state !== 'running') return;
+    await audio.theme.enter();
+  }
+
+  /** The title screen is the only place the theme plays, so every way out stops it. */
+  private closeTheme(): void {
+    currentAudio(this)?.theme.leave();
+  }
+
   private async play(tutorial = false): Promise<void> {
     if (this.busy) return;
     const request = ++this.request;
@@ -262,6 +317,7 @@ export class MenuScene extends BaseScene {
       void samples.load(audio.context);
       this.playLabel.setText('Play');
       const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || tutorialComplete());
+      this.closeTheme();
       this.curtain.cover(() => this.scene.start(needsTutorial ? SceneKey.Tutorial : SceneKey.Map));
     } catch (error) {
       if (this.disposed || request !== this.request) return;
@@ -276,6 +332,7 @@ export class MenuScene extends BaseScene {
     ++this.request;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+    this.closeTheme();
     this.taps.dispose();
     this.illustration.destroy();
   }
