@@ -231,6 +231,8 @@ describe('following what Play reports', () => {
     await updates.reconcile();
     expect(client.started).toEqual(['flexible', 'flexible']);
   });
+
+  it('applies when the native listener reports the download finished', async () => {
     const client = fakeClient();
     const updates = createPlayUpdate(client, {
       wouldInterrupt: () => false,
@@ -238,8 +240,7 @@ describe('following what Play reports', () => {
     });
     await updates.boot();
     client.emit('downloaded');
-    await Promise.resolve();
-    expect(client.completes).toBe(1);
+    await vi.waitFor(() => { expect(client.completes).toBe(1); });
   });
 
   it('waits until the player leaves a level before offering the restart', async () => {
