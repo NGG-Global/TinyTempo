@@ -8,18 +8,17 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('DJ scratch act', () => {
-  it('is appended as the nineteenth act and keeps every earlier level', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('scratch');
-    expect(VIGNETTES).toHaveLength(19);
+  it('is the nineteenth act and keeps every earlier level', () => {
+    expect(VIGNETTES[18]?.id).toBe('scratch');
     expect(levelSpec(19).vignette).toBe('scratch');
-    expect(levelSpec(38).vignette).toBe('scratch');
+    expect(levelSpec(19 + VIGNETTES.length).vignette).toBe('scratch');
     expect([1, 9, 17, 18].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'stapler', 'fisherman']);
-    expect(levelSpec(20).vignette).toBe('hammer');
-    expect(levelSpec(20).lap).toBe(1);
+    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
+    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {
-    const definition = VIGNETTES.at(-1)!;
+    const definition = VIGNETTES[18]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(SCRATCH_REVEAL_SEC);
     expect(definition.partial).toBeUndefined();

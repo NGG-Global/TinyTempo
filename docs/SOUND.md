@@ -1,7 +1,7 @@
 # Recorded beats
 
-Four acts take a recorded beat instead of a synthesized one. Everything else in the
-game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these four
+Five acts take a recorded beat instead of a synthesized one. Everything else in the
+game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these five
 keeps its synthesized voice as the fallback.
 
 | Act | File | Voice |
@@ -10,9 +10,13 @@ keeps its synthesized voice as the fallback.
 | Bug & shoe | `sfx/shoe.wav` | one take |
 | Bicep curl | `sfx/grunt.wav` | one take |
 | Scissors & paper | `sfx/scissors.wav` | one take |
+| Trombone | `sfx/trombone-1.mp3`, `sfx/trombone-2.mp3` | two takes, alternated |
 
-Only the **beat** changes. Success, rough, scrape and judder are still synthesized for
-all four, so a level's reactions are unchanged.
+Only the **beat** changes for the first four: success, rough, scrape and judder are still
+synthesized, so a level's reactions are unchanged. The trombone is the exception on that
+too: its success and rough voices are the delivered `sfx/trombone-success.mp3` and
+`sfx/trombone-fail.mp3`, because a fanfare and a "wah wah" were performed for it, and the
+synthesized fanfare and sagging note in `tromboneSounds.ts` are only the fallback.
 
 ## What this costs
 
@@ -21,11 +25,20 @@ downloads. They ride the same route as the music: files outside `public/`, refer
 through `import.meta.url` so Vite hashes and emits them, and served from local storage in
 the Android WebView.
 
-WAV rather than MP3 deliberately. An MP3's encoder delay is padding the decoder is
-supposed to strip and browsers do not agree about; on a 2.4 MB track that is detected once
-and dropped once (`detectLeadIn`), but on a 140 ms percussive one-shot fired on every beat
-it is exactly the error this act cannot afford. At these lengths the saving would have
-been around 160 KB.
+WAV rather than MP3 deliberately, for the percussive one-shots. An MP3's encoder delay is
+padding the decoder is supposed to strip and browsers do not agree about; on a 2.4 MB track
+that is detected once and dropped once (`detectLeadIn`), but on a 140 ms percussive one-shot
+fired on every beat it is exactly the error this act cannot afford. At these lengths the
+saving would have been around 160 KB.
+
+The trombone's four takes are MP3, as delivered, and that is a deliberate exception rather
+than a lapse. Two things changed the sum. `trimToAttack` now finds the attack at decode
+whatever silence precedes it, encoder delay included, so the alignment error the rule
+exists to prevent is removed by the bank rather than by the container — and measured after
+Chromium's decoder, the two notes start at 0.00 ms and 0.02 ms. And these are sustained
+notes of 1.0 s and endings of 2.0 s, six seconds of stereo in all: as WAV they would weigh
+about 1.06 MB, some 40% of the music track, against 150 KB as MP3. Neither is dual-mono,
+so folding would edit the delivered sound. A percussive take should still arrive as WAV.
 
 ## Alignment is not optional
 
@@ -38,6 +51,10 @@ A recorded one-shot carries whatever silence sat in front of the take. As delive
 | `wipe-2.wav` | 5.2 ms |
 | `shoe.wav` | 6.6 ms |
 | `scissors.wav` | **25.4 ms** |
+| `trombone-1.mp3` | 0.0 ms |
+| `trombone-2.mp3` | 0.02 ms |
+| `trombone-success.mp3` | 0.0 ms |
+| `trombone-fail.mp3` | 0.0 ms |
 
 A beat sound is scheduled *on* the grid, so that silence is not padding — it is lateness.
 25 ms against a 55 ms Perfect window would be charged to every demonstration beat, and
@@ -63,6 +80,12 @@ take twice across the join.
 Nothing else about a voice changes. Success, rough and the two accents stay single
 buffers, because none of them repeats often enough for the identical sample to be the
 problem.
+
+The trombone is built on this alternation: its two takes are two *notes*, and the slide in
+the picture moves between two positions to match. That only works because the engine's
+rotation is deterministic and the picture can count along with it, which `docs/TROMBONE.md`
+sets out — the action voice is scheduled for every cue and every target when a task is
+placed, so the n-th sounding beat of the level always gets the same take.
 
 ## Failing soft
 
@@ -92,6 +115,10 @@ whoever makes that call next:
 | `shoe.wav` | −5.1 dBFS | −20.9 dB |
 | `grunt.wav` | −7.4 dBFS | −23.3 dB |
 | `scissors.wav` | −2.8 dBFS | −28.5 dB |
+| `trombone-1.mp3` | −0.03 dBFS | −14.9 dB |
+| `trombone-2.mp3` | −0.8 dBFS | −16.3 dB |
+| `trombone-success.mp3` | −2.0 dBFS | −19.5 dB |
+| `trombone-fail.mp3` | 0.0 dBFS | −16.8 dB |
 
 The synthesized beats they sit among run −22 to −17 dB RMS. So the two wipes are roughly
 6 dB hotter than the loudest thing the game made for itself, and the scissors around 7 dB

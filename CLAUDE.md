@@ -15,7 +15,7 @@ Crockford base32 string carrying levels, accuracies and settings, never hearts o
 purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
-Nineteen vignettes rotate strictly by registry order: `levelSpec` picks
+Twenty vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -27,7 +27,7 @@ rotation has come round before a level, PlayScene passes it to `create(scene, la
 and the act indexes its own list with it: bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), and scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`).
-Lap 0 is always the original look, so the first nineteen levels are unchanged. Add
+Lap 0 is always the original look, so the first twenty levels are unchanged. Add
 variety this way, as a new look inside an existing act, rather than as a registry
 entry. See `docs/VARIANTS.md`.
 
@@ -61,6 +61,14 @@ The DJ scratch is act 19: a hand on a record and one on the crossfader, one shor
 per beat (`scratchPush`, back in place inside 0.42 beat), the mixer's meter lit by judged
 hits, and a binary ending — hands up under the lights, or the needle skips off. Its voices
 run vinyl noise through a swept band-pass (`audio/scratchSounds.ts`). See `docs/DJ_SCRATCH.md`.
+
+The trombone is act 20 and its beat is unlike every other's. **The action voice is scheduled
+on the grid for every demonstration cue and every target when a task is placed**, and the
+engine hands out its two recorded takes in that order for the whole level, so the note that
+sounds is fixed by its position in the level and the picture follows the plan (`soundedNotes`,
+`noteFor`), not the tap: the slide moves with the take being heard. The tap keeps the judged
+reactions and the curtain. Its four recordings are the sample bank's first MP3s, for reasons
+`docs/SOUND.md` records. See `docs/TROMBONE.md`.
 
 `HouseholdVignette.update` re-anchors the stage to its laid-out home every frame,
 as every other act does in its own `update`. `Vignette.translate` is the
@@ -536,9 +544,9 @@ and `ui/icons.ts` rather than drawing a card or a glyph of its own.
 The repository does ship binary audio — the WAV masters in `bgm/` and the MP3s
 encoded from them — and that is the great majority of the checkout. Only the
 premixed MP3 reaches the bundle. Sound effects are synthesized locally per vignette in
-`src/audio/`, with one exception: four acts take a *recorded* beat from `sfx/` — the
-window's two wipes, the bug's shoe, the curl's grunt and the paper's scissors, 180 KB of
-WAV beside the 2.4 MB track. They are an enhancement over a game that already works, so
+`src/audio/`, with one exception: five acts take a *recorded* beat from `sfx/` — the
+window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors and the
+trombone's two notes and two endings, 180 KB of WAV and 150 KB of MP3 beside the 2.4 MB track. They are an enhancement over a game that already works, so
 `audio/samples.ts` never rejects and an act whose sample does not arrive keeps the
 synthesized voice it shipped with. See `docs/SOUND.md`.
 

@@ -4,9 +4,9 @@ import type { Voice } from './AudioEngine';
  * The recorded one-shots.
  *
  * Every other sound in the game is synthesized at runtime, which is what kept the download
- * to one music track. These four acts are the exception: a stomp, a snip, a grunt and two
- * wipes, delivered as WAV, because a voice can be *performed* in a way a few lines of
- * oscillator maths cannot reach. They are an enhancement over a working game, never a
+ * to one music track. These five acts are the exception: a stomp, a snip, a grunt, two
+ * wipes and a trombone's two notes and two endings, delivered as recordings, because a
+ * voice can be *performed* in a way a few lines of oscillator maths cannot reach. They are an enhancement over a working game, never a
  * dependency of one — a bank that fails to load leaves every act on the synthesis it
  * already had, which is why `load` resolves rather than rejects and `get` returns null.
  *
@@ -22,6 +22,12 @@ export const SAMPLE_URLS = {
   grunt: new URL('../../sfx/grunt.wav', import.meta.url).href,
   wipe1: new URL('../../sfx/wipe-1.wav', import.meta.url).href,
   wipe2: new URL('../../sfx/wipe-2.wav', import.meta.url).href,
+  // The trombone's two notes and its two endings. MP3 as delivered: see docs/SOUND.md for
+  // why these four are not WAV like the others.
+  trombone1: new URL('../../sfx/trombone-1.mp3', import.meta.url).href,
+  trombone2: new URL('../../sfx/trombone-2.mp3', import.meta.url).href,
+  tromboneSuccess: new URL('../../sfx/trombone-success.mp3', import.meta.url).href,
+  tromboneFail: new URL('../../sfx/trombone-fail.mp3', import.meta.url).href,
 } as const;
 
 export type SampleName = keyof typeof SAMPLE_URLS;

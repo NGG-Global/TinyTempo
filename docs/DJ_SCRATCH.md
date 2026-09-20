@@ -1,9 +1,8 @@
 # DJ scratch
 
 One vignette appended to the rotation at request, as act 19. Levels 1 to 18 keep
-their acts; the rotation is nineteen long, so the variant laps described in
-`docs/VARIANTS.md` now turn over every nineteen levels, and the act's own first
-level is 19.
+their acts, and the act's own first level is 19. The trombone (`docs/TROMBONE.md`)
+has since been appended after it as act 20.
 
 | Each beat | Successful finale | Rough finale |
 | --- | --- | --- |
