@@ -10,19 +10,18 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('fisherman act', () => {
-  it('is appended as the eighteenth act and keeps every earlier level', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('fisherman');
-    expect(VIGNETTES).toHaveLength(18);
+  it('is the eighteenth act and keeps every earlier level', () => {
+    expect(VIGNETTES[17]?.id).toBe('fisherman');
     expect(levelSpec(18).vignette).toBe('fisherman');
-    expect(levelSpec(36).vignette).toBe('fisherman');
+    expect(levelSpec(18 + VIGNETTES.length).vignette).toBe('fisherman');
     expect([1, 4, 9, 13, 14, 17].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'saw', 'paper', 'doorbell', 'roller', 'stapler']);
-    // Level 19 is the hammer again: the rotation is one longer, and lap 1 starts a level later.
-    expect(levelSpec(19).vignette).toBe('hammer');
-    expect(levelSpec(19).lap).toBe(1);
+    // The hammer comes round again one level after the rotation's last act, on lap 1.
+    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
+    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
   });
 
   it('holds its finale for five beats, and every ending settles inside the hold at every tempo', () => {
-    const definition = VIGNETTES.at(-1)!;
+    const definition = VIGNETTES[17]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(FISHING_REVEAL_SEC);
     expect(definition.partial?.minAccuracy).toBe(FISHING_MOTION.partialAccuracy);

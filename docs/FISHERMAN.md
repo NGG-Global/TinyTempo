@@ -1,9 +1,8 @@
 # Fisherman
 
 One vignette appended to the rotation at request, as act 18. Levels 1 to 17 keep
-their acts; the rotation is eighteen long, so the variant laps described in
-`docs/VARIANTS.md` now turn over every eighteen levels, and the fisherman's own
-first level is 18.
+their acts, and the fisherman's own first level is 18. The DJ scratch
+(`docs/DJ_SCRATCH.md`) has since been appended after it as act 19.
 
 | Each beat | Successful finale (70%+) | Partial finale (40–69%) | Rough finale |
 | --- | --- | --- | --- |

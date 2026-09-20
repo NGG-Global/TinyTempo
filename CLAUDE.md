@@ -15,7 +15,7 @@ Crockford base32 string carrying levels, accuracies and settings, never hearts o
 purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
-Eighteen vignettes rotate strictly by registry order: `levelSpec` picks
+Nineteen vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -27,7 +27,7 @@ rotation has come round before a level, PlayScene passes it to `create(scene, la
 and the act indexes its own list with it: bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), and scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`).
-Lap 0 is always the original look, so the first eighteen levels are unchanged. Add
+Lap 0 is always the original look, so the first nineteen levels are unchanged. Add
 variety this way, as a new look inside an existing act, rather than as a registry
 entry. See `docs/VARIANTS.md`.
 
@@ -56,6 +56,11 @@ beat is a pull on a hooked line, not a reel, so `rodHeave` is deliberately not m
 It is the second act with three endings from the round accuracy: a big fish at 70%+, one
 of three that each leave the water their own way, a small fish at 40–69%, and a boot or
 tyre below. See `docs/FISHERMAN.md`.
+
+The DJ scratch is act 19: a hand on a record and one on the crossfader, one short scratch
+per beat (`scratchPush`, back in place inside 0.42 beat), the mixer's meter lit by judged
+hits, and a binary ending — hands up under the lights, or the needle skips off. Its voices
+run vinyl noise through a swept band-pass (`audio/scratchSounds.ts`). See `docs/DJ_SCRATCH.md`.
 
 `HouseholdVignette.update` re-anchors the stage to its laid-out home every frame,
 as every other act does in its own `update`. `Vignette.translate` is the

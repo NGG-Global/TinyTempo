@@ -1,9 +1,10 @@
 # Errand acts
 
 Four vignettes appended to the rotation at request, as acts 14 to 17. Levels 1 to
-13 keep their acts. The fisherman (`docs/FISHERMAN.md`) has since been appended as
-act 18, so the rotation is eighteen long and the variant laps described in
-`docs/VARIANTS.md` turn over every eighteen levels.
+13 keep their acts. The fisherman (`docs/FISHERMAN.md`) and the DJ scratch
+(`docs/DJ_SCRATCH.md`) have since been appended as acts 18 and 19, so the rotation
+is nineteen long and the variant laps described in `docs/VARIANTS.md` turn over
+every nineteen levels.
 
 | First level | Act | Each beat | Successful finale | Rough finale |
 | --- | --- | --- | --- | --- |
