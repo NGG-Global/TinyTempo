@@ -188,21 +188,21 @@ touch device held in landscape gets a "rotate your device" prompt instead. The
 prompt is gated on a coarse pointer, so a landscape desktop window is left
 alone. The native build declares the lock in its manifest and never shows it.
 
-## Legal (Google Play)
+## Website (GitHub Pages)
 
-The Privacy Policy and Terms of Service live in `legal/` as a static site,
-separate from the game bundle so they are not copied into the APK. GitHub
-Actions (`.github/workflows/pages.yml`) deploys that folder to GitHub Pages
-when `legal/` changes on `main`.
+The public site lives in `legal/` as static files, separate from the game
+bundle so it is not copied into the APK. GitHub Actions
+(`.github/workflows/pages.yml`) deploys that folder to GitHub Pages when
+`legal/` changes on `main`.
 
-Enable **Settings → Pages → Source: GitHub Actions** once. After the workflow
-runs, paste these HTTPS URLs into the Play Console listing (and the Data
-safety form, which must match the privacy policy):
+The homepage is the marketing site. Privacy and Terms stay at the same
+paths the Play Console listing already uses:
 
+- Game: `https://ngg-global.github.io/TinyTempo/`
 - Privacy Policy: `https://ngg-global.github.io/TinyTempo/privacy/`
 - Terms of Service: `https://ngg-global.github.io/TinyTempo/terms/`
 
-The pages state the current product as it is in code: on-device progress,
+The legal pages state the current product as it is in code: on-device progress,
 optional AdMob rewarded ads, optional Google Play heart refill and Premium
 bought and held through Google Play itself, no Tiny Tempo account. Contact on the pages is
 `dor1612@gmail.com`. Preview locally with any static server, for example

@@ -4,65 +4,280 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#eee8d8" />
-    <meta name="description" content="Privacy Policy and Terms of Service for Tiny Tempo, the Android rhythm game from Dor Vadai." />
-    <title>Tiny Tempo — Legal</title>
+    <meta name="description" content="Tiny Tempo is a portrait rhythm game for people who live on the beat. Watch a tiny everyday rhythm, then tap it back. Perfect windows, endless levels, one thumb." />
+    <title>Tiny Tempo — a rhythm game for the beat-obsessed</title>
+    <link rel="canonical" href="https://ngg-global.github.io/TinyTempo/" />
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://ngg-global.github.io/TinyTempo/" />
+    <meta property="og:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
+    <meta property="og:description" content="Watch a tiny everyday rhythm. Tap it back. Perfect windows, endless levels, one thumb." />
+    <meta property="og:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
+    <meta name="twitter:description" content="Watch a tiny everyday rhythm. Tap it back. Perfect windows, endless levels, one thumb." />
+    <meta name="twitter:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@700&family=Nunito:wght@500;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="./site.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="./market.css" />
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "VideoGame",
+        "name": "Tiny Tempo",
+        "url": "https://ngg-global.github.io/TinyTempo/",
+        "description": "A portrait rhythm game. Watch a tiny everyday rhythm, then tap it back.",
+        "genre": ["Rhythm", "Music"],
+        "playMode": "SinglePlayer",
+        "applicationCategory": "GameApplication",
+        "operatingSystem": "Android",
+        "author": { "@type": "Person", "name": "Dor Vadai" }
+      }
+    </script>
   </head>
   <body>
-    <a class="skip" href="#content">Skip to content</a>
-    <div class="wrap">
-      <header class="site-header">
-        <a class="brand" href="./">
-          <span class="brand-mark" aria-hidden="true"></span>
-          <span>
-            <span class="brand-name">Tiny Tempo</span>
-            <span class="brand-tag">Legal</span>
-          </span>
-        </a>
-        <nav aria-label="Legal documents">
-          <a href="./privacy/">Privacy</a>
-          <a href="./terms/">Terms</a>
-        </nav>
-      </header>
+    <a class="skip" href="#play-a-beat">Skip to the beat</a>
+    <div class="grain" aria-hidden="true"></div>
 
-      <main id="content">
-        <div class="panel">
-          <div class="hero">
-            <p class="kicker">Google Play listing</p>
-            <h1>Tiny Tempo legal pages</h1>
-            <p class="lede">
-              Public Privacy Policy and Terms of Service for the Android app
-              Tiny Tempo (<code>com.tinytempo.app</code>), published by Dor Vadai.
-            </p>
-          </div>
-          <div class="cards">
-            <a class="card" href="./privacy/">
-              <h2>Privacy Policy</h2>
-              <p>What the app stores on your device, what advertising and store partners may collect, and how to ask us about your data.</p>
-              <span>Read the policy →</span>
-            </a>
-            <a class="card" href="./terms/">
-              <h2>Terms of Service</h2>
-              <p>The rules for using Tiny Tempo, including hearts, Premium, rewarded ads, and Google Play purchases.</p>
-              <span>Read the terms →</span>
-            </a>
-          </div>
-          <p class="notice">
-            These pages are the public URLs for the Google Play Console listing.
-            They do not require an account. Last updated 16 September 2026.
-          </p>
+    <header class="site-header">
+      <a class="brand" href="./">
+        <img src="./apple-touch-icon.png" width="40" height="40" alt="" />
+        <span>
+          <span class="brand-name">Tiny Tempo</span>
+          <span class="brand-tag">Rhythm game</span>
+        </span>
+      </a>
+      <nav class="nav-links" aria-label="Site">
+        <a href="#play-a-beat">The beat</a>
+        <a href="#acts">Acts</a>
+        <a href="#heads">Windows</a>
+        <a class="nav-cta" href="#play-a-beat">Play a beat</a>
+      </nav>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="floaters" aria-hidden="true">
+          <span class="floater note"></span>
+          <span class="floater spark"></span>
+          <span class="floater note"></span>
+          <span class="floater spark"></span>
+          <span class="floater spark"></span>
         </div>
-      </main>
+        <div class="hero-copy">
+          <div class="sign" aria-hidden="false">
+            <div class="ropes" aria-hidden="true"><span></span><span></span></div>
+            <div class="board">
+              <p class="kicker">120 BPM</p>
+              <h1>Tiny<br />Tempo</h1>
+              <div class="beads" aria-hidden="true">
+                <span class="bead"></span><span class="bead"></span><span class="bead"></span><span class="bead"></span>
+              </div>
+            </div>
+          </div>
+          <p class="lede">A rhythm game for people who live on the beat.</p>
+          <div class="hero-actions">
+            <a class="cta" href="#play-a-beat"><span class="play-glyph" aria-hidden="true"></span>Play a beat</a>
+            <p class="soon">Coming to Android · one thumb · endless road</p>
+          </div>
+        </div>
+        <div class="phone-wrap">
+          <div class="phone" aria-hidden="true">
+            <div class="screen">
+              <span class="glow"></span>
+              <span class="bench"></span>
+              <span class="stand"></span>
+              <span class="hammer">
+                <span class="hammer-handle"></span>
+                <span class="hammer-grip"></span>
+                <span class="hammer-head"></span>
+              </span>
+              <span class="chips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
+              <div class="track-mini"><span></span><span></span><span></span><span></span></div>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <footer class="site-footer">
-        <span>© 2026 Dor Vadai</span>
+      <section class="section" id="play-a-beat">
+        <div class="section-head">
+          <p class="kicker">How it plays</p>
+          <h2>Watch. Then tap it back.</h2>
+          <p class="whisper">Same pattern as the game: tap, tap, wait, tap. Perfect is ±55 ms.</p>
+        </div>
+        <div class="play-card">
+        <div
+          class="play-stage is-watch"
+          data-stage
+          role="button"
+          tabindex="0"
+          aria-label="Rhythm stage. Watch the pattern, then tap anywhere to copy it."
+        >
+          <span class="baton" data-baton aria-hidden="true"></span>
+          <div class="turn-row">
+            <span class="turn-label watch">Watch</span>
+            <div class="sockets" data-sockets="watch">
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+            </div>
+          </div>
+          <div class="turn-row">
+            <span class="turn-label you">Your turn</span>
+            <div class="sockets" data-sockets="play">
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+              <div class="socket"><span class="pip"></span></div>
+            </div>
+          </div>
+          <div class="grade" data-grade></div>
+        </div>
+          <div class="play-hud">
+            <p class="hint" data-hint>Tap the stage when you are ready</p>
+            <div class="counts" aria-live="polite">
+              <span class="p">P <b data-count="perfect">0</b></span>
+              <span class="g">G <b data-count="good">0</b></span>
+              <span class="m">M <b data-count="miss">0</b></span>
+            </div>
+            <button type="button" class="sound-toggle" data-sound aria-pressed="false">Sound on</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="features">
+          <article class="feature reveal">
+            <div class="viz"><span class="eye" aria-hidden="true"></span></div>
+            <h3>Watch first</h3>
+          </article>
+          <article class="feature reveal">
+            <div class="viz"><span class="thumb" aria-hidden="true"></span></div>
+            <h3>One tap</h3>
+          </article>
+          <article class="feature reveal">
+            <div class="viz"><span class="rings" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <h3>±55 ms</h3>
+          </article>
+          <article class="feature reveal">
+            <div class="viz"><span class="path-loop" aria-hidden="true"></span></div>
+            <h3>Endless</h3>
+          </article>
+        </div>
+      </section>
+
+      <div class="ticker" aria-hidden="true">
+        <div class="ticker-track">
+          <span>Hammer & nail</span><span>Window cleaning</span><span>Bug & shoe</span><span>Saw & timber</span>
+          <span>Knife & tomato</span><span>Bicep curl</span><span>Knife & cucumber</span><span>Knife & banana</span>
+          <span>Scissors & paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
+          <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
+          <span>Hammer & nail</span><span>Window cleaning</span><span>Bug & shoe</span><span>Saw & timber</span>
+          <span>Knife & tomato</span><span>Bicep curl</span><span>Knife & cucumber</span><span>Knife & banana</span>
+          <span>Scissors & paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
+          <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
+        </div>
+      </div>
+
+      <section class="section" id="acts">
+        <div class="section-head">
+          <p class="kicker">Seventeen acts</p>
+          <h2>Everyday scenes. Hidden charts.</h2>
+          <p class="whisper">A hammer, a window, a doorbell — each one is a rhythm.</p>
+        </div>
+        <div class="acts">
+          <article class="act"><div class="mini mini-hammer" aria-hidden="true"><i class="sun"></i><i class="stand"></i><i class="ham"></i></div><h3>Hammer & nail</h3></article>
+          <article class="act"><div class="mini mini-window" aria-hidden="true"><i class="pane"></i><i class="squeegee"></i></div><h3>Window cleaning</h3></article>
+          <article class="act"><div class="mini mini-bug" aria-hidden="true"><i class="tile"></i><i class="shoe"></i><i class="bug"></i></div><h3>Bug & shoe</h3></article>
+          <article class="act"><div class="mini mini-saw" aria-hidden="true"><i class="plank"></i><i class="blade"></i></div><h3>Saw & timber</h3></article>
+          <article class="act"><div class="mini mini-tomato" aria-hidden="true"><i class="fruit"></i><i class="knife"></i></div><h3>Knife & tomato</h3></article>
+          <article class="act"><div class="mini mini-curl" aria-hidden="true"><i class="head"></i><i class="torso"></i><i class="plate"></i><i class="bar"></i><i class="plate r"></i></div><h3>Bicep curl</h3></article>
+          <article class="act"><div class="mini mini-cucumber" aria-hidden="true"><i class="cuke"></i><i class="disc"></i><i class="disc b"></i><i class="disc c"></i></div><h3>Knife & cucumber</h3></article>
+          <article class="act"><div class="mini mini-banana" aria-hidden="true"><i class="peel"></i><i class="coin"></i></div><h3>Knife & banana</h3></article>
+          <article class="act"><div class="mini mini-paper" aria-hidden="true"><i class="sheet"></i><i class="shears"></i></div><h3>Scissors & paper</h3></article>
+          <article class="act"><div class="mini mini-egg" aria-hidden="true"><i class="bowl"></i><i class="egg"></i></div><h3>Egg cracking</h3></article>
+          <article class="act"><div class="mini mini-bubble" aria-hidden="true"><i class="dot a"></i><i class="dot b"></i><i class="dot c"></i></div><h3>Bubble wrap</h3></article>
+          <article class="act"><div class="mini mini-light" aria-hidden="true"><i class="lamp"></i><i class="shade"></i></div><h3>Light switch</h3></article>
+          <article class="act"><div class="mini mini-door" aria-hidden="true"><i class="frame"></i><i class="door"></i><i class="btn"></i><i class="cat"></i></div><h3>Doorbell</h3></article>
+          <article class="act"><div class="mini mini-roller" aria-hidden="true"><i class="wall"></i><i class="roll"></i></div><h3>Paint roller</h3></article>
+          <article class="act"><div class="mini mini-bell" aria-hidden="true"><i class="dome"></i><i class="base"></i></div><h3>Hotel bell</h3></article>
+          <article class="act"><div class="mini mini-balloon" aria-hidden="true"><i class="ball"></i><i class="pump"></i></div><h3>Balloon pump</h3></article>
+          <article class="act"><div class="mini mini-stapler" aria-hidden="true"><i class="arm"></i><i class="base"></i></div><h3>Stapler</h3></article>
+        </div>
+      </section>
+
+      <section class="section" id="heads">
+        <div class="section-head">
+          <p class="kicker">For rhythm game lovers</p>
+          <h2>Windows you can feel.</h2>
+        </div>
+        <div class="heads">
+          <article class="head-card">
+            <h3>The judge</h3>
+            <div class="window-viz">
+              <div class="win perfect"><b>Perfect</b><span class="bar"><i></i></span><span>±55 ms</span></div>
+              <div class="win good"><b>Good</b><span class="bar"><i></i></span><span>±130 ms</span></div>
+              <div class="win miss"><b>Miss</b><span class="bar"><i></i></span><span>or extra</span></div>
+            </div>
+          </article>
+          <article class="head-card">
+            <h3>The climb</h3>
+            <div class="tempo">
+              <div class="dial" aria-hidden="true"></div>
+              <div class="bpm">120→150</div>
+            </div>
+          </article>
+          <article class="head-card">
+            <h3>The charts</h3>
+            <div class="chart" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+            <p class="whisper">Seeded patterns. Same level, every attempt.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-head">
+          <p class="kicker">The map</p>
+          <h2>A road that does not end.</h2>
+        </div>
+        <div class="road" aria-hidden="true">
+          <div class="road-line"></div>
+          <div class="nodes">
+            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
+            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="section finale">
+        <div class="plaque">
+          <div class="ropes" aria-hidden="true"><span></span><span></span></div>
+          <div class="stars" aria-hidden="true"><span class="star"></span><span class="star"></span><span class="star"></span></div>
+          <h2>The everyday, on the grid.</h2>
+          <a class="cta" href="#play-a-beat"><span class="play-glyph" aria-hidden="true"></span>Play a beat</a>
+          <p class="soon" style="margin:0.9rem 0 0">Coming to Google Play</p>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <span>© 2026 Dor Vadai</span>
+      <nav aria-label="Legal">
+        <a href="./privacy/">Privacy</a>
+        <a href="./terms/">Terms</a>
+        <a href="./legal/">Legal</a>
         <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>
-      </footer>
-    </div>
+      </nav>
+    </footer>
+    <script src="./market.js"></script>
   </body>
 </html>

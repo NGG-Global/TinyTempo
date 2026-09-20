@@ -86,13 +86,19 @@ a:hover {
   text-decoration: none;
 }
 
-.brand-mark {
+.brand-mark,
+.brand img {
   width: 2.5rem;
   height: 2.5rem;
   flex: 0 0 auto;
   border-radius: 0.85rem;
   background: var(--coral);
   box-shadow: 0 6px 0 rgba(107, 74, 46, 0.28);
+  object-fit: cover;
+}
+
+.brand img {
+  border: 3px solid var(--ink);
 }
 
 .brand-name {
