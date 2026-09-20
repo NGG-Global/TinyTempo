@@ -99,6 +99,9 @@ dependencies {
     // later as of 31 August 2026; 9.x is the current generation and the one this is
     // written against — setOfferToken became mandatory for one-time products in 8.
     implementation "com.android.billingclient:billing:$playBillingVersion"
+    // Play In-App Updates, used directly by PlayUpdatePlugin. 2.1.0 is the current
+    // partitioned artifact and the one that targets API 36.
+    implementation "com.google.android.play:app-update:$playAppUpdateVersion"
     // Play Games Services v2, used directly by PlayGamesPlugin. v2 only: the deprecated
     // com.google.android.gms:play-services-games (v1) must never be added beside it.
     implementation "com.google.android.gms:play-services-games-v2:$playGamesVersion"

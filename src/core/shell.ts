@@ -2,8 +2,10 @@
  * Controls the DOM overlays declared in `index.html`.
  *
  * These live outside the canvas on purpose. The boot panel has to be visible
- * before the bundle has parsed, and the orientation prompt has to work even if
- * the renderer failed to start — neither can be a Phaser scene.
+ * before the bundle has parsed, the orientation prompt has to work even if
+ * the renderer failed to start, and the update-restart sheet has to cover the
+ * canvas so a tap cannot fall through into a level — none of them can be a
+ * Phaser scene.
  */
 
 const BOOT_OVERLAY_ID = 'boot-overlay';
@@ -182,4 +184,51 @@ export function askForSaveCode(): Promise<string | null> {
     // inside the task the player's tap started. Deferring this to a frame loses it.
     try { input.focus(); } catch { /* a field that will not take focus can still be typed into */ }
   });
+}
+
+const UPDATE_OVERLAY_ID = 'update-overlay';
+const UPDATE_CONFIRM_ID = 'update-confirm';
+const UPDATE_CANCEL_ID = 'update-cancel';
+
+/** One prompt at a time: a second downloaded event must not stack a second sheet. */
+let updatePrompt: Promise<boolean> | null = null;
+
+/**
+ * Asks whether to restart into a downloaded Play update.
+ *
+ * This is DOM for the same reason the save-code sheet is: it has to cover the
+ * canvas so a tap cannot fall through into a level, and it has to work even if
+ * Phaser is mid-scene-change. Resolves false rather than rejecting when the
+ * markup is missing, so a caller never has to guard against the shell having
+ * changed under it. Later is a real answer — Play keeps the pack until the
+ * next resume asks again.
+ */
+export function askToApplyUpdate(): Promise<boolean> {
+  if (updatePrompt !== null) return updatePrompt;
+  const overlay = element(UPDATE_OVERLAY_ID);
+  const confirm = element(UPDATE_CONFIRM_ID);
+  const cancel = element(UPDATE_CANCEL_ID);
+  if (overlay === null || confirm === null || cancel === null) {
+    return Promise.resolve(false);
+  }
+
+  updatePrompt = new Promise<boolean>(resolve => {
+    let done = false;
+    const finish = (value: boolean): void => {
+      if (done) return;
+      done = true;
+      confirm.removeEventListener('click', onConfirm);
+      cancel.removeEventListener('click', onCancel);
+      overlay.setAttribute('hidden', '');
+      updatePrompt = null;
+      resolve(value);
+    };
+    const onConfirm = (): void => { finish(true); };
+    const onCancel = (): void => { finish(false); };
+
+    confirm.addEventListener('click', onConfirm);
+    cancel.addEventListener('click', onCancel);
+    overlay.removeAttribute('hidden');
+  });
+  return updatePrompt;
 }

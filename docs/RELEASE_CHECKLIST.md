@@ -289,6 +289,12 @@ these is a blocker — but none has been run on a device.
       `ngg-global.github.io/TinyTempo/`, which is a project path, not a root —
       you may need a domain you control.
 - [ ] Set up a merchant account for paid distribution.
+- [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
+      APK never sees an update; that is Play's rule, not a bug. Ship a higher
+      `versionCode` to an internal testing track, install the older build from
+      Play, then the newer one: priority 0–3 should download in the background
+      and show the restart sheet on a chrome screen, priority 4–5 should block.
+      See `docs/UPDATES.md`.
 
 ### E. Store listing assets — none of these exist in the repo
 

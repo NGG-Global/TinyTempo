@@ -192,6 +192,17 @@
         user-select: text;
       }
 
+      /*
+        Restart-to-apply a Play update. Same overlay contract as the save code, minus
+        the field: the body has `touch-action: none` for the canvas, and without this
+        the buttons never receive the tap in a WebView.
+      */
+      #update-overlay {
+        justify-content: center;
+        gap: 1.1rem;
+        touch-action: auto;
+      }
+
       #code-input {
         width: min(20rem, 100%);
         padding: 0.75rem 0.85rem;
@@ -315,6 +326,20 @@
       <div class="code-actions">
         <button type="button" class="code-button code-button--quiet" id="code-cancel">Cancel</button>
         <button type="button" class="code-button" id="code-confirm">Restore</button>
+      </div>
+    </div>
+
+    <!--
+      Restart-to-apply a Play update, shown by `core/shell.ts` once a flexible
+      download has finished and the player is not in a level. Immediate updates
+      use Play's own full-screen UI instead. See docs/UPDATES.md.
+    -->
+    <div class="overlay" id="update-overlay" role="dialog" aria-modal="true" aria-labelledby="update-title" hidden>
+      <p class="overlay__title" id="update-title">Update ready</p>
+      <p class="overlay__note">A new version is ready to install. Restart now — your progress stays on this device.</p>
+      <div class="code-actions">
+        <button type="button" class="code-button code-button--quiet" id="update-cancel">Later</button>
+        <button type="button" class="code-button" id="update-confirm">Restart</button>
       </div>
     </div>
 

@@ -2,12 +2,14 @@ import Phaser from 'phaser';
 
 import { installAnalyticsProvider } from '@/analytics/boot';
 import { createGameConfig } from '@/config/game';
+import { SceneKey } from '@/config/scenes';
 import { SUPPORT } from '@/config/support';
 import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
 import { installDiagnostics } from '@/diagnostics/boot';
 import { bootMonetization } from '@/monetization/boot';
 import { bootPlayGames } from '@/playgames/boot';
+import { bootUpdates } from '@/updates/boot';
 
 declare global {
   interface Window {
@@ -46,6 +48,9 @@ function start(): void {
     // the more it inherits, and attaching first would leave it to be wrapped instead.
     void installAnalyticsProvider();
     const game = new Phaser.Game(createGameConfig());
+    // After the game exists so the adapter can ask which scene is up. A Play
+    // sheet over a level would cost the round; chrome screens are the wait.
+    void bootUpdates({ wouldInterrupt: () => wouldInterruptUpdate(game) });
 
     if (import.meta.env.DEV) {
       window.__PHASER_GAME__ = game;
@@ -69,6 +74,22 @@ function start(): void {
     showBootError(`The game could not start on this device. (${detail})`, SUPPORT.address);
     throw error;
   }
+}
+
+/**
+ * True when a Play update sheet or a restart would cover a scene that must not
+ * be interrupted. Chrome screens — menu, map, settings, the save code, help —
+ * are the wait; everything else, including boot, is held.
+ */
+function wouldInterruptUpdate(game: Phaser.Game): boolean {
+  const scene = game.scene;
+  return !(
+    scene.isActive(SceneKey.Menu)
+    || scene.isActive(SceneKey.Map)
+    || scene.isActive(SceneKey.Settings)
+    || scene.isActive(SceneKey.Transfer)
+    || scene.isActive(SceneKey.Support)
+  );
 }
 
 start();

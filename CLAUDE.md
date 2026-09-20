@@ -406,6 +406,10 @@ src/
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces
+  updates/
+    playUpdate.ts      Flexible vs immediate, when to restart; no native import
+    native.ts          The PlayUpdate plugin wrap, unloaded in the browser
+    boot.ts            Native-only check on boot and resume
   vignettes/
     registry.ts        The rotation. Order is the level assignment.
     Vignette.ts        The contract a vignette implements
@@ -638,7 +642,11 @@ is **`play-services-games-v2` only** — the deprecated v1 `play-services-games`
 `GoogleSignIn` APIs must never be added beside it, which `scripts/check-android-config.mjs`
 enforces along with the Games project id, the meta-data, the Application class and both
 `registerPlugin` calls: `cap sync` rewrites `MainActivity` from its own template if the file
-is ever lost, taking both registrations with it. See `docs/PLAY_GAMES.md`. Beyond those, the game
+is ever lost, taking the registrations with it. See `docs/PLAY_GAMES.md`. In-app updates
+are the fifth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
+`src/updates/playUpdate.ts` decides flexible vs immediate and when to ask for a restart,
+and a browser or a Studio-sideloaded APK is silent — Play only answers for a package it
+installed. See `docs/UPDATES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately

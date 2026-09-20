@@ -42,11 +42,13 @@ if (services === null) {
 }
 
 /*
- * Billing is a plugin in this module rather than an npm package, which buys directness and
- * costs the two guarantees a package would have given. Nothing makes Gradle pull the
- * Billing Library in, and nothing makes Capacitor register the plugin — `cap` regenerates
- * MainActivity from its own template if the file is ever lost. Either omission compiles,
- * installs and runs; the only symptom is a store that reports itself unavailable forever.
+ * Billing, Play Games and in-app updates are plugins in this module rather than npm
+ * packages, which buys directness and costs the two guarantees a package would have given.
+ * Nothing makes Gradle pull the libraries in, and nothing makes Capacitor register
+ * the plugins — `cap` regenerates MainActivity from its own template if the file
+ * is ever lost. Either omission compiles, installs and runs; the only symptom is
+ * a store that reports itself unavailable, Games that never signs in, or an install
+ * that never updates itself.
  */
 const mainActivity = read('android/app/src/main/java/com/tinytempo/app/MainActivity.java') ?? '';
 if (!mainActivity.includes('registerPlugin(PlayBillingPlugin.class)')) {
@@ -54,11 +56,20 @@ if (!mainActivity.includes('registerPlugin(PlayBillingPlugin.class)')) {
     + '    billing in it — every purchase would report the store as unavailable. Add\n'
     + '    registerPlugin(PlayBillingPlugin.class) before super.onCreate.');
 }
+if (!mainActivity.includes('registerPlugin(PlayUpdatePlugin.class)')) {
+  notes.push('MainActivity.java does not register PlayUpdatePlugin, so this build cannot\n'
+    + '    offer in-app updates — every install would stay on the version it shipped.\n'
+    + '    Add registerPlugin(PlayUpdatePlugin.class) before super.onCreate.');
+}
 
 const appGradle = read('android/app/build.gradle') ?? '';
 if (!appGradle.includes('com.android.billingclient:billing')) {
   notes.push('android/app/build.gradle has no com.android.billingclient:billing dependency,\n'
     + '    so PlayBillingPlugin cannot compile. See docs/BILLING.md.');
+}
+if (!appGradle.includes('com.google.android.play:app-update')) {
+  notes.push('android/app/build.gradle has no com.google.android.play:app-update dependency,\n'
+    + '    so PlayUpdatePlugin cannot compile. See docs/UPDATES.md.');
 }
 
 /*
