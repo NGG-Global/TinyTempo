@@ -40,6 +40,9 @@ dependencies {
     // later as of 31 August 2026; 9.x is the current generation and the one this is
     // written against — setOfferToken became mandatory for one-time products in 8.
     implementation "com.android.billingclient:billing:$playBillingVersion"
+    // Play Games Services v2, used directly by PlayGamesPlugin. v2 only: the deprecated
+    // com.google.android.gms:play-services-games (v1) must never be added beside it.
+    implementation "com.google.android.gms:play-services-games-v2:$playGamesVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
