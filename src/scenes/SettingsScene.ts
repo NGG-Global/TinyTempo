@@ -149,9 +149,14 @@ export class SettingsScene extends BaseScene {
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
     this.headline = display(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
-    for (const caption of ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']) {
-      this.eyebrows.push(this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
-    }
+    // Assigned, never appended to. A field initializer runs once per scene *instance*
+    // while `build` runs once per *entry*, and Phaser keeps the instance and destroys the
+    // display list — so pushing here left seven new eyebrows behind the seven destroyed
+    // ones, `eyebrow(index)` kept reading the dead batch, and `Text.setColor` threw
+    // inside `create` and took the whole game down on the way back from Calibrate.
+    // Replacing the array rather than clearing it makes that unreachable by construction.
+    this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']
+      .map(caption => this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     this.buildTexts();
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.pointerMove, this);

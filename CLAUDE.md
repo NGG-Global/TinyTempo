@@ -402,9 +402,18 @@ that no coordinate can be hardcoded.
 
 Scenes that lay anything out extend `BaseScene` and implement two methods:
 
-- `build()` — create game objects. Runs **once**.
+- `build()` — create game objects. Runs **once per entry into the scene**.
 - `layout()` — position and size them. Runs on create **and on every viewport
   change**.
+
+**"Once" means once per entry, not once per instance.** Phaser constructs a Scene
+object one time and reuses it for every `scene.start`, destroying the display list
+in between — so `build()` runs again on a second visit while **field initializers
+do not**. A field that collects game objects must therefore be *assigned* in
+`build()`, never appended to: `this.eyebrows.push(...)` left Settings holding seven
+destroyed Texts behind seven live ones, and the second visit threw inside
+`Text.setColor` during `create`, which killed the game wherever the player happened
+to open Settings from.
 
 `layout()` must be idempotent: no object creation, no event listeners, no
 tweens started. `BaseScene` handles the resize subscription, the camera resize,
