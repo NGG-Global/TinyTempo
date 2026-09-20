@@ -19,7 +19,13 @@ export class Sheen {
   public constructor(scene: Phaser.Scene, depth: number) {
     this.shape = scene.make.graphics({}, false);
     this.band = scene.add.graphics().setDepth(depth).setVisible(false);
-    this.band.setMask(this.shape.createGeometryMask());
+    // Phaser 4 dropped WebGL geometry masks: `setMask` warns and leaves `mask` null, so
+    // the glint ran off the rounded brass. The filter list renders this shape to a
+    // DynamicTexture; on canvas, where geometry masks still work, keep the cheap path.
+    this.band.enableFilters();
+    const filters = this.band.filters;
+    if (filters) filters.internal.addMask(this.shape);
+    else this.band.setMask(this.shape.createGeometryMask());
   }
 
   /** The band itself, so a caller can add it to a container that scrolls or moves. */
@@ -29,6 +35,9 @@ export class Sheen {
   public place(r: Phaser.Geom.Rectangle, radius: number, period = 4.6): void {
     this.rect.setTo(r.x, r.y, r.width, r.height);
     this.period = period;
+    // The mask lives in the same space as the band, including a map footer that does
+    // not scroll: a default scroll factor of 1 would slide the clip off the brass.
+    this.shape.setScrollFactor(this.band.scrollFactorX, this.band.scrollFactorY);
     this.shape.clear().fillStyle(0xffffff, 1).fillRoundedRect(r.x, r.y, r.width, r.height, radius);
   }
 
@@ -60,6 +69,7 @@ export class Sheen {
   }
 
   public destroy(): void {
+    this.band.filters?.internal.clear();
     this.band.clearMask(true);
     this.band.destroy();
     this.shape.destroy();
