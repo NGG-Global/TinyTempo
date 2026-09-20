@@ -360,6 +360,10 @@ src/
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces
+  updates/
+    playUpdate.ts      Flexible vs immediate, when to restart; no native import
+    native.ts          The PlayUpdate plugin wrap, unloaded in the browser
+    boot.ts            Native-only check on boot and resume
   vignettes/
     registry.ts        The rotation. Order is the level assignment.
     Vignette.ts        The contract a vignette implements
@@ -574,7 +578,11 @@ so a browser build downloads none of them. Billing is the third native capabilit
 directly, registered by hand in `MainActivity` and reached through `monetization/purchases.ts`.
 Every decision about a purchase lives in `monetization/playBilling.ts`, which imports no
 native code and is therefore tested under node — the native side only relays what Play says
-and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Beyond those, the game
+and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. In-app updates
+are the fourth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
+`src/updates/playUpdate.ts` decides flexible vs immediate and when to ask for a restart,
+and a browser or a Studio-sideloaded APK is silent — Play only answers for a package it
+installed. See `docs/UPDATES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately

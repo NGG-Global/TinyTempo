@@ -8,9 +8,10 @@ public class MainActivity extends BridgeActivity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
-        // Play Billing lives in this module rather than an npm plugin, so it is registered
-        // by hand and must be registered before the bridge starts.
+        // Play Billing and In-App Updates live in this module rather than npm plugins, so
+        // they are registered by hand and must be registered before the bridge starts.
         registerPlugin(PlayBillingPlugin.class);
+        registerPlugin(PlayUpdatePlugin.class);
         super.onCreate(savedInstanceState);
     }
 }
