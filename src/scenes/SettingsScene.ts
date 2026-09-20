@@ -187,7 +187,7 @@ export class SettingsScene extends BaseScene {
       haptics: rowTitle('Haptics'),
       hapticsNote: rowNote('Not on this device'),
       offset: rowTitle('Tap offset'),
-      offsetNote: rowNote('Measured on this device'),
+      offsetNote: rowNote('· Measured on this device'),
       offsetValue: this.banded(display(this, '', { size: 48, colour: ink })).setOrigin(1, 0.5),
       tune: chip('Tune'),
       offsetReset: chip('Reset'),
@@ -344,13 +344,14 @@ export class SettingsScene extends BaseScene {
     } else {
       delete this.rows.offsetReset;
     }
-    // Title and value share the top line; the note sits under both, so the widest possible
-    // measurement ("−500 ms") still cannot reach the copy beside it.
-    const valueRight = this.rows.offsetReset?.x ?? tuneRect.x;
-    resize(this.texts.offsetValue!, 40 * s, PALETTE.ink, STYLE.current, false);
-    this.texts.offsetValue!.setPosition(valueRight - 22 * s, timing.centerY - 20 * s);
+    // Value lives on the note line, not beside the title: Reset + Tune on the right would
+    // otherwise run "+120 ms" into "Tap offset" on a 393-wide handset.
     this.texts.offset!.setPosition(left + 28 * s, timing.centerY - 20 * s);
-    this.texts.offsetNote!.setPosition(left + 28 * s, timing.centerY + 22 * s);
+    resize(this.texts.offsetValue!, 32 * s, PALETTE.ink, STYLE.current, false);
+    this.texts.offsetValue!.setOrigin(0, 0.5).setPosition(left + 28 * s, timing.centerY + 22 * s);
+    this.texts.offsetNote!.setPosition(
+      left + 28 * s + this.texts.offsetValue!.width + 12 * s, timing.centerY + 22 * s,
+    );
     this.hits.push({ name: 'tune', rect: tuneRect, pinned: false });
 
     // HEARTS — the status, not an offer. The offers are the section below.
