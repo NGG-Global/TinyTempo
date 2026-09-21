@@ -10,10 +10,10 @@ import { BaseScene } from '@/core/BaseScene';
 import { areaOf, levelSpec, mapLastLevel, mapLevelState, starsFor, type Area } from '@/game/levels';
 import {
   canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
-  loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
+  levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { loadProgress, type Progress } from '@/game/progress';
+import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
 import { MaterialKey } from '@/textures/materials';
 import { mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
@@ -97,12 +97,18 @@ export class MapScene extends BaseScene {
   private restDailyRect = new Phaser.Geom.Rectangle();
   private restPremiumRect = new Phaser.Geom.Rectangle();
   private restBackRect = new Phaser.Geom.Rectangle();
+  private restTipRect = new Phaser.Geom.Rectangle();
+  /** The first-time row on the sheet, for this visit to the map. Decided once, on entry. */
+  private restTipFresh = false;
+  private restTipOpen = false;
+  /** The finished level the row offers, or null when every finished level has three stars. */
+  private restTipLevel: number | null = null;
   private restShown = false;
   private restDailyOpen = false;
   private restAt = -Infinity;
   private restPressDirty = false;
   private restPressedAt = -Infinity;
-  private restPressed: 'watch' | 'refill' | 'daily' | 'premium' | 'back' | null = null;
+  private restPressed: 'watch' | 'refill' | 'daily' | 'premium' | 'back' | 'tip' | null = null;
   private restBusy = false;
   /** A store or ad message under the sheet's controls; empty when there is nothing to say. */
   private restNote = '';
@@ -161,6 +167,9 @@ export class MapScene extends BaseScene {
     this.health = loadHealth();
     this.restShown = false;
     this.restDailyOpen = false;
+    this.restTipFresh = !seenReplayTip();
+    this.restTipOpen = false;
+    this.restTipLevel = null;
     this.restAt = this.restPressedAt = -Infinity;
     this.restPressed = null;
     this.restBusy = false;
@@ -214,6 +223,9 @@ export class MapScene extends BaseScene {
       premiumPrice: this.restText(label(this, '', { size: 26, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
       back: this.restText(display(this, 'Back to the map', { size: 36, colour: PALETTE.ink, align: 'center' }), 0.5, 0.5),
       note: this.restText(body(this, '', { size: 25, colour: PALETTE.coral, align: 'center' }), 0.5, 0.5),
+      tipTitle: this.restText(display(this, HEALTH_COPY.firstEmptyTitle, { size: 32, colour: PALETTE.ink }), 0, 0.5),
+      tipCopy: this.restText(body(this, '', { size: 23, colour: PALETTE.muted }), 0, 0),
+      tipGo: this.restText(label(this, '', { size: 24, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
     };
     this.enteredAt = performance.now() / 1000;
     this.curtain = new SceneCurtain(this);
@@ -811,6 +823,7 @@ export class MapScene extends BaseScene {
   private drawRest(s: number, press: number): void {
     const shown = this.restShown;
     const hasDaily = shown && this.restDailyOpen;
+    const hasTip = shown && this.restTipOpen;
     const entitled = monetization().premium();
     this.restScrim.setVisible(shown);
     this.restPlate.setVisible(shown);
@@ -822,7 +835,8 @@ export class MapScene extends BaseScene {
     for (const [name, text] of Object.entries(this.restTexts)) {
       const daily = name.startsWith('daily');
       const premium = name.startsWith('premium');
-      text.setVisible(shown && (daily ? hasDaily : premium ? !entitled : name !== 'note' || this.restNote !== ''));
+      const tip = name.startsWith('tip');
+      text.setVisible(shown && (daily ? hasDaily : premium ? !entitled : tip ? hasTip && (name !== 'tipGo' || this.restTipLevel !== null) : name !== 'note' || this.restNote !== ''));
     }
     if (!shown) {
       this.restScrim.clear();
@@ -845,8 +859,16 @@ export class MapScene extends BaseScene {
     const noteH = this.restNote === '' ? 0 : 44 * s;
     const gap = 22 * s;
     const head = 250 * s;
-    const height = head + (hasDaily ? dailyH + gap : 0) + watchH + gap + refillH
+    const rest = head + (hasDaily ? dailyH + gap : 0) + watchH + gap + refillH
       + (entitled ? 0 : gap + premiumH) + gap + backH + noteH + 30 * s;
+    // The first-time row is the one part of the sheet that can give ground: on a short
+    // screen with every other row present it keeps its title and its control and drops
+    // the sentence, rather than pushing the way out off the bottom.
+    const tipFull = Math.max(178 * s, control + 24 * s);
+    const tipCompact = Math.max(96 * s, control + 24 * s);
+    const room = safe.height - 48 * s;
+    const tipH = !hasTip ? 0 : rest + tipFull + gap <= room ? tipFull : tipCompact;
+    const height = rest + (hasTip ? tipH + gap : 0);
     const top = Math.max(safe.top + 24 * s, (safe.top + safe.bottom) / 2 - height / 2);
     this.restRect.setTo(left, top, width, height);
 
@@ -868,6 +890,50 @@ export class MapScene extends BaseScene {
     this.restWait.setPosition(this.restRect.centerX, top + 208 * s);
 
     let y = top + head;
+    if (hasTip) {
+      // Said once, before any offer: the free thing the player already has. The whole
+      // row is the target, and the chip names the level so the tap has somewhere to go.
+      this.restTipRect.setTo(left + 26 * s, y, width - 52 * s, tipH);
+      const r = this.restTipRect;
+      const tipPress = this.restPressed === 'tip' ? press : 0;
+      drawPanel(c, r, s, { fill: SHELL.cream, depth: 8, press: tipPress, radius: 26 });
+      const sink = 8 * s * tipPress * 0.8;
+      const starR = 15 * s;
+      const starsX = r.x + 26 * s + starR;
+      const lineY = r.y + 24 * s + 22 * s + sink;
+      for (let k = 0; k < 3; k++) {
+        drawStar(c, starsX + k * 30 * s, lineY + (k === 1 ? -4 : 0) * s, starR, shade(SHELL.sun, -0.55), 0.9);
+        drawStar(c, starsX + k * 30 * s, lineY + (k === 1 ? -4 : 0) * s - 2 * s, starR, SHELL.sun);
+      }
+      const title = this.restTexts.tipTitle!;
+      resize(title, 28 * s, PALETTE.ink, STYLE.current, false);
+      title.setPosition(starsX + 2 * starR + 62 * s, lineY);
+      const go = this.restTexts.tipGo!;
+      if (this.restTipLevel !== null) {
+        go.setText(`Replay level ${this.restTipLevel}`);
+        resize(go, 24 * s, SHELL.cream, STYLE.current, false);
+        const chipW = Math.max(go.width + 44 * s, 176 * s), chipH = Math.max(60 * s, control * 0.7);
+        const chip = new Phaser.Geom.Rectangle(r.right - 22 * s - chipW, lineY - chipH / 2, chipW, chipH);
+        drawPanel(c, chip, s, { fill: PALETTE.coral, depth: 8, press: tipPress, radius: 20 });
+        go.setPosition(chip.centerX, chip.centerY + 8 * s * tipPress * 0.8);
+        // The title yields to the chip rather than running under it.
+        title.setWordWrapWidth(Math.max(120 * s, chip.x - 12 * s - title.x), false);
+      } else {
+        title.setWordWrapWidth(r.right - 24 * s - title.x, false);
+      }
+      const copy = this.restTexts.tipCopy!;
+      const compact = tipH < tipFull;
+      copy.setVisible(!compact);
+      if (!compact) {
+        copy.setText(this.restTipLevel === null ? HEALTH_COPY.firstEmptyMastered : HEALTH_COPY.firstEmpty);
+        resize(copy, 23 * s, PALETTE.muted, STYLE.current, false);
+        copy.setWordWrapWidth(r.width - 52 * s, false);
+        copy.setPosition(r.x + 26 * s, lineY + 40 * s);
+      }
+      y += tipH + gap;
+    } else {
+      this.restTipRect.setTo(0, 0, 0, 0);
+    }
     if (hasDaily) {
       // A free heart is not an offer to weigh up, so it reads as a row with one control
       // rather than as a fourth block competing with the paid ones.
@@ -967,6 +1033,13 @@ export class MapScene extends BaseScene {
     const first = !this.restShown;
     this.restShown = true;
     this.restDailyOpen = canClaimDailyHeart(this.health);
+    // The tip stays on the sheet for the whole visit once it has opened, and is marked
+    // seen on the first showing, so it is said once — not once per sheet.
+    this.restTipOpen = this.restTipFresh;
+    if (this.restTipOpen) {
+      this.restTipLevel = levelToPolish(this.progress);
+      if (first) markReplayTipSeen();
+    }
     this.restPressed = null;
     this.restNote = '';
     this.restAt = performance.now() / 1000;
@@ -985,8 +1058,22 @@ export class MapScene extends BaseScene {
     if (!this.restShown) return;
     this.restShown = false;
     this.restDailyOpen = false;
+    this.restTipOpen = false;
     this.restPressed = null;
     this.drawRest(this.uiScale, 0);
+  }
+
+  /**
+   * The first-time row's tap: straight into the finished level it named, which never
+   * costs a heart. With nothing to name, the row is a second way back to the map.
+   */
+  private replayFromRest(): void {
+    const level = this.restTipLevel;
+    this.restPressed = 'tip';
+    this.restPressedAt = performance.now() / 1000;
+    this.restPressDirty = true;
+    this.hideRest();
+    if (level !== null) this.openLevel(level);
   }
 
   private async watchAd(): Promise<void> {
@@ -1270,6 +1357,10 @@ export class MapScene extends BaseScene {
       }
       if (this.restDailyOpen && this.restDailyRect.contains(x, y)) {
         this.claimToday();
+        return;
+      }
+      if (this.restTipOpen && this.restTipRect.contains(x, y)) {
+        this.replayFromRest();
         return;
       }
       if (!monetization().premium() && this.restPremiumRect.contains(x, y)) {

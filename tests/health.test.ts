@@ -5,7 +5,7 @@ import {
   HEALTH, HEALTH_COPY, abandonAttempt, attemptCostsHeart, beginAttempt, calendarDay, canBeginAttempt,
   canClaimDailyHeart, claimDailyHeart, claimFill, claimHeart, clearHealth, createAttemptId, fillHearts,
   finishAttempt, formatCountdown, grantHeart, healthHud, heartProgress, isCleared, isMastered, isProtectedLevel,
-  loadHealth, reconcile, redeemDailyHeart, saveHealth, viewHealth, type Health,
+  levelToPolish, loadHealth, reconcile, redeemDailyHeart, saveHealth, viewHealth, type Health,
 } from '../src/game/health';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -512,5 +512,32 @@ describe('the refill a screen draws', () => {
       expect(p).toBeGreaterThanOrEqual(0);
       expect(p).toBeLessThanOrEqual(1);
     }
+  });
+});
+
+describe('the level the first empty bar points back to', () => {
+  it('is the highest finished level still short of three stars, never the frontier', () => {
+    const road: Progress = { unlocked: 10, best: { 6: twoStar(6), 7: threeStar(7), 8: twoStar(8), 9: threeStar(9) } };
+    expect(levelToPolish(road)).toBe(8);
+    // A merged save can carry a best for the frontier itself; it is still the level the
+    // hearts are for, so it is never the one offered.
+    const carried: Progress = { unlocked: 10, best: { 6: twoStar(6), 10: twoStar(10) } };
+    expect(levelToPolish(carried)).toBe(6);
+    expect(attemptCostsHeart(road, levelToPolish(road)!)).toBe(false);
+  });
+
+  it('has nothing to offer when every finished level has its three stars, or none is finished', () => {
+    expect(levelToPolish(EMPTY)).toBeNull();
+    expect(levelToPolish(ROAD)).toBeNull();
+    const mastered: Progress = { unlocked: 8, best: { 6: threeStar(6), 7: threeStar(7) } };
+    expect(levelToPolish(mastered)).toBeNull();
+  });
+
+  it('says the rule in the copy the two screens share', () => {
+    expect(HEALTH_COPY.firstEmpty).toMatch(/never costs a heart/);
+    expect(HEALTH_COPY.firstEmpty).toMatch(/stars/);
+    expect(HEALTH_COPY.firstEmptyLead).toMatch(/free/);
+    expect(HEALTH_COPY.firstEmptyPlay).toMatch(/three stars/);
+    expect(HEALTH_COPY.firstEmptyMastered).toMatch(/three stars/);
   });
 });

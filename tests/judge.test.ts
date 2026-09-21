@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createJudge, expireTargets, judgeTap } from '../src/rhythm/judge';
+import { createJudge, expireTargets, judgeTap, windowsFor } from '../src/rhythm/judge';
 import { scoreRound } from '../src/game/scoring';
 
 describe('casual timing windows', () => {
@@ -43,5 +43,32 @@ describe('casual timing windows', () => {
     expect(scoreRound(createJudge([1])).meanAbsoluteErrorMs).toBeNull();
     const perfect = createJudge([1, 2]); judgeTap(perfect, 1); judgeTap(perfect, 2);
     expect(scoreRound(perfect).accuracy).toBe(100);
+  });
+});
+
+describe('windows for a set of targets', () => {
+  it('keeps the casual windows wherever the targets leave room for them', () => {
+    const base = windowsFor([1, 1.25, 1.5]);
+    expect(base.perfectMs).toBe(55);
+    expect(base.goodMs).toBe(130);
+    expect(windowsFor([1]).perfectMs).toBe(55);
+    expect(windowsFor([]).perfectMs).toBe(55);
+  });
+  it('narrows Perfect so two neighbours’ Perfect cells never meet, and leaves Good to the nearest-target cell', () => {
+    // Sixteenths at 136 BPM: 110 ms apart.
+    const tight = windowsFor([1, 1.1103, 1.2206]);
+    expect(tight.perfectMs).toBeLessThan(55);
+    expect(tight.perfectMs * 2).toBeLessThan(110.3);
+    expect(tight.goodMs).toBe(130);
+    const state = createJudge([1, 1.1103], tight);
+    // Dead between the two is Good on the earlier one, never Perfect on either.
+    expect(judgeTap(state, 1.055)).toMatchObject({ kind: 'hit', index: 0, grade: 'Good' });
+    expect(judgeTap(state, 1.1103)).toMatchObject({ kind: 'hit', index: 1, grade: 'Perfect' });
+  });
+  it('rejects nothing a valid plan can produce', () => {
+    for (const spacing of [0.1, 0.125, 0.1667, 0.2, 0.25, 0.5, 1]) {
+      const targets = [0, spacing, spacing * 2];
+      expect(() => createJudge(targets, windowsFor(targets))).not.toThrow();
+    }
   });
 });

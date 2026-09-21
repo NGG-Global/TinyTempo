@@ -21,13 +21,16 @@ One curve drives every difficulty knob so they move together and never contradic
 | Tasks per level | 3 + 5d | 3 | 5 | 6 | 7 | 8 |
 | Tempo ceiling (BPM) | 120 + 30·d^1.5, in 2 BPM steps | 120 | 124 | 132 | 142 | 150 |
 | Pattern tier reached | ⌊5·d^0.8⌋, spanning two tiers below | 0 | 1 | 3 | 4 | 4 |
+| Tasks on a finer grid | up to 50% of a level, from d ≥ 0.8 (triplets) and d ≥ 0.9 (sixteenths) | 0 | 0 | 0 | 0 | ~3 of 8 |
 | Clear bar (mean accuracy) | 40 + 40d | 40% | 52% | 61% | 72% | 80% |
 | Stars | clear bar, then thirds of the headroom to 100% | 40/60/80 | 52/68/84 | 61/74/87 | 72/81/91 | 80/87/93 |
 | Length | | ~30 s | ~50 s | ~65 s | ~80 s | ~95 s |
 
 **Every level starts at 120 BPM**, the music's real tempo, and ramps task by task toward its ceiling: task `i` of `n` plays at `120 + (ceiling − 120)·i/(n−1)`, rounded. The music follows: on the downbeat that starts each new task the seven stems get the same playback-rate automation, so the beat grid and the backing track change tempo together. Pitch rises with tempo (Web Audio has no time-stretch), which is why the ceiling stops at +25%. Levels 1–3 are entirely flat: three quarter-note tasks at 120 BPM with a 40% bar, which mostly-Good tapping (70 points each) clears comfortably. Tempo and density use higher exponents than length and the clear bar, so the first things a new player notices are slightly longer levels and a slightly higher bar, not faster or denser music.
 
-Pattern tiers: 0 quarter notes only; 1 one offbeat per bar; 2 two offbeats; 3 eight-beat phrases; 4 dense eight-beat phrases. No pattern places hits closer than half a beat, so at the 150 BPM ceiling the tightest spacing is 200 ms, still wider than the 130 ms Good window. Within a level the tiers also ramp from two below the ceiling tier up to it, and patterns are chosen with a per-level seed so a level is identical on every attempt and can be learned.
+Pattern tiers: 0 quarter notes only; 1 one offbeat per bar; 2 two offbeats; 3 eight-beat phrases; 4 dense eight-beat phrases. No tier pattern places hits closer than half a beat, so at the 150 BPM ceiling the tightest spacing is 200 ms, still wider than the 130 ms Good window. Within a level the tiers also ramp from two below the ceiling tier up to it, and patterns are chosen with a per-level seed so a level is identical on every attempt and can be learned.
+
+Finer grids arrive as a second stage on the same curve, once the tiers have run out (`docs/SUBDIVISIONS.md`). From level 43 a level may swap some of its later tasks — never the first, which sets the pulse, and never more than half — for a one-bar triplet phrase; from level 59 for a sixteenth phrase; the share of tasks that may swap rises to a half by level 99, and each grid steps from one group per bar to two halfway there. A grid is only offered where the task's tempo leaves the thumb at least 110 ms between taps, which keeps sixteenths off tasks above 136 BPM. The Perfect window narrows for a task whose targets sit closer than 122 ms so two neighbours' Perfect cells never meet; Good is already bounded by the nearest-target cell. The swaps draw from their own seeded stream, so every level below 43 kept its exact tasks.
 
 Failing shows the bar that would have cleared it and offers an immediate retry; the level itself does not get easier. Replaying a cleared level can only raise its best. The plateau is deliberate: past level 60 parameters hold while the seeded patterns keep changing, which keeps the road endless without becoming unfair.
 
@@ -155,7 +158,7 @@ Replay resets the six-round session and its score. Keep the slice's state in mem
 
 ## Acceptance criteria and boundaries
 
-- A first-time player can distinguish Watch from Your turn and knows when to enter after one tutorial round.
+- A first-time player can read whose turn it is from the turn block — the hammer's row, the token crossing, their row — and knows when to enter after one tutorial round.
 - All three vignettes run the same pattern and judgement system without vignette-specific timing rules.
 - A clean run, no-input run, early/late run and spam run produce understandable, consistent results.
 - Rapid doubles trigger two visible actions and two sound attacks; recoil does not swallow the second input.

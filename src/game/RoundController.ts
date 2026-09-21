@@ -1,5 +1,5 @@
 import { RHYTHM } from '../config/rhythm';
-import { createJudge, expireTargets, judgeTap, type JudgeState, type Judgement } from '../rhythm/judge';
+import { createJudge, expireTargets, judgeTap, windowsFor, type JudgeState, type Judgement } from '../rhythm/judge';
 import { createRoundPlan, RhythmScheduler, type RoundPlan, type ScheduledCue, type SoundSink } from '../rhythm/RhythmScheduler';
 import type { Pattern } from '../rhythm/patterns';
 import { scoreRound, type RoundResult } from './scoring';
@@ -37,7 +37,7 @@ export class RoundController {
   public start(pattern: Pattern, bpm: number, renderNow: number, wallMs: number, startAt = renderNow + RHYTHM.leadSec, leadBeats = 0): void {
     this.scheduler.cancel();
     this.plan = createRoundPlan(++this.generation, pattern, bpm, startAt, leadBeats);
-    this.judge = createJudge(this.plan.targets);
+    this.judge = createJudge(this.plan.targets, windowsFor(this.plan.targets));
     this.result = null;
     this.cueIndex = 0;
     this.lastPumpMs = wallMs;

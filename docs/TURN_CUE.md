@@ -196,5 +196,7 @@ Two flags, both in `game/progress.ts` and neither inside `Progress`.
   the first bead at every pattern length. See **Widening the rows**.
 - `TRACK` moved from `PlayScene` into `ui/turnBlock.ts` with the block it describes,
   rather than being extended where it was.
-- The separate `TutorialScene` is untouched and still runs on a first Play; whether
-  the in-play pass replaces it is a decision for after the cue has been played.
+- The separate `TutorialScene` still runs on a first Play, and has since been remade
+  to teach on this block rather than on a sign and a labelled bead row of its own
+  (`docs/TUTORIAL.md`). The in-play pass and the ring remain the teach for a player
+  who skips it.

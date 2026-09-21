@@ -103,7 +103,8 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
 }
 
 /**
- * The first-run teach, which is two flags and neither of them is earned progress.
+ * The first-run teach: the flags for what the player has been shown once, and none of
+ * them earned progress.
  *
  * They live here because they are read next to `Progress` and written on the same
  * events, but deliberately not *inside* it: `mergeProgress` takes the better of two
@@ -115,17 +116,49 @@ const TEACH_KEY = 'small-acts.teach.v1';
 
 /** Has the one-cycle demonstration pass already played? It runs once, ever. */
 export function seenDemonstration(storage: Storage | null = safeStorage()): boolean {
-  try {
-    const raw = storage?.getItem(TEACH_KEY);
-    if (!raw) return false;
-    const parsed: unknown = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed !== null && (parsed as { seen?: unknown }).seen === true;
-  } catch { return false; }
+  return readTeach(storage).seen === true;
 }
 
 /** False means nothing was written, and the pass will simply play again next time. */
 export function markDemonstrationSeen(storage: Storage | null = safeStorage()): boolean {
-  try { storage?.setItem(TEACH_KEY, JSON.stringify({ seen: true })); return storage !== null; } catch { return false; }
+  return writeTeach(storage, { seen: true });
+}
+
+/**
+ * Has the player been told, the first time the hearts ran out, that finished levels
+ * are free to replay? Said once: the rest sheet keeps a quieter line ever after.
+ */
+export function seenReplayTip(storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage).replayTip === true;
+}
+
+/** False means nothing was written, and the tip will simply be shown once more. */
+export function markReplayTipSeen(storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { replayTip: true });
+}
+
+interface Teach { readonly seen?: unknown; readonly replayTip?: unknown }
+
+function readTeach(storage: Storage | null): Teach {
+  try {
+    const raw = storage?.getItem(TEACH_KEY);
+    if (!raw) return {};
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null ? parsed as Teach : {};
+  } catch { return {}; }
+}
+
+/** One object holds every teach flag, so setting one cannot clear another. */
+function writeTeach(storage: Storage | null, patch: Teach): boolean {
+  try {
+    const current = readTeach(storage);
+    const next: Record<string, true> = {};
+    if (current.seen === true) next.seen = true;
+    if (current.replayTip === true) next.replayTip = true;
+    for (const [key, value] of Object.entries(patch)) if (value === true) next[key] = true;
+    storage?.setItem(TEACH_KEY, JSON.stringify(next));
+    return storage !== null;
+  } catch { return false; }
 }
 
 /**

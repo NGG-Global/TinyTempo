@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { guidedLevel, loadProgress, markDemonstrationSeen, mergeProgress, recordResult, saveProgress, seenDemonstration } from '../src/game/progress';
+import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, mergeProgress, recordResult, saveProgress, seenDemonstration, seenReplayTip } from '../src/game/progress';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -105,6 +105,32 @@ describe('the first-run teach', () => {
     expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': '{not json' }))).toBe(false);
     expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': 'null' }))).toBe(false);
     expect(seenDemonstration(memoryStorage({ 'small-acts.teach.v1': '{"seen":"yes"}' }))).toBe(false);
+  });
+
+  it('says the replay tip once, and keeps the other teach flag when it does', () => {
+    const storage = memoryStorage();
+    expect(seenReplayTip(storage)).toBe(false);
+    expect(markDemonstrationSeen(storage)).toBe(true);
+    expect(markReplayTipSeen(storage)).toBe(true);
+    expect(seenReplayTip(storage)).toBe(true);
+    // Both flags share one stored object; setting the second must not clear the first,
+    // or the demonstration pass would play again on the first empty bar.
+    expect(seenDemonstration(storage)).toBe(true);
+    const only = memoryStorage();
+    markReplayTipSeen(only);
+    expect(seenDemonstration(only)).toBe(false);
+    expect(seenReplayTip(only)).toBe(true);
+  });
+
+  it('reads the older one-flag object, and shows the tip again on blocked or corrupt storage', () => {
+    // A device that saw the demonstration before the tip existed has `{"seen":true}` stored.
+    const older = memoryStorage({ 'small-acts.teach.v1': '{"seen":true}' });
+    expect(seenDemonstration(older)).toBe(true);
+    expect(seenReplayTip(older)).toBe(false);
+    expect(seenReplayTip(null)).toBe(false);
+    expect(markReplayTipSeen(null)).toBe(false);
+    expect(seenReplayTip(memoryStorage({ 'small-acts.teach.v1': '{not json' }))).toBe(false);
+    expect(seenReplayTip(memoryStorage({ 'small-acts.teach.v1': '{"replayTip":"yes"}' }))).toBe(false);
   });
 
   it('guides the first level until it has been cleared, and then stops', () => {

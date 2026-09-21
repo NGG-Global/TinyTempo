@@ -26,7 +26,7 @@ import {
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { guidedLevel, loadProgress, markDemonstrationSeen, recordResult, saveProgress, seenDemonstration, type LevelOutcome } from '@/game/progress';
+import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress, seenDemonstration, seenReplayTip, type LevelOutcome } from '@/game/progress';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -124,6 +124,9 @@ export class PlayScene extends BaseScene {
   private attemptId: string | null = null;
   private heartRefunded = false;
   private emptyTracked = false;
+  /** Whether this screen has decided if it is the player's first empty bar, and what it decided. */
+  private replayTipShown = false;
+  private firstEmpty = false;
   private watchOfferTracked = false;
   private purchaseOfferTracked = false;
   private commerceBusy = false;
@@ -593,6 +596,7 @@ export class PlayScene extends BaseScene {
     this.attemptId = null;
     this.heartRefunded = false;
     this.emptyTracked = false;
+    this.replayTipShown = this.firstEmpty = false;
     this.watchOfferTracked = false;
     this.purchaseOfferTracked = false;
     // Not `kept.setVisible(false)` and `stars.clear()`: the plaque is a Graphics *and*
@@ -1381,6 +1385,15 @@ export class PlayScene extends BaseScene {
     if (monetization().premium()) return;
     this.changeHeadline('No hearts');
     const health = loadHealth();
+    // The first time ever, the line under the countdown says the rule in full: finished
+    // levels are free, and the map is where they are. Said once; the map's sheet says
+    // it too, and marks it as well, so whichever screen the player meets first is the
+    // one that tells them.
+    if (!this.replayTipShown) {
+      this.replayTipShown = true;
+      this.firstEmpty = !seenReplayTip();
+      if (this.firstEmpty) markReplayTipSeen();
+    }
     if (!this.summaryShown) this.accuracy.setText(this.waitCopy(health));
     this.setAction(canClaimDailyHeart(health) ? 'TODAY' : 'WATCH');
     if (!this.emptyTracked) {
@@ -1404,6 +1417,10 @@ export class PlayScene extends BaseScene {
    */
   private waitCopy(health: Health): string {
     const wait = healthHud(viewHealth(health), { premium: monetization().premium() }).wait;
+    if (this.firstEmpty) {
+      // Two lines, as ever: the countdown carries the rule and the note says what to do with it.
+      return wait === null ? HEALTH_COPY.firstEmptyPlay : `Next one in ${wait} · ${HEALTH_COPY.firstEmptyLead}\n${HEALTH_COPY.firstEmptyPlay}`;
+    }
     return wait === null ? HEALTH_COPY.playNote : `Next one in ${wait}\n${HEALTH_COPY.playNote}`;
   }
 

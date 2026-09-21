@@ -14,22 +14,26 @@ Boot → Preload → **menu** → **map** → **play** → back to the map, with
 
 The first Play opens a skippable **tutorial** before the map. **How to play** on
 the menu replays it at any time. It uses the same hammer, workshop surfaces,
-fonts and sound engine as gameplay:
+fonts, sound engine and — the point of it — the same **turn block** as a level,
+with a label on each row and a pointer that follows the token:
 
-1. A slow animated example shows **tap, tap, wait, tap**, then a finger copies
-   it as the sign switches from **Watch** to **Your turn**.
-2. Guided practice waits indefinitely at each required tap. Tap anywhere on
-   the stage; glowing beads prompt the hits, a hollow **WAIT** bead teaches the
-   gap, and completed taps receive checkmarks. There is no score or failure.
-3. A preview at the game's starting tempo demonstrates that the player's turn
-   begins on the next beat, with no extra pause. **Let's play** saves tutorial
+1. **Watch.** One counted bar, the hammer's bar on the top row, the token
+   crossing, and the game answering on the bottom row, at 72 BPM with no pause
+   between the two halves. A sign names each moment as it happens: *Listen*,
+   *Their turn*, *Get ready* as the token starts to cross, *Your turn* on the
+   downbeat.
+2. **Try.** The same cycle, judged by the level's own controller. Two hits of
+   three passes. A miss is named rather than scored — *Too early* for taps in
+   the hammer's turn, *That was your turn* for a bar that went by — and after
+   three tries the way on is offered as well. **Let's play** saves tutorial
    completion separately from level progress and opens the map.
 
-Replay, mute and skip remain available. Backgrounding, interrupted audio or
+Watch again, mute and skip remain available. Backgrounding, interrupted audio or
 turning a touch device sideways pauses the lesson; resume restarts the current
-demonstration or practice. `src/game/TutorialRun.ts` owns the guided sequence,
-and `src/scenes/TutorialScene.ts` presents it without changing level timing or
-judgement rules.
+pass. `src/game/TutorialRun.ts` owns the model and the words, both derived from
+the same handover the block is drawn from, and `src/scenes/TutorialScene.ts`
+presents it without changing level timing or judgement rules. See
+`docs/TUTORIAL.md`.
 
 - **The map** is an endless scrollable road grouped into ten-level areas:
   Grass, Pavement, Sand, Snow, Dusk, then the same five again numbered II, III
@@ -62,7 +66,10 @@ judgement rules.
   the clear bar together: easy for the first few areas, still climbing at level
   60, then a hard-but-fair plateau while the seeded patterns keep changing. Every
   level starts at the music's 120 BPM and ramps task by task toward its peak, up
-  to 150 BPM.
+  to 150 BPM. Past the tiers' eighth notes, triplets (from level 43) and
+  sixteenths (from level 59) arrive as a second stage of the same curve, on up
+  to half of a level's later tasks and only where the tempo leaves the thumb
+  room. See [subdivisions](docs/SUBDIVISIONS.md).
 - **Judgement** is Perfect within ±55 ms, Good within ±130 ms, otherwise Miss.
   Extra taps score as Miss and penalise weighted accuracy. The thresholds live in
   `src/config/rhythm.ts`; the judge itself is pure and knows nothing about
