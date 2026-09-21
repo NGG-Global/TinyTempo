@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePattern, secondsPerBeat, validatePattern } from '../src/rhythm/patterns';
+import { parsePattern, parseSubdivided, secondsPerBeat, tightestGap, validatePattern } from '../src/rhythm/patterns';
 import { createRoundPlan, RhythmScheduler } from '../src/rhythm/RhythmScheduler';
 
 describe('patterns and absolute scheduling', () => {
@@ -12,6 +12,25 @@ describe('patterns and absolute scheduling', () => {
   });
   it.each(['', '- -', 'X Y', 'XX'])('rejects invalid notation: %s', notation => {
     expect(() => parsePattern('p', notation)).toThrow();
+    expect(() => parseSubdivided('p', notation, 3)).toThrow();
+  });
+  it('writes triplets and sixteenths on an exact grid, so twelve triplet steps are one bar and not two', () => {
+    const triplets = parseSubdivided('t', 'X - - X - - X X X X - -', 3);
+    expect(triplets.lengthBeats).toBe(4);
+    expect(triplets.grid).toBe(3);
+    expect(triplets.hits.map(h => Math.round(h * 3))).toEqual([0, 3, 6, 7, 8, 9]);
+    expect(tightestGap(triplets)).toBeCloseTo(1 / 3);
+    // Multiplying the step out instead would not: a third of a beat has no exact binary form.
+    expect(createRoundPlan(1, triplets, 120, 0).response - createRoundPlan(1, triplets, 120, 0).demo).toBeCloseTo(2);
+    const sixteenths = parseSubdivided('s', 'X - - - X X X X X - - - X - - -', 4);
+    expect(sixteenths.lengthBeats).toBe(4);
+    expect(sixteenths.hits).toEqual([0, 1, 1.25, 1.5, 1.75, 2, 3]);
+    expect(tightestGap(sixteenths)).toBe(0.25);
+    expect(tightestGap(parsePattern('one', 'X - - -'))).toBe(Infinity);
+    expect(parsePattern('e', 'X - X -', 0.5).grid).toBe(2);
+  });
+  it.each([0, 1.5, -2, NaN])('rejects a grid of %s steps per beat', steps => {
+    expect(() => parseSubdivided('p', 'X - -', steps)).toThrow();
   });
   it.each([0, -1, NaN, Infinity])('rejects invalid BPM and step %s', value => {
     expect(() => secondsPerBeat(value)).toThrow();

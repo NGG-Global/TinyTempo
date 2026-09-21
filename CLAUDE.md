@@ -15,6 +15,19 @@ Crockford base32 string carrying levels, accuracies and settings, never hearts o
 purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
+The tiers stop at the eighth note; **triplets and sixteenths are a second stage on the
+same curve** (`PROGRESSION.subdivision`, `SUBDIVIDED_TIERS`, `subdivide` in `levels.ts`).
+From level 43 a level may swap up to half of its tasks, never the first, for a one-bar
+triplet phrase, from level 59 for a sixteenth one, and only where the task's tempo leaves
+`minSpacingMs` between taps — which is what keeps sixteenths off tasks above 136 BPM. The
+swap draws from **its own seeded stream** after the tiers have chosen, so no level below 43
+changed; `tests/fixtures/levels-before-subdivision.json` is the fingerprint that proves it,
+and a change that moves any of those levels is the registry trap again. Subdivided phrases
+are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
+multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
+`windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
+nearest-target cell. See `docs/SUBDIVISIONS.md`.
+
 Twenty vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New

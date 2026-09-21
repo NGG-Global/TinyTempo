@@ -16,6 +16,28 @@ export interface JudgeState {
 
 const EPSILON_MS = 0.000001; // Only absorb floating-point subtraction at exact boundaries.
 
+/**
+ * The most of the gap between two neighbouring targets one Perfect window may take. Under
+ * half, so two neighbours' Perfect cells can never meet: a tap between them is Good on
+ * one of them, never Perfect on both.
+ */
+const PERFECT_SHARE = 0.45;
+
+/**
+ * The windows for one set of targets. Perfect is the casual 55 ms until targets sit
+ * closer than 122 ms apart — sixteenths above 122 BPM — where it narrows so the cells
+ * stay disjoint. Good does not need to: the judge assigns a tap to its nearest target,
+ * so the midpoint between two targets already bounds each one's Good cell, and at a
+ * phrase's edges the full window is still what a player deserves.
+ */
+export function windowsFor(targets: readonly number[], base: TimingWindows = RHYTHM): TimingWindows {
+  let spacing = Infinity;
+  for (let i = 1; i < targets.length; i++) spacing = Math.min(spacing, targets[i]! - targets[i - 1]!);
+  if (!Number.isFinite(spacing) || spacing <= 0) return base;
+  const perfectMs = Math.min(base.perfectMs, Math.floor(spacing * 1000 * PERFECT_SHARE));
+  return perfectMs === base.perfectMs ? base : { ...base, perfectMs };
+}
+
 export function createJudge(targets: readonly number[], windows: TimingWindows = RHYTHM): JudgeState {
   if (!targets.length || targets.some((t, i) => !Number.isFinite(t) || (i > 0 && t <= targets[i - 1]!))) {
     throw new Error('Targets must be nonempty, finite and strictly increasing.');

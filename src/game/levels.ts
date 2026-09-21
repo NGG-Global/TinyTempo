@@ -1,7 +1,10 @@
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
-import { parsePattern, type Pattern } from '../rhythm/patterns';
+import { parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
 import { VIGNETTES } from '../vignettes/registry';
+
+/** A grid finer than the tiers' eighth note. Null for a task on the tiers. */
+export type Grid = 'triplet' | 'sixteenth';
 
 export interface LevelTask {
   readonly pattern: Pattern;
@@ -9,6 +12,7 @@ export interface LevelTask {
   readonly tier: number;
   /** Whole beats of lead-in before this task's demonstration. Zero for most tasks. */
   readonly leadBeats: number;
+  readonly grid: Grid | null;
 }
 export interface Area { readonly name: string; readonly sky: number; readonly ground: number; readonly road: number; readonly ink: number; readonly paper: number }
 export interface LevelSpec {
@@ -53,6 +57,28 @@ export const PATTERN_TIERS: readonly (readonly Pattern[])[] = Object.freeze([
   ['X X X - X - X X X - X - - X X -', 'X - X X - X - X X - - X X - X X', 'X X - X X - X - X X - X - X X -', 'X - X X X - - X X - X X X - X -'].map((n, i) => parsePattern(`t4-${i}`, n, 0.5)),
 ]);
 
+/**
+ * The finer grids, on top of the tiers: two densities each, one group of the subdivision
+ * per bar and then two. Every phrase is one bar and opens on its downbeat, like every
+ * tier pattern, so the block, the handover and the task change see nothing new. A phrase
+ * ends at least a third of a beat before the bar line: the next task's demonstration
+ * begins on the very next downbeat, and a sixteenth owed 100 ms before the hammer plays
+ * again is a trap, not a rhythm.
+ */
+export const SUBDIVIDED_TIERS: Readonly<Record<Grid, readonly (readonly Pattern[])[]>> = Object.freeze({
+  triplet: Object.freeze([
+    ['X - - X - - X X X X - -', 'X X X X - - X - - X - -', 'X - - X X X X - - X - -', 'X - - X - - X - - X X X'].map((n, i) => parseSubdivided(`tr0-${i}`, n, 3)),
+    ['X X X X - - X X X X - -', 'X - - X X X X - - X X X', 'X X X X X X X - - X - -', 'X - - X X X X X X X - -'].map((n, i) => parseSubdivided(`tr1-${i}`, n, 3)),
+  ]),
+  sixteenth: Object.freeze([
+    ['X - - - X - - - X - - X X - - -', 'X - - X X - - - X - - - X - - -', 'X - - - X - - X X - - - X - - -', 'X - - - X - X - X - - X X - - -'].map((n, i) => parseSubdivided(`sx0-${i}`, n, 4)),
+    ['X - - - X X X X X - - - X - - -', 'X X X X X - - - X - - - X - - -', 'X - - - X - - - X X X X X - - -', 'X - X - X X X X X - - - X - X -'].map((n, i) => parseSubdivided(`sx1-${i}`, n, 4)),
+  ]),
+});
+
+/** A second random stream for the second stage, so its draws never move the first's. */
+const SUBDIVISION_SEED = 0x51ed;
+
 export function difficulty(level: number): number {
   if (!Number.isInteger(level) || level < 1) throw new Error('Levels start at 1.');
   return 1 - Math.exp(-(level - 1) / PROGRESSION.rampLevels);
@@ -75,6 +101,61 @@ function seeded(seed: number): () => number {
     t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   };
+}
+
+/** 0 → 1 across [from, to], clamped. */
+function ramp(value: number, from: number, to: number): number {
+  return Math.max(0, Math.min(1, (value - from) / (to - from)));
+}
+
+/**
+ * The closest two taps a pattern asks for at a tempo, in milliseconds.
+ */
+export function tightestSpacingMs(pattern: Pattern, bpm: number): number {
+  return tightestGap(pattern) * 60_000 / bpm;
+}
+
+/** Whether a grid may be offered for a task at this tempo: its densest pattern must still leave the thumb room. */
+export function gridFits(grid: Grid, bpm: number): boolean {
+  const patterns = SUBDIVIDED_TIERS[grid].flat();
+  return patterns.every(pattern => tightestSpacingMs(pattern, bpm) >= PROGRESSION.subdivision.minSpacingMs);
+}
+
+/**
+ * The second stage of the curve: swap some of a level's later tasks onto a finer grid.
+ *
+ * Runs after the tiers have chosen every task and touches nothing below `tripletsFrom`,
+ * so the levels players have already learnt keep their tasks to the seed. Within a level
+ * the swaps skip the first task, which sets the pulse, and respect the tempo: a grid
+ * whose densest pattern would ask for taps closer than `minSpacingMs` at this task's
+ * tempo is not offered here, which is what keeps sixteenths off the fastest tasks.
+ */
+function subdivide(level: number, d: number, tasks: readonly LevelTask[]): readonly LevelTask[] {
+  const S = PROGRESSION.subdivision;
+  if (d < S.tripletsFrom) return tasks;
+  const random = seeded(level + SUBDIVISION_SEED);
+  const share = S.maxShare * ramp(d, S.tripletsFrom, S.fullAt);
+  // The share is a ceiling as well as a chance: a run of lucky draws may not turn a level
+  // into a subdivision drill, so no more than that fraction of its tasks ever swap.
+  const most = Math.floor(tasks.length * S.maxShare);
+  const out = [...tasks];
+  let swapped = 0;
+  for (let i = 1; i < out.length && swapped < most; i++) {
+    if (random() >= share) continue;
+    const task = out[i]!;
+    const grids: Grid[] = [];
+    if (gridFits('triplet', task.bpm)) grids.push('triplet');
+    if (d >= S.sixteenthsFrom && gridFits('sixteenth', task.bpm)) grids.push('sixteenth');
+    if (grids.length === 0) continue;
+    const grid = grids.length === 2 ? grids[Math.floor(random() * 2)]! : grids[0]!;
+    const density = ramp(d, grid === 'triplet' ? S.tripletsFrom : S.sixteenthsFrom, S.fullAt) >= 0.5 ? 1 : 0;
+    // Neither neighbour repeats: the one before is final, the one after is checked when its
+    // own turn comes.
+    const pool = SUBDIVIDED_TIERS[grid][density]!.filter(pattern => pattern !== out[i - 1]!.pattern);
+    out[i] = { ...task, pattern: pool[Math.floor(random() * pool.length)]!, grid };
+    swapped++;
+  }
+  return out;
 }
 
 /**
@@ -107,7 +188,7 @@ export function levelSpec(level: number): LevelSpec {
     // nothing between any other pair of tasks.
     const leadBeats = i === 0 ? RHYTHM.leadInBeats
       : i === breather ? P.breatherBars * RHYTHM.beatsPerBar : 0;
-    tasks.push({ pattern, tier, leadBeats, bpm: Math.round(P.baseBpm + (peakBpm - P.baseBpm) * progress) });
+    tasks.push({ pattern, tier, leadBeats, grid: null, bpm: Math.round(P.baseBpm + (peakBpm - P.baseBpm) * progress) });
   }
   const clearAccuracy = Math.round(P.clearMin + P.clearRange * d);
   const gap = (100 - clearAccuracy) / 3;
@@ -115,7 +196,7 @@ export function levelSpec(level: number): LevelSpec {
   return Object.freeze({
     level, difficulty: d, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
     lap: Math.floor((level - 1) / VIGNETTES.length), areaName: name, area,
-    tasks: Object.freeze(tasks), peakBpm, clearAccuracy,
+    tasks: Object.freeze(subdivide(level, d, tasks)), peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });
 }

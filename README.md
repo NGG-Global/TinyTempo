@@ -66,7 +66,10 @@ presents it without changing level timing or judgement rules. See
   the clear bar together: easy for the first few areas, still climbing at level
   60, then a hard-but-fair plateau while the seeded patterns keep changing. Every
   level starts at the music's 120 BPM and ramps task by task toward its peak, up
-  to 150 BPM.
+  to 150 BPM. Past the tiers' eighth notes, triplets (from level 43) and
+  sixteenths (from level 59) arrive as a second stage of the same curve, on up
+  to half of a level's later tasks and only where the tempo leaves the thumb
+  room. See [subdivisions](docs/SUBDIVISIONS.md).
 - **Judgement** is Perfect within ±55 ms, Good within ±130 ms, otherwise Miss.
   Extra taps score as Miss and penalise weighted accuracy. The thresholds live in
   `src/config/rhythm.ts`; the judge itself is pure and knows nothing about

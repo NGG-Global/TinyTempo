@@ -1,9 +1,14 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { AREAS, PATTERN_TIERS, areaOf, breatherTask, difficulty, levelSpec, mapLastLevel, mapLevelState, meanAccuracy, starsFor } from '../src/game/levels';
+import {
+  AREAS, PATTERN_TIERS, SUBDIVIDED_TIERS, areaOf, breatherTask, difficulty, gridFits, levelSpec, mapLastLevel, mapLevelState,
+  meanAccuracy, starsFor, tightestSpacingMs, type Grid,
+} from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
 import { RHYTHM } from '../src/config/rhythm';
 import { RoundController, type RoundEvents } from '../src/game/RoundController';
 import { TaskSequence } from '../src/game/TaskSequence';
+import { windowsFor } from '../src/rhythm/judge';
 import { VIGNETTES } from '../src/vignettes/registry';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -90,7 +95,7 @@ describe('level progression', () => {
     expect(mapLevelState(5 + PROGRESSION.mapLookahead + 1, 5)).toBe('preview');
     expect(mapLastLevel(5)).toBe(5 + PROGRESSION.mapLookahead + PROGRESSION.mapPreview);
   });
-  it.each([1, 12, 19, 45])('plays level %s end to end on one grid with the music tempo changing on task downbeats', level => {
+  it.each([1, 12, 19, 45, 70, 200])('plays level %s end to end on one grid with the music tempo changing on task downbeats', level => {
     const spec = levelSpec(level);
     const sound = { play: vi.fn(), cancel: vi.fn() };
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
@@ -109,6 +114,7 @@ describe('level progression', () => {
         if (target < plan.targets.length && now >= plan.targets[target]!) { controller.tap(plan.targets[target]!, now, now * 1000); target++; }
       }
       expect(controller.result).not.toBeNull();
+      expect(controller.result!.perfect).toBe(plan.targets.length);
       accuracies.push(controller.result!.accuracy);
       origin = new TaskSequence(task.bpm, origin).ending(plan.end).next;
     }
@@ -134,6 +140,103 @@ describe('level progression', () => {
       const leads = levelSpec(level).tasks.map(t => t.leadBeats);
       expect(leads.filter(n => n > 0).length).toBeLessThanOrEqual(2);
       expect(leads[0]).toBe(RHYTHM.leadInBeats);
+    }
+  });
+});
+
+describe('the finer grids', () => {
+  const S = PROGRESSION.subdivision;
+  /** The first level at or past a difficulty on the curve. */
+  const levelAt = (d: number) => { let level = 1; while (difficulty(level) < d) level++; return level; };
+  const grids = (level: number) => levelSpec(level).tasks.map(t => t.grid);
+
+  it('leaves every level below the triplet threshold exactly as it was, to the seed', () => {
+    // Recorded from the derivation before the second stage existed. A finer grid that
+    // moved any of these would be the registry trap again: a level a player has learnt,
+    // silently reassigned.
+    const before = JSON.parse(readFileSync(new URL('./fixtures/levels-before-subdivision.json', import.meta.url), 'utf8')) as Record<string, string[]>;
+    const first = levelAt(S.tripletsFrom);
+    expect(first).toBeGreaterThan(40);
+    for (let level = 1; level < first; level++) {
+      const spec = levelSpec(level);
+      expect(spec.tasks.map(t => `${t.pattern.id}@${t.bpm}/${t.tier}/${t.leadBeats}`)).toEqual(before[String(level)]);
+      expect(spec.tasks.every(t => t.grid === null)).toBe(true);
+    }
+    // Past it, the tiers' own draws still stand: only the swapped tasks differ.
+    for (let level = first; level <= 120; level++) {
+      const spec = levelSpec(level);
+      spec.tasks.forEach((task, i) => {
+        const was = before[String(level)]![i]!;
+        if (task.grid === null) expect(`${task.pattern.id}@${task.bpm}/${task.tier}/${task.leadBeats}`).toBe(was);
+        else expect(`@${task.bpm}/${task.tier}/${task.leadBeats}`).toBe(was.slice(was.indexOf('@')));
+      });
+    }
+  });
+
+  it('arrives in two steps — triplets first, sixteenths later — and grows denser toward the plateau', () => {
+    const firstTriplet = levelAt(S.tripletsFrom);
+    const firstSixteenth = levelAt(S.sixteenthsFrom);
+    for (let level = 1; level < firstTriplet; level++) expect(grids(level).every(g => g === null)).toBe(true);
+    for (let level = 1; level < firstSixteenth; level++) expect(grids(level).includes('sixteenth')).toBe(false);
+    const count = (from: number, to: number) => { let n = 0; for (let level = from; level <= to; level++) n += grids(level).filter(Boolean).length; return n / (to - from + 1); };
+    const early = count(firstTriplet, firstTriplet + 9);
+    const middle = count(firstSixteenth, firstSixteenth + 19);
+    const plateau = count(150, 250);
+    expect(early).toBeGreaterThan(0);
+    expect(early).toBeLessThan(middle);
+    expect(middle).toBeLessThan(plateau);
+    // At most the stated share of a level, and never the task that sets the pulse.
+    for (let level = 1; level <= 300; level++) {
+      const g = grids(level);
+      expect(g[0]).toBeNull();
+      expect(g.filter(Boolean).length).toBeLessThanOrEqual(Math.floor(g.length * S.maxShare));
+    }
+    // Some level on the plateau has both grids in it.
+    let both = false;
+    for (let level = 150; level <= 250 && !both; level++) { const g = grids(level); both = g.includes('triplet') && g.includes('sixteenth'); }
+    expect(both).toBe(true);
+  });
+
+  it('writes every subdivided phrase as one exact bar opening on its downbeat', () => {
+    for (const grid of Object.keys(SUBDIVIDED_TIERS) as Grid[]) {
+      for (const density of SUBDIVIDED_TIERS[grid]) for (const pattern of density) {
+        expect(pattern.lengthBeats).toBe(RHYTHM.beatsPerBar);
+        expect(pattern.hits[0]).toBe(0);
+        expect(pattern.grid).toBe(grid === 'triplet' ? 3 : 4);
+        // At least a third of a beat before the next task's downbeat: no sixteenth pickup into it.
+        expect(RHYTHM.beatsPerBar - pattern.hits.at(-1)!).toBeGreaterThanOrEqual(1 / 3 - 1e-9);
+      }
+    }
+    // The second density is denser than the first, which is what makes it a second step.
+    for (const grid of Object.keys(SUBDIVIDED_TIERS) as Grid[]) {
+      const hits = (density: number) => SUBDIVIDED_TIERS[grid][density]!.reduce((n, p) => n + p.hits.length, 0);
+      expect(hits(1)).toBeGreaterThan(hits(0));
+    }
+  });
+
+  it('never asks the thumb for two taps closer than the floor, whatever the task’s tempo', () => {
+    for (let level = 1; level <= 300; level++) {
+      for (const task of levelSpec(level).tasks) {
+        expect(tightestSpacingMs(task.pattern, task.bpm)).toBeGreaterThanOrEqual(S.minSpacingMs);
+      }
+    }
+    // Triplets fit every tempo the curve reaches; sixteenths fall off the fastest tasks.
+    const ceiling = PROGRESSION.baseBpm + PROGRESSION.peakBpmRange;
+    expect(gridFits('triplet', ceiling)).toBe(true);
+    expect(gridFits('sixteenth', PROGRESSION.baseBpm)).toBe(true);
+    expect(gridFits('sixteenth', ceiling)).toBe(false);
+  });
+
+  it('narrows only the Perfect window, and only where two neighbours would otherwise share it', () => {
+    for (let level = 1; level <= 300; level++) {
+      for (const task of levelSpec(level).tasks) {
+        const beat = 60 / task.bpm;
+        const windows = windowsFor(task.pattern.hits.map(h => h * beat));
+        expect(windows.goodMs).toBe(RHYTHM.goodMs);
+        expect(windows.perfectMs).toBeLessThanOrEqual(RHYTHM.perfectMs);
+        expect(2 * windows.perfectMs).toBeLessThan(tightestSpacingMs(task.pattern, task.bpm));
+        if (task.grid === null) expect(windows.perfectMs).toBe(RHYTHM.perfectMs);
+      }
     }
   });
 });
