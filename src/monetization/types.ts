@@ -60,4 +60,11 @@ export interface Monetization {
   purchase(product: ProductId): Promise<PurchaseResult>;
   restorePurchases(): Promise<RestoreResult>;
   premium(): boolean;
+  /**
+   * True only on native AdMob, and only while UMP says a privacy-options button is
+   * required. The browser stub and an unconfigured UMP message both stay false, so
+   * Settings can hide the row without knowing about the plugin.
+   */
+  privacyOptionsAvailable(): boolean;
+  showPrivacyOptions(): Promise<void>;
 }

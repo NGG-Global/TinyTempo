@@ -13,20 +13,32 @@ const BLOCKED: ConsentSnapshot = { canRequestAds: false, isConsentFormAvailable:
 interface FakeOptions {
   readonly consent?: ConsentSnapshot;
   readonly form?: ConsentSnapshot;
+  readonly privacyForm?: ConsentSnapshot;
+  readonly privacyFormThrows?: boolean;
   readonly prepare?: 'ok' | 'fail';
-    readonly show?: 'reward' | 'dismiss' | 'fail' | 'reward-twice' | 'hang' | 'resolve-zero' | 'dismiss-then-reward';
+  readonly show?: 'reward' | 'dismiss' | 'fail' | 'reward-twice' | 'hang' | 'resolve-zero' | 'dismiss-then-reward';
 }
 
 function fakeClient(options: FakeOptions = {}): AdMobClient & {
   readonly initializes: number;
+  readonly consentRequests: number;
+  readonly privacyForms: number;
   readonly prepares: string[];
   emit(event: string, payload?: unknown): void;
 } {
   const listeners = new Map<string, ((payload?: unknown) => void)[]>();
   const prepares: string[] = [];
   let initializes = 0;
-  const client: AdMobClient & { initializes: number; prepares: string[]; emit: (event: string, payload?: unknown) => void } = {
+  let consentRequests = 0;
+  let privacyForms = 0;
+  let privacyShown = false;
+  const client: AdMobClient & {
+    initializes: number; consentRequests: number; privacyForms: number; prepares: string[];
+    emit: (event: string, payload?: unknown) => void;
+  } = {
     get initializes() { return initializes; },
+    get consentRequests() { return consentRequests; },
+    get privacyForms() { return privacyForms; },
     get prepares() { return prepares; },
     emit(event, payload) {
       for (const listener of listeners.get(event) ?? []) listener(payload);
@@ -34,8 +46,17 @@ function fakeClient(options: FakeOptions = {}): AdMobClient & {
     async initialize() { initializes += 1; },
     async trackingAuthorizationStatus() { return { status: 'authorized' }; },
     async requestTrackingAuthorization() { /* Android no-op */ },
-    async requestConsentInfo() { return options.consent ?? ALLOWED; },
+    async requestConsentInfo() {
+      consentRequests += 1;
+      if (privacyShown && options.privacyForm) return options.privacyForm;
+      return options.consent ?? ALLOWED;
+    },
     async showConsentForm() { return options.form ?? ALLOWED; },
+    async showPrivacyOptionsForm() {
+      privacyForms += 1;
+      if (options.privacyFormThrows) throw new Error('no privacy form');
+      privacyShown = true;
+    },
     async prepareRewardVideoAd(adId) {
       prepares.push(adId);
       if (options.prepare === 'fail') throw new Error('no fill');
@@ -169,6 +190,92 @@ describe('AdMob rewarded adapter', () => {
   });
 });
 
+describe('UMP privacy options', () => {
+  it('hides the privacy-options entry point unless UMP reports REQUIRED', async () => {
+    const absent = createAdMobAds(fakeClient({ consent: ALLOWED }));
+    await absent.boot();
+    expect(absent.privacyOptionsAvailable()).toBe(false);
+
+    const notRequired = createAdMobAds(fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'NOT_REQUIRED' },
+    }));
+    await notRequired.boot();
+    expect(notRequired.privacyOptionsAvailable()).toBe(false);
+
+    const unknown = createAdMobAds(fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'UNKNOWN' },
+    }));
+    await unknown.boot();
+    expect(unknown.privacyOptionsAvailable()).toBe(false);
+
+    const requiredClient = fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+    });
+    const required = createAdMobAds(requiredClient);
+    await required.boot();
+    expect(required.privacyOptionsAvailable()).toBe(true);
+    expect(required.available()).toBe(true);
+    expect(requiredClient.privacyForms).toBe(0);
+  });
+
+  it('still offers privacy options when ads cannot yet be requested', async () => {
+    const ads = createAdMobAds(fakeClient({
+      consent: { canRequestAds: false, isConsentFormAvailable: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+      form: { canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' },
+    }));
+    await ads.boot();
+    expect(ads.available()).toBe(false);
+    expect(ads.privacyOptionsAvailable()).toBe(true);
+  });
+
+  it('re-requests consent after the privacy options form and can then request ads', async () => {
+    const client = fakeClient({
+      consent: { canRequestAds: false, isConsentFormAvailable: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+      form: { canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' },
+      privacyForm: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+    });
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    expect(client.prepares).toEqual([]);
+    expect(ads.available()).toBe(false);
+    const askedBefore = client.consentRequests;
+    await ads.showPrivacyOptions();
+    expect(client.privacyForms).toBe(1);
+    expect(client.consentRequests).toBe(askedBefore + 1);
+    expect(ads.available()).toBe(true);
+    expect(ads.privacyOptionsAvailable()).toBe(true);
+    expect(client.prepares).toEqual([ADMOB.rewardedUnitId]);
+  });
+
+  it('stops requesting ads if the player withdraws consent on the privacy form', async () => {
+    const client = fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+      privacyForm: { canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' },
+    });
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    expect(ads.available()).toBe(true);
+    expect(client.prepares).toEqual([ADMOB.rewardedUnitId]);
+    await ads.showPrivacyOptions();
+    expect(ads.available()).toBe(false);
+    expect(client.prepares).toEqual([ADMOB.rewardedUnitId]);
+  });
+
+  it('still re-requests consent if the privacy form is missing', async () => {
+    const client = fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+      privacyFormThrows: true,
+    });
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    const askedBefore = client.consentRequests;
+    await expect(ads.showPrivacyOptions()).resolves.toBeUndefined();
+    expect(client.privacyForms).toBe(1);
+    expect(client.consentRequests).toBe(askedBefore + 1);
+    expect(ads.available()).toBe(true);
+  });
+});
+
 describe('rewarded show through the facade still grants once', () => {
   it('only the completion result is an ok, so a caller can claim once', async () => {
     const client = fakeClient({ show: 'reward-twice' });
@@ -181,5 +288,17 @@ describe('rewarded show through the facade still grants once', () => {
     expect(first.granted).toBe(true);
     expect(again.granted).toBe(false);
     expect(again.health.hearts).toBe(1);
+  });
+
+  it('forwards privacy options only when the ads adapter implements them', async () => {
+    const client = fakeClient({
+      consent: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+    });
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    const commerce = createMonetization({ ads });
+    expect(commerce.privacyOptionsAvailable()).toBe(true);
+    await commerce.showPrivacyOptions();
+    expect(client.privacyForms).toBe(1);
   });
 });

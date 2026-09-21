@@ -41,13 +41,13 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'reset' | 'analytics' | 'help' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
 const LEGAL = {
-  privacy: 'https://ngg-global.github.io/TinyTempo/privacy/',
-  terms: 'https://ngg-global.github.io/TinyTempo/terms/',
+  privacy: 'https://tinytempo.games/privacy/',
+  terms: 'https://tinytempo.games/terms/',
 } as const;
 
 /**
@@ -216,6 +216,9 @@ export class SettingsScene extends BaseScene {
       // it runs under the knob. It also answers the question a consent row actually raises,
       // which is what is *not* sent.
       analyticsNote: rowNote('No name, no progress — offers only'),
+      adPrivacy: rowTitle('Ad privacy'),
+      adPrivacyNote: rowNote('Manage your ad choices'),
+      adPrivacyGo: chip('Open'),
       transfer: rowTitle('Save code'),
       transferNote: rowNote('Carry your progress to another device'),
       transferGo: chip('Open'),
@@ -233,6 +236,14 @@ export class SettingsScene extends BaseScene {
   /** A refill is an offer only while there is room for the hearts it would restore. */
   private refillOffered(): boolean {
     return !monetization().premium() && viewHealth(loadHealth()).hearts < HEALTH.max;
+  }
+
+  /**
+   * UMP's privacy-options button, not the analytics switch. Hidden in the browser, on
+   * a native build whose message is not required, and until consent info has arrived.
+   */
+  private adPrivacyOffered(): boolean {
+    return monetization().privacyOptionsAvailable();
   }
 
   protected override layout(): void {
@@ -438,17 +449,32 @@ export class SettingsScene extends BaseScene {
     this.texts.reset!.setPosition(resetRect.centerX, resetRect.centerY);
     this.hits.push({ name: 'reset', rect: resetRect, pinned: false });
 
-    // PRIVACY — one switch. The policy's "your choices" section has to be able to point
-    // at something a player can actually reach, and a consent that can only be granted by
-    // a build flag is not a choice.
+    // PRIVACY — the analytics switch always, and UMP's privacy-options row only when
+    // AdMob says the entry point is required. The policy's "your choices" section has
+    // to be able to point at something a player can actually reach.
     y += SETTINGS.sectionGap * s;
     eyebrow(5);
-    const privacy = plate(row);
+    const adPrivacy = this.adPrivacyOffered();
+    const privacy = plate(row * (adPrivacy ? 2 : 1));
     this.rows.privacyCard = privacy;
     this.rows.analytics = switchRect(privacy, privacy.y, row);
-    this.texts.analytics!.setPosition(left + 30 * s, privacy.centerY - 15 * s);
-    this.texts.analyticsNote!.setPosition(left + 30 * s, privacy.centerY + 19 * s);
+    this.texts.analytics!.setPosition(left + 30 * s, privacy.y + row / 2 - 15 * s);
+    this.texts.analyticsNote!.setPosition(left + 30 * s, privacy.y + row / 2 + 19 * s);
     this.hits.push({ name: 'analytics', rect: new Phaser.Geom.Rectangle(left, privacy.y, width, row), pinned: false });
+    if (adPrivacy) {
+      const privacyRow = new Phaser.Geom.Rectangle(left, privacy.y + row, width, row);
+      this.rows.adPrivacyRow = privacyRow;
+      this.texts.adPrivacy!.setPosition(left + 30 * s, privacyRow.centerY - 15 * s);
+      this.texts.adPrivacyNote!.setPosition(left + 30 * s, privacyRow.centerY + 19 * s);
+      const goW = Math.max(150 * s, control);
+      const goRect = new Phaser.Geom.Rectangle(privacyRow.right - 26 * s - goW, privacyRow.centerY - control / 2, goW, control);
+      this.rows.adPrivacy = goRect;
+      this.texts.adPrivacyGo!.setPosition(goRect.centerX - 14 * s, goRect.centerY);
+      this.hits.push({ name: 'adPrivacy', rect: goRect, pinned: false });
+    } else {
+      delete this.rows.adPrivacy;
+      delete this.rows.adPrivacyRow;
+    }
 
     // HELP — last, because it is where someone looks once something has gone wrong, and
     // by then they have already scrolled past everything that might have prevented it.
@@ -577,6 +603,14 @@ export class SettingsScene extends BaseScene {
       this.texts.transferGo!.setPosition(this.rows.transfer.centerX - 14 * s, this.rows.transfer.centerY + sink);
     }
     if (this.rows.analytics) drawSwitch(g, this.rows.analytics, s, this.switchAt.analytics);
+    if (this.rows.adPrivacy && this.rows.adPrivacyRow) {
+      const line = this.rows.adPrivacyRow;
+      g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(line.x + 24 * s, line.y - 1.5 * s, line.width - 48 * s, 3 * s);
+      drawPanel(g, this.rows.adPrivacy, s, { fill: SHELL.cream, depth: 8, press: sunk('adPrivacy'), radius: 18 });
+      const sink = 8 * s * sunk('adPrivacy') * 0.8;
+      drawChevron(g, this.rows.adPrivacy.right - 30 * s, this.rows.adPrivacy.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.adPrivacyGo!.setPosition(this.rows.adPrivacy.centerX - 14 * s, this.rows.adPrivacy.centerY + sink);
+    }
     if (this.rows.help) {
       drawPanel(g, this.rows.help, s, { fill: SHELL.cream, depth: 8, press: sunk('help'), radius: 18 });
       const sink = 8 * s * sunk('help') * 0.8;
@@ -631,6 +665,8 @@ export class SettingsScene extends BaseScene {
     this.texts.refillPrice!.setText(refillPrice ?? 'Buy');
     const offered = this.refillOffered();
     for (const key of ['refill', 'refillNote', 'refillPrice']) this.texts[key]!.setVisible(offered);
+    const adPrivacy = this.adPrivacyOffered();
+    for (const key of ['adPrivacy', 'adPrivacyNote', 'adPrivacyGo']) this.texts[key]!.setVisible(adPrivacy);
     const area = areaOf(progress.unlocked);
     this.texts.level!.setText(`Level ${progress.unlocked}`);
     this.texts.levelNote!.setText(`· ${area.name}`);
@@ -799,6 +835,7 @@ export class SettingsScene extends BaseScene {
       case 'sound': this.toggleSound(); return;
       case 'haptics': this.toggleHaptics(); return;
       case 'analytics': this.toggleAnalytics(); return;
+      case 'adPrivacy': void this.openAdPrivacy(); return;
       case 'unlock': void this.buy(PRODUCT.premium); return;
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
@@ -835,6 +872,23 @@ export class SettingsScene extends BaseScene {
     this.switchedAt.analytics = performance.now() / 1000;
     void setAnalyticsConsent(this.analyticsOn);
     this.refreshCopy();
+  }
+
+  /**
+   * Native UMP sheet. After it closes the adapter re-reads consent, so a relayout is
+   * what hides the row if the requirement has gone, or stops ads if the player withdrew.
+   */
+  private async openAdPrivacy(): Promise<void> {
+    if (this.commerceBusy || this.curtain.active) return;
+    this.commerceBusy = true;
+    try {
+      await monetization().showPrivacyOptions();
+      if (this.disposed || this.curtain.active) return;
+      this.refreshCopy();
+      this.layout();
+    } finally {
+      this.commerceBusy = false;
+    }
   }
 
   /** Back to an uncalibrated clock. Unlike progress reset, this is one tap: Tune can put it back. */

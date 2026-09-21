@@ -22,6 +22,7 @@ describe('monetization stubs', () => {
     expect(commerce.rewardedAvailable()).toBe(false);
     expect(commerce.purchasesAvailable()).toBe(false);
     expect(commerce.premium()).toBe(false);
+    expect(commerce.privacyOptionsAvailable()).toBe(false);
     expect(commerce.productPrice(PRODUCT.heartRefill)).toBeNull();
     expect(commerce.productPrice(PRODUCT.premium)).toBeNull();
   });
@@ -33,6 +34,7 @@ describe('monetization stubs', () => {
       ok: false, product: PRODUCT.premium, reason: 'unavailable',
     });
     await expect(commerce.restorePurchases()).resolves.toEqual({ ok: true, premium: false });
+    await expect(commerce.showPrivacyOptions()).resolves.toBeUndefined();
   });
 
   it('exposes the same stub through the game-wide accessor', async () => {
@@ -58,6 +60,7 @@ describe('native failure isolation', () => {
     expect(commerce.rewardedAvailable()).toBe(false);
     expect(commerce.purchasesAvailable()).toBe(false);
     expect(commerce.premium()).toBe(false);
+    expect(commerce.privacyOptionsAvailable()).toBe(false);
     expect(commerce.productPrice(PRODUCT.heartRefill)).toBeNull();
     await expect(commerce.showRewarded()).resolves.toEqual({ ok: false, reason: 'unavailable' });
     await expect(commerce.purchase(PRODUCT.premium)).resolves.toEqual({
@@ -66,6 +69,21 @@ describe('native failure isolation', () => {
     await expect(commerce.restorePurchases()).resolves.toEqual({ ok: false, reason: 'failed' });
     expect(events.filter(e => e.event === 'purchase_started')).toEqual([]);
     expect(events).toContainEqual({ event: 'purchase_failed', payload: { product: PRODUCT.premium, reason: 'unavailable' } });
+  });
+
+  it('treats a throwing privacy-options adapter as unavailable rather than crashing', async () => {
+    const ads: RewardedAds & {
+      privacyOptionsAvailable(): boolean;
+      showPrivacyOptions(): Promise<void>;
+    } = {
+      available: () => true,
+      show: async () => ({ ok: true }),
+      privacyOptionsAvailable: () => { throw new Error('ump missing'); },
+      showPrivacyOptions: async () => { throw new Error('form exploded'); },
+    };
+    const commerce = createMonetization({ ads });
+    expect(commerce.privacyOptionsAvailable()).toBe(false);
+    await expect(commerce.showPrivacyOptions()).resolves.toBeUndefined();
   });
 
   it('turns a throwing show() into a failed result after availability passed', async () => {

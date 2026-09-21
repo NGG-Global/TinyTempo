@@ -261,6 +261,12 @@ these is a blocker — but none has been run on a device.
 - [ ] **Confirm the unit is a rewarded unit** in the AdMob console. An ad unit ID does
       not encode its format, the adapter only ever calls `prepareRewardVideoAd`, and a
       unit of any other format fails to load rather than saying why.
+- [ ] **UMP Privacy & messaging.** Create a GDPR (EEA/UK) message for the Android app
+      and enable the privacy options form on it. Settings only shows **Ad privacy**
+      while `privacyOptionsRequirementStatus` is `REQUIRED`; without that message the
+      row never appears. Do not call `resetConsentInfo` from a production build — the
+      wrapper deliberately does not expose it. Point the message's privacy policy URL
+      at `https://tinytempo.games/privacy/`.
 - [x] ~~**Billing provider key.**~~ Gone with the provider. Billing is Google Play
       Billing called directly from `PlayBillingPlugin.java`, authorised by the APK's
       signature and package name, so there is no key to inject and none to leak.
@@ -285,9 +291,7 @@ these is a blocker — but none has been run on a device.
       store as unavailable.
 - [ ] Link the AdMob app to the Play listing.
 - [ ] Publish `app-ads.txt` at the root of your developer-website domain and
-      declare that domain in AdMob. You already publish to
-      `ngg-global.github.io/TinyTempo/`, which is a project path, not a root —
-      you may need a domain you control.
+      declare that domain in AdMob. The live site is `tinytempo.games`.
 - [ ] Set up a merchant account for paid distribution.
 - [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
       APK never sees an update; that is Play's rule, not a bug. Ship a higher
@@ -332,19 +336,13 @@ these is a blocker — but none has been run on a device.
 - [ ] **Government apps / financial features / health** — all no.
 - [ ] **Account deletion** — the game has no accounts, so this likely does not
       apply *(verify how the requirement is phrased now.)*
-- [ ] Privacy policy URL: `https://ngg-global.github.io/TinyTempo/privacy/` is
+- [ ] Privacy policy URL: `https://tinytempo.games/privacy/` is
       live and covers advertising, purchases, retention, children, a section 6 on
-      what a crash report contains, and a section 7 on analytics. Re-publish Pages
-      so the live page matches the app you submit — **the pages have changed since
-      they were last published**, so this is now required, not routine.
+      what a crash report contains, and a section 7 on analytics. Point Play,
+      AdMob and Settings at this URL, not the old GitHub Pages copy.
 - [ ] **Confirm the developer name matches the legal pages.** Both name *Dor Vadai*
       as publisher and data controller, which is the name on the Play account. Play
       verifies it and displays it publicly, so if either ever changes, change both.
-- [ ] The policy is hosted at `ngg-global.github.io` while the publisher is Dor
-      Vadai. That is only where the repository lives and is not a claim about
-      who publishes the app, but it reads oddly to anyone who looks. Moving the repo
-      or pointing a domain at Pages would settle it; the URL in
-      `SettingsScene.LEGAL` has to change with it.
 
 ### G. Testing before you promote anything
 
@@ -357,6 +355,10 @@ these is a blocker — but none has been run on a device.
       traffic.
 - [ ] Watch a real rewarded ad and confirm the heart lands.
 - [ ] Exercise the AdMob consent form in an EEA/UK locale.
+- [ ] Confirm Settings → Privacy shows **Ad privacy** in that locale, that the
+      privacy-options form opens from it, and that refusing or withdrawing consent
+      leaves rewarded ads unavailable rather than serving them anyway. The row is
+      hidden unless UMP reports `privacyOptionsRequirementStatus === REQUIRED`.
 - [ ] Test with no network, and with the store unavailable — the code is written
       to fall back to a stub, so confirm the copy in `monetization/copy.ts` is
       what the player actually sees.
