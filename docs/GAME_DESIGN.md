@@ -155,7 +155,7 @@ Replay resets the six-round session and its score. Keep the slice's state in mem
 
 ## Acceptance criteria and boundaries
 
-- A first-time player can distinguish Watch from Your turn and knows when to enter after one tutorial round.
+- A first-time player can read whose turn it is from the turn block — the hammer's row, the token crossing, their row — and knows when to enter after one tutorial round.
 - All three vignettes run the same pattern and judgement system without vignette-specific timing rules.
 - A clean run, no-input run, early/late run and spam run produce understandable, consistent results.
 - Rapid doubles trigger two visible actions and two sound attacks; recoil does not swallow the second input.

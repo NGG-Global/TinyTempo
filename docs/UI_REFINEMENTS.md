@@ -117,6 +117,22 @@ backdrop be the way out.
 it: the hearts under the headline, the countdown, Watch (or Today, when the free
 heart is there), and the two paid ways out side by side.
 
+**The first time the bar is empty**, both say one more thing, before any offer: a
+finished level never costs a heart, and the stars missed on one are the thing to go
+back for while the next heart fills. On the map it is a cream row under the countdown
+with three stars, the rule in a sentence, and a coral chip — *Replay level N* — that
+closes the sheet and opens the highest finished level still short of three stars
+(`levelToPolish` in `game/health.ts`; the frontier is never the one named). With every
+finished level already at three, the row says so and the chip is left off. Mid-run,
+where there are two lines under the headline, the countdown line gains the rule
+(`HEALTH_COPY.firstEmptyLead`) and the note becomes what to do with it
+(`HEALTH_COPY.firstEmptyPlay`). Either screen marks it seen (`seenReplayTip` in
+`game/progress.ts`, stored beside the demonstration flag and, like it, never in a save
+code), so whichever the player meets first is the one that tells them; after that the
+quieter standing line returns. On a short screen with every other row present the map's
+row keeps its title and chip and drops the sentence rather than pushing the way out off
+the bottom.
+
 Premium is offered in both places now, and a successful purchase drops straight
 back into the level the player was stopped on — entitlement lifts the heart cost
 entirely, so there is nothing left to wait for. `monetization/copy.ts` holds the

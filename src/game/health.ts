@@ -18,6 +18,18 @@ export const HEALTH = {
 export const HEALTH_COPY = {
   restNote: 'Finished levels stay open. Hearts are for the next one.',
   playNote: 'Finished levels stay open on the map.',
+  /**
+   * The first time the hearts run out, said plainly and once. A player who has just been
+   * stopped assumes the game is over until the next heart; it is not, and the thing to
+   * do in the meantime is the thing the stars are for.
+   */
+  firstEmptyTitle: 'Earlier levels are free',
+  firstEmpty: 'Replaying a level you have finished never costs a heart. Go back for the stars you missed while the next heart fills.',
+  /** The mid-run screen has two lines: the countdown gains the rule, and the note says what to do. */
+  firstEmptyLead: 'replays are free',
+  firstEmptyPlay: 'Replay one from the map for three stars.',
+  /** When every earlier level already has its three stars, the tip still names the rule. */
+  firstEmptyMastered: 'Replaying a finished level never costs a heart — and every one of yours already has three stars.',
 } as const;
 
 export interface Health {
@@ -171,6 +183,21 @@ export function isMastered(progress: Progress, level: number): boolean {
 export function isCleared(progress: Progress, level: number): boolean {
   const best = progress.best[level];
   return typeof best === 'number' && Number.isFinite(best);
+}
+
+/**
+ * The finished level worth going back to: the highest one cleared below the frontier
+ * that is still short of three stars, or null when every one of them has its three.
+ *
+ * Highest rather than lowest because it is the level nearest the player's reach — the
+ * one they most likely just came from, and the one whose stars are most in doubt. The
+ * frontier itself is never offered: it is the level the hearts are for.
+ */
+export function levelToPolish(progress: Progress): number | null {
+  for (let level = progress.unlocked - 1; level >= 1; level--) {
+    if (isCleared(progress, level) && !isMastered(progress, level)) return level;
+  }
+  return null;
 }
 
 /**

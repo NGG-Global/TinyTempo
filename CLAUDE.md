@@ -222,7 +222,21 @@ never evaluates, that handler is an inline `<script>` in `index.html` rather tha
 in the bundle. See `docs/SUPPORT.md`.
 
 The separate `TutorialScene` (`game/TutorialRun.ts`, the menu's "How to play", a first
-Play) still exists alongside the first-run pass, deliberately and pending a decision.
+Play) exists alongside the first-run pass and teaches on the **same turn block** a level
+draws, with the two things a level leaves out — a label on each row and a pointer that
+follows the token — and words. `coach` derives every heading from `momentOf`, which reads
+the same `handover` the block is drawn from, so *Get ready* is said when the baton starts
+to cross and *Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins
+that order. The tried pass is judged by the level's own `RoundController`, and a miss is
+named — *Too early* for taps in the hammer's turn, *That was your turn* for a bar that
+went by — rather than scored. Nothing in it waits for a tap: the loop's whole lesson is
+that it does not. See `docs/TUTORIAL.md`.
+
+The first time the hearts run out, both empty-bar screens say once that a finished level
+never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
+highest finished level short of three stars, never the frontier). `seenReplayTip` lives
+beside `seenDemonstration` in `game/progress.ts`, in one stored object that a write to
+either flag preserves whole, and neither travels in a save code.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
