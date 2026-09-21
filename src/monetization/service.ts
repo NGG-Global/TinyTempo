@@ -23,6 +23,19 @@ function asBoolean(read: () => boolean): boolean {
   try { return read() === true; } catch { return false; }
 }
 
+/** AdMob ads expose these; the stub and any RewardedAds test double do not. */
+function hasPrivacyOptions(ads: RewardedAds): ads is RewardedAds & {
+  privacyOptionsAvailable(): boolean;
+  showPrivacyOptions(): Promise<void>;
+} {
+  const candidate = ads as RewardedAds & {
+    privacyOptionsAvailable?: unknown;
+    showPrivacyOptions?: unknown;
+  };
+  return typeof candidate.privacyOptionsAvailable === 'function'
+    && typeof candidate.showPrivacyOptions === 'function';
+}
+
 function withTimeout<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
   return new Promise(resolve => {
     let settled = false;
@@ -121,6 +134,20 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
       } catch {
         return { ok: false, reason: 'failed' };
       }
+    },
+
+    privacyOptionsAvailable: () => {
+      if (!hasPrivacyOptions(ads)) return false;
+      return asBoolean(() => ads.privacyOptionsAvailable());
+    },
+
+    async showPrivacyOptions(): Promise<void> {
+      if (!hasPrivacyOptions(ads)) return;
+      try {
+        // The native form is a player-driven sheet, so this uses the longer show
+        // timeout rather than the 45s commerce one. A hang still unsticks Settings.
+        await withTimeout(Promise.resolve().then(() => ads.showPrivacyOptions()), showTimeoutMs, undefined);
+      } catch { /* form missing, plugin threw, or the timeout fired */ }
     },
   };
 }

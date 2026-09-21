@@ -11,9 +11,16 @@ export const REWARD_EVENTS = {
   rewarded: 'onRewardedVideoAdReward',
 } as const;
 
+/**
+ * UMP privacy-options requirement. Inlined so tests never import the native package.
+ * `REQUIRED` is the only status that should surface a publisher-rendered entry point.
+ */
+export type PrivacyOptionsRequirementStatus = 'NOT_REQUIRED' | 'REQUIRED' | 'UNKNOWN';
+
 export interface ConsentSnapshot {
   readonly canRequestAds: boolean;
   readonly isConsentFormAvailable?: boolean;
+  readonly privacyOptionsRequirementStatus?: PrivacyOptionsRequirementStatus;
 }
 
 export interface AdMobClient {
@@ -22,6 +29,7 @@ export interface AdMobClient {
   requestTrackingAuthorization(): Promise<void>;
   requestConsentInfo(): Promise<ConsentSnapshot>;
   showConsentForm(): Promise<ConsentSnapshot>;
+  showPrivacyOptionsForm(): Promise<void>;
   prepareRewardVideoAd(adId: string): Promise<{ readonly adUnitId: string }>;
   showRewardVideoAd(): Promise<{ readonly type: string; readonly amount: number }>;
   addListener(event: string, listener: (payload?: unknown) => void): Promise<{ remove: () => Promise<void> }>;
@@ -30,6 +38,13 @@ export interface AdMobClient {
 export interface AdMobAds extends RewardedAds {
   /** Consent, SDK init and the first preload. Safe to call more than once. */
   boot(): Promise<void>;
+  /** True only while UMP reports that a privacy-options entry point is required. */
+  privacyOptionsAvailable(): boolean;
+  /**
+   * Shows the publisher-rendered privacy options form, then re-reads consent so
+   * `canRequestAds` and the Settings row stay in step with what the player just chose.
+   */
+  showPrivacyOptions(): Promise<void>;
 }
 
 interface ShowSession {
@@ -55,6 +70,7 @@ export function createAdMobAds(client: AdMobClient, options: {
   let bootPromise: Promise<void> | null = null;
   let initialized = false;
   let denied = false;
+  let privacyOptionsRequired = false;
   let loaded = false;
   let preparing: Promise<void> | null = null;
   let showing = false;
@@ -83,14 +99,31 @@ export function createAdMobAds(client: AdMobClient, options: {
       if (!consent.canRequestAds) {
         try { consent = await client.showConsentForm(); } catch { /* form missing or already answered */ }
       }
-      if (!consent.canRequestAds) {
-        denied = true;
-        return;
-      }
-      await ensureListeners();
-      await prepare();
+      rememberConsent(consent);
+      await allowAdsIfConsented();
     } catch {
       denied = true;
+    }
+  }
+
+  function rememberConsent(consent: ConsentSnapshot): void {
+    privacyOptionsRequired = consent.privacyOptionsRequirementStatus === 'REQUIRED';
+    denied = !consent.canRequestAds;
+  }
+
+  async function allowAdsIfConsented(): Promise<void> {
+    if (denied) return;
+    await ensureListeners();
+    await prepare();
+  }
+
+  async function showPrivacyOptions(): Promise<void> {
+    try {
+      try { await client.showPrivacyOptionsForm(); } catch { /* form missing or already closed */ }
+      rememberConsent(await client.requestConsentInfo());
+      await allowAdsIfConsented();
+    } catch {
+      /* leave the last known consent standing */
     }
   }
 
@@ -199,6 +232,12 @@ export function createAdMobAds(client: AdMobClient, options: {
     available(): boolean {
       return !denied;
     },
+
+    privacyOptionsAvailable(): boolean {
+      return privacyOptionsRequired;
+    },
+
+    showPrivacyOptions,
 
     async show(): Promise<RewardedResult> {
       if (showing) return { ok: false, reason: 'failed' };

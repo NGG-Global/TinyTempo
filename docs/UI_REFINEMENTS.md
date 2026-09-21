@@ -42,8 +42,8 @@ which is right in gameplay because there the press *is* the musical event; in a
 scrolling list a press is the start of a gesture that may turn out to be a scroll.
 
 Privacy and Terms open the published pages
-(`https://ngg-global.github.io/TinyTempo/{privacy,terms}/`, built from `legal/` by
-`.github/workflows/pages.yml`) in the system browser. The version comes from
+(`https://tinytempo.games/privacy/` and `https://tinytempo.games/terms/`)
+in the system browser. The version comes from
 `package.json` through `__APP_VERSION__`, defined in `vite.config.ts`, so the
 footer cannot drift from the package.
 

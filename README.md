@@ -196,11 +196,11 @@ bundle so it is not copied into the APK. GitHub Actions
 `legal/` changes on `main`.
 
 The homepage is the marketing site. Privacy and Terms stay at the same
-paths the Play Console listing already uses:
+paths the Play Console listing should use:
 
-- Game: `https://ngg-global.github.io/TinyTempo/`
-- Privacy Policy: `https://ngg-global.github.io/TinyTempo/privacy/`
-- Terms of Service: `https://ngg-global.github.io/TinyTempo/terms/`
+- Game: `https://tinytempo.games/`
+- Privacy Policy: `https://tinytempo.games/privacy/`
+- Terms of Service: `https://tinytempo.games/terms/`
 
 The legal pages state the current product as it is in code: on-device progress,
 optional AdMob rewarded ads, optional Google Play heart refill and Premium

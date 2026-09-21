@@ -117,6 +117,10 @@ consent call that cannot be delivered — no provider in this build, no network,
 must not leave the switch showing something the save disagrees with, because the save is
 what the next boot reads.
 
+AdMob's own UMP privacy-options form is a different control, on the same Settings
+section only while `privacyOptionsRequirementStatus` is `REQUIRED`. It does not
+drive analytics consent, and the analytics switch does not drive ads.
+
 `Settings.analytics` defaults to whatever `VITE_ANALYTICS_CONSENT` says, and a save
 written before the switch existed falls back to the same default rather than being read as
 a yes. That is the opposite of the rule `haptics` follows, and deliberately so: a missing
