@@ -260,6 +260,24 @@ highest finished level short of three stars, never the frontier). `seenReplayTip
 beside `seenDemonstration` in `game/progress.ts`, in one stored object that a write to
 either flag preserves whole, and neither travels in a save code.
 
+**A baked Graphics is free of rebuild cost, not of render cost.** Phaser walks a
+Graphics' whole command buffer and re-tessellates it on every frame it renders, and it
+culls nothing by bounds — `willRender` asks about visibility and alpha, never about where
+an object is. `MapScene` bakes its road once in `layout()` and used to bake it into one
+Graphics, which on a 64-level save was 82,000 commands for a world 10,700 units tall
+showing 1,560 of them: 23.6 ms of main-thread time per frame, more than the whole 60 fps
+budget, ~85% of it spent off the top and bottom of the screen. The bake is now cut into
+strips of `MAP.stripLevels` levels (`stripBounds` in `ui/navigation.ts`, which
+`tests/navigation.test.ts` pins as a true tiling — a gap is a screen-wide band of missing
+ground) and `cullStrips` draws only the strips the camera can reach, with the level
+numbers, since each `Text` carries its own texture. Two things follow for anyone editing
+the map's drawing. Each strip has a **ground layer under every strip's detail layer**, so
+the terrain of the strip above can never land on a prop standing across the seam below it.
+And within the ground layer strips are painted bottom to top, so anything that overhangs a
+seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and hangs
+down onto paint already laid; claiming by centre instead drew a row of half-alpha terrain
+motifs twice, at every seam.
+
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
 request** — a new entry in the registry reassigns every level.
@@ -419,7 +437,7 @@ src/
     BootScene.ts       Input tuning, orientation guard
     PreloadScene.ts    Texture generation and font registration
     MenuScene.ts       Title; owns the first audio gesture
-    MapScene.ts        The endless road, rendered as a bounded window
+    MapScene.ts        The endless road: a bounded window, baked into culled strips
     PlayScene.ts       One level: hosts a vignette, never judges
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
