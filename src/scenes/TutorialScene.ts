@@ -138,12 +138,12 @@ export class TutorialScene extends BaseScene {
     this.copy.setPosition(safe.centerX, safe.top + 268 * s);
     resize(this.copy, 30 * s, PALETTE.ink, STYLE.current, false);
     this.copy.setWordWrapWidth(680 * s);
-    this.stepLabel.setPosition(safe.centerX, safe.top + 68 * s);
+    this.stepLabel.setPosition(safe.centerX, safe.top + 66 * s);
     resize(this.stepLabel, 25 * s, PALETTE.muted, STYLE.current, false);
-    this.skip.setTo(safe.left + 12 * s, safe.top + 68 * s - this.target / 2, this.target, this.target);
+    this.skip.setTo(safe.left + 12 * s, safe.top + 66 * s - this.target / 2, this.target, this.target);
     this.skipLabel.setPosition(this.skip.centerX, this.skip.centerY);
     resize(this.skipLabel, 28 * s, PALETTE.ink, STYLE.current, false);
-    this.mute = { x: safe.right - 56 * s, y: safe.top + 68 * s };
+    this.mute = { x: safe.right - 56 * s, y: safe.top + 66 * s };
     // The face sits where a level puts it relative to the thumb, and the labels take
     // the band around it.
     this.trackY = safe.bottom - 300 * s;
@@ -388,6 +388,7 @@ export class TutorialScene extends BaseScene {
       rattle, still,
       ghost: live ? this.ghostFor(plan!, marks, turn.yours, now) : null,
       ink: VIGNETTES[0]!.ink,
+      landed: live && plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
     });
     const lift = faceLift(turn, still);
     const theirsAlpha = 1 - 0.5 * turn.yours;

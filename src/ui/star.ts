@@ -3,7 +3,7 @@ import { mix, shade } from './colour';
 import { faces } from './light';
 import type { StarPose } from './starReveal';
 
-/** Prize brass for an earned result star. Map stars keep the area ink. */
+/** Prize brass for an earned star, wherever it is shown: plaque, road plate, tally and flight. */
 export const STAR_PRIZE = 0xe0b34a;
 
 const INNER = 0.45;
@@ -15,6 +15,19 @@ export function drawStar(g: Phaser.GameObjects.Graphics, x: number, y: number, r
   // Same cartoon edge the pucks and plaques carry; a fill with no outline read as a sticker
   // from a different game.
   g.lineStyle(Math.max(1.8, radius * 0.22), shade(color, -0.55), alpha).strokePoints(points, true);
+}
+
+/**
+ * An empty seat on a plate: the plate's own tone ringed in faded ink, so what is missing
+ * reads as a hole where a star would go rather than as a duller star. That is the
+ * distinction the road needs once earned stars are brass — on the dark Dusk plate a
+ * brass fill and a faded seat sit at nearly the same luminance, and full against hollow
+ * is legible where a difference of tone is not.
+ */
+export function drawStarSeat(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, plate: number, ring: number): void {
+  const points = starPoints(x, y, radius, 0, 1, 1);
+  g.fillStyle(shade(plate, -0.06), 1).fillPoints(points, true);
+  g.lineStyle(Math.max(1.5, radius * 0.18), ring, 0.9).strokePoints(points, true);
 }
 
 export interface StarMarkSpec {

@@ -174,7 +174,8 @@ export class MenuScene extends BaseScene {
     drawPanel(g, r, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press, hero: true });
     const sink = CHROME.block.depth * s * press * 0.8;
     placeSurface(this.buttonSurface, r, s, sink);
-    const labelX = r.centerX + 22 * s;
+    // The label sits right of centre by half the icon group, so icon and word together are centred on the block.
+    const labelX = r.centerX + 28 * s;
     this.playLabel.setPosition(labelX, r.centerY + sink);
     const iconX = labelX - this.playLabel.displayWidth / 2 - 34 * s;
     g.fillStyle(0x000000, 0.18).fillCircle(iconX, r.centerY + sink, 22 * s);

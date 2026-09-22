@@ -33,7 +33,10 @@ player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
 `PROGRESSION.starGate`): 12, 25, 39, 53, then 14 more each time, a bank rather than a
 per-area quota, so a player averaging 1.4 stars a level is never stopped and one who scrapes
 is only ever a few replays short. Nothing is stored: the collection is the sum of
-`starsFor(best)`, so save codes and merges carry it unknowingly. A cleared level is never
+`starsFor(best)`, so save codes and merges carry it unknowingly. **An earned star is prize
+brass everywhere it is shown** — plaque, road plate, tally and flight — and an empty seat on a
+road plate is hollow (`drawStarSeat`), because on the dark Dusk plate brass and a faded seat
+sit at the same luminance and only full-against-hollow keeps the count legible. A cleared level is never
 held, only the uncleared frontier at a closed area's first stop. The map draws a barrier at
 each closed area's foot, the collection on the bench, and flies a finished level's new stars
 from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everything that
@@ -123,6 +126,11 @@ as every other act does in its own `update`. `Vignette.translate` is the
 between-task slide and is an absolute offset from that home, applied by PlayScene
 right after `update`; an act that skips the re-anchor walks off screen.
 
+Every sub-screen header is one row: the back puck at `safe.top + 66 * s`, its title at 56 in the
+display face beside it, and every scene's `s` is `min(safe.width / 720, safe.height / 1150)` — one
+divisor, so the shared puck row does not shift size between the map and Settings on a tablet.
+A text's `align` agrees with its origin, and a caption that can wrap hangs from its top edge so
+a second line grows away from the title above it rather than up into it.
 Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Settings is
 labelled sections scrolling between a pinned title and a pinned Done, with calibration on
 its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
@@ -261,6 +269,13 @@ from a quarter to full so the count is faintest where the example is still the t
 and it sits *below the face* rather than in the verdict's band, because a tap on the downbeat is
 judged there and then and the verdict would wipe the "Go!" for the player who got it right. The
 slot is occupied from "3" onward, so "Go!" replaces the "1" in place and the property still holds.
+`turnCountPose` poses each numeral as a *strike* — dropped in oversized, stamped to size, leaning
+alternate ways, a ring left on the beat, the fill warming from ink to coral — and the baton's
+travel (`batonTrail`, `glyphFlip`, `landingRipple`, `dropLine`, all pure in `ui/turnBlock.ts`) is
+what makes the token read as handed over. **A task answered Perfect throughout gets the one
+celebration a task has**: `isFlawless` reads the judge's marks, and `ui/flourish.ts` strikes
+*Flawless!* onto the verdict's line and sweeps a light across the face, glinting each socket in
+turn. It is `f(age)` from the audio clock, like everything else on the block.
 The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because

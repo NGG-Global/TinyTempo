@@ -24,7 +24,7 @@ import { drawGear } from '@/ui/gear';
 import { drawBack, drawChevron, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
-import { drawStar, drawStarMark, STAR_PRIZE } from '@/ui/star';
+import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize } from '@/ui/type';
@@ -78,7 +78,7 @@ const MAP = {
   cullMargin: 260,
   /** The frontier puck hops once a bar at the game's own tempo. */
   hopSec: 1.6,
-  sign: { width: 340, height: 92, top: 26, ropeInset: 40 },
+  sign: { width: 340, height: 92, top: 20, ropeInset: 40 },
   /**
    * The star gate: a barrier across the road at the foot of a closed area, with the
    * count it wants on a sign under the bar. The bar pivots on the left post and lifts
@@ -302,13 +302,13 @@ export class MapScene extends BaseScene {
     this.touch = this.add.graphics().setDepth(5);
     this.numbers = Array.from({ length: this.shown }, (_, i) => display(this, String(this.first + i), { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(4));
     const areas = Math.floor((this.first + this.shown - 2) / PROGRESSION.areaSize) - this.firstBand + 1;
-    this.areaTitles = Array.from({ length: areas }, () => display(this, '', { size: 30, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(2));
+    this.areaTitles = Array.from({ length: areas }, () => display(this, '', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(2));
     // The pool of light stays put while the ground scrolls under it: a lamp over a table.
     this.glow = this.add.image(0, 0, FxKey.glow).setScrollFactor(0).setDepth(6).setAlpha(0.22);
     this.fibre = this.add.tileSprite(0, 0, 1, 1, MaterialKey.paper).setOrigin(0).setScrollFactor(0).setDepth(6).setAlpha(0.32 * STYLE.current.grain);
     this.signBack = this.add.graphics().setScrollFactor(0).setDepth(10);
     this.signSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7).setScrollFactor(0).setDepth(10);
-    this.status = display(this, '', { size: 40, colour: SHELL.cream, align: 'center' }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
+    this.status = display(this, '', { size: 40, colour: SHELL.cream }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.healthCount = display(this, '', { size: 28, colour: SHELL.cream, align: 'right' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
     this.healthWait = body(this, '', { size: 20, colour: SHELL.cream, align: 'right' }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
     this.healthMark = this.add.graphics().setScrollFactor(0).setDepth(11);
@@ -330,7 +330,8 @@ export class MapScene extends BaseScene {
     this.restSheen = new Sheen(this, 22);
     this.restSheen.node.setScrollFactor(0);
     this.restTitle = display(this, 'Out of hearts', { size: 68, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
-    this.restWait = body(this, '', { size: 28, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(22);
+    // Hung from its top, under the title: a two-line wait grows down the sheet, not up.
+    this.restWait = body(this, '', { size: 28, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(22);
     this.restTexts = {
       dailyTitle: this.restText(body(this, STORE_COPY.dailyTitle, { size: 30, colour: PALETTE.ink }), 0, 0.5),
       dailyTerms: this.restText(body(this, STORE_COPY.dailyTerms, { size: 24, colour: PALETTE.muted }), 0, 0.5),
@@ -341,7 +342,8 @@ export class MapScene extends BaseScene {
       refill: this.restText(display(this, STORE_COPY.refillShort, { size: 36, colour: PALETTE.ink }), 0, 0.5),
       refillPrice: this.restText(label(this, '', { size: 28, colour: PALETTE.ink, align: 'right' }), 1, 0.5),
       premium: this.restText(display(this, STORE_COPY.premiumHeadline, { size: 42, colour: SHELL.cream, outline: shade(BRASS, -0.62) }), 0, 0.5),
-      premiumTerms: this.restText(body(this, `${STORE_COPY.premiumTitle} · ${STORE_COPY.premiumShort.toLowerCase()}`, { size: 25, colour: shade(BRASS, -0.62) }), 0, 0.5),
+      // Top-anchored, since it wraps beside the price chip: the second line grows down.
+      premiumTerms: this.restText(body(this, `${STORE_COPY.premiumTitle} · ${STORE_COPY.premiumShort.toLowerCase()}`, { size: 21, colour: shade(BRASS, -0.62) }), 0, 0),
       premiumPrice: this.restText(label(this, '', { size: 26, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
       back: this.restText(display(this, 'Back to the map', { size: 36, colour: PALETTE.ink, align: 'center' }), 0.5, 0.5),
       note: this.restText(body(this, '', { size: 25, colour: PALETTE.coral, align: 'center' }), 0.5, 0.5),
@@ -672,7 +674,9 @@ export class MapScene extends BaseScene {
       g.fillStyle(faces(BRASS).edge).fillCircle(sx, y - h / 2 + 17 * s, 4.5 * s);
       g.fillStyle(BRASS).fillCircle(sx, y - h / 2 + 16 * s, 4.5 * s);
     }
-    title.setPosition(x + 24 * s, y);
+    // Centred on the sign, so a short name on the minimum-width sign sits between its
+    // two screws rather than hugging the left one.
+    title.setPosition(x + w / 2, y);
   }
 
   /** The ribbon: a cast shadow, a casing, the surface, a top sheen and dashed markings. */
@@ -1097,12 +1101,21 @@ export class MapScene extends BaseScene {
     this.cullStrips();
   }
 
-  /** Stars on their own small slab, so they never sit directly on the road surface. */
+  /**
+   * Stars on their own small slab, so they never sit directly on the road surface. An
+   * earned star is prize brass — the same brass the plaque stamps, the tally counts and a
+   * star flight carries — so what the player won on the level is what they see on the
+   * road; drawn in the area's ink they read as three more dots on the plate. An empty seat
+   * is hollow, ringed in the ink faded toward the plate: full against hollow is what keeps
+   * the count legible on Dusk, where brass and a faded seat are the same brightness.
+   */
   private drawStars(g: Phaser.GameObjects.Graphics, x: number, y: number, stars: number, area: Area, s: number): void {
     const plate = shade(area.paper, -0.03);
     drawPanel(g, new Phaser.Geom.Rectangle(x - 46 * s, y - 17 * s, 92 * s, 34 * s), s, { fill: plate, depth: 4, radius: 17 });
     for (let k = 0; k < 3; k++) {
-      drawStar(g, x + (k - 1) * 24 * s, y, 9 * s, starColour(k < stars, shade(area.ink, 0.1), plate));
+      const sx = x + (k - 1) * 24 * s;
+      if (k < stars) drawStar(g, sx, y, 9 * s, STAR_PRIZE);
+      else drawStarSeat(g, sx, y, 9 * s, plate, starColour(false, shade(area.ink, 0.1), plate));
     }
   }
 
@@ -1322,7 +1335,7 @@ export class MapScene extends BaseScene {
     this.restTitle.setPosition(this.restRect.centerX, top + 148 * s);
     resize(this.restWait, 28 * s, PALETTE.muted, STYLE.current, false);
     this.restWait.setWordWrapWidth(width - 56 * s, false);
-    this.restWait.setPosition(this.restRect.centerX, top + 208 * s);
+    this.restWait.setPosition(this.restRect.centerX, top + 194 * s);
 
     let y = top + head;
     if (hasTip) {
@@ -1435,7 +1448,7 @@ export class MapScene extends BaseScene {
       resize(this.restTexts.premiumTerms!, 21 * s, shade(BRASS, -0.62), STYLE.current, false);
       this.restTexts.premiumTerms!.setWordWrapWidth(premium.right - 40 * s - pw - copyX, false);
       this.restTexts.premium!.setPosition(copyX, premium.centerY - 20 * s + premiumSink);
-      this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 24 * s + premiumSink);
+      this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 13 * s + premiumSink);
       c.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + 3 * s + premiumSink, pw, ph, 14 * s);
       c.fillStyle(PALETTE.coral, 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + premiumSink, pw, ph, 14 * s);
       price.setPosition(premium.right - 24 * s - pw / 2, premium.centerY + premiumSink);
@@ -1831,7 +1844,7 @@ export class MapScene extends BaseScene {
     const drag = this.drag;
     if (!drag || pointer.id !== drag.id) return;
     this.drag = null;
-    if (drag.moved || pointer.x < 0 || pointer.y < 0 || pointer.x > this.scale.width || pointer.y > this.scale.height) return;
+    if (drag.moved || pointer.x < 0 || pointer.y < 0 || pointer.x > this.viewport.full.right || pointer.y > this.viewport.full.bottom) return;
     this.velocity = 0;
     this.handleTap(pointer.x, pointer.y);
   }
