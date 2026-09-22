@@ -43,6 +43,13 @@ import { TROMBONE_REVEAL_SEC } from './tromboneMotion';
 import { ClappingHandsVignette, ROOM } from './ClappingHandsVignette';
 import { createClapSounds } from '@/audio/clapSounds';
 import { CLAP_MOTION, CLAP_REVEAL_SEC } from './clapMotion';
+import { SnareDrumVignette } from './SnareDrumVignette';
+import { BongosVignette } from './BongosVignette';
+import { SlushyVignette } from './SlushyVignette';
+import { AppleVignette } from './AppleVignette';
+import { createTreatSounds } from '@/audio/treatSounds';
+import { TREAT_REVEAL_SEC } from './treatMotion';
+import { TREAT_INK } from './treatArt';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -184,5 +191,29 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     rough: ['Search\nme.', 'Nobody is quite sure what that was.'],
     endingSec: CLAP_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: CLAP_MOTION.successAccuracy,
     create: scene => new ClappingHandsVignette(scene), sounds: createClapSounds,
+  },
+  {
+    id: 'snare', title: 'Snare drum', intro: 'Let it\nroll.', ink: TREAT_INK,
+    success: ['Drumroll,\nplease.', 'A little flourish. A big finish.'], rough: ['Dropped\nthe sticks.', 'They were getting carried away.'],
+    endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new SnareDrumVignette(scene), sounds: context => createTreatSounds(context, 'snare'),
+  },
+  {
+    id: 'bongos', title: 'Bongos', intro: 'Find your\ngroove.', ink: TREAT_INK,
+    success: ['In the\ngroove.', 'Two drums. One lovely groove.'], rough: ['Bongo\n…oh no.', 'The groove took a little detour.'],
+    endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new BongosVignette(scene), sounds: context => createTreatSounds(context, 'bongos'),
+  },
+  {
+    id: 'slushy', title: 'Slushy', intro: 'Sip to\nthe beat.', ink: TREAT_INK,
+    success: ['Every\nlast drop.', 'Cool to the very bottom.'], rough: ['Brain\nfreeze!', 'A little too cool for comfort.'],
+    endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new SlushyVignette(scene), sounds: context => createTreatSounds(context, 'slushy'),
+  },
+  {
+    id: 'apple', title: 'Apple', intro: 'A little\ncrunch.', ink: TREAT_INK,
+    success: ['To the\ncore.', 'That hit the sweet spot.'], rough: ['Oh,\nhello.', 'Someone else ordered the apple.'],
+    endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: scene => new AppleVignette(scene), sounds: context => createTreatSounds(context, 'apple'),
   },
 ];

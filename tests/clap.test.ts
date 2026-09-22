@@ -13,7 +13,6 @@ vi.mock('phaser', () => ({ default: {} }));
 
 describe('clapping hands act', () => {
   it('is appended as the twenty-first act and keeps every earlier level', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('clap');
     expect(VIGNETTES[20]?.id).toBe('clap');
     expect(levelSpec(21).vignette).toBe('clap');
     expect(levelSpec(21 + VIGNETTES.length).vignette).toBe('clap');
@@ -23,7 +22,7 @@ describe('clapping hands act', () => {
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {
-    const definition = VIGNETTES.at(-1)!;
+    const definition = VIGNETTES.find(v => v.id === 'clap')!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(CLAP_REVEAL_SEC);
     // The middle ending is declared, so the plaque's words and the coda agree on it.

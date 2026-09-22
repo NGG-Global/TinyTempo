@@ -40,10 +40,13 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Twenty-one vignettes rotate strictly by registry order: `levelSpec` picks
+Twenty-five vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
+Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
+Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
+judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
 stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
 
