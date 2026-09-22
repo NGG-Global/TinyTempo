@@ -1,4 +1,10 @@
 (() => {
+  /*
+   * The reveal styles only apply under html.js, so a blocked or failed script
+   * leaves every section visible rather than blank.
+   */
+  document.documentElement.classList.add('js');
+
   const BPM = 120;
   const BEAT = 60 / BPM;
   const BAR = 4 * BEAT;
@@ -18,6 +24,7 @@
     m: document.querySelector('[data-count="miss"]'),
   };
   const soundBtn = document.querySelector('[data-sound]');
+  const soundWord = soundBtn?.querySelector('.sound-word') ?? soundBtn;
   const header = document.querySelector('.site-header');
 
   let audioCtx = null;
@@ -222,7 +229,7 @@
   soundBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     muted = !muted;
-    soundBtn.textContent = muted ? 'Sound off' : 'Sound on';
+    if (soundWord) soundWord.textContent = muted ? 'Sound off' : 'Sound on';
     soundBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
     if (!muted) audio();
   });
@@ -247,6 +254,22 @@
   window.addEventListener('scroll', () => {
     header?.classList.toggle('is-stuck', window.scrollY > 8);
   }, { passive: true });
+
+  const revealables = [...document.querySelectorAll('.reveal')];
+  if (reduce || !('IntersectionObserver' in window)) {
+    for (const el of revealables) el.classList.add('in');
+  } else {
+    const revealer = new IntersectionObserver((entries, self) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        const group = [...(entry.target.parentElement?.children ?? [])];
+        entry.target.style.setProperty('--stagger', `${Math.min(group.indexOf(entry.target), 7) * 70}ms`);
+        entry.target.classList.add('in');
+        self.unobserve(entry.target);
+      }
+    }, { rootMargin: '0px 0px -12% 0px', threshold: 0.12 });
+    for (const el of revealables) revealer.observe(el);
+  }
 
   if (!reduce) {
     const root = document.documentElement;

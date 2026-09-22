@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#eee8d8" />
-    <meta name="description" content="Tiny Tempo is a portrait rhythm game for people who live on the beat. Watch a tiny everyday rhythm, then tap it back. Perfect windows, endless levels, one thumb." />
+    <meta name="description" content="Tiny Tempo is a portrait rhythm game for people who live on the beat. Watch a tiny everyday rhythm — a hammer, a squeegee, a doorbell — then tap it back. Twenty acts, a ±55 ms window, one thumb." />
     <title>Tiny Tempo — a rhythm game for the beat-obsessed</title>
     <link rel="canonical" href="https://ngg-global.github.io/TinyTempo/" />
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
@@ -12,15 +12,15 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ngg-global.github.io/TinyTempo/" />
     <meta property="og:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
-    <meta property="og:description" content="Watch a tiny everyday rhythm. Tap it back. Perfect windows, endless levels, one thumb." />
+    <meta property="og:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty acts, a ±55 ms window, one thumb." />
     <meta property="og:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
-    <meta name="twitter:description" content="Watch a tiny everyday rhythm. Tap it back. Perfect windows, endless levels, one thumb." />
+    <meta name="twitter:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty acts, a ±55 ms window, one thumb." />
     <meta name="twitter:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Nunito:wght@700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="./market.css" />
     <script type="application/ld+json">
       {
@@ -53,12 +53,14 @@
         <a href="#play-a-beat">The beat</a>
         <a href="#acts">Acts</a>
         <a href="#heads">Windows</a>
-        <a class="nav-cta" href="#play-a-beat">Play a beat</a>
+        <a href="#road">The road</a>
       </nav>
+      <a class="nav-cta" href="#play-a-beat">Play a beat</a>
     </header>
 
     <main>
       <section class="hero">
+        <div class="hero-light" aria-hidden="true"></div>
         <div class="floaters" aria-hidden="true">
           <span class="floater note"></span>
           <span class="floater spark"></span>
@@ -66,8 +68,11 @@
           <span class="floater spark"></span>
           <span class="floater spark"></span>
         </div>
+
         <div class="hero-copy">
-          <div class="sign" aria-hidden="false">
+          <p class="badge"><span class="badge-dot" aria-hidden="true"></span>Coming to Google&nbsp;Play</p>
+
+          <div class="sign">
             <div class="ropes" aria-hidden="true"><span></span><span></span></div>
             <div class="board">
               <p class="kicker">120 BPM</p>
@@ -77,15 +82,34 @@
               </div>
             </div>
           </div>
+
           <p class="lede">A rhythm game for people who live on the beat.</p>
+          <p class="sub">
+            A hammer. A squeegee. A doorbell. Each one plays you a bar, and then it is
+            your turn. One thumb, twenty acts, and a road that keeps going.
+          </p>
+
           <div class="hero-actions">
             <a class="cta" href="#play-a-beat"><span class="play-glyph" aria-hidden="true"></span>Play a beat</a>
-            <p class="soon">Coming to Android · one thumb · endless road</p>
+            <a class="cta ghost" href="#acts">See the acts</a>
           </div>
+
+          <ul class="stat-strip">
+            <li><b>20</b><span>acts</span></li>
+            <li><b>±55<i>ms</i></b><span>perfect</span></li>
+            <li><b>120<i>→</i>150</b><span>BPM</span></li>
+            <li><b>1</b><span>thumb</span></li>
+          </ul>
         </div>
+
         <div class="phone-wrap">
           <div class="phone" aria-hidden="true">
+            <span class="phone-shadow"></span>
             <div class="screen">
+              <div class="hud">
+                <span class="hud-area">Area 1 · Level 3</span>
+                <span class="hud-pips"><i class="done"></i><i class="done"></i><i></i><i></i></span>
+              </div>
               <span class="glow"></span>
               <span class="bench"></span>
               <span class="stand"></span>
@@ -95,7 +119,11 @@
                 <span class="hammer-head"></span>
               </span>
               <span class="chips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-              <div class="track-mini"><span></span><span></span><span></span><span></span></div>
+              <div class="mini-turn">
+                <div class="mini-shelf"><i></i><i></i><i></i><i></i></div>
+                <div class="mini-face"><i></i><i></i><i></i><i></i></div>
+                <span class="mini-baton"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -105,178 +133,339 @@
         <div class="section-head">
           <p class="kicker">How it plays</p>
           <h2>Watch. Then tap it back.</h2>
-          <p class="whisper">Same pattern as the game: tap, tap, wait, tap. Perfect is ±55 ms.</p>
+          <p class="whisper">
+            The same loop the game runs: one bar is played to you, the next one is
+            yours. No bar waits in between.
+          </p>
         </div>
+
         <div class="play-card">
-        <div
-          class="play-stage is-watch"
-          data-stage
-          role="button"
-          tabindex="0"
-          aria-label="Rhythm stage. Watch the pattern, then tap anywhere to copy it."
-        >
-          <span class="baton" data-baton aria-hidden="true"></span>
-          <div class="turn-row">
-            <span class="turn-label watch">Watch</span>
-            <div class="sockets" data-sockets="watch">
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
+          <div
+            class="play-stage is-watch"
+            data-stage
+            role="button"
+            tabindex="0"
+            aria-label="Rhythm stage. Watch the pattern, then tap anywhere to copy it."
+          >
+            <span class="baton" data-baton aria-hidden="true"></span>
+            <div class="turn-row row-watch">
+              <span class="turn-label watch">Watch</span>
+              <div class="sockets" data-sockets="watch">
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+              </div>
             </div>
-          </div>
-          <div class="turn-row">
-            <span class="turn-label you">Your turn</span>
-            <div class="sockets" data-sockets="play">
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
-              <div class="socket"><span class="pip"></span></div>
+            <div class="turn-row row-play">
+              <span class="turn-label you">Your turn</span>
+              <div class="sockets" data-sockets="play">
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+                <div class="socket"><span class="pip"></span></div>
+              </div>
             </div>
+            <div class="grade" data-grade></div>
           </div>
-          <div class="grade" data-grade></div>
-        </div>
+
           <div class="play-hud">
             <p class="hint" data-hint>Tap the stage when you are ready</p>
-            <div class="counts" aria-live="polite">
-              <span class="p">P <b data-count="perfect">0</b></span>
-              <span class="g">G <b data-count="good">0</b></span>
-              <span class="m">M <b data-count="miss">0</b></span>
+            <div class="hud-right">
+              <div class="counts" aria-live="polite">
+                <span class="p">Perfect <b data-count="perfect">0</b></span>
+                <span class="g">Good <b data-count="good">0</b></span>
+                <span class="m">Miss <b data-count="miss">0</b></span>
+              </div>
+              <button type="button" class="sound-toggle" data-sound aria-pressed="false">
+                <span class="speaker" aria-hidden="true"></span><span class="sound-word">Sound on</span>
+              </button>
             </div>
-            <button type="button" class="sound-toggle" data-sound aria-pressed="false">Sound on</button>
           </div>
         </div>
-      </section>
 
-      <section class="section">
         <div class="features">
           <article class="feature reveal">
             <div class="viz"><span class="eye" aria-hidden="true"></span></div>
             <h3>Watch first</h3>
+            <p>Every task opens with the act playing its own bar. Nothing is written down.</p>
           </article>
           <article class="feature reveal">
             <div class="viz"><span class="thumb" aria-hidden="true"></span></div>
             <h3>One tap</h3>
+            <p>Tap anywhere. There is no second button and nothing to aim at.</p>
           </article>
           <article class="feature reveal">
             <div class="viz"><span class="rings" aria-hidden="true"><i></i><i></i><i></i></span></div>
-            <h3>±55 ms</h3>
+            <h3>Judged on time</h3>
+            <p>Perfect inside ±55 ms, Good inside ±130 ms, measured against what you hear.</p>
           </article>
           <article class="feature reveal">
             <div class="viz"><span class="path-loop" aria-hidden="true"></span></div>
-            <h3>Endless</h3>
+            <h3>It keeps going</h3>
+            <p>Tempo, length and pattern all ride one curve that never quite flattens.</p>
           </article>
         </div>
       </section>
 
       <div class="ticker" aria-hidden="true">
         <div class="ticker-track">
-          <span>Hammer & nail</span><span>Window cleaning</span><span>Bug & shoe</span><span>Saw & timber</span>
-          <span>Knife & tomato</span><span>Bicep curl</span><span>Knife & cucumber</span><span>Knife & banana</span>
-          <span>Scissors & paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
+          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span>
+          <span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span>
+          <span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
           <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
-          <span>Hammer & nail</span><span>Window cleaning</span><span>Bug & shoe</span><span>Saw & timber</span>
-          <span>Knife & tomato</span><span>Bicep curl</span><span>Knife & cucumber</span><span>Knife & banana</span>
-          <span>Scissors & paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
+          <span>Fisherman</span><span>DJ scratch</span><span>Trombone</span>
+          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span>
+          <span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span>
+          <span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
           <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
+          <span>Fisherman</span><span>DJ scratch</span><span>Trombone</span>
         </div>
       </div>
 
       <section class="section" id="acts">
         <div class="section-head">
-          <p class="kicker">Seventeen acts</p>
+          <p class="kicker">Twenty acts</p>
           <h2>Everyday scenes. Hidden charts.</h2>
-          <p class="whisper">A hammer, a window, a doorbell — each one is a rhythm.</p>
+          <p class="whisper">
+            One act per level, in order, then round again — the same scene at a tempo
+            that has moved on.
+          </p>
         </div>
         <div class="acts">
-          <article class="act"><div class="mini mini-hammer" aria-hidden="true"><i class="sun"></i><i class="stand"></i><i class="ham"></i></div><h3>Hammer & nail</h3></article>
-          <article class="act"><div class="mini mini-window" aria-hidden="true"><i class="pane"></i><i class="squeegee"></i></div><h3>Window cleaning</h3></article>
-          <article class="act"><div class="mini mini-bug" aria-hidden="true"><i class="tile"></i><i class="shoe"></i><i class="bug"></i></div><h3>Bug & shoe</h3></article>
-          <article class="act"><div class="mini mini-saw" aria-hidden="true"><i class="plank"></i><i class="blade"></i></div><h3>Saw & timber</h3></article>
-          <article class="act"><div class="mini mini-tomato" aria-hidden="true"><i class="fruit"></i><i class="knife"></i></div><h3>Knife & tomato</h3></article>
-          <article class="act"><div class="mini mini-curl" aria-hidden="true"><i class="head"></i><i class="torso"></i><i class="plate"></i><i class="bar"></i><i class="plate r"></i></div><h3>Bicep curl</h3></article>
-          <article class="act"><div class="mini mini-cucumber" aria-hidden="true"><i class="cuke"></i><i class="disc"></i><i class="disc b"></i><i class="disc c"></i></div><h3>Knife & cucumber</h3></article>
-          <article class="act"><div class="mini mini-banana" aria-hidden="true"><i class="peel"></i><i class="coin"></i></div><h3>Knife & banana</h3></article>
-          <article class="act"><div class="mini mini-paper" aria-hidden="true"><i class="sheet"></i><i class="shears"></i></div><h3>Scissors & paper</h3></article>
-          <article class="act"><div class="mini mini-egg" aria-hidden="true"><i class="bowl"></i><i class="egg"></i></div><h3>Egg cracking</h3></article>
-          <article class="act"><div class="mini mini-bubble" aria-hidden="true"><i class="dot a"></i><i class="dot b"></i><i class="dot c"></i></div><h3>Bubble wrap</h3></article>
-          <article class="act"><div class="mini mini-light" aria-hidden="true"><i class="lamp"></i><i class="shade"></i></div><h3>Light switch</h3></article>
-          <article class="act"><div class="mini mini-door" aria-hidden="true"><i class="frame"></i><i class="door"></i><i class="btn"></i><i class="cat"></i></div><h3>Doorbell</h3></article>
-          <article class="act"><div class="mini mini-roller" aria-hidden="true"><i class="wall"></i><i class="roll"></i></div><h3>Paint roller</h3></article>
-          <article class="act"><div class="mini mini-bell" aria-hidden="true"><i class="dome"></i><i class="base"></i></div><h3>Hotel bell</h3></article>
-          <article class="act"><div class="mini mini-balloon" aria-hidden="true"><i class="ball"></i><i class="pump"></i></div><h3>Balloon pump</h3></article>
-          <article class="act"><div class="mini mini-stapler" aria-hidden="true"><i class="arm"></i><i class="base"></i></div><h3>Stapler</h3></article>
+          <article class="act reveal">
+            <div class="mini mini-hammer" aria-hidden="true"><i class="sun"></i><i class="floor"></i><i class="stand"></i><i class="ham"></i><i class="spark"></i></div>
+            <h3><b>01</b>Hammer &amp; nail</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-window" aria-hidden="true"><i class="sill"></i><i class="pane"></i><i class="bar"></i><i class="foam"></i><i class="squeegee"></i></div>
+            <h3><b>02</b>Window cleaning</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-bug" aria-hidden="true"><i class="tile"></i><i class="bug"></i><i class="shoe"></i><i class="sole"></i></div>
+            <h3><b>03</b>Bug &amp; shoe</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-saw" aria-hidden="true"><i class="horse"></i><i class="plank"></i><i class="blade"></i><i class="grip"></i></div>
+            <h3><b>04</b>Saw &amp; timber</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-tomato" aria-hidden="true"><i class="board"></i><i class="fruit"></i><i class="slice"></i><i class="knife"></i></div>
+            <h3><b>05</b>Knife &amp; tomato</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-curl" aria-hidden="true"><i class="bench"></i><i class="head"></i><i class="torso"></i><i class="arm"></i><i class="bar"></i><i class="plate"></i><i class="plate r"></i></div>
+            <h3><b>06</b>Bicep curl</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-cucumber" aria-hidden="true"><i class="board"></i><i class="cuke"></i><i class="disc"></i><i class="disc b"></i><i class="disc c"></i><i class="knife"></i></div>
+            <h3><b>07</b>Knife &amp; cucumber</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-banana" aria-hidden="true"><i class="board"></i><i class="peel"></i><i class="coin"></i><i class="coin b"></i><i class="knife"></i></div>
+            <h3><b>08</b>Knife &amp; banana</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-paper" aria-hidden="true"><i class="desk"></i><i class="sheet"></i><i class="snips"></i><i class="shears"></i><i class="shears b"></i></div>
+            <h3><b>09</b>Scissors &amp; paper</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-egg" aria-hidden="true"><i class="counter"></i><i class="bowl"></i><i class="yolk"></i><i class="egg"></i></div>
+            <h3><b>10</b>Egg cracking</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-bubble" aria-hidden="true"><i class="sheet"></i><i class="dot a"></i><i class="dot b"></i><i class="dot c"></i><i class="finger"></i></div>
+            <h3><b>11</b>Bubble wrap</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-light" aria-hidden="true"><i class="wall"></i><i class="cord"></i><i class="shade"></i><i class="beam"></i><i class="plate"></i><i class="toggle"></i></div>
+            <h3><b>12</b>Light switch</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-door" aria-hidden="true"><i class="wall"></i><i class="frame"></i><i class="door"></i><i class="knob"></i><i class="btn"></i><i class="ring"></i></div>
+            <h3><b>13</b>Doorbell</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-roller" aria-hidden="true"><i class="wall"></i><i class="paint"></i><i class="roll"></i><i class="handle"></i><i class="tray"></i></div>
+            <h3><b>14</b>Paint roller</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-bell" aria-hidden="true"><i class="desk"></i><i class="dome"></i><i class="base"></i><i class="knob"></i><i class="ding"></i></div>
+            <h3><b>15</b>Hotel bell</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-balloon" aria-hidden="true"><i class="floor"></i><i class="ball"></i><i class="knot"></i><i class="hose"></i><i class="pump"></i><i class="plunger"></i></div>
+            <h3><b>16</b>Balloon pump</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-stapler" aria-hidden="true"><i class="desk"></i><i class="paper"></i><i class="base"></i><i class="arm"></i><i class="staple"></i></div>
+            <h3><b>17</b>Stapler</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-fish" aria-hidden="true"><i class="sky"></i><i class="water"></i><i class="man"></i><i class="hat"></i><i class="rod"></i><i class="line"></i><i class="fish"></i></div>
+            <h3><b>18</b>Fisherman</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-scratch" aria-hidden="true"><i class="deck"></i><i class="disc"></i><i class="label"></i><i class="arm"></i><i class="fader"></i><i class="cap"></i></div>
+            <h3><b>19</b>DJ scratch</h3>
+          </article>
+          <article class="act reveal">
+            <div class="mini mini-trombone" aria-hidden="true"><i class="sky"></i><i class="moon"></i><i class="parapet"></i><i class="player"></i><i class="horn"></i><i class="bell"></i><i class="slide"></i></div>
+            <h3><b>20</b>Trombone</h3>
+          </article>
         </div>
       </section>
 
-      <section class="section" id="heads">
-        <div class="section-head">
-          <p class="kicker">For rhythm game lovers</p>
-          <h2>Windows you can feel.</h2>
-        </div>
-        <div class="heads">
-          <article class="head-card">
-            <h3>The judge</h3>
-            <div class="window-viz">
-              <div class="win perfect"><b>Perfect</b><span class="bar"><i></i></span><span>±55 ms</span></div>
-              <div class="win good"><b>Good</b><span class="bar"><i></i></span><span>±130 ms</span></div>
-              <div class="win miss"><b>Miss</b><span class="bar"><i></i></span><span>or extra</span></div>
-            </div>
-          </article>
-          <article class="head-card">
-            <h3>The climb</h3>
-            <div class="tempo">
-              <div class="dial" aria-hidden="true"></div>
-              <div class="bpm">120→150</div>
-            </div>
-          </article>
-          <article class="head-card">
-            <h3>The charts</h3>
-            <div class="chart" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
-            <p class="whisper">Seeded patterns. Same level, every attempt.</p>
-          </article>
-        </div>
-      </section>
+      <section class="band band-ink" id="heads">
+        <div class="section">
+          <div class="section-head">
+            <p class="kicker">For rhythm game lovers</p>
+            <h2>Windows you can feel.</h2>
+            <p class="whisper">
+              The numbers under the game, in the open — because the people who care
+              about them are the people this is for.
+            </p>
+          </div>
+          <div class="heads">
+            <article class="head-card wide">
+              <h3>The judge</h3>
+              <div class="ruler" aria-hidden="true">
+                <span class="w-good"></span>
+                <span class="w-perfect"></span>
+                <span class="target"></span>
+                <span class="tick early">early</span>
+                <span class="tick late">late</span>
+                <span class="tap t1"></span>
+                <span class="tap t2"></span>
+                <span class="tap t3"></span>
+              </div>
+              <ul class="legend">
+                <li><span class="swatch perfect"></span>Perfect <b>±55 ms</b></li>
+                <li><span class="swatch good"></span>Good <b>±130 ms</b></li>
+                <li><span class="swatch miss"></span>Miss <b>outside, or one tap too many</b></li>
+              </ul>
+              <p class="note">
+                Judged against the sample you are hearing, not the one the device is
+                scheduling — and there is a calibration screen for the gap between them.
+              </p>
+            </article>
 
-      <section class="section">
-        <div class="section-head">
-          <p class="kicker">The map</p>
-          <h2>A road that does not end.</h2>
-        </div>
-        <div class="road" aria-hidden="true">
-          <div class="road-line"></div>
-          <div class="nodes">
-            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node now"></span><span class="node"></span><span class="node"></span>
-            <span class="node"></span><span class="node"></span><span class="node"></span><span class="node"></span>
+            <article class="head-card">
+              <h3>The climb</h3>
+              <div class="tempo">
+                <div class="dial" aria-hidden="true"><span class="needle"></span></div>
+                <div class="bpm"><b>120</b><i>→</i><b>150</b></div>
+              </div>
+              <p class="note">
+                Every level opens at the music's tempo and ramps task by task. Length
+                grows from three tasks to eight.
+              </p>
+            </article>
+
+            <article class="head-card">
+              <h3>The grid</h3>
+              <div class="grid-viz" aria-hidden="true">
+                <div class="grid-row">
+                  <span class="lab">Quarters</span>
+                  <span class="cells q"><i class="on"></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i><i></i><i class="on"></i><i></i><i></i><i></i></span>
+                </div>
+                <div class="grid-row">
+                  <span class="lab">Eighths</span>
+                  <span class="cells e"><i class="on"></i><i></i><i class="on"></i><i></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i></span>
+                </div>
+                <div class="grid-row">
+                  <span class="lab">Triplets</span>
+                  <span class="cells t"><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i></span>
+                </div>
+                <div class="grid-row">
+                  <span class="lab">Sixteenths</span>
+                  <span class="cells s"><i class="on"></i><i class="on"></i><i></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i><i class="on"></i><i></i><i></i><i class="on"></i><i></i><i class="on"></i><i></i></span>
+                </div>
+              </div>
+              <p class="note">
+                Triplets arrive around level 43, sixteenths around 59, and only where the
+                tempo still leaves your thumb room.
+              </p>
+            </article>
           </div>
         </div>
       </section>
 
-      <section class="section finale">
-        <div class="plaque">
-          <div class="ropes" aria-hidden="true"><span></span><span></span></div>
-          <div class="stars" aria-hidden="true"><span class="star"></span><span class="star"></span><span class="star"></span></div>
-          <h2>The everyday, on the grid.</h2>
-          <a class="cta" href="#play-a-beat"><span class="play-glyph" aria-hidden="true"></span>Play a beat</a>
-          <p class="soon" style="margin:0.9rem 0 0">Coming to Google Play</p>
+      <section class="section" id="road">
+        <div class="section-head">
+          <p class="kicker">The map</p>
+          <h2>A road that does not end.</h2>
+          <p class="whisper">Ten levels to an area. Your progress lives on the device, and travels as a code rather than an account.</p>
+        </div>
+        <div class="road">
+          <svg class="road-svg" viewBox="0 0 1120 240" preserveAspectRatio="none" aria-hidden="true">
+            <defs>
+              <path id="rd" d="M-40 176 C 120 176, 150 96, 300 96 S 480 176, 620 152 S 820 64, 980 92 S 1120 150, 1180 132" />
+            </defs>
+            <use href="#rd" class="road-bed" />
+            <use href="#rd" class="road-dash" />
+          </svg>
+          <div class="road-scene" aria-hidden="true">
+            <span class="hill h1"></span><span class="hill h2"></span><span class="hill h3"></span>
+            <span class="tree t1"></span><span class="tree t2"></span><span class="tree t3"></span><span class="tree t4"></span>
+          </div>
+          <div class="road-nodes" aria-hidden="true">
+            <span class="rnode done" style="--x:3.1%; --y:70.5%"></span>
+            <span class="rnode done" style="--x:13.5%; --y:53.6%"></span>
+            <span class="rnode done" style="--x:24.0%; --y:40.5%"></span>
+            <span class="rnode now" style="--x:34.9%; --y:44.8%"><em></em></span>
+            <span class="rnode next" style="--x:45.3%; --y:61.6%"></span>
+            <span class="rnode" style="--x:56.2%; --y:62.7%"></span>
+            <span class="rnode lock" style="--x:66.7%; --y:48.8%"></span>
+            <span class="rnode lock" style="--x:77.3%; --y:36.3%"></span>
+            <span class="rnode lock" style="--x:88.3%; --y:39.0%"></span>
+            <span class="rnode far" style="--x:98.9%; --y:52.2%"></span>
+          </div>
+          <span class="road-flag area-1" aria-hidden="true">Area 1</span>
+          <span class="road-flag area-2" aria-hidden="true">Area 2</span>
+        </div>
+        <div class="road-facts">
+          <span><b>10</b> levels an area</span>
+          <span><b>3</b> stars a level</span>
+          <span><b>0</b> accounts</span>
+        </div>
+      </section>
+
+      <section class="band band-coral finale">
+        <div class="section">
+          <div class="plaque">
+            <div class="ropes" aria-hidden="true"><span></span><span></span></div>
+            <div class="stars" aria-hidden="true"><span class="star"></span><span class="star"></span><span class="star"></span></div>
+            <h2>The everyday, on the grid.</h2>
+            <p class="whisper">Portrait, one thumb, and a beat you already know.</p>
+            <a class="cta" href="#play-a-beat"><span class="play-glyph" aria-hidden="true"></span>Play a beat</a>
+            <p class="soon">Coming to Google Play</p>
+          </div>
         </div>
       </section>
     </main>
 
     <footer class="site-footer">
-      <span>© 2026 Dor Vadai</span>
-      <nav aria-label="Legal">
-        <a href="./privacy/">Privacy</a>
-        <a href="./terms/">Terms</a>
-        <a href="./legal/">Legal</a>
-        <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>
-      </nav>
+      <div class="footer-inner">
+        <div class="footer-brand">
+          <img src="./apple-touch-icon.png" width="44" height="44" alt="" />
+          <div>
+            <span class="brand-name">Tiny Tempo</span>
+            <p>A portrait rhythm game built one act at a time.</p>
+          </div>
+        </div>
+        <nav aria-label="Legal">
+          <p class="foot-head">The small print</p>
+          <a href="./privacy/">Privacy</a>
+          <a href="./terms/">Terms</a>
+          <a href="./legal/">Legal</a>
+        </nav>
+        <div class="footer-contact">
+          <p class="foot-head">Say something</p>
+          <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>
+          <p class="copy">© 2026 Dor Vadai</p>
+        </div>
+      </div>
     </footer>
     <script src="./market.js"></script>
   </body>

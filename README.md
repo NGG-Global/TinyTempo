@@ -215,6 +215,28 @@ bought and held through Google Play itself, no Tiny Tempo account. Contact on th
 `dor1612@gmail.com`. Preview locally with any static server, for example
 `python3 -m http.server --directory legal 4174`.
 
+The homepage carries the game's own treatment rather than a second one: the
+palette is `src/config/theme.ts`, objects take one key light from the upper left
+with a block shadow for their edge, and `market.css` keeps that in tokens
+(`--lift-*`, and a surface set a band re-points so a card dropped into the dark
+band picks up the right ink). Three things on it are tied to the code and will
+go stale if the game moves without them:
+
+- **The acts gallery is the registry.** Twenty tiles in `VIGNETTES` order, each
+  drawn in CSS on its act's own palette. A new act means a new tile and a new
+  count in the heading and the ticker.
+- **The numbers are the config.** ±55 ms and ±130 ms are `RHYTHM`, 120→150 BPM
+  and ten levels to an area are `PROGRESSION`, and the grid card names the
+  levels `PROGRESSION.subdivision` reaches.
+- **The reveal hides nothing on its own.** `market.js` adds `html.js` before the
+  scroll-reveal styles apply, so a blocked or failed script leaves every section
+  visible instead of blank. Anything that fades in on scroll must stay under
+  that class.
+
+`legal/og.png` is the card a share shows. It is rendered from
+`scripts/og-card.html`, which pulls in the site's own stylesheet so the two
+cannot drift; that file says how to re-render it.
+
 ## Documentation
 
 - [Game design](docs/GAME_DESIGN.md) and
