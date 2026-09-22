@@ -39,9 +39,11 @@ export interface VignetteDefinition {
   readonly endingSec: number;
   readonly successAccuracy: number;
   /**
-   * The action voice is scheduled on every response target as well as the demonstration.
-   * Only the trombone: every other act must keep the player's turn silent until they tap,
-   * or the ghost note would give the answer away.
+   * The action voice is scheduled on every response target as well as the demonstration,
+   * whatever the output route. Only the trombone: every other act keeps the player's turn
+   * silent until they tap, or the ghost note would give the answer away — except on a
+   * route that delays sound past the tap's own judgement, where PlayScene voices every
+   * act this way (`RHYTHM.gridVoiceLagMs`).
    */
   readonly gridAction?: boolean;
   /**

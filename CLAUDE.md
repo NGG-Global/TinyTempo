@@ -164,6 +164,16 @@ the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, w
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
 
+**A sound the tap starts is heard one output lag after the tap.** The demonstration is
+scheduled on the grid and drawn from the heard clock, so it stays together on any route; the
+player's own beat, started at `currentTime` by the tap, reaches a Bluetooth headset 150–400 ms
+later — most of an eighth note — so a Perfect tap sounded on the next subdivision and no Tap
+offset could move it, since the offset moves the judgement and a sound cannot precede the tap
+that starts it. `AudioClock.tapVoiceLate` (reported lag plus any positive offset, against
+`RHYTHM.gridVoiceLagMs`) therefore turns on the trombone's `gridAction` for every act, per
+task: the targets are voiced on the grid and the tap keeps the picture and the verdict. See
+`docs/SOUND.md`.
+
 **A recorded beat is late by whatever silence was in front of it.** The delivered
 one-shots open with between 0.1 ms and 25 ms of room before the take, and a beat sound is
 scheduled *on* the grid — so that silence is not padding, it is lateness, charged to every

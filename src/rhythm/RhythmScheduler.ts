@@ -55,9 +55,10 @@ export function createRoundPlan(id: number, pattern: Pattern, bpm: number, start
 export class RhythmScheduler {
   public constructor(private readonly sound: SoundSink) {}
   /**
-   * `gridAction` also voices every response target on the grid. Most acts must not:
-   * a ghost action during the player's turn would give the answer away. The trombone
-   * is the exception — its note is the plan, not the tap.
+   * `gridAction` also voices every response target on the grid. By default an act must
+   * not: a ghost action during the player's turn would give the answer away. The trombone
+   * always does — its note is the plan, not the tap — and every act does on an output
+   * route laggy enough that a tap-started voice would be heard late (`tapVoiceLate`).
    */
   public schedule(plan: RoundPlan, gridAction = false): void {
     this.cancel();

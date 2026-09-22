@@ -65,6 +65,19 @@ export function reportedOutputLag(context: Pick<AudioContext, 'baseLatency' | 'o
   return Math.min(total, MAX_REPORTED_LAG_SEC);
 }
 
+/**
+ * Whether a voice started by the tap would be heard too late to read as the tap's own.
+ *
+ * The lag the player hears is what the platform admits to plus whatever it under-reports,
+ * which is exactly what a positive Tap offset measures. A negative offset is a player
+ * tapping ahead of the beat, not a route that delivers sound early, so it is not subtracted.
+ */
+export function tapVoiceLate(reportedLagMs: number, calibrationMs: number, thresholdMs: number = RHYTHM.gridVoiceLagMs): boolean {
+  const reported = Number.isFinite(reportedLagMs) ? Math.max(0, reportedLagMs) : 0;
+  const corrected = Number.isFinite(calibrationMs) ? Math.max(0, calibrationMs) : 0;
+  return reported + corrected >= thresholdMs;
+}
+
 export class AudioClock {
   /**
    * Milliseconds the device's output lags the schedule, subtracted from every judged tap.
@@ -77,6 +90,8 @@ export class AudioClock {
   public mode: 'output' | 'estimated' = 'estimated';
   /** What the platform claims its output lag is, for the support report and Tap offset. */
   public get reportedLagMs(): number { return Math.round(reportedOutputLag(this.context) * 1000); }
+  /** Whether a beat played on the tap would reach the ear too late to be that tap's sound. */
+  public get tapVoiceLate(): boolean { return tapVoiceLate(this.reportedLagMs, this.calibrationMs); }
   public constructor(private readonly context: AudioContext) {}
 
   public refresh(): void {

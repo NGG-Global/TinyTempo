@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { AudioClock, mapTimestamp, normalizeTimestamp, reportedOutputLag, stampUsable } from '../src/audio/AudioClock';
+import { AudioClock, mapTimestamp, normalizeTimestamp, reportedOutputLag, stampUsable, tapVoiceLate } from '../src/audio/AudioClock';
+import { RHYTHM } from '../src/config/rhythm';
 import { createJudge, expireTargets, judgeTap } from '../src/rhythm/judge';
 
 it('normalizes modern/legacy timestamps and falls back for invalid ones', () => {
@@ -162,5 +163,50 @@ describe('a device whose output stamp cannot be trusted', () => {
     // performance.timeOrigin is subtracted inside `input`, so pass a stamp it will keep.
     const judged = clock.input(5000);
     expect(judged).toBeCloseTo(10 - 0.2 - 0.05, 5);
+  });
+});
+
+describe('whether the tap can still voice its own beat', () => {
+  it('keeps the voice on the tap through a speaker', () => {
+    // Chrome's measured 42 ms is heard as the sound of the tap; nothing changes there.
+    expect(tapVoiceLate(42, 0)).toBe(false);
+  });
+
+  it('moves the voice onto the grid on a Bluetooth route', () => {
+    // A2DP's 150-400 ms lands most of an eighth note late at 120 BPM. This is the case
+    // where the judge was right and the player still heard their own strike as late.
+    expect(tapVoiceLate(180, 0)).toBe(true);
+    expect(tapVoiceLate(400, 0)).toBe(true);
+  });
+
+  it('counts a positive Tap offset as lag the platform failed to report', () => {
+    // A route that admits to 60 ms and was measured 60 ms later still delivers 120 late.
+    expect(tapVoiceLate(60, 60)).toBe(true);
+    expect(tapVoiceLate(60, 30)).toBe(false);
+  });
+
+  it('does not let a negative offset make a route look faster than it reports', () => {
+    // Tapping ahead of the beat is a habit, not a headset that plays early.
+    expect(tapVoiceLate(150, -200)).toBe(true);
+  });
+
+  it('sits under the Good window, so a voice inside the tap\'s own judgement stays on the tap', () => {
+    expect(RHYTHM.gridVoiceLagMs).toBeLessThan(RHYTHM.goodMs);
+    expect(tapVoiceLate(RHYTHM.gridVoiceLagMs, 0)).toBe(true);
+    expect(tapVoiceLate(RHYTHM.gridVoiceLagMs - 1, 0)).toBe(false);
+  });
+
+  it('treats a report it cannot read as no lag', () => {
+    expect(tapVoiceLate(Number.NaN, 0)).toBe(false);
+    expect(tapVoiceLate(0, Number.NaN)).toBe(false);
+  });
+
+  it('is what the clock answers from its own context and offset', () => {
+    const clock = new AudioClock({ baseLatency: 0.01, outputLatency: 0.2, currentTime: 1 } as AudioContext);
+    expect(clock.tapVoiceLate).toBe(true);
+    const speaker = new AudioClock({ baseLatency: 0.01, outputLatency: 0.032, currentTime: 1 } as AudioContext);
+    expect(speaker.tapVoiceLate).toBe(false);
+    speaker.calibrationMs = 90;
+    expect(speaker.tapVoiceLate).toBe(true);
   });
 });
