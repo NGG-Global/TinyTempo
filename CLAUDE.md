@@ -28,6 +28,18 @@ multiplied out land a hair over four beats and round the phrase up to two bars. 
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
 
+**Stars are a currency the road spends.** Every area after the first is closed until the
+player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
+`PROGRESSION.starGate`): 12, 25, 39, 53, then 14 more each time, a bank rather than a
+per-area quota, so a player averaging 1.4 stars a level is never stopped and one who scrapes
+is only ever a few replays short. Nothing is stored: the collection is the sum of
+`starsFor(best)`, so save codes and merges carry it unknowingly. A cleared level is never
+held, only the uncleared frontier at a closed area's first stop. The map draws a barrier at
+each closed area's foot, the collection on the bench, and flies a finished level's new stars
+from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everything that
+reads the collection reads the shown count**, so nothing opens before the star that opens
+it has landed. See `docs/STAR_GATES.md`.
+
 Twenty-one vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
@@ -163,6 +175,16 @@ crossed: `game_services_project_id` is the numeric Games project id the manifest
 the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, which exists for
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
+
+**A sound the tap starts is heard one output lag after the tap.** The demonstration is
+scheduled on the grid and drawn from the heard clock, so it stays together on any route; the
+player's own beat, started at `currentTime` by the tap, reaches a Bluetooth headset 150–400 ms
+later — most of an eighth note — so a Perfect tap sounded on the next subdivision and no Tap
+offset could move it, since the offset moves the judgement and a sound cannot precede the tap
+that starts it. `AudioClock.tapVoiceLate` (reported lag plus any positive offset, against
+`RHYTHM.gridVoiceLagMs`) therefore turns on the trombone's `gridAction` for every act, per
+task: the targets are voiced on the grid and the tap keeps the picture and the verdict. See
+`docs/SOUND.md`.
 
 **A recorded beat is late by whatever silence was in front of it.** The delivered
 one-shots open with between 0.1 ms and 25 ms of room before the take, and a beat sound is

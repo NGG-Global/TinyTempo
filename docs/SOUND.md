@@ -112,6 +112,32 @@ rotation is deterministic and the picture can count along with it, which `docs/T
 sets out — the action voice is scheduled for every cue and every target when a task is
 placed, so the n-th sounding beat of the level always gets the same take.
 
+## The player's own beat, through headphones
+
+Every demonstration beat is scheduled ahead of time on the grid, and the picture is driven
+by the clock of the sample being *heard*, so the example stays together on any output
+route. The player's beat was different: `RoundController.emitHit` started the action voice
+at `currentTime` the instant the tap arrived, and a sound written now is heard one output
+lag later. Through a speaker that is about 40 ms and still reads as the tap's own sound.
+Through Bluetooth it is 150–400 ms — most of an eighth note at 120 BPM — so a tap the judge
+scored Perfect was heard on the next subdivision, after a picture that had already moved.
+That is what "the example is in sync but my input is off" describes, and the Tap offset
+could not touch it: the offset moves the judgement, and a sound the tap starts can never be
+played before the tap.
+
+So on such a route the player's targets are voiced on the grid, the way the trombone's
+always are (`RoundController.start`'s `gridAction`), and the tap keeps the picture and the
+verdict. `AudioClock.tapVoiceLate` decides, from the lag the platform reports plus any
+positive Tap offset — which is precisely the lag it failed to report — against
+`RHYTHM.gridVoiceLagMs`, set under the Good window so a voice that would still land inside
+the tap's own judgement stays on the tap. It is read per task, because a route can change
+mid-level.
+
+The trade is the trombone's: the beat sounds whether or not the player taps, so a miss is
+announced by the picture and the verdict rather than by silence. On a route where the
+tap's own voice arrives late enough to be a wrong note, that is the better of the two. The
+debug overlay names which it chose (`lag 42+0 tap`, `lag 210+0 grid`).
+
 ## Failing soft
 
 `SampleBank.load` never rejects. A sample that 404s, fails to decode, or never arrives

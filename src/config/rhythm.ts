@@ -44,6 +44,20 @@ export const RHYTHM = {
    * fine while `input()` placed every tap a Bluetooth buffer early and missed.
    */
   inputStampMaxAgeMs: 80,
+  /**
+   * The output lag, in milliseconds, past which the player's own beat is voiced on the
+   * grid instead of on the tap.
+   *
+   * A tap-triggered voice is written at `currentTime` and heard one output lag later. A
+   * speaker's 40 ms still reads as the sound of the tap; Bluetooth's 150–400 ms is most
+   * of an eighth note at 120 BPM, so a tap the judge scores Perfect sounds on the next
+   * subdivision, after a picture that already moved. No offset can fix it — a sound the
+   * tap starts can never play before the tap — so on such a route every target is
+   * sounded on the grid, as the trombone always is, and the tap keeps the picture and the
+   * verdict. The threshold sits under the Good window so a voice that would still land
+   * inside the tap's own judgement stays on the tap.
+   */
+  gridVoiceLagMs: 100,
   goodPoints: 70,
   extraPenalty: 25,
 } as const;

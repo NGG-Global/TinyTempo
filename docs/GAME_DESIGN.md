@@ -32,6 +32,8 @@ Pattern tiers: 0 quarter notes only; 1 one offbeat per bar; 2 two offbeats; 3 ei
 
 Finer grids arrive as a second stage on the same curve, once the tiers have run out (`docs/SUBDIVISIONS.md`). From level 43 a level may swap some of its later tasks — never the first, which sets the pulse, and never more than half — for a one-bar triplet phrase; from level 59 for a sixteenth phrase; the share of tasks that may swap rises to a half by level 99, and each grid steps from one group per bar to two halfway there. A grid is only offered where the task's tempo leaves the thumb at least 110 ms between taps, which keeps sixteenths off tasks above 136 BPM. The Perfect window narrows for a task whose targets sit closer than 122 ms so two neighbours' Perfect cells never meet; Good is already bounded by the nearest-target cell. The swaps draw from their own seeded stream, so every level below 43 kept its exact tasks.
 
+Stars are also what opens the road. Every area after the first is closed until the player's total stars reach its requirement — 12, 25, 39, 53, then 14 more per area — a cumulative bank rather than a per-area quota, tuned so a player averaging 1.4 stars a level is never stopped and one who scrapes every level is only ever a few replays short. A cleared level is never held. See [star gates](STAR_GATES.md).
+
 Failing shows the bar that would have cleared it and offers an immediate retry; the level itself does not get easier. Replaying a cleared level can only raise its best. The plateau is deliberate: past level 60 parameters hold while the seeded patterns keep changing, which keeps the road endless without becoming unfair.
 
 The earlier one-task-per-act table below is retained as history.

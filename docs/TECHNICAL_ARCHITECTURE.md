@@ -158,7 +158,7 @@ Targets:     R + [0, 0.6, 1.8, 2.1]
 Response nominal end: R + 2.4
 ```
 
-Schedule no target action sounds during response: taps cause them. Start player sound as soon as the handler executes, not quantized to the nearest target and never at a past event time. Actual speaker latency still exists; scheduling ahead solves demo jitter, not hardware or touch latency. Use trimmed, short attacks and avoid stretching action samples when BPM changes.
+Schedule no target action sounds during response: taps cause them. Start player sound as soon as the handler executes, not quantized to the nearest target and never at a past event time. Actual speaker latency still exists; scheduling ahead solves demo jitter, not hardware or touch latency. Use trimmed, short attacks and avoid stretching action samples when BPM changes. One exception, added later: on an output route whose lag exceeds `RHYTHM.gridVoiceLagMs` (`AudioClock.tapVoiceLate`, typically Bluetooth), a tap-started voice is heard most of a subdivision late, so the targets are voiced on the grid instead and the tap drives only the picture and the verdict — see `docs/SOUND.md`.
 
 ### Map input to what the player heard
 

@@ -56,6 +56,29 @@ export const PROGRESSION = {
    */
   breatherBars: 4,
   breatherFromTasks: 6,
+  /**
+   * The star gates: what a new area asks for before its first level will start.
+   *
+   * Every area after the first is closed until the player's *total* stars — every star
+   * on every level, wherever it was earned — reach the area's requirement. The
+   * requirement is a bank rather than a per-area quota, so a strong start carries a
+   * player through many areas, and stars earned anywhere count, so the loop it asks for
+   * is "go back and do a level better", never "grind this area".
+   *
+   * Area k (the first is 0) asks for the sum over the k areas behind it of a per-area
+   * share: `firstArea` stars for the first area behind, one more (`growth`) for each
+   * area after, capped at `maxPerArea`. With 12, 1 and 14 that is 12 stars to enter the
+   * second area, 25 the third, 39 the fourth, then 14 more each time — between 40% and
+   * 47% of the 30 an area holds. What that buys, and what it protects against: a player
+   * averaging 1.4 stars a level is never stopped by any gate, ever; a player who scrapes
+   * every level at one star is short by 2 at the first gate and, once through it, by 3
+   * and then 4 at each gate after, so the ask at any one barrier is a few levels replayed
+   * one star better, never a backlog; and the plateau's clear bar of 80% (two stars at
+   * 87%) is where the cap stops the requirement climbing with the difficulty. The first gate is deliberately the softest: levels 1 to 10 are the
+   * ones nearly everyone three-stars, and two spare stars out of thirty teaches the
+   * mechanic without stopping anyone.
+   */
+  starGate: { firstArea: 12, growth: 1, maxPerArea: 14 },
   /** Locked levels drawn beyond the frontier, still with per-node padlocks. */
   mapLookahead: 12,
   /** Faded levels past the lock gate, so the road continues instead of cutting off. */

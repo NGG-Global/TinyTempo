@@ -217,7 +217,12 @@ export class TutorialScene extends BaseScene {
       });
       const contextNow = this.audio.context.currentTime;
       const startAt = Math.max(this.now(), contextNow) + TUTORIAL.leadSec;
-      this.controller.start(TUTORIAL.pattern, TUTORIAL.bpm, contextNow, performance.now(), startAt, TUTORIAL.leadBeats);
+      // Same rule as a level: on a route that delays sound past a tap's own judgement the
+      // answered beats are sounded on the grid, or the lesson's own strike would sound late.
+      this.controller.start(
+        TUTORIAL.pattern, TUTORIAL.bpm, contextNow, performance.now(), startAt, TUTORIAL.leadBeats,
+        this.audio.clock.tapVoiceLate,
+      );
       const plan = this.controller.plan!;
       if (resumed) this.run.tries--;
       this.run.try(plan);

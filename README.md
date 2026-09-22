@@ -239,6 +239,8 @@ cannot drift; that file says how to re-render it.
 
 ## Documentation
 
+- [Star gates](docs/STAR_GATES.md) — the collection, what each area asks for,
+  and the flight from a finished level to the bench.
 - [Game design](docs/GAME_DESIGN.md) and
   [technical architecture](docs/TECHNICAL_ARCHITECTURE.md) — the design and
   engine notes. Both carry historical sections, marked as such.

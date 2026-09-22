@@ -1,30 +1,32 @@
 import Phaser from 'phaser';
 import { reducedMotion } from '@/core/motionPreference';
 import { MUSIC } from '@/config/music';
-import { ensureShellMusic, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, ensureShellMusic, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
-import { areaOf, levelSpec, mapLastLevel, mapLevelState, starsFor, type Area } from '@/game/levels';
+import { areaOf, levelSpec, mapLastLevel, mapLevelState, type Area } from '@/game/levels';
 import {
   canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
+import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { MaterialKey } from '@/textures/materials';
 import { mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { FxKey } from '@/ui/feedback';
 import { dashes, smoothPath, type Point } from '@/ui/path';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawChevron, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
-import { drawStar } from '@/ui/star';
+import { drawStar, drawStarMark, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
+import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize } from '@/ui/type';
 import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -76,7 +78,17 @@ const MAP = {
   /** The frontier puck hops once a bar at the game's own tempo. */
   hopSec: 1.6,
   sign: { width: 340, height: 92, top: 26, ropeInset: 40 },
+  /**
+   * The star gate: a barrier across the road at the foot of a closed area, with the
+   * count it wants on a sign under the bar. The bar pivots on the left post and lifts
+   * when the collection reaches the requirement.
+   */
+  barrier: { post: 14, height: 62, reach: 18, bar: 15, sign: { width: 150, height: 48 }, liftSec: 0.9, barFadeSec: 0.35 },
+  /** The tally's star on the bench, and the beads row it shares. */
+  tally: { star: 13 },
 } as const;
+
+
 
 /**
  * One baked slice of the world, and the node indices it owns.
@@ -173,6 +185,35 @@ export class MapScene extends BaseScene {
   private bakeKey = '';
   private feedbackAt = -Infinity;
   private lockedIndex = -1;
+  /** Every star on the road, as the map read it on entry. */
+  private stars = 0;
+  /** Per band: the have/need sign under a closed gate's bar. Culled with the area titles. */
+  private gateTexts: Phaser.GameObjects.Text[] = [];
+  private tally!: Phaser.GameObjects.Graphics;
+  private tallyCount!: Phaser.GameObjects.Text;
+  private tallyGoal!: Phaser.GameObjects.Text;
+  private tallyAt = { x: 0, y: 0 };
+  private flight!: Phaser.GameObjects.Graphics;
+  /** The stars the level just finished added, still to fly in; null when nothing is owed. */
+  private earned: EarnedStars | null = null;
+  private flightSettled = true;
+  /**
+   * The count the tally shows. It trails `stars` by the stars still in the air, and
+   * everything that reads the collection while a flight is on — the held frontier, the
+   * live gate's sign, the dock — reads this, so nothing opens before the star that
+   * opens it has landed.
+   */
+  private tallyShown = 0;
+  private landedCount = 0;
+  private landedAt = -Infinity;
+  /**
+   * The area whose gate is drawn live rather than baked: the first one closed to the
+   * shown count on entry. Live because it is the one that can change this visit — its
+   * sign counts the landings and its bar lifts — and the bake would have to be redone
+   * every frame to show that.
+   */
+  private liveGate = -1;
+  private gateLiftAt = -Infinity;
   private frontierIndex = -1;
   private dockRect = new Phaser.Geom.Rectangle();
   private blockRect = new Phaser.Geom.Rectangle();
@@ -228,8 +269,18 @@ export class MapScene extends BaseScene {
     this.restAt = this.restPressedAt = -Infinity;
     this.restPressed = null;
     this.restBusy = false;
-    const data = this.sys.settings.data as { focus?: number } | undefined;
+    const data = this.sys.settings.data as { focus?: number; earned?: EarnedStars } | undefined;
     this.focus = Math.max(1, Math.min(this.progress.unlocked, data?.focus ?? this.progress.unlocked));
+    this.stars = totalStars(this.progress);
+    const earned = data?.earned;
+    this.earned = earned && Number.isInteger(earned.level) && earned.after > earned.before ? earned : null;
+    // Under reduced motion the stars are simply already in the collection.
+    this.flightSettled = this.earned === null || this.reducedMotion;
+    this.tallyShown = this.flightSettled ? this.stars : this.stars - (this.earned!.after - this.earned!.before);
+    this.landedCount = 0;
+    this.landedAt = -Infinity;
+    this.gateLiftAt = -Infinity;
+    this.liveGate = firstClosedArea(this.tallyShown);
     const top = mapLastLevel(this.progress.unlocked);
     this.first = Math.max(1, Math.min(this.focus - MAP.history, top - MAP.window + 1));
     this.shown = Math.min(top, this.first + MAP.window - 1) - this.first + 1;
@@ -265,6 +316,12 @@ export class MapScene extends BaseScene {
     this.dockSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(10);
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
+    this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 26, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
+    this.tally = this.add.graphics().setScrollFactor(0).setDepth(11);
+    this.tallyCount = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
+    this.tallyGoal = body(this, '', { size: 22, colour: PALETTE.muted }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
+    // Above the bench and the sign: a star in the air crosses both on its way down.
+    this.flight = this.add.graphics().setScrollFactor(0).setDepth(13);
     this.restScrim = this.add.graphics().setScrollFactor(0).setDepth(19).setVisible(false);
     this.restPlate = this.add.graphics().setScrollFactor(0).setDepth(20);
     this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.28).setScrollFactor(0).setDepth(20);
@@ -332,36 +389,7 @@ export class MapScene extends BaseScene {
     // the road's scale, its world height and every node come out identical. Re-baking them
     // cost 11.8 ms a frame for fifteen frames — 177 ms of main-thread work per collapse,
     // to redraw geometry byte for byte the same as what was already on screen.
-    const key = [s, this.worldHeight, full.x, full.width, safe.left, safe.right, safe.centerX, safe.width, this.first, this.shown].join('|');
-    if (key !== this.bakeKey) {
-      this.bakeKey = key;
-      // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
-      this.nodes = Array.from({ length: this.shown }, (_, i) => ({
-        x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
-        y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
-      }));
-      // The road runs one span past the last node so it leaves the frame rather than stopping.
-      const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
-      this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
-      // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
-      // clipped: every node, prop and road span belongs whole to one strip, and only the
-      // terrain — the one thing that fills rather than sits — is cut at the seam.
-      const bounds = stripBounds(this.shown, MAP.stripLevels, this.worldHeight, i => this.nodes[i]!.y, MAP.step * s);
-      this.strips.forEach((strip, j) => {
-        strip.top = bounds[j]!.top;
-        strip.bottom = bounds[j]!.bottom;
-      });
-      this.frontierIndex = -1;
-      for (const strip of this.strips) {
-        this.drawTerrain(strip.ground.clear(), s, strip);
-        const g = strip.detail.clear();
-        this.drawRoad(g, s, strip);
-        this.drawScenery(g, s, strip);
-        this.drawPlaques(g, s, strip);
-        this.drawNodes(g, s, strip);
-      }
-      this.drawGate(s);
-    }
+    this.bake(s);
     const size = Math.max(full.width, full.height) * 1.25;
     this.glow.setPosition(full.x + full.width * 0.38, full.y + full.height * 0.34).setDisplaySize(size, size)
       .setTint(mix(0xf6e6bc, areaOf(this.progress.unlocked).area.sky, 0.4));
@@ -379,6 +407,44 @@ export class MapScene extends BaseScene {
     this.velocity = 0;
     this.clampScroll();
     this.cullStrips();
+  }
+
+  /**
+   * Everything baked from the world, redone only when its key moves — or when `force`
+   * says the collection changed under it: a flight that has landed, a gate that lifted.
+   */
+  private bake(s: number, force = false): void {
+    const { safe, full } = this.viewport;
+    const key = [s, this.worldHeight, full.x, full.width, safe.left, safe.right, safe.centerX, safe.width, this.first, this.shown].join('|');
+    if (!force && key === this.bakeKey) return;
+    this.bakeKey = key;
+    // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
+    this.nodes = Array.from({ length: this.shown }, (_, i) => ({
+      x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
+      y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
+    }));
+    // The road runs one span past the last node so it leaves the frame rather than stopping.
+    const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
+    this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
+    // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
+    // clipped: every node, prop and road span belongs whole to one strip, and only the
+    // terrain — the one thing that fills rather than sits — is cut at the seam.
+    const bounds = stripBounds(this.shown, MAP.stripLevels, this.worldHeight, i => this.nodes[i]!.y, MAP.step * s);
+    this.strips.forEach((strip, j) => {
+      strip.top = bounds[j]!.top;
+      strip.bottom = bounds[j]!.bottom;
+    });
+    this.frontierIndex = -1;
+    for (const strip of this.strips) {
+      this.drawTerrain(strip.ground.clear(), s, strip);
+      const g = strip.detail.clear();
+      this.drawRoad(g, s, strip);
+      this.drawScenery(g, s, strip);
+      this.drawPlaques(g, s, strip);
+      this.drawNodes(g, s, strip);
+    }
+    this.drawGate(s);
+    this.drawStarGates(s);
   }
 
   /**
@@ -409,6 +475,39 @@ export class MapScene extends BaseScene {
       const on = title.y > top && title.y < bottom;
       if (title.visible !== on) title.setVisible(on);
     }
+    for (const sign of this.gateTexts) {
+      // A sign with no text is a gate that is open or off the window; it stays hidden.
+      const on = sign.text !== '' && sign.y > top && sign.y < bottom;
+      if (sign.visible !== on) sign.setVisible(on);
+    }
+  }
+
+  /**
+   * The star gate standing in front of this level, read against the *shown* count, or
+   * null. Only an uncleared level in a closed area is ever held — in practice the
+   * frontier at an area's first stop — so replays past a gate a restored save never
+   * earned stay open, which is exactly what the gate asks for.
+   */
+  private heldBy(level: number): StarGate | null {
+    if (levelStars(this.progress, level) > 0) return null;
+    const area = areaIndexOf(level);
+    if (areaOpen(area, this.tallyShown)) return null;
+    const required = starsRequired(area);
+    return { area, level: firstLevelOfArea(area), required, have: this.tallyShown, short: required - this.tallyShown };
+  }
+
+  /** The gate the shown count is working toward: the first one it does not open. */
+  private goalGate(): StarGate {
+    const area = firstClosedArea(this.tallyShown);
+    const required = starsRequired(area);
+    return { area, level: firstLevelOfArea(area), required, have: this.tallyShown, short: required - this.tallyShown };
+  }
+
+  /** World y of the road's boundary at the foot of an area, or null when it is off the window. */
+  private boundaryY(area: number): number | null {
+    const i = firstLevelOfArea(area) - this.first;
+    if (i <= 0 || i >= this.shown) return i === 0 && this.shown > 0 ? this.nodes[0]!.y + MAP.step * this.uiScale / 2 : null;
+    return (this.nodes[i - 1]!.y + this.nodes[i]!.y) / 2;
   }
 
   /**
@@ -745,7 +844,9 @@ export class MapScene extends BaseScene {
     const { area } = areaOf(level);
     const s = this.uiScale;
     const state = mapLevelState(level, this.progress.unlocked);
-    if (state === 'frontier') return { r: MAP.nodeRadius * 1.1 * s, depth: 10, fill: PALETTE.coral, number: SHELL.cream, size: 34 * s, state };
+    // A frontier behind a closed star gate is drawn as a locked stop: the barrier
+    // standing in the road below it is what says why.
+    if (state === 'frontier' && this.heldBy(level) === null) return { r: MAP.nodeRadius * 1.1 * s, depth: 10, fill: PALETTE.coral, number: SHELL.cream, size: 34 * s, state };
     if (state === 'cleared') return { r: MAP.nodeRadius * s, depth: 8, fill: area.ink, number: area.paper, size: 30 * s, state };
     if (state === 'preview') {
       return {
@@ -787,7 +888,9 @@ export class MapScene extends BaseScene {
       }
       this.drawLevelPuck(g, i, 0);
       if (p.state === 'cleared') {
-        this.drawStars(g, node.x, plateY, starsFor(this.progress.best[level] ?? 0, levelSpec(level)), area, s);
+        // Until they land, the stars in the air are not on the plate they left.
+        const inFlight = this.earned !== null && !this.flightSettled && level === this.earned.level;
+        this.drawStars(g, node.x, plateY, inFlight ? this.earned!.before : levelStars(this.progress, level), area, s);
       } else if (p.state === 'locked') {
         drawPadlock(g, node.x, plateY - 10 * s, 26 * s, area.ink, p.fill);
       }
@@ -824,6 +927,173 @@ export class MapScene extends BaseScene {
     this.gateLabel.setVisible(true).setText('Complete more\nto unlock');
     resize(this.gateLabel, 28 * s, SHELL.cream);
     this.gateLabel.setLineSpacing(-4 * s).setPosition(lockX + 44 * s, y);
+  }
+
+  /**
+   * A barrier at the foot of every closed area in the window, with the stars it wants
+   * on a sign under the bar. The one the collection is working toward is not baked: it
+   * is `liveGate`, drawn every frame so its sign can count the landings and its bar
+   * can lift the moment the count is met.
+   */
+  private drawStarGates(s: number): void {
+    for (let k = 0; k < this.gateTexts.length; k++) {
+      const area = this.firstBand + k;
+      const sign = this.gateTexts[k]!;
+      const live = area === this.liveGate;
+      // The live gate stays until its bar has finished lifting, whatever the count says
+      // now; every other gate is simply closed or open against the collection.
+      const closed = live ? this.gateLiftAt === -Infinity || performance.now() / 1000 - this.gateLiftAt < MAP.barrier.liftSec + MAP.barrier.barFadeSec
+        : !areaOpen(area, this.stars);
+      const y = area >= 1 ? this.boundaryY(area) : null;
+      const strip = y === null ? undefined : this.strips.find(candidate => y >= candidate.top && y < candidate.bottom);
+      if (y === null || !strip) { sign.setText('').setVisible(false); continue; }
+      if (!closed) {
+        // A gate the player has passed stands open: its posts stay as the area's threshold.
+        sign.setText('').setVisible(false);
+        if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 1, 0, null);
+        continue;
+      }
+      this.placeGateSign(sign, this.roadXAt(y), y, s, live ? this.tallyShown : null, starsRequired(area));
+      // The live gate's graphics are update()'s; its sign is placed here like the rest.
+      if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 0, 1, sign);
+    }
+  }
+
+  /** The sign under a bar: `have / need` on the gate being worked toward, the requirement alone further up the road. */
+  private placeGateSign(sign: Phaser.GameObjects.Text, x: number, y: number, s: number, have: number | null, need: number): void {
+    const B = MAP.barrier;
+    sign.setText(have === null ? String(need) : `${have} / ${need}`);
+    resize(sign, 26 * s, SHELL.cream);
+    // Star at the left of the plate, the count after it, the pair centred on the road.
+    const starR = 12 * s;
+    const total = starR * 2 + 10 * s + sign.width;
+    sign.setPosition(x - total / 2 + starR * 2 + 10 * s, MapScene.gateSignTop(y, s) + B.sign.height * s / 2 + 1 * s).setAlpha(1);
+  }
+
+  /** Top of the plate under a gate's bar, with the bar down. The sign text and the plate agree through this. */
+  private static gateSignTop(y: number, s: number): number {
+    const B = MAP.barrier;
+    return y - (B.height - B.bar - 12) * s;
+  }
+
+  /** Re-word the live gate's sign for the shown count, in place. */
+  private refreshLiveSign(): void {
+    const sign = this.gateTexts[this.liveGate - this.firstBand];
+    const y = sign && this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
+    if (!sign || y === null) return;
+    this.placeGateSign(sign, this.roadXAt(y), y, this.uiScale, this.tallyShown, starsRequired(this.liveGate));
+  }
+
+  /**
+   * Two posts, a striped bar pivoting on the left one, and a plate hanging under it.
+   * `lift` is 0 for a bar across the road and 1 for one swung clear of it.
+   */
+  private drawBarrier(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, area: Area, active: boolean, lift: number, bar: number, sign: Phaser.GameObjects.Text | null): void {
+    const B = MAP.barrier;
+    const half = (MAP.roadWidth / 2 + B.reach) * s;
+    const post = B.post * s, height = B.height * s;
+    const wood = faces(SHELL.wood);
+    const shadow = castShadow(6);
+    // Posts, with the bar's shadow on the road between them while the bar is down.
+    for (const px of [x - half, x + half]) {
+      g.fillStyle(0x1a1410, shadow.alpha).fillEllipse(px + shadow.dx * s, y + shadow.dy * s + 2 * s, post * 2.2, post * 0.8);
+      g.fillStyle(wood.shade).fillRoundedRect(px - post / 2, y - height + 4 * s, post, height, post * 0.3);
+      g.fillStyle(wood.face).fillRoundedRect(px - post / 2, y - height, post, height, post * 0.3);
+      g.lineStyle(STYLE.current.outline * s * 0.5, shade(SHELL.wood, -0.6), 1).strokeRoundedRect(px - post / 2, y - height, post, height, post * 0.3);
+      g.fillStyle(faces(BRASS).edge).fillCircle(px, y - height, post * 0.42);
+      g.fillStyle(BRASS).fillCircle(px, y - height - 1.5 * s, post * 0.42);
+    }
+    // The bar, as a rotated slab about the left post's cap. `bar` is its alpha: a lifted
+    // bar fades once it is up, or it would stand across the puck it just opened the road to.
+    const pivot = { x: x - half, y: y - height + B.bar * s * 0.5 + 2 * s };
+    if (bar <= 0.01) return;
+    const angle = -lift * 1.32;
+    const cos = Math.cos(angle), sin = Math.sin(angle);
+    const length = half * 2;
+    const thick = B.bar * s;
+    const at = (along: number, across: number): Phaser.Math.Vector2 =>
+      new Phaser.Math.Vector2(pivot.x + along * cos - across * sin, pivot.y + along * sin + across * cos);
+    const slab = (from: number, to: number, colour: number, alpha = 1, inset = 0): void => {
+      g.fillStyle(colour, alpha * bar).fillPoints([at(from, -thick / 2 + inset), at(to, -thick / 2 + inset), at(to, thick / 2 - inset), at(from, thick / 2 - inset)], true);
+    };
+    const stripeA = active ? PALETTE.coral : shade(area.ground, -0.28);
+    const stripeB = active ? SHELL.cream : mix(area.paper, area.ground, 0.3);
+    if (lift < 0.05) {
+      g.fillStyle(0x1a1410, shadow.alpha * bar).fillPoints([at(0, thick * 0.6 + 4 * s), at(length, thick * 0.6 + 4 * s), at(length, thick * 0.9 + 4 * s), at(0, thick * 0.9 + 4 * s)], true);
+    }
+    g.lineStyle(STYLE.current.outline * s * 0.55, shade(stripeA, -0.6), bar)
+      .strokePoints([at(0, -thick / 2), at(length, -thick / 2), at(length, thick / 2), at(0, thick / 2)], true);
+    slab(0, length, stripeB);
+    const stripes = 5;
+    for (let i = 0; i < stripes; i += 2) slab(length * i / stripes, length * (i + 1) / stripes, stripeA);
+    g.fillStyle(0xffffff, 0.22 * bar).fillPoints([at(2 * s, -thick / 2 + 2 * s), at(length - 2 * s, -thick / 2 + 2 * s), at(length - 2 * s, -thick / 2 + 4.5 * s), at(2 * s, -thick / 2 + 4.5 * s)], true);
+    g.fillStyle(faces(BRASS).face, bar).fillCircle(pivot.x, pivot.y, post * 0.28);
+    // The sign hangs under the bar's middle and fades as the bar goes up: it stays put
+    // rather than swinging with the bar, so the count is readable until it is gone.
+    if (sign !== null) {
+      const alpha = Math.max(0, 1 - Math.min(1, lift * 2));
+      sign.setAlpha(alpha);
+      if (alpha > 0) {
+        const w = B.sign.width * s, h = B.sign.height * s;
+        const barBottom = pivot.y + thick / 2;
+        const top = MapScene.gateSignTop(y, s);
+        g.lineStyle(2.5 * s, SHELL.rope, alpha).lineBetween(x - w * 0.3, barBottom, x - w * 0.3, top).lineBetween(x + w * 0.3, barBottom, x + w * 0.3, top);
+        const fill = active ? shade(PALETTE.ink, -0.1) : mix(SHELL.wood, area.road, 0.35);
+        g.fillStyle(0x1a1410, shadow.alpha * alpha).fillRoundedRect(x - w / 2 + shadow.dx * s, top + shadow.dy * s + 5 * s, w, h, 12 * s);
+        g.fillStyle(faces(fill).shade, alpha).fillRoundedRect(x - w / 2, top + 5 * s, w, h, 12 * s);
+        g.fillStyle(fill, alpha).fillRoundedRect(x - w / 2, top, w, h, 12 * s);
+        g.lineStyle(STYLE.current.outline * s * 0.5, shade(fill, -0.6), alpha).strokeRoundedRect(x - w / 2, top, w, h, 12 * s);
+        // The star sits where `placeGateSign` left room for it, ahead of the count.
+        const starR = 12 * s;
+        const total = starR * 2 + 10 * s + sign.width;
+        drawStar(g, x - total / 2 + starR, top + h / 2, starR, STAR_PRIZE, alpha);
+      }
+    }
+  }
+
+  /**
+   * The collection on the bench: a brass star, the count, and the next gate's ask, with
+   * a slim track filling toward it. This is where an earned star flies to, so it lives
+   * in screen space next to the beads and is redrawn while it rings.
+   */
+  private drawTally(s: number, now: number): void {
+    const g = this.tally.clear();
+    const goal = this.goalGate();
+    const beadY = this.blockRect.bottom + 12 * s + 26 * s;
+    const right = this.blockRect.right - 12 * s;
+    this.tallyGoal.setText(`/ ${goal.required}`);
+    resize(this.tallyGoal, 22 * s, PALETTE.muted, STYLE.current, false);
+    this.tallyGoal.setPosition(right, beadY);
+    this.tallyCount.setText(String(this.tallyShown));
+    resize(this.tallyCount, 30 * s, PALETTE.ink, STYLE.current, false);
+    this.tallyCount.setPosition(right - this.tallyGoal.width - 6 * s, beadY);
+    const starR = MAP.tally.star * s;
+    this.tallyAt = { x: this.tallyCount.x - this.tallyCount.width - 14 * s - starR, y: beadY };
+    const ring = tallyRing(now - this.landedAt, STYLE.current.exaggeration);
+    if (ring.glow > 0.02) {
+      g.fillStyle(0xffe7a0, ring.glow * 0.5).fillCircle(this.tallyAt.x, this.tallyAt.y, starR * (1.4 + ring.glow * 0.6));
+      g.lineStyle(Math.max(1.5, 3 * s), 0xffe7a0, ring.glow * 0.7).strokeCircle(this.tallyAt.x, this.tallyAt.y, starR * (1.2 + (1 - ring.glow) * 2.2));
+    }
+    drawStarMark(g, {
+      x: this.tallyAt.x, y: this.tallyAt.y, radius: starR, color: STAR_PRIZE,
+      pose: { alpha: 1, drop: 0, scaleX: 1 + ring.squash, scaleY: 1 - ring.squash * 0.8, spin: 0, fill: 1, glow: ring.glow * 0.5, shine: 0, twinkle: 0, lift: 0, landed: true },
+    });
+    // The track: from the star to the bench's edge, filled as far as the collection has come.
+    const trackY = beadY + 24 * s, trackH = 5 * s;
+    const left = this.tallyAt.x - starR;
+    g.fillStyle(shade(SHELL.bench, -0.22), 1).fillRoundedRect(left, trackY - trackH / 2, right - left, trackH, trackH / 2);
+    const share = goal.required > 0 ? Math.min(1, this.tallyShown / goal.required) : 1;
+    if (share > 0) g.fillStyle(STAR_PRIZE, 1).fillRoundedRect(left, trackY - trackH / 2, Math.max(trackH, (right - left) * share), trackH, trackH / 2);
+  }
+
+  /** Redo the bake and the bench once the collection has moved: a landed flight, a lifted gate. */
+  private rebake(): void {
+    const s = this.uiScale;
+    this.bake(s, true);
+    this.drawDock(s, 0);
+    this.drawTally(s, performance.now() / 1000);
+    this.pressDirty = true;
+    this.cullStrips();
   }
 
   /** Stars on their own small slab, so they never sit directly on the road surface. */
@@ -934,17 +1204,31 @@ export class MapScene extends BaseScene {
     const sink = 12 * s * press * 0.8;
     placeSurface(this.dockSurface, this.blockRect, s, sink);
     const level = this.progress.unlocked;
+    const held = this.heldBy(level);
     const definition = VIGNETTES.find(v => v.id === levelSpec(level).vignette)!;
     const bx = this.blockRect.x, by = this.blockRect.y + sink;
-    this.dockTitle.setText(definition.title);
+    // Held at a gate, the block stops being the next level's and becomes the errand:
+    // how many stars the area wants, and a way back down the road to find them.
+    this.dockTitle.setText(held === null ? definition.title
+      : `${held.short} more ${held.short === 1 ? 'star' : 'stars'} for ${areaOf(held.level).name}`);
     // Caption size on cream: the same undressed Fredoka the locked numbers use, so the
     // outline does not close the counters on a 30-unit word.
     resize(this.dockTitle, 30 * s, PALETTE.ink, STYLE.current, false);
-    this.dockTitle.setPosition(bx + 24 * s, by + height * 0.5);
     const r = Math.max(40 * s, this.controlSize / 2);
     const cx = this.blockRect.right - 24 * s - r, cy = this.blockRect.centerY + sink;
-    drawDisc(g, cx, cy, r, s, { fill: PALETTE.coral, depth: 9, press });
-    drawPlay(g, cx + 2 * s, cy + 9 * s * press * 0.8, r * 0.42, SHELL.cream);
+    const room = cx - r - 16 * s - (bx + 24 * s);
+    if (this.dockTitle.width > room) resize(this.dockTitle, Math.max(20 * s, 30 * s * room / this.dockTitle.width), PALETTE.ink, STYLE.current, false);
+    this.dockTitle.setPosition(bx + 24 * s, by + height * 0.5);
+    if (held === null) {
+      drawDisc(g, cx, cy, r, s, { fill: PALETTE.coral, depth: 9, press });
+      drawPlay(g, cx + 2 * s, cy + 9 * s * press * 0.8, r * 0.42, SHELL.cream);
+    } else {
+      // Brass, and a chevron back down the road: the tap replays the finished level with
+      // the most to give, which never costs a heart.
+      drawDisc(g, cx, cy, r, s, { fill: BRASS, depth: 9, press });
+      drawStar(g, cx, cy - r * 0.12 + 9 * s * press * 0.8, r * 0.36, SHELL.cream);
+      drawChevron(g, cx, cy + r * 0.52 + 9 * s * press * 0.8, r * 0.16, shade(BRASS, -0.62));
+    }
     this.dockRect.setTo(this.blockRect.x - 8 * s, this.blockRect.y - 8 * s, this.blockRect.width + 16 * s, this.blockRect.height + 16 * s);
     // Ten beads for the ten stops in the current area.
     const beadY = this.blockRect.bottom + 12 * s + 26 * s;
@@ -958,6 +1242,7 @@ export class MapScene extends BaseScene {
       g.fillStyle(f.face, 1).fillCircle(x, beadY, rr);
       g.fillStyle(f.rim, 0.8).fillCircle(x - rr * 0.3, beadY - rr * 0.35, rr * 0.3);
     }
+    this.drawTally(s, performance.now() / 1000);
   }
 
   /**
@@ -1404,6 +1689,19 @@ export class MapScene extends BaseScene {
         g.lineStyle(STYLE.current.outline * s * 0.55, PALETTE.coral, Math.max(0, 1 - beat / 1.1) * 0.55).strokeCircle(frontier.x, frontier.y - lift, p.r + 4 * s + ring * 22 * s);
       }
     }
+    // The gate the collection is working toward, live: its sign counts the landings and
+    // its bar lifts on the one that meets it. Under reduced motion a met gate is simply up.
+    const liveY = this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
+    if (liveY !== null) {
+      const lifting = this.gateLiftAt > -Infinity;
+      const age = now - this.gateLiftAt;
+      const lift = !lifting ? 0 : still ? 1 : spring(age / MAP.barrier.liftSec, 4.2, 1.6);
+      // Once up, the bar goes and the posts stay, as every passed gate's do.
+      const bar = !lifting ? 1 : still ? 0 : Math.max(0, 1 - (age - MAP.barrier.liftSec) / MAP.barrier.barFadeSec);
+      this.drawBarrier(g, this.roadXAt(liveY), liveY, s, areaOf(firstLevelOfArea(this.liveGate)).area, true, lift, bar, this.gateTexts[this.liveGate - this.firstBand] ?? null);
+    }
+    if (!this.flightSettled) this.drawFlight(s, now);
+    if (now - this.landedAt < STAR_FLIGHT.ring) this.drawTally(s, now);
     // A tapped locked puck: its number squashes and a ring says "not yet".
     const feedbackAge = now - this.feedbackAt;
     const locked = this.nodes[this.lockedIndex];
@@ -1444,6 +1742,64 @@ export class MapScene extends BaseScene {
       this.restWait.setAlpha(alpha);
       for (const text of Object.values(this.restTexts)) text.setAlpha(alpha);
       this.restSheen.update(now, !monetization().premium());
+    }
+  }
+
+  /**
+   * The stars the finished level earned, leaving its plate and landing on the tally.
+   * Each landing steps the count, rings the bench and, on the one that meets the live
+   * gate's ask, lifts its bar. When the last has settled the world is rebaked with the
+   * collection as it now stands.
+   */
+  private drawFlight(s: number, now: number): void {
+    const earned = this.earned!;
+    const count = earned.after - earned.before;
+    const mapAge = now - this.enteredAt;
+    const landed = starsLanded(mapAge, count);
+    if (landed > this.landedCount) {
+      this.landedCount = landed;
+      this.tallyShown = this.stars - count + landed;
+      this.landedAt = now;
+      const audio = currentAudio(this);
+      // A tick per landing on the engine's own count voice, and the readiness tick for the last.
+      audio?.play(audio.context.currentTime, landed === count ? 'ready' : 'count');
+      this.refreshLiveSign();
+      // The landing that meets the ask lifts the bar, a beat after the count shows it.
+      if (this.gateLiftAt === -Infinity && this.liveGate >= 1 && areaOpen(this.liveGate, this.tallyShown)) this.gateLiftAt = now + 0.12;
+      this.drawDock(s, 0);
+    }
+    const g = this.flight.clear();
+    if (flightDone(mapAge, count)) {
+      this.flightSettled = true;
+      this.rebake();
+      return;
+    }
+    // From the socket each star was drawn in on the plate. The level is usually on
+    // screen — the map is centred on the one after it — and if it has been scrolled away
+    // the star still comes from where its plate is, and enters the frame on its arc.
+    const index = earned.level - this.first;
+    const node = this.nodes[index];
+    const p = node ? this.puckOf(index) : null;
+    const plateY = node && p ? node.y + p.r + (p.depth + 24) * s - this.scrollY : this.viewport.full.bottom + 30 * s;
+    const to = this.tallyAt;
+    const radius = MAP.tally.star * s;
+    for (let i = 0; i < count; i++) {
+      const pose = starFlightPose(starFlightAge(mapAge, i), STYLE.current.exaggeration);
+      if (!pose.started || pose.landed) continue;
+      const slot = earned.before + i;
+      const from = { x: node ? node.x + (slot - 1) * 24 * s : this.viewport.safe.centerX, y: plateY };
+      for (let k = STAR_FLIGHT.trail; k >= 1; k--) {
+        const ghost = starFlightPose(starFlightAge(mapAge, i) - k * STAR_FLIGHT.trailStep, STYLE.current.exaggeration);
+        if (!ghost.started) continue;
+        const at = flightPath(from, to, ghost.t);
+        drawStar(g, at.x, at.y, radius * ghost.scale * (1 - k * 0.16), STAR_PRIZE, trailAlpha(k, pose.lift));
+      }
+      const at = flightPath(from, to, pose.t);
+      g.fillStyle(0xffe7a0, 0.28 * pose.lift).fillCircle(at.x, at.y, radius * pose.scale * 1.5);
+      drawStarMark(g, {
+        x: at.x, y: at.y, radius: radius * pose.scale, color: STAR_PRIZE,
+        pose: { alpha: 1, drop: 0, scaleX: 1, scaleY: 1, spin: pose.spin, fill: 1, glow: pose.lift * 0.9, shine: pose.lift, twinkle: 0, lift: pose.lift, landed: false },
+      });
     }
   }
 
@@ -1524,7 +1880,13 @@ export class MapScene extends BaseScene {
     if (this.dockRect.contains(x, y)) {
       this.pressedAt = performance.now() / 1000;
       this.pressDirty = true;
-      this.openLevel(this.progress.unlocked);
+      const held = this.heldBy(this.progress.unlocked);
+      if (held === null) { this.openLevel(this.progress.unlocked); return; }
+      // The errand: the finished level with the most to give, or a look at the gate
+      // itself when every finished level already has its three.
+      const replay = levelToPolish(this.progress);
+      if (replay !== null) this.openLevel(replay);
+      else { this.velocity = 0; this.scrollTo(held.level); }
       return;
     }
     if (y < this.hudHeight || y >= this.footerTop) return;
@@ -1532,7 +1894,7 @@ export class MapScene extends BaseScene {
     const reach = Math.max(MAP.nodeRadius * this.uiScale, this.controlSize / 2);
     const index = this.nodes.findIndex(node => Math.hypot(node.x - x, node.y - worldY) <= reach);
     if (index < 0) return;
-    if (this.first + index > this.progress.unlocked) {
+    if (this.first + index > this.progress.unlocked || this.heldBy(this.first + index) !== null) {
       if (this.lockedIndex >= 0) this.numbers[this.lockedIndex]!.setScale(1);
       this.lockedIndex = index;
       this.feedbackAt = performance.now() / 1000;
@@ -1549,6 +1911,7 @@ export class MapScene extends BaseScene {
     this.clampScroll();
   }
   private openLevel(level: number): void {
+    if (!canPlayLevel(this.progress, level) || this.heldBy(level) !== null) return;
     if (!canBeginAttempt(this.health, this.progress, level, Date.now(), monetization().premium())) {
       this.showRest(level);
       return;

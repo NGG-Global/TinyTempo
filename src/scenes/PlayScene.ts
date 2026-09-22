@@ -27,6 +27,7 @@ import {
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress, seenDemonstration, seenReplayTip, type LevelOutcome } from '@/game/progress';
+import type { EarnedStars } from '@/game/stars';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -788,7 +789,11 @@ export class PlayScene extends BaseScene {
     this.turnCall.setAlpha(0);
     this.controller!.start(
       this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(),
-      startAt, this.task.leadBeats, this.definition.gridAction === true,
+      // The trombone's note is always the plan. On a route that delays sound by more than
+      // a tap's own judgement — Bluetooth, typically — every act's is: a voice started by
+      // the tap would be heard on the next subdivision. Decided per task, since the route
+      // can change mid-level and the judge is already reading the same clock.
+      startAt, this.task.leadBeats, this.definition.gridAction === true || this.audio!.clock.tapVoiceLate,
     );
     this.vignette.reset(this.controller!.plan!);
     if (this.replayOffset !== null) {
@@ -1007,7 +1012,7 @@ export class PlayScene extends BaseScene {
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
       const music = this.audio?.music;
-      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
+      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
     }
   }
   private changeHeadline(text: string, colour = SHELL.cream): void {
@@ -1468,7 +1473,13 @@ export class PlayScene extends BaseScene {
     this.replay = null;
     this.audio?.cancel();
     this.audio?.music.setRate(1, this.audio.context.currentTime);
-    this.curtain.cover(() => this.scene.start(SceneKey.Map, { focus: this.levelCleared ? this.spec.level + 1 : this.spec.level }));
+    // The stars this run added are the map's to deliver: they fly from this level's plate
+    // into the collection on the bench, and the count there does not move until they land.
+    const outcome = this.outcome;
+    const before = outcome?.bestBefore == null ? 0 : starsFor(outcome.bestBefore, this.spec);
+    const after = outcome ? starsFor(outcome.progress.best[this.spec.level] ?? 0, this.spec) : 0;
+    const earned: EarnedStars | undefined = this.levelCleared && after > before ? { level: this.spec.level, before, after } : undefined;
+    this.curtain.cover(() => this.scene.start(SceneKey.Map, { focus: this.levelCleared ? this.spec.level + 1 : this.spec.level, ...(earned ? { earned } : {}) }));
   }
   private showNoHearts(): void {
     this.starting = false;
