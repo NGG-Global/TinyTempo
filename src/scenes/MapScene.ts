@@ -32,6 +32,7 @@ import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/naviga
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
+import { definitionForLap } from '@/vignettes/Vignette';
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
 const MAP = {
@@ -1205,7 +1206,8 @@ export class MapScene extends BaseScene {
     placeSurface(this.dockSurface, this.blockRect, s, sink);
     const level = this.progress.unlocked;
     const held = this.heldBy(level);
-    const definition = VIGNETTES.find(v => v.id === levelSpec(level).vignette)!;
+    const spec = levelSpec(level);
+    const definition = definitionForLap(VIGNETTES.find(v => v.id === spec.vignette)!, spec.lap);
     const bx = this.blockRect.x, by = this.blockRect.y + sink;
     // Held at a gate, the block stops being the next level's and becomes the errand:
     // how many stars the area wants, and a way back down the road to find them.

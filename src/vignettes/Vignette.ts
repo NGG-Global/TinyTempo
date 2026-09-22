@@ -25,6 +25,9 @@ export interface Vignette {
   translate(offset: number): void;
   destroy(): void;
 }
+/** The words an act's look may replace: the name on the map, the intro and the two endings. */
+export type LookCopy = Partial<Pick<VignetteDefinition, 'title' | 'intro' | 'success' | 'rough'>>;
+
 export interface VignetteDefinition {
   readonly id: string;
   readonly title: string;
@@ -52,4 +55,24 @@ export interface VignetteDefinition {
    */
   create(scene: Phaser.Scene, lap: number): Vignette;
   sounds(context: AudioContext): VignetteSounds;
+  /**
+   * Wording per look, indexed like the act's own look list (`lap % looks.length`). Only
+   * for an act whose look changes what the subject *is* — a donut is not an apple — so
+   * the map, the intro and the verdict name the thing on the plate. Entry 0 should be
+   * empty: lap 0 keeps the definition's own words.
+   */
+  readonly looks?: readonly LookCopy[];
+}
+
+const withLooks = new WeakMap<VignetteDefinition, VignetteDefinition[]>();
+
+/** The definition as a given lap presents it. Memoized, since PlayScene reads it per frame. */
+export function definitionForLap(definition: VignetteDefinition, lap: number): VignetteDefinition {
+  const looks = definition.looks;
+  if (!looks?.length) return definition;
+  const index = Number.isFinite(lap) ? Math.max(0, Math.floor(lap)) % looks.length : 0;
+  if (Object.keys(looks[index] ?? {}).length === 0) return definition;
+  let cache = withLooks.get(definition);
+  if (!cache) withLooks.set(definition, cache = []);
+  return cache[index] ??= { ...definition, ...looks[index] };
 }

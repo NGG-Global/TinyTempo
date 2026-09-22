@@ -44,7 +44,7 @@ import { drawStarMark, prizeColour, STAR_PRIZE } from '@/ui/star';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { VIGNETTES } from '@/vignettes/registry';
-import type { Vignette } from '@/vignettes/Vignette';
+import { definitionForLap, type Vignette } from '@/vignettes/Vignette';
 import { clamp01, easeOut } from '@/vignettes/motion';
 
 /**
@@ -132,7 +132,9 @@ export class PlayScene extends BaseScene {
   private purchaseOfferTracked = false;
   private commerceBusy = false;
   private watchClaims = 0;
-  private get definition() { return VIGNETTES.find(v => v.id === this.spec.vignette) ?? VIGNETTES[0]!; }
+  private get definition() {
+    return definitionForLap(VIGNETTES.find(v => v.id === this.spec.vignette) ?? VIGNETTES[0]!, this.spec.lap);
+  }
   private stars!: Phaser.GameObjects.Graphics;
   private scoreValue!: Phaser.GameObjects.Text;
   private scoreNote!: Phaser.GameObjects.Text;

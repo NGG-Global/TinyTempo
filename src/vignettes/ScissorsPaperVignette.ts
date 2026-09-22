@@ -21,6 +21,8 @@ export const CRAFT = {
   coral: 0xcf5134, steel: 0xc7d4d2, steelLight: 0xf5f4e7, steelDark: 0x79908a,
   star: 0xf0ce7e, heart: 0xf29c87, angel: 0xfff1d7,
   butterfly: 0xb99bd9, tree: 0x86b87c, tulip: 0xe57f90,
+  crown: 0xe8b84a, bell: 0x9cc6cf, mushroom: 0xdc7a62,
+  gingerbread: 0xc98b55, maple: 0xe0843f, rocket: 0x8fb0dc,
 } as const;
 
 /** Where the three glints land for each shape once it has opened. */
@@ -31,7 +33,19 @@ const GLINTS: Readonly<Record<PaperShape, readonly (readonly [number, number])[]
   butterfly: [[-208, -166], [212, -120], [-150, 150]],
   tree: [[-160, -150], [188, -40], [-198, 120]],
   tulip: [[-190, -150], [196, -110], [178, 130]],
+  crown: [[-196, -150], [206, -128], [-150, 150]],
+  bell: [[-180, -150], [196, -40], [170, 150]],
+  mushroom: [[-200, -140], [205, -90], [120, 160]],
+  gingerbread: [[-110, -180], [196, -100], [-160, 150]],
+  maple: [[-160, -170], [200, -120], [-170, 110]],
+  rocket: [[-120, -170], [150, -40], [-160, 120]],
 };
+
+/** Both halves of the part of a contour that lies within `from`..`to` in y, the left one opened by `open`. */
+function mirrored(contour: readonly PaperPoint[], open: number, from: number, to: number): PaperPoint[] {
+  const half = contour.filter(p => p.y >= from && p.y <= to);
+  return [...half, ...half.slice().reverse().map(p => ({ x: -p.x * open, y: p.y }))];
+}
 
 const MAT = { left: -346, top: -258, width: 692, height: 536 } as const;
 const FOLD = { top: -194, bottom: 194, width: 194 } as const;
@@ -362,6 +376,70 @@ export class ScissorsPaperVignette implements Vignette {
         d.fillStyle(0x6fa66a, 0.9 * alpha).fillRect(-14 * open, -12, 14 * open + 14, 182);
         d.lineStyle(2, 0xc2e0b8, 0.7 * alpha).lineBetween(4, -4, 4, 166);
         return;
+      case 'crown':
+        // A jewel on every point, and a band of gems scored across the base.
+        for (const [x, y] of [[0, -176], [98, -146], [182, -120]] as const) {
+          for (const side of x ? [-open, 1] : [1]) {
+            d.fillStyle(0xfff1d7, alpha).fillCircle(x * side, y, 11);
+            d.lineStyle(2, score, 0.8 * alpha).strokeCircle(x * side, y, 11);
+          }
+        }
+        d.lineStyle(3, score, 0.7 * alpha).lineBetween(-166 * open, 78, 166, 78).lineBetween(-166 * open, 138, 166, 138);
+        for (const [x, c] of [[0, 0xd9564a], [86, 0x5b8fd0], [-86, 0x5b8fd0]] as const) {
+          d.fillStyle(c, 0.95 * alpha).fillEllipse(x < 0 ? x * open : x, 108, 26, 34);
+          d.fillStyle(0xffffff, 0.6 * alpha).fillEllipse((x < 0 ? x * open : x) - 4, 100, 7, 10);
+        }
+        return;
+      case 'bell':
+        // The lip's rolled band, a shine down the shoulder, and the clapper in shade.
+        d.lineStyle(3, score, 0.7 * alpha).lineBetween(-150 * open, 96, 150, 96).lineBetween(-170 * open, 112, 170, 112);
+        d.lineStyle(7, 0xf6fbfb, 0.6 * alpha).beginPath().moveTo(48, -122).lineTo(70, -40).lineTo(96, 60).strokePath();
+        d.fillStyle(shade(colour, -0.28), 0.8 * alpha).fillEllipse(0, 156, 40 * (open + 1) / 2 + 12, 40);
+        d.fillStyle(0xc9963b, alpha).fillRoundedRect(-12 * open - 6, -202, 12 * open + 18, 16, 6);
+        return;
+      case 'mushroom': {
+        // Cream stem and gills under a spotted cap.
+        polygon(d, mirrored(contour.filter(p => p.x <= 80), open, -8, 174), 0xf6e7cf, 0, alpha);
+        d.lineStyle(2, score, 0.55 * alpha);
+        for (let i = 1; i < 6; i++) for (const side of [-open, 1]) d.lineBetween(36 * side, -10, (36 + i * 26) * side, -22 + i * 1.5);
+        for (const [x, y, r] of [[0, -128, 22], [92, -112, 18], [146, -52, 14], [48, -60, 12]] as const) {
+          for (const side of x ? [-open, 1] : [1]) d.fillStyle(0xfff4e4, 0.95 * alpha).fillCircle(x * side, y, r);
+        }
+        return;
+      }
+      case 'gingerbread':
+        // Icing eyes, smile and zigzags, and three sweet buttons down the fold.
+        d.fillStyle(0x5a3824, alpha).fillCircle(20, -152, 7).fillCircle(-20 * open, -152, 7);
+        d.lineStyle(4, 0xfff8ea, 0.95 * alpha).beginPath().arc(0, -136, 20, 0.35, Math.PI - 0.35).strokePath();
+        for (const [y, c] of [[-50, 0xf29c87], [-6, 0x86b87c], [38, 0xfff1d7]] as const) d.fillStyle(c, alpha).fillCircle(0, y, 10);
+        for (const side of [-open, 1]) {
+          d.lineStyle(4, 0xfff8ea, 0.9 * alpha).beginPath().moveTo(124 * side, -84);
+          for (let i = 1; i <= 4; i++) d.lineTo((124 + (i % 2) * 12) * side, -84 + i * 12);
+          d.strokePath();
+          d.beginPath().moveTo(84 * side, 150);
+          for (let i = 1; i <= 4; i++) d.lineTo((84 + i * 9) * side, 150 + (i % 2 ? 12 : 0));
+          d.strokePath();
+        }
+        return;
+      case 'maple':
+        // Veins from the stalk out to every lobe, and a darker stalk.
+        d.fillStyle(0x9a5a2e, 0.9 * alpha).fillRect(-12 * open, 56, 12 * open + 12, 114);
+        d.lineStyle(2.5, score, 0.65 * alpha).lineBetween(0, 56, 0, -168);
+        for (const side of [-open, 1]) {
+          for (const [x, y] of [[108, -124], [160, -30], [114, 64]] as const) d.lineBetween(0, 56, x * side, y);
+        }
+        return;
+      case 'rocket':
+        // A porthole on the fold, a stripe, fins in shade and the flame painted in.
+        polygon(d, [{ x: 58, y: 24 }, { x: 124, y: 92 }, { x: 126, y: 158 }, { x: 58, y: 122 }], shade(colour, -0.16), 0, alpha);
+        polygon(d, [{ x: -58 * open, y: 24 }, { x: -124 * open, y: 92 }, { x: -126 * open, y: 158 }, { x: -58 * open, y: 122 }], shade(colour, -0.16), 0, alpha);
+        polygon(d, mirrored(contour, open, 140, 194), 0xf6a04d, 0, alpha);
+        polygon(d, [{ x: 12, y: 146 }, { x: 0, y: 176 }, { x: -12 * open, y: 146 }], 0xffe08a, 0, alpha);
+        d.fillStyle(0xe7eef2, alpha).fillCircle(0, -62, 32);
+        d.fillStyle(0x5d86b8, alpha).fillCircle(0, -62, 22);
+        d.fillStyle(0xffffff, 0.7 * alpha).fillCircle(-7, -69, 6);
+        d.lineStyle(3, score, 0.7 * alpha).lineBetween(-58 * open, -4, 58, -4).lineBetween(-58 * open, 8, 58, 8);
+        return;
     }
   }
 
@@ -415,7 +493,7 @@ export class ScissorsPaperVignette implements Vignette {
     const alpha = easeOut((age - 0.36) / 0.22);
     const drift = still ? 0 : Math.sin(age * 5) * Math.exp(-age) * 9;
     for (const [x, y] of GLINTS[this.shape]) {
-      const size = (this.shape === 'star' || this.shape === 'tree' ? 16 : 11) * open;
+      const size = (this.shape === 'star' || this.shape === 'tree' || this.shape === 'crown' ? 16 : 11) * open;
       const cy = y + drift;
       polygon(g, [{ x, y: cy - size }, { x: x + size * 0.25, y: cy - size * 0.25 }, { x: x + size, y: cy },
         { x: x + size * 0.25, y: cy + size * 0.25 }, { x, y: cy + size }, { x: x - size * 0.25, y: cy + size * 0.25 },

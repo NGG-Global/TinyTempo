@@ -5,10 +5,17 @@ import { shape, slab, sparkle } from './householdArt';
 import { clamp01 } from './motion';
 import { consumed, contactPulse, FREEZE_AT, reveal } from './treatMotion';
 import { celebration } from './treatArt';
+import { slushyLook, type SlushyLook } from './slushyLooks';
 
-/** A berry slushy in a clear cup; the bent straw stays joined to the drinker's lips. */
+/** A slushy in a clear cup; the bent straw stays joined to the drinker's lips. */
 export class SlushyVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe4eee5, 0xc8e9df); }
+  /** Which flavour is poured. Chosen once from the rotation lap. */
+  private readonly look: SlushyLook;
+
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe4eee5, 0xc8e9df);
+    this.look = slushyLook(lap);
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -76,25 +83,25 @@ export class SlushyVignette extends HouseholdVignette {
   }
 
   private cup(amount: number, sip: number, now: number): void {
-    const g = this.art, x = 112, top = -49, base = 164;
+    const g = this.art, look = this.look, x = 112, top = -49, base = 164;
     const left = (y: number) => x - 82 + (y - top) / (base - top) * 25;
     const right = (y: number) => x + 82 - (y - top) / (base - top) * 25;
     shape(g, [x - 84, top, x + 84, top, x + 58, base, x - 58, base], 0xd8eee6, 0x6e9c98, 3);
     const liquidY = top + 16 + amount * (base - top - 20);
     if (amount < 0.999) {
-      shape(g, [left(liquidY) + 5, liquidY, right(liquidY) - 5, liquidY, x + 53, base - 5, x - 53, base - 5], 0xd96a92, 0xd96a92, 0);
-      g.fillStyle(0xb44078, 0.4).fillTriangle(x + 46, base - 6, right(liquidY) - 5, liquidY, right(liquidY) - 24, liquidY);
-      g.fillStyle(0xf59cba).fillEllipse(x, liquidY, right(liquidY) - left(liquidY) - 9, 24 * (1 - amount) + 5);
+      shape(g, [left(liquidY) + 5, liquidY, right(liquidY) - 5, liquidY, x + 53, base - 5, x - 53, base - 5], look.drink, look.drink, 0);
+      g.fillStyle(look.deep, 0.4).fillTriangle(x + 46, base - 6, right(liquidY) - 5, liquidY, right(liquidY) - 24, liquidY);
+      g.fillStyle(look.surface).fillEllipse(x, liquidY, right(liquidY) - left(liquidY) - 9, 24 * (1 - amount) + 5);
       for (let i = 0; i < 55; i++) {
         const yy = top + 25 + ((i * 43) % 177), xx = x + Math.sin(i * 17) * 52;
         if (yy > liquidY + 6) {
-          g.fillStyle(i % 3 ? 0xffccdd : 0xb24479, i % 3 ? 0.65 : 0.25).fillEllipse(xx, yy, 4 + i % 4, 3 + i % 3);
+          g.fillStyle(i % 3 ? look.ice : look.syrup, i % 3 ? 0.65 : 0.25).fillEllipse(xx, yy, 4 + i % 4, 3 + i % 3);
         }
       }
     }
     // A white paper straw, striped individually along its vertical and bent portions.
     g.lineStyle(12, 0xfff8e3).beginPath().moveTo(x + 18, base - 15).lineTo(x + 39, -79).lineTo(-103, -32).strokePath();
-    g.lineStyle(5, 0xd94f6b);
+    g.lineStyle(5, look.stripe);
     for (let i = 0; i < 13; i++) {
       const yy = -66 + i * 16, xx = x + 38 - (yy + 66) * 0.084;
       g.lineBetween(xx - 4, yy - 2, xx + 4, yy + 3);
@@ -106,7 +113,7 @@ export class SlushyVignette extends HouseholdVignette {
     if (sip > 0.05 && !this.still) {
       for (let i = 0; i < 3; i++) {
         const p = (now * 3 + i / 3) % 1;
-        g.fillStyle(0xf19dba).fillCircle(x + 35 - p * 235, -78 + p * 43, 3.3);
+        g.fillStyle(look.sip).fillCircle(x + 35 - p * 235, -78 + p * 43, 3.3);
       }
     }
     g.fillStyle(0xf1ffef, 0.25).fillRoundedRect(x - 62, top + 25, 16, 150, 7);
@@ -120,10 +127,34 @@ export class SlushyVignette extends HouseholdVignette {
       g.fillStyle(0xf3fffa, 0.65).fillEllipse(dx, dy, 5, 9);
       g.fillStyle(0x669b99, 0.3).fillEllipse(dx + 1, dy + 3, 3, 4);
     }
-    g.fillStyle(0xffefbd).fillCircle(x, 69, 24);
-    g.fillStyle(0xbc5776).fillEllipse(x - 6, 70, 17, 22).fillEllipse(x + 6, 70, 17, 22);
-    g.fillStyle(0x528f72).fillEllipse(x + 3, 55, 14, 6);
+    this.label(x, 69);
     if (amount >= 0.999) sparkle(g, x + 10, 12, 18, clamp01((amount - 0.95) * 20));
+  }
+
+  /** The fruit printed on the cup's cream label names the flavour at phone size. */
+  private label(x: number, y: number): void {
+    const g = this.art, { fruit, fruitInk, label } = this.look;
+    g.fillStyle(0xffefbd).fillCircle(x, y, 24);
+    if (label === 'berry') {
+      g.fillStyle(fruit).fillEllipse(x - 6, y + 1, 17, 22).fillEllipse(x + 6, y + 1, 17, 22);
+      g.fillStyle(fruitInk).fillEllipse(x + 3, y - 14, 14, 6);
+    } else if (label === 'wheel') {
+      // A cut citrus wheel: rind, pith and six segments.
+      g.fillStyle(fruitInk).fillCircle(x, y, 18);
+      g.fillStyle(0xfff6d8).fillCircle(x, y, 15);
+      g.fillStyle(fruit).fillCircle(x, y, 13);
+      g.lineStyle(2, 0xfff6d8);
+      for (let i = 0; i < 6; i++) {
+        const a = i * Math.PI / 3;
+        g.lineBetween(x, y, x + Math.cos(a) * 13, y + Math.sin(a) * 13);
+      }
+    } else {
+      for (const [dx, dy] of [[-10, -6], [0, -7], [10, -6], [-5, 3], [5, 3], [0, 12]] as const) {
+        g.fillStyle(fruit).fillCircle(x + dx, y + dy, 6.5);
+        g.fillStyle(0xffffff, 0.45).fillCircle(x + dx - 2, y + dy - 2, 2);
+      }
+      g.fillStyle(fruitInk).fillEllipse(x + 6, y - 16, 14, 6);
+    }
   }
 
   private snowflake(x: number, y: number, r: number): void {

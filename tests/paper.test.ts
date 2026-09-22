@@ -16,6 +16,16 @@ describe('paper cutting presentation', () => {
       expect(points[0]!.x).toBe(0);
       expect(points.at(-1)!.x).toBe(0);
       expect(points.every(p => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0 && p.x <= 194 && Math.abs(p.y) <= 194)).toBe(true);
+      // An opened silhouette is this half and its mirror, so the half must never cross itself.
+      const segments = [...points.slice(1).map((p, i) => [points[i]!, p] as const), [points.at(-1)!, points[0]!] as const];
+      const crosses = (a: typeof points[number], b: typeof points[number], c: typeof points[number], d: typeof points[number]) => {
+        const turn = (p: typeof a, q: typeof a, r: typeof a) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+        return turn(a, b, c) * turn(a, b, d) < 0 && turn(c, d, a) * turn(c, d, b) < 0;
+      };
+      for (let i = 0; i < segments.length; i++) for (let j = i + 2; j < segments.length; j++) {
+        if (i === 0 && j === segments.length - 1) continue;
+        expect(crosses(...segments[i]!, ...segments[j]!), `${shape} edges ${i} and ${j}`).toBe(false);
+      }
       expect(paperCutPoint(shape, -1)).toEqual(points[0]);
       expect(paperCutPoint(shape, 2)).toEqual(points.at(-1));
       for (let i = 0; i <= 100; i++) {
@@ -25,11 +35,13 @@ describe('paper cutting presentation', () => {
     }
   });
 
-  it('cuts a second set of shapes on the next lap of the rotation and comes back round', () => {
-    expect(PAPER_SHAPE_SETS).toHaveLength(2);
+  it('cuts a new set of shapes on each of the next three laps and comes back round', () => {
+    expect(PAPER_SHAPE_SETS).toHaveLength(4);
     expect(new Set(PAPER_SHAPES).size).toBe(PAPER_SHAPES.length);
     expect([1, 2, 3, 4].map(id => paperShape(id, 1))).toEqual(['butterfly', 'tree', 'tulip', 'butterfly']);
-    expect([1, 2, 3].map(id => paperShape(id, 2))).toEqual(['star', 'heart', 'angel']);
+    expect([1, 2, 3, 4].map(id => paperShape(id, 2))).toEqual(['crown', 'bell', 'mushroom', 'crown']);
+    expect([1, 2, 3, 4].map(id => paperShape(id, 3))).toEqual(['gingerbread', 'maple', 'rocket', 'gingerbread']);
+    expect([1, 2, 3].map(id => paperShape(id, 4))).toEqual(['star', 'heart', 'angel']);
     expect(paperShape(1, -1)).toBe('star');
     expect(paperShape(1, 1.9)).toBe('butterfly');
     // The first visit to the act keeps the shapes it always had; the second visit is new.
@@ -84,6 +96,9 @@ describe('paper cutting presentation', () => {
       expect(still.tilt).toBe(0);
     }
     expect(paperReveal(1, 'success', 'angel').lift).toBeGreaterThan(paperReveal(1, 'success', 'heart').lift);
+    expect(paperReveal(1, 'success', 'rocket').lift).toBeGreaterThan(paperReveal(1, 'success', 'angel').lift);
+    expect(paperReveal(1, 'success', 'mushroom').lift).toBeLessThan(paperReveal(1, 'success', 'crown').lift);
+    expect(paperReveal(0.3, 'success', 'bell').tilt).not.toBe(0);
   });
 
   it('gives the reveal an extra musical bar without shifting the next task off the downbeat', () => {
