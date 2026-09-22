@@ -1,6 +1,6 @@
 # Act variants
 
-Three acts change their look on each return visit, so the endless map does not
+Five acts change their look on each return visit, so the endless map does not
 show the same twenty scenes over and over. No registry entry was added: the
 standing rule that a new entry reassigns every level still holds, and every level
 keeps the act it had.
@@ -17,11 +17,13 @@ original look, so nothing a player has already seen changes.
 The look is fixed for the level. The paper act still cycles its shapes per task,
 but within the set the lap selected.
 
-| Act | Lap 0 | Lap 1 | Lap 2 | Data |
-| --- | --- | --- | --- | --- |
-| Bug & shoe (level 3, 23, 43…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | `src/vignettes/bugLooks.ts` |
-| Bicep curl (level 6, 26, 46…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | `src/vignettes/curlLooks.ts` |
-| Scissors & paper (level 9, 29, 49…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
+| Act | Lap 0 | Lap 1 | Lap 2 | Lap 3 | Data |
+| --- | --- | --- | --- | --- | --- |
+| Bug & shoe (level 3, 23, 43…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | Plum again | `src/vignettes/bugLooks.ts` |
+| Bicep curl (level 6, 26, 46…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | The coach again | `src/vignettes/curlLooks.ts` |
+| Scissors & paper (level 9, 29, 49…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | Butterfly set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
+| Light switch (level 12, 32, 52, 72…) | Sage salon | Morning kitchen | Green study | Rose bedroom | `src/vignettes/lightLooks.ts` |
+| Doorbell (level 13, 33, 53, 73…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | `src/vignettes/doorLooks.ts` |
 
 ## What a look may change
 
@@ -31,7 +33,7 @@ small switch in the drawing code rather than a new act:
 
 - **Bug & shoe** swaps the shell colour and its markings (sheen patch, ladybird
   head and dots, or a beetle's metallic band), and the sneaker's canvas and heel
-  tab. The drop, squash and floor are untouched.
+  tab. The drop, squash and the floor are untouched.
 - **Bicep curl** swaps skin, flush and crease tones, the singlet and its trim, and
   three features drawn per look: hair (quiff, bun or bald with a fringe), facial
   hair (moustache, full beard or none) and the chest badge. The gym, the
@@ -41,6 +43,16 @@ small switch in the drawing code rather than a new act:
   paper colour each, glint positions, and per-shape crease and detail marks in
   `drawKeepsake`. `paperReveal` gives the butterfly a faster rock and lift and
   keeps the tree on the mat; the success, partial and failure endings are shared.
+- **Light switch** keeps the floor lamp, the rocker and the five-light finale on
+  the same schedule. The cutaway behind them is a different room: the original
+  salon, a tiled kitchen, a green study, or a dusty-rose bedroom. Wallpaper,
+  window, furniture and the fitting the five bulbs hang from all swap; the lamp
+  still answers every beat, independently of the hidden interior.
+- **Doorbell** keeps the hinge, the swing, the hallway and the cat. The leaf
+  changes: four recessed panels and a brass knocker, a crimson six-panel with a
+  lion, an ochre cottage with an oval window, or navy vertical planks with a
+  letter slot. Brick and frame shift with the door so the porch reads as a
+  different house.
 
 ## Adding a look
 
@@ -50,7 +62,9 @@ cleared. Keep new records to colours and feature flags; if a variant needs new
 motion, it is a new act and needs a request.
 
 The pure modules are unit-tested under node (`tests/bug.test.ts`,
-`tests/curl.test.ts`, `tests/paper.test.ts`). In DEV, `?debug&level=23`,
-`?debug&level=26` and `?debug&level=29` open the lap 1 looks directly. The lap
-numbers move whenever an act is appended, since the rotation gets longer; the
-look a level shows is `lap % looks`, so appending never changes lap 0.
+`tests/curl.test.ts`, `tests/paper.test.ts`, `tests/light.test.ts`,
+`tests/door.test.ts`). In DEV, `?debug&level=23`, `?debug&level=26`,
+`?debug&level=29`, `?debug&level=32` and `?debug&level=33` open the lap 1 looks
+directly. The lap numbers move whenever an act is appended, since the rotation
+gets longer; the look a level shows is `lap % looks`, so appending never changes
+lap 0.

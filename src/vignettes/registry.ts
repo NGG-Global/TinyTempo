@@ -117,13 +117,13 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'light', title: 'Light switch', intro: 'Set the\nmood.', ink: HOME_INK,
     success: ['Oh,\nhello there.', 'Quite a room for one little switch.'], rough: ['Lights\nout.', 'A little more rhythm next time.'],
     endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new LightSwitchVignette(scene), sounds: context => createHouseholdSounds(context, 'light'),
+    create: (scene, lap) => new LightSwitchVignette(scene, lap), sounds: context => createHouseholdSounds(context, 'light'),
   },
   {
     id: 'doorbell', title: 'Doorbell', intro: 'Anyone\nhome?', ink: HOME_INK,
     success: ['Come\non in.', 'Someone was expecting you.'], rough: ['Nobody\nhome.', 'Try that rhythm again.'],
     endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new DoorbellVignette(scene), sounds: context => createHouseholdSounds(context, 'doorbell'),
+    create: (scene, lap) => new DoorbellVignette(scene, lap), sounds: context => createHouseholdSounds(context, 'doorbell'),
   },
   // Acts 14 to 17, appended at request: the first thirteen levels keep their acts.
   {

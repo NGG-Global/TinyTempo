@@ -44,4 +44,9 @@ saturation. The balloon's rough voice puts its crack at `BALLOON_MOTION.popAtSec
 the same instant the picture bursts, and the test finds the buffer's loudest
 sample there.
 
+The stapler sits on the pile in the pile's own oblique: a dark base, a red arm
+hinged at the rear, and a jaw that opens by `staplerJaw` (a readable rest gape,
+wider on a jam). The right face of the stack is the thickness; the pens stand
+out of the pot.
+
 In development, open `?debug&level=14` through `?debug&level=17`.
