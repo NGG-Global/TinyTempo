@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
-import type { AudioEngine } from '@/audio/AudioEngine';
+import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
@@ -1235,10 +1235,18 @@ export class PlayScene extends BaseScene {
     this.results[this.taskIndex] = result.accuracy;
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
     const contact = ending.contact;
-    this.vignette.finish(strong, contact, result.accuracy);
-    this.audio!.playFinish(contact, strong);
-    this.finishUnlock = contact + this.definition.endingSec;
     const last = this.taskIndex >= this.spec.tasks.length - 1;
+    // One decision, read twice: the words on the plaque and the coda that plays under
+    // them are the same verdict, so an act with a middle ending never says one and
+    // sounds the other.
+    const partial = this.definition.partial;
+    const outcome: FinishOutcome = strong ? 'success'
+      : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
+    this.vignette.finish(strong, contact, result.accuracy);
+    // A coda has the room to itself until the next task's downbeat; after the last task
+    // there is no next task, and it rings out under the summary.
+    this.audio!.playFinish(contact, outcome, last ? undefined : ending.next);
+    this.finishUnlock = contact + this.definition.endingSec;
     this.transition = last ? null : { ...ending, swapped: false };
     if (last) {
       this.audio!.music.setRate(1, ending.next); // back to the source tempo on the next downbeat
@@ -1247,8 +1255,8 @@ export class PlayScene extends BaseScene {
       // cleared level entirely.
       this.recordOutcome();
     }
-    const partial = this.definition.partial;
-    const copy = strong ? this.definition.success : partial && result.accuracy >= partial.minAccuracy ? partial.copy : this.definition.rough;
+    const copy = outcome === 'success' ? this.definition.success
+      : outcome === 'partial' && partial ? partial.copy : this.definition.rough;
     this.changeHeadline(copy[0]);
     this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
     this.setAction('');

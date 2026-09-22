@@ -8,8 +8,9 @@ keeps the act it had.
 ## How a look is chosen
 
 `levelSpec` exposes `lap`, the number of completed passes through the rotation
-before this level: `floor((level - 1) / VIGNETTES.length)`. With twenty acts,
-levels 1 to 20 are lap 0, 21 to 40 are lap 1, and so on. `PlayScene` passes it to
+before this level: `floor((level - 1) / VIGNETTES.length)`. With twenty-one acts,
+levels 1 to 21 are lap 0, 22 to 42 are lap 1, and so on — every act appended to the
+rotation lengthens the lap, so the level numbers below move with it. `PlayScene` passes it to
 `VignetteDefinition.create(scene, lap)`; an act with one look ignores it, an act
 with several indexes its list modulo the list's length. Lap 0 is always the
 original look, so nothing a player has already seen changes.
@@ -19,11 +20,11 @@ but within the set the lap selected.
 
 | Act | Lap 0 | Lap 1 | Lap 2 | Lap 3 | Data |
 | --- | --- | --- | --- | --- | --- |
-| Bug & shoe (level 3, 23, 43…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | Plum again | `src/vignettes/bugLooks.ts` |
-| Bicep curl (level 6, 26, 46…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | The coach again | `src/vignettes/curlLooks.ts` |
-| Scissors & paper (level 9, 29, 49…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | Butterfly set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
-| Light switch (level 12, 32, 52, 72…) | Sage salon | Morning kitchen | Green study | Rose bedroom | `src/vignettes/lightLooks.ts` |
-| Doorbell (level 13, 33, 53, 73…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | `src/vignettes/doorLooks.ts` |
+| Bug & shoe (level 3, 24, 45…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | Plum again | `src/vignettes/bugLooks.ts` |
+| Bicep curl (level 6, 27, 48…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | The coach again | `src/vignettes/curlLooks.ts` |
+| Scissors & paper (level 9, 30, 51…) | Star, heart, angel | Butterfly, fir tree, tulip | Star, heart, angel again | Butterfly set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
+| Light switch (level 12, 33, 54, 75…) | Sage salon | Morning kitchen | Green study | Rose bedroom | `src/vignettes/lightLooks.ts` |
+| Doorbell (level 13, 34, 55, 76…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | `src/vignettes/doorLooks.ts` |
 
 ## What a look may change
 

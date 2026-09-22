@@ -13,18 +13,17 @@ import { PATTERN_TIERS } from '../src/game/levels';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('trombone act', () => {
-  it('is appended as the twentieth act and keeps every earlier level', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('trombone');
-    expect(VIGNETTES).toHaveLength(20);
+  it('is the twentieth act and keeps every earlier level', () => {
+    expect(VIGNETTES[19]?.id).toBe('trombone');
     expect(levelSpec(20).vignette).toBe('trombone');
-    expect(levelSpec(40).vignette).toBe('trombone');
+    expect(levelSpec(20 + VIGNETTES.length).vignette).toBe('trombone');
     expect([1, 9, 18, 19].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'fisherman', 'scratch']);
-    expect(levelSpec(21).vignette).toBe('hammer');
-    expect(levelSpec(21).lap).toBe(1);
+    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
+    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
   });
 
   it('holds its finale for five beats, long enough for the two-second recorded endings at every tempo', () => {
-    const definition = VIGNETTES.at(-1)!;
+    const definition = VIGNETTES[19]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(TROMBONE_REVEAL_SEC);
     for (const bpm of [120, 136, 150]) {

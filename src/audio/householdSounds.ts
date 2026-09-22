@@ -1,8 +1,8 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { BUBBLE_CHAIN } from '../vignettes/householdMotion';
 
 export type HouseholdAct = 'egg' | 'bubble' | 'light' | 'doorbell';
-type Voice = keyof VignetteSounds;
+type Voice = VoiceName;
 const TAU = Math.PI * 2;
 const LENGTH: Record<HouseholdAct, Record<Voice, number>> = {
   egg: { action: 0.18, success: 1.1, rough: 0.52, scrape: 0.15, judder: 0.16 },

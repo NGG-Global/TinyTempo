@@ -1,8 +1,8 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { BALLOON_MOTION } from '../vignettes/errandMotion';
 
 export type ErrandAct = 'roller' | 'bell' | 'balloon' | 'stapler';
-type Voice = keyof VignetteSounds;
+type Voice = VoiceName;
 const TAU = Math.PI * 2;
 const LENGTH: Record<ErrandAct, Record<Voice, number>> = {
   roller: { action: 0.26, success: 1.2, rough: 0.7, scrape: 0.14, judder: 0.16 },

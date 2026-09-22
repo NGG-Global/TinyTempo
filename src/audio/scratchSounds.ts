@@ -1,7 +1,7 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { SCRATCH_MOTION } from '../vignettes/scratchMotion';
 
-type Voice = keyof VignetteSounds;
+type Voice = VoiceName;
 const TAU = Math.PI * 2;
 const LENGTH: Record<Voice, number> = { action: 0.24, success: 1.6, rough: 1.0, scrape: 0.12, judder: 0.18 };
 const decay = (t: number, rate: number) => t < 0 ? 0 : Math.exp(-t * rate);
