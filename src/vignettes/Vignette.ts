@@ -39,6 +39,12 @@ export interface VignetteDefinition {
   readonly endingSec: number;
   readonly successAccuracy: number;
   /**
+   * The action voice is scheduled on every response target as well as the demonstration.
+   * Only the trombone: every other act must keep the player's turn silent until they tap,
+   * or the ghost note would give the answer away.
+   */
+  readonly gridAction?: boolean;
+  /**
    * `lap` is how many times the rotation has come round before this level. An act with
    * several looks picks one from it; an act with a single look ignores it.
    */

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  blow, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, TROMBONE_REVEAL_SEC, tromboneFinale,
+  blow, carryNotes, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, TROMBONE_REVEAL_SEC, tromboneFinale,
 } from '../src/vignettes/tromboneMotion';
 import { synthesizeTrombone } from '../src/audio/tromboneSounds';
 import { SAMPLE_URLS } from '../src/audio/samples';
@@ -46,6 +46,18 @@ describe('trombone act', () => {
     expect([0, 1, 2, 3, 4, 5].map(noteFor)).toEqual([0, 1, 0, 1, 0, 1]);
     expect(noteFor(-1)).toBe(0);
     expect(TROMBONE_MOTION.positions).toEqual([0, 1]);
+  });
+
+  it('voices its action on the grid, unlike every earlier act', () => {
+    expect(VIGNETTES.at(-1)?.gridAction).toBe(true);
+    expect(VIGNETTES.slice(0, -1).every(act => act.gridAction !== true)).toBe(true);
+  });
+
+  it('resets the slide count on a new attempt and carries it across tasks of the same one', () => {
+    expect(carryNotes(8, 8, true)).toBe(0);
+    expect(carryNotes(8, 8, false)).toBe(16);
+    expect(carryNotes(0, 4, false)).toBe(4);
+    expect(carryNotes(0, 0, true)).toBe(0);
   });
 
   it('counts the demonstration cues before the targets, in the order the engine hands out takes', () => {

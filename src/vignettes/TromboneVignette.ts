@@ -5,7 +5,7 @@ import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import { HouseholdVignette } from './HouseholdVignette';
 import { shape, slab, sparkle } from './householdArt';
 import {
-  blow, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, tromboneFinale, type TromboneFinale,
+  blow, carryNotes, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, tromboneFinale, type TromboneFinale,
 } from './tromboneMotion';
 import { clamp01, easeOut } from './motion';
 
@@ -52,7 +52,9 @@ export class TromboneVignette extends HouseholdVignette {
   public constructor(scene: Phaser.Scene) { super(scene, 0x3f4468, 0xf2a65a); }
 
   public override reset(plan: RoundPlan): void {
-    if (this.plan && this.plan !== plan) this.notesBefore += this.actionCues(this.plan).length + this.plan.targets.length;
+    const previous = this.plan ? this.actionCues(this.plan).length + this.plan.targets.length : 0;
+    const fresh = this.phase === 'paused' || this.phase === 'idle';
+    this.notesBefore = carryNotes(this.notesBefore, previous, fresh);
     super.reset(plan);
   }
 

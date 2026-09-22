@@ -54,9 +54,15 @@ export function createRoundPlan(id: number, pattern: Pattern, bpm: number, start
 /** Entire short phrase is submitted ahead of time; no JS callback starts a demo beat. */
 export class RhythmScheduler {
   public constructor(private readonly sound: SoundSink) {}
-  public schedule(plan: RoundPlan): void {
+  /**
+   * `gridAction` also voices every response target on the grid. Most acts must not:
+   * a ghost action during the player's turn would give the answer away. The trombone
+   * is the exception — its note is the plan, not the tap.
+   */
+  public schedule(plan: RoundPlan, gridAction = false): void {
     this.cancel();
     for (const cue of plan.cues) this.sound.play(cue.time, cue.kind);
+    if (gridAction) for (const time of plan.targets) this.sound.play(time, 'action');
   }
   public cancel(): void { this.sound.cancel(); }
 }
