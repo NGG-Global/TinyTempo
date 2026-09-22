@@ -1,11 +1,11 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { recordedVoice } from './samples';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.24, scrape: 0.22, judder: 0.28, success: 0.55, rough: 0.24,
 };
 
-export function synthesizeWipe(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeWipe(sampleRate: number, kind: VoiceName): Float32Array {
   const duration = DURATION[kind];
   const data = new Float32Array(Math.ceil(sampleRate * duration));
   let seed = 731;
@@ -33,7 +33,7 @@ export function synthesizeWipe(sampleRate: number, kind: keyof VignetteSounds): 
   return data;
 }
 export function createWindowSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const data = synthesizeWipe(context.sampleRate, kind);
     const buffer = context.createBuffer(1, data.length, context.sampleRate);
     buffer.getChannelData(0).set(data);

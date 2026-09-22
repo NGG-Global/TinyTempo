@@ -28,7 +28,7 @@ multiplied out land a hair over four beats and round the phrase up to two bars. 
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
 
-Twenty vignettes rotate strictly by registry order: `levelSpec` picks
+Twenty-one vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -75,6 +75,19 @@ The DJ scratch is act 19: a hand on a record and one on the crossfader, one shor
 per beat (`scratchPush`, back in place inside 0.42 beat), the mixer's meter lit by judged
 hits, and a binary ending — hands up under the lights, or the needle skips off. Its voices
 run vinyl noise through a swept band-pass (`audio/scratchSounds.ts`). See `docs/DJ_SCRATCH.md`.
+
+The clapping hands are act 21, on the household lifecycle: one Graphics, curves in
+`clapMotion.ts`, and a five-beat hold. Each hand is laid out in its own frame and the left
+one is that frame mirrored, so the pair cannot drift apart; `roundedBox` traces the palm,
+the cuff and every crowd mitt. It is the third act with three endings from the round
+accuracy — a crowd of eleven pairs on a clean round, a scatter of three on a middling one,
+and on a rough one nobody at all, the hands turning palms up into a shrug — and the first
+whose middle ending has a voice of its own, since all four of its takes were recorded.
+**A coda can outlive the hold it plays in.** Four seconds of applause against 2.8 at the
+fastest tempo would land on the beats the player has to copy next, so `playFinish` takes
+the instant the room has to be clear by — the next task's own downbeat — and fades the coda
+under it; after the last task nothing follows and it rings out under the summary. See
+`docs/CLAPPING_HANDS.md`.
 
 The trombone is act 20 and its beat is unlike every other's. **The action voice is scheduled
 on the grid for every demonstration cue and every target when a task is placed**, and the
@@ -336,6 +349,7 @@ rather than working around it.
 | `npm run build` | Type-check, then produce the production bundle in `dist/` |
 | `npm run preview` | Serve the built bundle on port 4173 |
 | `npm run music:encode` | Premix the WAV masters to the shipped MP3 |
+| `npm run sfx:encode` | Encode the long one-shot masters in `sfx/masters/` to MP3 |
 | `npm run icons` | Cut every launcher and web icon from the 1024px master |
 | `npm run android:apk` | Build, sync and assemble a debug APK |
 | `npm run android:bundle` | Release-build, sync and produce the signed AAB Play takes |
@@ -615,9 +629,12 @@ and `ui/icons.ts` rather than drawing a card or a glyph of its own.
 The repository does ship binary audio — the WAV masters in `bgm/` and the MP3s
 encoded from them — and that is the great majority of the checkout. Only the
 premixed MP3 reaches the bundle. Sound effects are synthesized locally per vignette in
-`src/audio/`, with one exception: five acts take a *recorded* beat from `sfx/` — the
-window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors and the
-trombone's two notes and two endings, 180 KB of WAV and 150 KB of MP3 beside the 2.4 MB track. They are an enhancement over a game that already works, so
+`src/audio/`, with one exception: six acts take a *recorded* beat from `sfx/` — the
+window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors, the
+trombone's two notes and two endings, and the clap with the three rooms that answer it,
+260 KB of WAV and 340 KB of MP3 beside the 2.4 MB track. A percussive take ships as
+delivered; a coda of several seconds is kept in `sfx/masters/` and encoded by
+`npm run sfx:encode`, which is what keeps four seconds of applause from costing 1.6 MB. They are an enhancement over a game that already works, so
 `audio/samples.ts` never rejects and an act whose sample does not arrive keeps the
 synthesized voice it shipped with. See `docs/SOUND.md`.
 

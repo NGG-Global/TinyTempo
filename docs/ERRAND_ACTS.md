@@ -4,7 +4,7 @@ Four vignettes appended to the rotation at request, as acts 14 to 17. Levels 1 t
 13 keep their acts. The fisherman (`docs/FISHERMAN.md`), the DJ scratch
 (`docs/DJ_SCRATCH.md`) and the trombone (`docs/TROMBONE.md`) have since been
 appended as acts 18 to 20, so the rotation is twenty long and the variant laps
-described in `docs/VARIANTS.md` turn over every twenty levels.
+described in `docs/VARIANTS.md` turn over every twenty-one levels.
 
 | First level | Act | Each beat | Successful finale | Rough finale |
 | --- | --- | --- | --- | --- |

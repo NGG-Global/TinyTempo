@@ -1,6 +1,6 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.22, scrape: 0.18, judder: 0.24, success: 0.62, rough: 0.58,
 };
 
@@ -8,7 +8,7 @@ const DURATION: Record<keyof VignetteSounds, number> = {
  * A knife meeting a wooden board through a banana: a duller knock, soft flesh giving
  * way, almost no crunch. Deterministic and local: no encoder, no downloaded asset.
  */
-export function synthesizeBanana(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeBanana(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 3347;
   let wet = 0;
@@ -42,7 +42,7 @@ export function synthesizeBanana(sampleRate: number, kind: keyof VignetteSounds)
 }
 
 export function createBananaSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const samples = synthesizeBanana(context.sampleRate, kind);
     const buffer = context.createBuffer(1, samples.length, context.sampleRate);
     buffer.getChannelData(0).set(samples);

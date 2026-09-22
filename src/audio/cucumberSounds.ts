@@ -1,6 +1,6 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.2, scrape: 0.18, judder: 0.24, success: 0.6, rough: 0.55,
 };
 
@@ -8,7 +8,7 @@ const DURATION: Record<keyof VignetteSounds, number> = {
  * A knife meeting a wooden board through a cucumber: a short bright click, a watery
  * crunch of cell walls, and pale sap. Deterministic and local: no encoder, no asset.
  */
-export function synthesizeCucumber(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeCucumber(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 2011;
   let wet = 0;
@@ -45,7 +45,7 @@ export function synthesizeCucumber(sampleRate: number, kind: keyof VignetteSound
 }
 
 export function createCucumberSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const samples = synthesizeCucumber(context.sampleRate, kind);
     const buffer = context.createBuffer(1, samples.length, context.sampleRate);
     buffer.getChannelData(0).set(samples);

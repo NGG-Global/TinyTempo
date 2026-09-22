@@ -1,6 +1,6 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.2, scrape: 0.18, judder: 0.24, success: 0.6, rough: 0.55,
 };
 
@@ -8,7 +8,7 @@ const DURATION: Record<keyof VignetteSounds, number> = {
  * A knife meeting a wooden board: a short bright click into a dry wood body, with a
  * wet element for the tomato. Deterministic and local: no encoder, no downloaded asset.
  */
-export function synthesizeChop(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeChop(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 1289;
   let wet = 0;
@@ -48,7 +48,7 @@ export function synthesizeChop(sampleRate: number, kind: keyof VignetteSounds): 
 }
 
 export function createTomatoSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const samples = synthesizeChop(context.sampleRate, kind);
     const buffer = context.createBuffer(1, samples.length, context.sampleRate);
     buffer.getChannelData(0).set(samples);

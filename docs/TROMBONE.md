@@ -1,9 +1,10 @@
 # Trombone
 
 One vignette appended to the rotation at request, as act 20. Levels 1 to 19 keep
-their acts; the rotation is twenty long, so the variant laps described in
-`docs/VARIANTS.md` now turn over every twenty levels, and the act's own first level
-is 20.
+their acts, and the act's own first level is 20. The clapping hands
+(`docs/CLAPPING_HANDS.md`) have since been appended after it as act 21, so the
+rotation is twenty-one long and the variant laps described in `docs/VARIANTS.md`
+turn over every twenty-one levels.
 
 | Each beat | Successful finale | Rough finale |
 | --- | --- | --- |

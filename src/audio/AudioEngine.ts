@@ -5,6 +5,12 @@ import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
 
 const TONE = { count: 440, ready: 660, action: 880 } as const;
 const DURATION = 0.065;
+/**
+ * How long a coda takes to fade out when the next task needs the room. Under a beat at
+ * every tempo, so the fade belongs to the ending it closes rather than to the task after
+ * it, and long enough that applause recedes instead of being cut.
+ */
+const CODA_FADE = 0.35;
 /** A resume() that never settles (no gesture credit, blocked route) must not leave the scene waiting forever. */
 const UNLOCK_TIMEOUT_MS = 3000;
 /**
@@ -14,10 +20,27 @@ const UNLOCK_TIMEOUT_MS = 3000;
  */
 export type Voice = AudioBuffer | readonly AudioBuffer[];
 
+/** Which coda a resolved round gets. The same decision the headline is chosen from. */
+export type FinishOutcome = 'success' | 'partial' | 'rough';
+
+/**
+ * The voices every act declares, which is what each act's synthesis is written against.
+ * Named here rather than read off `VignetteSounds`, because that interface also carries
+ * the voices only some acts have: a `keyof` over it would oblige every act to synthesize
+ * a coda it does not use.
+ */
+export type VoiceName = 'action' | 'success' | 'rough' | 'scrape' | 'judder';
+
 export interface VignetteSounds {
   readonly action: Voice;
   readonly success: AudioBuffer;
   readonly rough: AudioBuffer;
+  /**
+   * The middle coda, for an act whose ending has three outcomes. Optional, and the
+   * middle falls back to `rough` without one — which is what the acts with three
+   * endings and two voices have always done.
+   */
+  readonly partial?: AudioBuffer;
   /**
    * The judgement accents: `scrape` answers a tap that hit nothing, `judder` a beat that
    * went by untapped. The action sound is scheduled before the tap is graded, so a
@@ -110,9 +133,20 @@ export class AudioEngine implements SoundSink {
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
     this.startVoice(source, envelope, start, start + DURATION);
   }
-  /** A non-scoring coda, scheduled by presentation only after the round is resolved. */
-  public playFinish(time: number, successful: boolean): void {
-    if (this.sounds) this.playBuffer(time, successful ? this.sounds.success : this.sounds.rough, 0.8);
+  /**
+   * A non-scoring coda, scheduled by presentation only after the round is resolved.
+   *
+   * `silentBy` is the instant the coda has to be out of the way: the next task's own
+   * downbeat. A recorded ending can outlast the hold it plays in — the clap's applause
+   * runs four seconds against a hold of 2.8 at the fastest tempo — and a coda still
+   * ringing there is applause over the beats the player has to copy next. It is faded
+   * rather than cut, and left to ring out when nothing follows it.
+   */
+  public playFinish(time: number, outcome: FinishOutcome, silentBy?: number): void {
+    const sounds = this.sounds;
+    if (!sounds) return;
+    const coda = outcome === 'success' ? sounds.success : outcome === 'partial' ? sounds.partial ?? sounds.rough : sounds.rough;
+    this.playBuffer(time, coda, 0.8, silentBy);
   }
   /**
    * A reaction to a grade the judge has already returned. It sits under the action
@@ -122,7 +156,7 @@ export class AudioEngine implements SoundSink {
     const buffer = this.sounds?.[kind];
     if (buffer) this.playBuffer(time, buffer, 0.5);
   }
-  private playBuffer(time: number, buffer: AudioBuffer, gain: number): void {
+  private playBuffer(time: number, buffer: AudioBuffer, gain: number, silentBy?: number): void {
     if (this.disposed) return;
     const source = this.context.createBufferSource();
     const envelope = this.context.createGain();
@@ -132,6 +166,14 @@ export class AudioEngine implements SoundSink {
     this.sources.set(source, envelope);
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
     const start = Math.max(time, this.context.currentTime);
+    if (silentBy !== undefined && Number.isFinite(silentBy) && silentBy > start) {
+      // Linear rather than exponential: an exponential ramp cannot reach zero, and this
+      // one has to, since the source is stopped on the same instant.
+      envelope.gain.setValueAtTime(gain, Math.max(start, silentBy - CODA_FADE));
+      envelope.gain.linearRampToValueAtTime(0, silentBy);
+      this.startVoice(source, envelope, start, silentBy);
+      return;
+    }
     this.startVoice(source, envelope, start);
   }
   /**

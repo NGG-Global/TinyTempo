@@ -4,8 +4,9 @@ import type { Voice } from './AudioEngine';
  * The recorded one-shots.
  *
  * Every other sound in the game is synthesized at runtime, which is what kept the download
- * to one music track. These five acts are the exception: a stomp, a snip, a grunt, two
- * wipes and a trombone's two notes and two endings, delivered as recordings, because a
+ * to one music track. These six acts are the exception: a stomp, a snip, a grunt, two
+ * wipes, a trombone's two notes and two endings, and a clap with the three rooms that
+ * answer it, delivered as recordings, because a
  * voice can be *performed* in a way a few lines of oscillator maths cannot reach. They are an enhancement over a working game, never a
  * dependency of one — a bank that fails to load leaves every act on the synthesis it
  * already had, which is why `load` resolves rather than rejects and `get` returns null.
@@ -28,6 +29,13 @@ export const SAMPLE_URLS = {
   trombone2: new URL('../../sfx/trombone-2.mp3', import.meta.url).href,
   tromboneSuccess: new URL('../../sfx/trombone-success.mp3', import.meta.url).href,
   tromboneFail: new URL('../../sfx/trombone-fail.mp3', import.meta.url).href,
+  // The clap. The beat is WAV as delivered, like every other percussive take; its three
+  // endings are four seconds of applause each, encoded from the masters in sfx/masters/
+  // by `npm run sfx:encode` for the same reason the trombone's endings are MP3.
+  clap: new URL('../../sfx/clap.wav', import.meta.url).href,
+  clapSuccess: new URL('../../sfx/clap-success.mp3', import.meta.url).href,
+  clapPartial: new URL('../../sfx/clap-partial.mp3', import.meta.url).href,
+  clapFail: new URL('../../sfx/clap-fail.mp3', import.meta.url).href,
 } as const;
 
 export type SampleName = keyof typeof SAMPLE_URLS;

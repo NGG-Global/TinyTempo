@@ -1,10 +1,10 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { recordedVoice } from './samples';
 
-const DURATION: Record<keyof VignetteSounds, number> = { action: 0.15, scrape: 0.19, judder: 0.23, success: 0.9, rough: 0.8 };
+const DURATION: Record<VoiceName, number> = { action: 0.15, scrape: 0.19, judder: 0.23, success: 0.9, rough: 0.8 };
 
 /** Dry blade contact followed by paper fibres; all five voices are synthesized locally. */
-export function synthesizePaper(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizePaper(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 7829, low = 0;
   for (let i = 0; i < data.length; i++) {
@@ -38,7 +38,7 @@ export function synthesizePaper(sampleRate: number, kind: keyof VignetteSounds):
 }
 
 export function createPaperSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const data = synthesizePaper(context.sampleRate, kind);
     const buffer = context.createBuffer(1, data.length, context.sampleRate);
     buffer.getChannelData(0).set(data);

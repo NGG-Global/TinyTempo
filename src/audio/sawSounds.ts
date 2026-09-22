@@ -1,6 +1,6 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.22, scrape: 0.2, judder: 0.26, success: 0.62, rough: 0.6,
 };
 
@@ -8,7 +8,7 @@ const DURATION: Record<keyof VignetteSounds, number> = {
  * Teeth are a band of noise rather than a tone, so every voice is shaped from one
  * seeded noise source. Deterministic and local: no encoder, no downloaded asset.
  */
-export function synthesizeSaw(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeSaw(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 977;
   let rasp = 0;
@@ -47,7 +47,7 @@ export function synthesizeSaw(sampleRate: number, kind: keyof VignetteSounds): F
 }
 
 export function createSawSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const samples = synthesizeSaw(context.sampleRate, kind);
     const buffer = context.createBuffer(1, samples.length, context.sampleRate);
     buffer.getChannelData(0).set(samples);
