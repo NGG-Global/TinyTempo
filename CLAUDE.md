@@ -28,6 +28,18 @@ multiplied out land a hair over four beats and round the phrase up to two bars. 
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
 
+**Stars are a currency the road spends.** Every area after the first is closed until the
+player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
+`PROGRESSION.starGate`): 12, 25, 39, 53, then 14 more each time, a bank rather than a
+per-area quota, so a player averaging 1.4 stars a level is never stopped and one who scrapes
+is only ever a few replays short. Nothing is stored: the collection is the sum of
+`starsFor(best)`, so save codes and merges carry it unknowingly. A cleared level is never
+held, only the uncleared frontier at a closed area's first stop. The map draws a barrier at
+each closed area's foot, the collection on the bench, and flies a finished level's new stars
+from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everything that
+reads the collection reads the shown count**, so nothing opens before the star that opens
+it has landed. See `docs/STAR_GATES.md`.
+
 Twenty-one vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New

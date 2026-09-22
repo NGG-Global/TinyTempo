@@ -27,6 +27,7 @@ import {
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress, seenDemonstration, seenReplayTip, type LevelOutcome } from '@/game/progress';
+import type { EarnedStars } from '@/game/stars';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -1472,7 +1473,13 @@ export class PlayScene extends BaseScene {
     this.replay = null;
     this.audio?.cancel();
     this.audio?.music.setRate(1, this.audio.context.currentTime);
-    this.curtain.cover(() => this.scene.start(SceneKey.Map, { focus: this.levelCleared ? this.spec.level + 1 : this.spec.level }));
+    // The stars this run added are the map's to deliver: they fly from this level's plate
+    // into the collection on the bench, and the count there does not move until they land.
+    const outcome = this.outcome;
+    const before = outcome?.bestBefore == null ? 0 : starsFor(outcome.bestBefore, this.spec);
+    const after = outcome ? starsFor(outcome.progress.best[this.spec.level] ?? 0, this.spec) : 0;
+    const earned: EarnedStars | undefined = this.levelCleared && after > before ? { level: this.spec.level, before, after } : undefined;
+    this.curtain.cover(() => this.scene.start(SceneKey.Map, { focus: this.levelCleared ? this.spec.level + 1 : this.spec.level, ...(earned ? { earned } : {}) }));
   }
   private showNoHearts(): void {
     this.starting = false;
