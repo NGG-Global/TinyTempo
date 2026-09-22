@@ -173,7 +173,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
   {
     id: 'trombone', title: 'Trombone', intro: 'Play it\nloud.', ink: ROOFTOP.ink,
     success: ['Bravo,\nmaestro.', 'The neighbours are applauding.'], rough: ['Wah\nwah.', 'The neighbours have closed the shutters.'],
-    endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70, gridAction: true,
     create: scene => new TromboneVignette(scene), sounds: createTromboneSounds,
   },
   // Act 21, appended at request: levels 1 to 20 keep their acts.

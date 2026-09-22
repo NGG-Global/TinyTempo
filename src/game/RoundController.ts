@@ -28,13 +28,21 @@ export class RoundController {
    * still on the tool, so the action voice and the vignette wait for `respond`.
    */
   private heldHit: { readonly renderNow: number } | null = null;
+  /**
+   * The trombone's action voice is the plan, not the tap. When set, targets are
+   * scheduled with the demonstration and `emitHit` does not play a second take.
+   */
+  private gridAction = false;
   private readonly scheduler: RhythmScheduler;
 
   public constructor(private readonly sound: SoundSink, private readonly events: RoundEvents) {
     this.scheduler = new RhythmScheduler(sound);
   }
   public get active(): boolean { return this.plan !== null && this.phase !== 'result' && this.phase !== 'paused'; }
-  public start(pattern: Pattern, bpm: number, renderNow: number, wallMs: number, startAt = renderNow + RHYTHM.leadSec, leadBeats = 0): void {
+  public start(
+    pattern: Pattern, bpm: number, renderNow: number, wallMs: number,
+    startAt = renderNow + RHYTHM.leadSec, leadBeats = 0, gridAction = false,
+  ): void {
     this.scheduler.cancel();
     this.plan = createRoundPlan(++this.generation, pattern, bpm, startAt, leadBeats);
     this.judge = createJudge(this.plan.targets, windowsFor(this.plan.targets));
@@ -42,7 +50,8 @@ export class RoundController {
     this.cueIndex = 0;
     this.lastPumpMs = wallMs;
     this.heldHit = null;
-    this.scheduler.schedule(this.plan);
+    this.gridAction = gridAction;
+    this.scheduler.schedule(this.plan, gridAction);
     this.setPhase('prepare');
   }
   /** Absolute time of the first demonstration beat, which is the first thing a stall can hide. */
@@ -117,7 +126,9 @@ export class RoundController {
   }
   private emitHit(renderNow: number): void {
     this.events.tap();
-    this.sound.play(renderNow, 'action');
+    // Grid-voiced acts already scheduled the take: playing again would double it and
+    // walk the engine past the note the picture is showing.
+    if (!this.gridAction) this.sound.play(renderNow, 'action');
   }
   private releaseHeldHit(): void {
     if (this.phase !== 'respond' || !this.heldHit) return;
@@ -127,4 +138,12 @@ export class RoundController {
   private setPhase(phase: Phase): void {
     if (this.phase !== phase) { this.phase = phase; this.events.phase(phase); }
   }
+}
+
+/**
+ * A pause after the last task has already been scored should reveal the plaque, not
+ * "Resume". Between tasks the phase is also `result`, but nothing has been saved yet.
+ */
+export function pauseShouldShowSummary(phase: Phase, hasOutcome: boolean): boolean {
+  return phase === 'result' && hasOutcome;
 }

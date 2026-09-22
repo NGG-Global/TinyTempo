@@ -39,6 +39,16 @@ export function soundedNotes(actionCues: readonly number[], targets: readonly nu
   return { count, lastAt };
 }
 
+/**
+ * How many notes to keep when a new plan arrives. A later task of the same attempt
+ * adds the previous task's sounding beats so the slide stays with the engine's takes.
+ * A paused or idle reset is a new attempt: the engine restarts its takes, and so must
+ * the count, or the slide opens on the wrong note.
+ */
+export function carryNotes(notesBefore: number, previousSounded: number, freshAttempt: boolean): number {
+  return freshAttempt ? 0 : notesBefore + Math.max(0, previousSounded);
+}
+
 /** The slide's travel from the last position to the new one: 0 still on the old note, 1 arrived. */
 export function slideTravel(age: number, beat = REFERENCE_BEAT): number {
   if (age < 0) return 0;

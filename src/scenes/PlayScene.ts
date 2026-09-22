@@ -13,7 +13,7 @@ import { LAYOUT } from '@/config/design';
 import { RHYTHM } from '@/config/rhythm';
 import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
-import { RoundController, type Phase } from '@/game/RoundController';
+import { RoundController, pauseShouldShowSummary, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
 import { TapInput, type Tap } from '@/input/TapInput';
@@ -592,8 +592,14 @@ export class PlayScene extends BaseScene {
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
   private async startRound(): Promise<void> {
+    const health = loadHealth();
+    const progress = loadProgress();
+    const premium = monetization().premium();
+    // An unfinished try that already spent keeps its heart: Resume and the restart puck
+    // are the same attempt. Try-again after the plaque is a new one (`outcome` is set).
+    const resumeId = this.outcome === null ? this.attemptId : null;
     // Gate before tearing anything down: a denied restart must not kill a paid run.
-    if (!canBeginAttempt(loadHealth(), loadProgress(), this.spec.level, Date.now(), monetization().premium())) {
+    if (!canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
       if (this.controller?.active) return;
       this.showNoHearts();
       return;
@@ -611,7 +617,7 @@ export class PlayScene extends BaseScene {
     this.levelCleared = false;
     this.outcome = null;
     this.saveFailed = false;
-    this.attemptId = null;
+    this.attemptId = resumeId;
     this.heartRefunded = false;
     this.emptyTracked = false;
     this.replayTipShown = this.firstEmpty = false;
@@ -677,7 +683,8 @@ export class PlayScene extends BaseScene {
         return;
       }
       // Spend only once audio is running: a failed unlock/load above never reaches here.
-      const attemptId = createAttemptId(this.spec.level);
+      // The same id is idempotent, so Resume does not take a second heart.
+      const attemptId = resumeId ?? createAttemptId(this.spec.level);
       const begun = beginAttempt(loadHealth(), loadProgress(), this.spec.level, attemptId, Date.now(), monetization().premium());
       if (!begun.ok) {
         this.audio!.music.stop();
@@ -779,7 +786,10 @@ export class PlayScene extends BaseScene {
     this.struckAt = this.extraAt = this.verdictAt = -Infinity;
     this.verdict.setAlpha(0);
     this.turnCall.setAlpha(0);
-    this.controller!.start(this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(), startAt, this.task.leadBeats);
+    this.controller!.start(
+      this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(),
+      startAt, this.task.leadBeats, this.definition.gridAction === true,
+    );
     this.vignette.reset(this.controller!.plan!);
     if (this.replayOffset !== null) {
       const plan = this.controller!.plan!;
@@ -824,6 +834,10 @@ export class PlayScene extends BaseScene {
     if (phase === 'idle' || phase === 'paused') {
       if (this.offeringHeart()) return;
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
+      if (this.outcome !== null) {
+        if (!this.summaryShown) this.showSummary();
+        return;
+      }
       if (!this.starting) void this.startRound();
       return;
     }
@@ -1604,9 +1618,16 @@ export class PlayScene extends BaseScene {
     const wasEnding = this.controller?.phase === 'result';
     const wasRunning = this.controller !== null && this.controller.phase !== 'idle';
     this.controller?.interrupt('Paused');
-    if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     this.audio?.cancel();
     this.audio?.music.stop();
+    // The last task has already been scored: reveal the plaque rather than "Resume",
+    // which would start a new try and could charge another heart for a finished run.
+    if (pauseShouldShowSummary(wasEnding ? 'result' : 'paused', this.outcome !== null)) {
+      this.vignette.pause();
+      if (!this.summaryShown) this.showSummary();
+      return;
+    }
+    if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     // Freezing the idle illustration would leave it stuck until the next round begins.
     if (wasRunning || wasStarting || wasTeaching) this.vignette.pause();
   }
