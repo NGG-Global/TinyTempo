@@ -47,6 +47,7 @@ import { SnareDrumVignette } from './SnareDrumVignette';
 import { BongosVignette } from './BongosVignette';
 import { SlushyVignette } from './SlushyVignette';
 import { AppleVignette } from './AppleVignette';
+import { APPLE_LOOKS } from './appleLooks';
 import { createTreatSounds } from '@/audio/treatSounds';
 import { TREAT_REVEAL_SEC } from './treatMotion';
 import { TREAT_INK } from './treatArt';
@@ -208,12 +209,14 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'slushy', title: 'Slushy', intro: 'Sip to\nthe beat.', ink: TREAT_INK,
     success: ['Every\nlast drop.', 'Cool to the very bottom.'], rough: ['Brain\nfreeze!', 'A little too cool for comfort.'],
     endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new SlushyVignette(scene), sounds: context => createTreatSounds(context, 'slushy'),
+    create: (scene, lap) => new SlushyVignette(scene, lap), sounds: context => createTreatSounds(context, 'slushy'),
   },
   {
     id: 'apple', title: 'Apple', intro: 'A little\ncrunch.', ink: TREAT_INK,
     success: ['To the\ncore.', 'That hit the sweet spot.'], rough: ['Oh,\nhello.', 'Someone else ordered the apple.'],
     endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new AppleVignette(scene), sounds: context => createTreatSounds(context, 'apple'),
+    create: (scene, lap) => new AppleVignette(scene, lap), sounds: context => createTreatSounds(context, 'apple'),
+    // A pear, a peach and a donut follow the apple, and each is called what it is.
+    looks: APPLE_LOOKS.map(look => look.copy),
   },
 ];

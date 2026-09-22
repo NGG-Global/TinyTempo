@@ -24,6 +24,11 @@ changes with scalloped bites instead of covering the artwork with background
 paint. Success leaves a cream core, seeds and peel at each end. Failure brings a
 segmented worm through an occluding hole.
 
+On later laps the slushy is poured in blue raspberry, lime, orange and grape
+(`slushyLooks.ts`), and the plate holds a pear, a peach and then a strawberry-iced
+donut (`appleLooks.ts`), each named on the map and in its verdict; the donut is eaten
+from one side across and draws a wasp rather than a worm. See `docs/VARIANTS.md`.
+
 `audio/treatSounds.ts` renders material sounds into the game's existing audio
 context: modal snare and bongo resonances, filtered wire noise, wood impacts,
 resonant straw suction and short clusters of apple fractures. Each action has

@@ -17,10 +17,12 @@ or consuming the player's sheet. Gameplay remains one tap anywhere per hit.
 | Below 40% | The torn sheet buckles into a crumpled scrap and drops onto the mat. |
 
 Star, heart and angel cycle deterministically by round ID, with the shape chosen
-at reset so the cutting template matches its ending. They are the first of two
-shape sets: the act's second visit (level 30, with twenty-one acts) cuts a lilac butterfly, a green fir
-tree and a pink tulip instead, and the third visit returns to the first set.
-`PAPER_SHAPE_SETS` in `paperMotion.ts` holds both; see `docs/VARIANTS.md`. `PlayScene` passes the
+at reset so the cutting template matches its ending. They are the first of four
+shape sets: with twenty-five acts, the act's second visit (level 34) cuts a lilac
+butterfly, a green fir tree and a pink tulip, the third (level 59) a gold crown, a
+blue bell and a spotted mushroom, the fourth (level 84) a gingerbread man, a maple
+leaf and a rocket, and the fifth returns to the first set. `PAPER_SHAPE_SETS` in
+`paperMotion.ts` holds all four; see `docs/VARIANTS.md`. `PlayScene` passes the
 authoritative weighted accuracy to the presentation; the new thresholds never
 change judgement, score, stars or level unlocks.
 
