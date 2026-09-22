@@ -35,14 +35,15 @@ acts are appended so the earlier levels keep theirs.
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
 stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
 
-Three acts carry more than one look. `LevelSpec.lap` counts how many times the
+Five acts carry more than one look. `LevelSpec.lap` counts how many times the
 rotation has come round before a level, PlayScene passes it to `create(scene, lap)`,
 and the act indexes its own list with it: bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
-(`curlLooks.ts`), and scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`).
-Lap 0 is always the original look, so the first twenty levels are unchanged. Add
-variety this way, as a new look inside an existing act, rather than as a registry
-entry. See `docs/VARIANTS.md`.
+(`curlLooks.ts`), scissors & paper two sets of three shapes (`PAPER_SHAPE_SETS`),
+the light switch four interiors (`lightLooks.ts`), and the doorbell four leaves
+(`doorLooks.ts`). Lap 0 is always the original look, so the first twenty levels
+are unchanged. Add variety this way, as a new look inside an existing act, rather
+than as a registry entry. See `docs/VARIANTS.md`.
 
 Scissors & paper is the ninth act. Its three cutout shapes rotate per task;
 `paperMotion.ts` derives success (70%+), partial (40–69%) and failure from the

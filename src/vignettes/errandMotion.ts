@@ -137,6 +137,17 @@ export function staplerClose(age: number, beat = REFERENCE_BEAT): number {
   return 1 - easeOut(age / (0.36 * beat));
 }
 
+/**
+ * Radians the arm sits open. Rest is a readable gape on the pile; a jam adds more.
+ * Close=1 is shut. The vignette used to take `sin` of a 0.26 rest, which left a 33 px
+ * lift on a 140 px arm and read as a collapsed red slab rather than a stapler.
+ */
+export const STAPLER_REST_RAD = 0.72;
+
+export function staplerJaw(close: number, jam = 0): number {
+  return STAPLER_REST_RAD * (1 - clamp01(close)) + Math.max(0, jam) * 0.5;
+}
+
 export interface PileFinale {
   /** 1 while the pile is still fanned; 0 once it is squared and bound. */
   readonly fan: number;

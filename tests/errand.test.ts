@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   BALLOON_MOTION, backSoonCard, balloonFinale, balloonSize, bellboyArrival, ERRAND_REVEAL_SEC, PAINT_GRID,
-  PAINT_IMAGES, paintImage, pileFinale, pumpStroke, rollerPass, rollerReturn, ROLLER_MOTION, staplerClose, stripeColumns,
+  PAINT_IMAGES, paintImage, pileFinale, pumpStroke, rollerPass, rollerReturn, ROLLER_MOTION, staplerClose, staplerJaw, STAPLER_REST_RAD, stripeColumns,
 } from '../src/vignettes/errandMotion';
 import { synthesizeErrand } from '../src/audio/errandSounds';
 import { VIGNETTES } from '../src/vignettes/registry';
@@ -69,6 +69,12 @@ describe('errand acts', () => {
     }
     expect(pumpStroke(-1)).toBe(0);
     expect(staplerClose(-1)).toBe(0);
+    // Rest is a readable gape; shut is zero; a jam opens further, never past a right angle.
+    expect(staplerJaw(1)).toBe(0);
+    expect(staplerJaw(0)).toBe(STAPLER_REST_RAD);
+    expect(staplerJaw(-4)).toBe(STAPLER_REST_RAD);
+    expect(staplerJaw(0, 1)).toBeGreaterThan(staplerJaw(0));
+    expect(staplerJaw(0, 1)).toBeLessThan(Math.PI / 2);
   });
 
   it('brings the bell boy only on success and the card only on failure', () => {
