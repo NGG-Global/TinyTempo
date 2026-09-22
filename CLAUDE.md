@@ -28,7 +28,7 @@ multiplied out land a hair over four beats and round the phrase up to two bars. 
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
 
-Twenty vignettes rotate strictly by registry order: `levelSpec` picks
+Twenty-one vignettes rotate strictly by registry order: `levelSpec` picks
 `VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
 in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
 acts are appended so the earlier levels keep theirs.
@@ -75,6 +75,19 @@ The DJ scratch is act 19: a hand on a record and one on the crossfader, one shor
 per beat (`scratchPush`, back in place inside 0.42 beat), the mixer's meter lit by judged
 hits, and a binary ending — hands up under the lights, or the needle skips off. Its voices
 run vinyl noise through a swept band-pass (`audio/scratchSounds.ts`). See `docs/DJ_SCRATCH.md`.
+
+The clapping hands are act 21, on the household lifecycle: one Graphics, curves in
+`clapMotion.ts`, and a five-beat hold. Each hand is laid out in its own frame and the left
+one is that frame mirrored, so the pair cannot drift apart; `roundedBox` traces the palm,
+the cuff and every crowd mitt. It is the third act with three endings from the round
+accuracy — a crowd of eleven pairs on a clean round, a scatter of three on a middling one,
+and on a rough one nobody at all, the hands turning palms up into a shrug — and the first
+whose middle ending has a voice of its own, since all four of its takes were recorded.
+**A coda can outlive the hold it plays in.** Four seconds of applause against 2.8 at the
+fastest tempo would land on the beats the player has to copy next, so `playFinish` takes
+the instant the room has to be clear by — the next task's own downbeat — and fades the coda
+under it; after the last task nothing follows and it rings out under the summary. See
+`docs/CLAPPING_HANDS.md`.
 
 The trombone is act 20 and its beat is unlike every other's. **The action voice is scheduled
 on the grid for every demonstration cue and every target when a task is placed**, and the
@@ -208,7 +221,16 @@ have rung up left to right and the baton has landed. That is the property to pro
 that arrives on the beat it announces arrives too late to wind up for. The stage light moves
 with it (`turnOpen` in `vignettes/motion.ts`, keyed to the plan in each act's `reset`) and is
 the only thing that does: the demonstration is still running, so nothing that consumes the
-act's subject may start there. `showPhase` sets no turn words. The first run adds one 0.75×
+act's subject may start there. `showPhase` sets no turn words. What does carry words is `turnCount` in `game/beatTrack.ts`:
+**"3", "2", "1" on the beats before the player's first target and "Go!" on the target itself**,
+under the player's own row. It is a count-in and is built as one — measured in beats back from
+`targets[0]` rather than in seconds, opening `RHYTHM.turnCountBeats` (one beat ahead of the
+runway) inside the demonstration's own bar, scheduling and sounding nothing. Its `weight` ramps
+from a quarter to full so the count is faintest where the example is still the thing to watch,
+and it sits *below the face* rather than in the verdict's band, because a tap on the downbeat is
+judged there and then and the verdict would wipe the "Go!" for the player who got it right. The
+slot is occupied from "3" onward, so "Go!" replaces the "1" in place and the property still holds.
+The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
 coral on a coral plate is invisible. See `docs/TURN_CUE.md`.
@@ -251,6 +273,36 @@ never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
 beside `seenDemonstration` in `game/progress.ts`, in one stored object that a write to
 either flag preserves whole, and neither travels in a save code.
+
+**A baked Graphics is free of rebuild cost, not of render cost.** Phaser walks a
+Graphics' whole command buffer and re-tessellates it on every frame it renders, and it
+culls nothing by bounds — `willRender` asks about visibility and alpha, never about where
+an object is. `MapScene` bakes its road once in `layout()` and used to bake it into one
+Graphics, which on a 64-level save was 82,000 commands for a world 10,700 units tall
+showing 1,560 of them: 23.6 ms of main-thread time per frame, more than the whole 60 fps
+budget, ~85% of it spent off the top and bottom of the screen. The bake is now cut into
+strips of `MAP.stripLevels` levels (`stripBounds` in `ui/navigation.ts`, which
+`tests/navigation.test.ts` pins as a true tiling — a gap is a screen-wide band of missing
+ground) and `cullStrips` draws only the strips the camera can reach, with the level
+numbers, since each `Text` carries its own texture. Two things follow for anyone editing
+the map's drawing. Each strip has a **ground layer under every strip's detail layer**, so
+the terrain of the strip above can never land on a prop standing across the seam below it.
+And within the ground layer strips are painted bottom to top, so anything that overhangs a
+seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and hangs
+down onto paint already laid; claiming by centre instead drew a row of half-alpha terrain
+motifs twice, at every seam.
+
+**`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
+work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
+frame's *height* and nothing else, and `uiScale` is `min(safe.width / 720, safe.height / 1150)`,
+which the width pins on any handset — so the map's scale, its world height and every node
+come out identical fifteen frames running. Re-baking them cost 11.8 ms a frame, 177 ms of
+main-thread work per collapse, to redraw geometry byte for byte the same as what was
+already on screen. `MapScene.bakeKey` is every value the bake reads and nothing else (the
+frame's height is deliberately not in it), and the bake is skipped when it has not moved.
+Like any field holding scene state, **it is assigned in `build()`**: a second entry makes
+fresh, empty strips, and a key left over from the first would skip the one bake that fills
+them.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
@@ -297,6 +349,7 @@ rather than working around it.
 | `npm run build` | Type-check, then produce the production bundle in `dist/` |
 | `npm run preview` | Serve the built bundle on port 4173 |
 | `npm run music:encode` | Premix the WAV masters to the shipped MP3 |
+| `npm run sfx:encode` | Encode the long one-shot masters in `sfx/masters/` to MP3 |
 | `npm run icons` | Cut every launcher and web icon from the 1024px master |
 | `npm run android:apk` | Build, sync and assemble a debug APK |
 | `npm run android:bundle` | Release-build, sync and produce the signed AAB Play takes |
@@ -411,7 +464,7 @@ src/
     BootScene.ts       Input tuning, orientation guard
     PreloadScene.ts    Texture generation and font registration
     MenuScene.ts       Title; owns the first audio gesture
-    MapScene.ts        The endless road, rendered as a bounded window
+    MapScene.ts        The endless road: a bounded window, baked into culled strips
     PlayScene.ts       One level: hosts a vignette, never judges
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
@@ -576,9 +629,12 @@ and `ui/icons.ts` rather than drawing a card or a glyph of its own.
 The repository does ship binary audio — the WAV masters in `bgm/` and the MP3s
 encoded from them — and that is the great majority of the checkout. Only the
 premixed MP3 reaches the bundle. Sound effects are synthesized locally per vignette in
-`src/audio/`, with one exception: five acts take a *recorded* beat from `sfx/` — the
-window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors and the
-trombone's two notes and two endings, 180 KB of WAV and 150 KB of MP3 beside the 2.4 MB track. They are an enhancement over a game that already works, so
+`src/audio/`, with one exception: six acts take a *recorded* beat from `sfx/` — the
+window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors, the
+trombone's two notes and two endings, and the clap with the three rooms that answer it,
+260 KB of WAV and 340 KB of MP3 beside the 2.4 MB track. A percussive take ships as
+delivered; a coda of several seconds is kept in `sfx/masters/` and encoded by
+`npm run sfx:encode`, which is what keeps four seconds of applause from costing 1.6 MB. They are an enhancement over a game that already works, so
 `audio/samples.ts` never rejects and an act whose sample does not arrive keeps the
 synthesized voice it shipped with. See `docs/SOUND.md`.
 

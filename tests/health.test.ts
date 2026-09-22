@@ -252,6 +252,18 @@ describe('countdown display', () => {
 });
 
 describe('duplicate calls', () => {
+  it('lets a spent attempt resume at zero remaining hearts without charging again', () => {
+    const spent = beginAttempt(full({ hearts: 1 }), ROAD, 6, 'run', T0).health;
+    expect(spent.hearts).toBe(0);
+    expect(canBeginAttempt(spent, ROAD, 6, T0)).toBe(false);
+    expect(canBeginAttempt(spent, ROAD, 6, T0, false, 'run')).toBe(true);
+    expect(canBeginAttempt(spent, ROAD, 6, T0, false, 'other')).toBe(false);
+    const again = beginAttempt(spent, ROAD, 6, 'run', T0);
+    expect(again.ok).toBe(true);
+    expect(again.health.hearts).toBe(0);
+    expect(again.health.spentAttempt).toBe('run');
+  });
+
   it('spends only once for the same attempt id', () => {
     const first = beginAttempt(full(), ROAD, 6, 'a', T0);
     const again = beginAttempt(first.health, ROAD, 6, 'a', T0 + 5_000);

@@ -1,7 +1,7 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { recordedVoice } from './samples';
 
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.24, scrape: 0.26, judder: 0.28, success: 0.7, rough: 0.8,
 };
 
@@ -10,7 +10,7 @@ const DURATION: Record<keyof VignetteSounds, number> = {
  * seeded noise source and a few decaying sines. Deterministic and local: no encoder, no
  * downloaded asset.
  */
-export function synthesizeCurl(sampleRate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeCurl(sampleRate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(sampleRate * DURATION[kind]));
   let seed = 613;
   let breath = 0;
@@ -59,7 +59,7 @@ export function synthesizeCurl(sampleRate: number, kind: keyof VignetteSounds): 
 }
 
 export function createCurlSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds): AudioBuffer => {
+  const make = (kind: VoiceName): AudioBuffer => {
     const data = synthesizeCurl(context.sampleRate, kind);
     const buffer = context.createBuffer(1, data.length, context.sampleRate);
     buffer.getChannelData(0).set(data);

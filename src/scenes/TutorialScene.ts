@@ -261,7 +261,7 @@ export class TutorialScene extends BaseScene {
     // bent on a miss. Contact is a moment ahead so the swing has room to wind up.
     const contact = now + 0.28;
     this.illustration.finish(verdict === 'clear', contact);
-    this.audio.playFinish(contact, verdict === 'clear');
+    this.audio.playFinish(contact, verdict === 'clear' ? 'success' : 'rough');
     this.controller?.dispose();
   }
 

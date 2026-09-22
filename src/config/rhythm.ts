@@ -16,6 +16,16 @@ export const RHYTHM = {
    * densest patterns it may crowd, which is why it is a knob rather than a literal.
    */
   runwayBeats: 2,
+  /**
+   * How many numerals count the player into their turn: "3", "2", "1" on the beats
+   * before their first target, and "Go!" on the target itself.
+   *
+   * One more than `runwayBeats`, deliberately. The block's own cue opens two beats out;
+   * the count opens a beat ahead of it so the first numeral is a heads-up rather than
+   * another thing arriving at the same moment as the baton. Nothing is scheduled and
+   * nothing sounds — the numerals land on beats the plan already carries.
+   */
+  turnCountBeats: 3,
   pumpMs: 20,
   stallMs: 250,
   /**

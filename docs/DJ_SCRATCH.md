@@ -2,7 +2,8 @@
 
 One vignette appended to the rotation at request, as act 19. Levels 1 to 18 keep
 their acts, and the act's own first level is 19. The trombone (`docs/TROMBONE.md`)
-has since been appended after it as act 20.
+and the clapping hands (`docs/CLAPPING_HANDS.md`) have since been appended after it
+as acts 20 and 21.
 
 | Each beat | Successful finale | Rough finale |
 | --- | --- | --- |

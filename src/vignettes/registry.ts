@@ -40,6 +40,9 @@ import { SCRATCH_REVEAL_SEC } from './scratchMotion';
 import { TromboneVignette, ROOFTOP } from './TromboneVignette';
 import { createTromboneSounds } from '@/audio/tromboneSounds';
 import { TROMBONE_REVEAL_SEC } from './tromboneMotion';
+import { ClappingHandsVignette, ROOM } from './ClappingHandsVignette';
+import { createClapSounds } from '@/audio/clapSounds';
+import { CLAP_MOTION, CLAP_REVEAL_SEC } from './clapMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -170,7 +173,16 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
   {
     id: 'trombone', title: 'Trombone', intro: 'Play it\nloud.', ink: ROOFTOP.ink,
     success: ['Bravo,\nmaestro.', 'The neighbours are applauding.'], rough: ['Wah\nwah.', 'The neighbours have closed the shutters.'],
-    endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70, gridAction: true,
     create: scene => new TromboneVignette(scene), sounds: createTromboneSounds,
+  },
+  // Act 21, appended at request: levels 1 to 20 keep their acts.
+  {
+    id: 'clap', title: 'Clapping hands', intro: 'Give them\na hand.', ink: ROOM.ink,
+    success: ['Take a\nbow.', 'The whole room is clapping.'],
+    partial: { minAccuracy: CLAP_MOTION.partialAccuracy, copy: ['A polite\nripple.', 'A few of them are clapping.'] },
+    rough: ['Search\nme.', 'Nobody is quite sure what that was.'],
+    endingSec: CLAP_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: CLAP_MOTION.successAccuracy,
+    create: scene => new ClappingHandsVignette(scene), sounds: createClapSounds,
   },
 ];

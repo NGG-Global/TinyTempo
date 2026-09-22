@@ -8,8 +8,8 @@ to 5 keep the vignettes they had and the curl is every sixth level from 6 on.
 ## Visual direction and controls
 
 The coach described below is the first of three people who take the bench. On the
-act's second visit (level 26, with twenty acts in the rotation) a sprinter in a plum singlet lifts, with a high bun
-and a star badge; on the third (level 40) a bald, bearded veteran in amber with two
+act's second visit (level 27, with twenty-one acts in the rotation) a sprinter in a plum singlet lifts, with a high bun
+and a star badge; on the third (level 48) a bald, bearded veteran in amber with two
 racing stripes. `src/vignettes/curlLooks.ts` holds the three as data; the figure,
 its motion and the gym are shared. See `docs/VARIANTS.md`.
 

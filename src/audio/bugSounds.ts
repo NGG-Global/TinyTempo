@@ -1,10 +1,10 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { recordedVoice } from './samples';
-const DURATION: Record<keyof VignetteSounds, number> = {
+const DURATION: Record<VoiceName, number> = {
   action: 0.2, scrape: 0.22, judder: 0.24, success: 0.55, rough: 0.55,
 };
 
-export function synthesizeStomp(rate: number, kind: keyof VignetteSounds): Float32Array {
+export function synthesizeStomp(rate: number, kind: VoiceName): Float32Array {
   const data = new Float32Array(Math.ceil(rate * DURATION[kind]));
   let seed = 409;
   let grit = 0;
@@ -31,7 +31,7 @@ export function synthesizeStomp(rate: number, kind: keyof VignetteSounds): Float
   return data;
 }
 export function createBugSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: keyof VignetteSounds) => {
+  const make = (kind: VoiceName) => {
     const data = synthesizeStomp(context.sampleRate, kind);
     const buffer = context.createBuffer(1, data.length, context.sampleRate);
     buffer.getChannelData(0).set(data);

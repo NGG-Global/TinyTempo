@@ -210,9 +210,13 @@ export function attemptCostsHeart(progress: Progress, level: number): boolean {
 
 export function canBeginAttempt(
   health: Health, progress: Progress, level: number, now: number = Date.now(), premium = false,
+  attemptId: string | null = null,
 ): boolean {
   if (premium || !attemptCostsHeart(progress, level)) return true;
-  return reconcile(health, now).hearts > 0;
+  const live = reconcile(health, now);
+  // Resume / restart of a try that already spent: the heart is this attempt's, even at 0.
+  if (attemptId !== null && live.spentAttempt === attemptId) return true;
+  return live.hearts > 0;
 }
 
 /** Local `YYYY-MM-DD`, so a daily heart resets at the player's midnight, not UTC. */

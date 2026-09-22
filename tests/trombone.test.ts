@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  blow, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, TROMBONE_REVEAL_SEC, tromboneFinale,
+  blow, carryNotes, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, TROMBONE_REVEAL_SEC, tromboneFinale,
 } from '../src/vignettes/tromboneMotion';
 import { synthesizeTrombone } from '../src/audio/tromboneSounds';
 import { SAMPLE_URLS } from '../src/audio/samples';
@@ -13,18 +13,17 @@ import { PATTERN_TIERS } from '../src/game/levels';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('trombone act', () => {
-  it('is appended as the twentieth act and keeps every earlier level', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('trombone');
-    expect(VIGNETTES).toHaveLength(20);
+  it('is the twentieth act and keeps every earlier level', () => {
+    expect(VIGNETTES[19]?.id).toBe('trombone');
     expect(levelSpec(20).vignette).toBe('trombone');
-    expect(levelSpec(40).vignette).toBe('trombone');
+    expect(levelSpec(20 + VIGNETTES.length).vignette).toBe('trombone');
     expect([1, 9, 18, 19].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'fisherman', 'scratch']);
-    expect(levelSpec(21).vignette).toBe('hammer');
-    expect(levelSpec(21).lap).toBe(1);
+    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
+    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
   });
 
   it('holds its finale for five beats, long enough for the two-second recorded endings at every tempo', () => {
-    const definition = VIGNETTES.at(-1)!;
+    const definition = VIGNETTES[19]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(TROMBONE_REVEAL_SEC);
     for (const bpm of [120, 136, 150]) {
@@ -46,6 +45,18 @@ describe('trombone act', () => {
     expect([0, 1, 2, 3, 4, 5].map(noteFor)).toEqual([0, 1, 0, 1, 0, 1]);
     expect(noteFor(-1)).toBe(0);
     expect(TROMBONE_MOTION.positions).toEqual([0, 1]);
+  });
+
+  it('voices its action on the grid, unlike every earlier act', () => {
+    expect(VIGNETTES.at(-1)?.gridAction).toBe(true);
+    expect(VIGNETTES.slice(0, -1).every(act => act.gridAction !== true)).toBe(true);
+  });
+
+  it('resets the slide count on a new attempt and carries it across tasks of the same one', () => {
+    expect(carryNotes(8, 8, true)).toBe(0);
+    expect(carryNotes(8, 8, false)).toBe(16);
+    expect(carryNotes(0, 4, false)).toBe(4);
+    expect(carryNotes(0, 0, true)).toBe(0);
   });
 
   it('counts the demonstration cues before the targets, in the order the engine hands out takes', () => {

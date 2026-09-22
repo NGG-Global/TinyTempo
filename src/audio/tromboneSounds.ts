@@ -1,7 +1,7 @@
-import type { VignetteSounds } from './AudioEngine';
+import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { recordedVoice, samples } from './samples';
 
-type Voice = keyof VignetteSounds | 'note2';
+type Voice = VoiceName | 'note2';
 const TAU = Math.PI * 2;
 const LENGTH: Record<Voice, number> = { action: 0.42, note2: 0.42, success: 1.6, rough: 1.4, scrape: 0.16, judder: 0.3 };
 const decay = (t: number, rate: number) => t < 0 ? 0 : Math.exp(-t * rate);

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
-import type { AudioEngine } from '@/audio/AudioEngine';
+import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
@@ -13,13 +13,13 @@ import { LAYOUT } from '@/config/design';
 import { RHYTHM } from '@/config/rhythm';
 import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
-import { RoundController, type Phase } from '@/game/RoundController';
+import { RoundController, pauseShouldShowSummary, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Handover, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, GO_HOLD_BEATS, handover, markFor, trackGeometry, turnCount, type Handover, type Mark } from '@/game/beatTrack';
 import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
@@ -44,7 +44,7 @@ import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { VIGNETTES } from '@/vignettes/registry';
 import type { Vignette } from '@/vignettes/Vignette';
-import { easeOut } from '@/vignettes/motion';
+import { clamp01, easeOut } from '@/vignettes/motion';
 
 /**
  * The first-run demonstration pass: one whole cycle at a teaching tempo, played by the
@@ -228,11 +228,16 @@ export class PlayScene extends BaseScene {
   private trackY = 0;
   private trackWidth = 0;
   private verdictY = 0;
+  private turnCallY = 0;
   private struckIndex = -1;
   private struckAt = -Infinity;
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
+  /** The count into the player's turn: "3 2 1 Go!", in the free band under the face. */
+  private turnCall!: Phaser.GameObjects.Text;
+  /** The numeral currently rasterised, so the beat pays for `setText` and nothing else does. */
+  private turnCalled: number | null = null;
   private headlineColour = SHELL.cream;
   private sequence: TaskSequence | null = null;
   /** Beat-aligned table slide between tasks; the next task and the music's new tempo both start at `next`. */
@@ -302,6 +307,7 @@ export class PlayScene extends BaseScene {
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.turnCall = display(this, '', { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.taskMarks = this.add.graphics().setDepth(11);
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
@@ -357,6 +363,18 @@ export class PlayScene extends BaseScene {
     this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    // Under the player's row, not in the verdict's band above the shelf. The two would
+    // otherwise want the same line at the same instant: a tap landing on the downbeat is
+    // judged there and then, so the verdict would wipe the "Go!" for exactly the player
+    // who got it right. Below the face is also the furthest point on the screen from the
+    // act, which is where a count-in belongs — it is counting the player in, not narrating
+    // the example. The band is free for it because the action block is hidden for the
+    // whole of a task: `setAction('')` on both `prepare` and `respond`, which is every
+    // phase the count can appear in. A resize leaves the numeral dressed at the old
+    // scale, so the cache is dropped and the next beat re-dresses it.
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCall.setPosition(safe.centerX, this.turnCallY);
+    this.turnCalled = null;
     this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
@@ -574,8 +592,14 @@ export class PlayScene extends BaseScene {
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
   private async startRound(): Promise<void> {
+    const health = loadHealth();
+    const progress = loadProgress();
+    const premium = monetization().premium();
+    // An unfinished try that already spent keeps its heart: Resume and the restart puck
+    // are the same attempt. Try-again after the plaque is a new one (`outcome` is set).
+    const resumeId = this.outcome === null ? this.attemptId : null;
     // Gate before tearing anything down: a denied restart must not kill a paid run.
-    if (!canBeginAttempt(loadHealth(), loadProgress(), this.spec.level, Date.now(), monetization().premium())) {
+    if (!canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
       if (this.controller?.active) return;
       this.showNoHearts();
       return;
@@ -593,7 +617,7 @@ export class PlayScene extends BaseScene {
     this.levelCleared = false;
     this.outcome = null;
     this.saveFailed = false;
-    this.attemptId = null;
+    this.attemptId = resumeId;
     this.heartRefunded = false;
     this.emptyTracked = false;
     this.replayTipShown = this.firstEmpty = false;
@@ -659,7 +683,8 @@ export class PlayScene extends BaseScene {
         return;
       }
       // Spend only once audio is running: a failed unlock/load above never reaches here.
-      const attemptId = createAttemptId(this.spec.level);
+      // The same id is idempotent, so Resume does not take a second heart.
+      const attemptId = resumeId ?? createAttemptId(this.spec.level);
       const begun = beginAttempt(loadHealth(), loadProgress(), this.spec.level, attemptId, Date.now(), monetization().premium());
       if (!begun.ok) {
         this.audio!.music.stop();
@@ -760,7 +785,11 @@ export class PlayScene extends BaseScene {
     this.struckIndex = -1;
     this.struckAt = this.extraAt = this.verdictAt = -Infinity;
     this.verdict.setAlpha(0);
-    this.controller!.start(this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(), startAt, this.task.leadBeats);
+    this.turnCall.setAlpha(0);
+    this.controller!.start(
+      this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(),
+      startAt, this.task.leadBeats, this.definition.gridAction === true,
+    );
     this.vignette.reset(this.controller!.plan!);
     if (this.replayOffset !== null) {
       const plan = this.controller!.plan!;
@@ -805,6 +834,10 @@ export class PlayScene extends BaseScene {
     if (phase === 'idle' || phase === 'paused') {
       if (this.offeringHeart()) return;
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
+      if (this.outcome !== null) {
+        if (!this.summaryShown) this.showSummary();
+        return;
+      }
       if (!this.starting) void this.startRound();
       return;
     }
@@ -1090,6 +1123,7 @@ export class PlayScene extends BaseScene {
     // the band: the moment the last beat lands is exactly when a player wants to read it.
     if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) {
       this.roomDim.setAlpha(0);
+      this.turnCall.setAlpha(0);
       return;
     }
     const { safe } = this.viewport;
@@ -1138,9 +1172,57 @@ export class PlayScene extends BaseScene {
         else g.lineStyle(2.5 * s, ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
+    this.drawTurnCall(plan, now);
     // The workshop steps back as the turn arrives, so the block comes forward without
     // anything on it having to get brighter.
     this.roomDim.setAlpha(turn.yours * 0.17);
+  }
+
+  /**
+   * The count into the player's turn, under their own row: "3", "2", "1" on the beats
+   * before their first target and "Go!" on the target itself.
+   *
+   * The block already says all of this, and says it early — but it says it in colour,
+   * position and motion, and a player meeting it for the first time has nothing to hold
+   * on to while it happens. Testers were still missing the downbeat with the whole
+   * handover in front of them. A count-in is the one form of this everybody already
+   * knows, so it is added as a count-in rather than as a label: on the grid and at the
+   * thumb, under the row it is counting the player onto, so it reinforces where to look
+   * instead of adding a second place to look. It sits below the face rather than in the
+   * verdict's band above the shelf, because the two want the same line at the same
+   * instant — a tap on the downbeat is judged there and then, and the verdict would wipe
+   * the "Go!" for exactly the player who got it right.
+   *
+   * Two things keep it off the example. It is weighted — quiet at "3", where the
+   * demonstration is still the thing to watch, and full only at "Go!", where the
+   * demonstration is over. And the slot is occupied from the first numeral onward, so
+   * "Go!" *replaces* the "1" in place rather than arriving on the beat it announces:
+   * the block's property still holds, and by the downbeat nothing new appears.
+   */
+  private drawTurnCall(plan: RoundPlan | null, now: number): void {
+    const call = plan && turnCount(plan, now);
+    if (!plan || !call) {
+      if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
+      return;
+    }
+    const s = this.uiScale;
+    const go = call.count === 0;
+    if (call.count !== this.turnCalled) {
+      this.turnCalled = call.count;
+      // setFontSize re-measures and re-rasterises, so the size is paid once per beat.
+      this.turnCall.setText(go ? 'Go!' : String(call.count));
+      resize(this.turnCall, (34 + 18 * call.weight) * s, go ? PALETTE.coral : this.definition.ink);
+    }
+    const beat = 60 / plan.bpm;
+    const still = this.reducedMotion;
+    // A landing rather than an entrance: the numeral takes the knock of the beat it sits
+    // on and settles inside it, so the motion is the pulse and not a second event.
+    const punch = still ? 0 : squash(call.age, beat * 0.5, 0.16);
+    // The "Go!" leaves rather than blinking out, over the back of its own hold.
+    const leaving = go && !still
+      ? 1 - clamp01((call.age - beat * GO_HOLD_BEATS * 0.45) / (beat * GO_HOLD_BEATS * 0.55))
+      : 1;
+    this.turnCall.setAlpha((0.42 + 0.58 * call.weight) * leaving).setScale(1 + punch);
   }
 
   /**
@@ -1167,10 +1249,18 @@ export class PlayScene extends BaseScene {
     this.results[this.taskIndex] = result.accuracy;
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
     const contact = ending.contact;
-    this.vignette.finish(strong, contact, result.accuracy);
-    this.audio!.playFinish(contact, strong);
-    this.finishUnlock = contact + this.definition.endingSec;
     const last = this.taskIndex >= this.spec.tasks.length - 1;
+    // One decision, read twice: the words on the plaque and the coda that plays under
+    // them are the same verdict, so an act with a middle ending never says one and
+    // sounds the other.
+    const partial = this.definition.partial;
+    const outcome: FinishOutcome = strong ? 'success'
+      : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
+    this.vignette.finish(strong, contact, result.accuracy);
+    // A coda has the room to itself until the next task's downbeat; after the last task
+    // there is no next task, and it rings out under the summary.
+    this.audio!.playFinish(contact, outcome, last ? undefined : ending.next);
+    this.finishUnlock = contact + this.definition.endingSec;
     this.transition = last ? null : { ...ending, swapped: false };
     if (last) {
       this.audio!.music.setRate(1, ending.next); // back to the source tempo on the next downbeat
@@ -1179,8 +1269,8 @@ export class PlayScene extends BaseScene {
       // cleared level entirely.
       this.recordOutcome();
     }
-    const partial = this.definition.partial;
-    const copy = strong ? this.definition.success : partial && result.accuracy >= partial.minAccuracy ? partial.copy : this.definition.rough;
+    const copy = outcome === 'success' ? this.definition.success
+      : outcome === 'partial' && partial ? partial.copy : this.definition.rough;
     this.changeHeadline(copy[0]);
     this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
     this.setAction('');
@@ -1528,9 +1618,16 @@ export class PlayScene extends BaseScene {
     const wasEnding = this.controller?.phase === 'result';
     const wasRunning = this.controller !== null && this.controller.phase !== 'idle';
     this.controller?.interrupt('Paused');
-    if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     this.audio?.cancel();
     this.audio?.music.stop();
+    // The last task has already been scored: reveal the plaque rather than "Resume",
+    // which would start a new try and could charge another heart for a finished run.
+    if (pauseShouldShowSummary(wasEnding ? 'result' : 'paused', this.outcome !== null)) {
+      this.vignette.pause();
+      if (!this.summaryShown) this.showSummary();
+      return;
+    }
+    if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     // Freezing the idle illustration would leave it stuck until the next round begins.
     if (wasRunning || wasStarting || wasTeaching) this.vignette.pause();
   }

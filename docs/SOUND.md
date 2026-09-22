@@ -1,7 +1,7 @@
 # Recorded beats
 
-Five acts take a recorded beat instead of a synthesized one. Everything else in the
-game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these five
+Six acts take a recorded beat instead of a synthesized one. Everything else in the
+game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these six
 keeps its synthesized voice as the fallback.
 
 | Act | File | Voice |
@@ -11,6 +11,7 @@ keeps its synthesized voice as the fallback.
 | Bicep curl | `sfx/grunt.wav` | one take |
 | Scissors & paper | `sfx/scissors.wav` | one take |
 | Trombone | `sfx/trombone-1.mp3`, `sfx/trombone-2.mp3` | two takes, alternated |
+| Clapping hands | `sfx/clap.wav` | one take |
 
 Only the **beat** changes for the first four: success, rough, scrape and judder are still
 synthesized, so a level's reactions are unchanged. The trombone is the exception on that
@@ -18,10 +19,23 @@ too: its success and rough voices are the delivered `sfx/trombone-success.mp3` a
 `sfx/trombone-fail.mp3`, because a fanfare and a "wah wah" were performed for it, and the
 synthesized fanfare and sagging note in `tromboneSounds.ts` are only the fallback.
 
+The clap goes furthest: all three of its endings were performed, so `sfx/clap-success.mp3`,
+`sfx/clap-partial.mp3` and `sfx/clap-fail.mp3` are a full house, a scattered few and a
+shrug with nobody behind it. It is the only act with a recording for the *middle* ending,
+which is why `VignetteSounds.partial` exists — it is optional, and an act with three
+endings and two voices still plays `rough` in the middle, as scissors & paper and the
+fisherman always have.
+
+Its endings are also the only ones longer than the hold they play in: four seconds of
+applause against 2.8 at the fastest tempo. `AudioEngine.playFinish` takes the instant the
+coda has to be clear by — the next task's own downbeat — and fades it out under that, so
+applause never lands on the beats the player has to copy next. After the last task there
+is no next task and it rings out under the summary.
+
 ## What this costs
 
-180 KB of WAV, beside the 2.4 MB music track — about 8% on top of what the game already
-downloads. They ride the same route as the music: files outside `public/`, referenced
+260 KB of WAV and 340 KB of MP3, beside the 2.4 MB music track and the 3.7 MB title
+theme. They ride the same route as the music: files outside `public/`, referenced
 through `import.meta.url` so Vite hashes and emits them, and served from local storage in
 the Android WebView.
 
@@ -55,6 +69,10 @@ A recorded one-shot carries whatever silence sat in front of the take. As delive
 | `trombone-2.mp3` | 0.02 ms |
 | `trombone-success.mp3` | 0.0 ms |
 | `trombone-fail.mp3` | 0.0 ms |
+| `clap.wav` | 0.00 ms |
+| `clap-success` master | 27.9 ms |
+| `clap-fail` master | 70.7 ms |
+| `clap-partial` master | 114.5 ms |
 
 A beat sound is scheduled *on* the grid, so that silence is not padding — it is lateness.
 25 ms against a 55 ms Perfect window would be charged to every demonstration beat, and
@@ -62,6 +80,13 @@ then to the player copying what they heard: they would tap where the sound was, 
 where the grid is, and lose Perfects for it. The whole `AudioClock` design exists to put a
 tap on the sample the player is hearing; shipping a beat whose attack is 25 ms behind its
 own cue would give that back.
+
+The three clap figures are measured on the WAV masters, before encoding; the shipped MP3s
+carry whatever delay their encoder adds on top of that, which has not been measured here
+because nothing in this repository decodes MP3. It does not need to be: those three are
+codas rather than beats, they are never scheduled on the grid, and `trimToAttack` drops
+whatever lead the decoder reports in any case. The one clap that *is* on the grid is
+`clap.wav`, which starts on its first frame.
 
 `trimToAttack` drops the lead at decode. Nothing else about the sound changes — this is
 alignment, not a mix decision, and it is the same thing `MusicSystem` already does to the
@@ -117,6 +142,10 @@ whoever makes that call next:
 | `scissors.wav` | −2.8 dBFS | −28.5 dB |
 | `trombone-1.mp3` | −0.03 dBFS | −14.9 dB |
 | `trombone-2.mp3` | −0.8 dBFS | −16.3 dB |
+| `clap.wav` | −0.07 dBFS | −17.3 dB |
+| `clap-fail` master | −1.0 dBFS | −16.0 dB |
+| `clap-success` master | −1.4 dBFS | −17.8 dB |
+| `clap-partial` master | −0.7 dBFS | −27.5 dB |
 | `trombone-success.mp3` | −2.0 dBFS | −19.5 dB |
 | `trombone-fail.mp3` | 0.0 dBFS | −16.8 dB |
 
@@ -127,6 +156,20 @@ gain. That will be audible against the music bed before it is audible in isolati
 is not something a headless browser can settle. It wants a listen on a handset, and then
 either a re-export or a per-sample gain.
 
-Three of the five (`grunt`, `shoe`, `scissors`) are dual-mono — identical channels — so
-folding them to mono would halve their share of the download losslessly. Not done, because
-it edits the delivered file for 61 KB.
+Four of the takes (`grunt`, `shoe`, `scissors`, `clap`) are dual-mono — identical channels
+— so folding them to mono would halve their share of the download losslessly. Not done,
+because it edits the delivered files for 100 KB.
+
+The clap's partial take is around 10 dB quieter than its success take, which is the point:
+a scatter of applause is not a full house. It is the same judgement as the spread above,
+and it wants the same listen on a handset.
+
+## Masters, and what ships
+
+A percussive take ships exactly as delivered. A coda of several seconds does not: as WAV
+the clap's three endings are 1.6 MB, two thirds of the music track, and as MP3 they are
+184 KB. So those three live in `sfx/masters/` as the delivered WAV — the source of truth,
+referenced by nothing and therefore never bundled — and `npm run sfx:encode` writes the
+MP3s beside the other one-shots. It is the arrangement the music already uses, on the same
+pure-JavaScript encoder, and it is the same trade the trombone's endings made when they
+arrived as MP3.

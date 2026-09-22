@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RoundController, type RoundEvents } from '../src/game/RoundController';
+import { RoundController, pauseShouldShowSummary, type RoundEvents } from '../src/game/RoundController';
 import { parsePattern } from '../src/rhythm/patterns';
 import { RHYTHM } from '../src/config/rhythm';
 
@@ -128,6 +128,32 @@ describe('round lifecycle', () => {
     expect(round.result).toBeNull();
     expect(events.judgement).not.toHaveBeenCalled();
     expect(events.interrupted).toHaveBeenCalledTimes(1);
+  });
+  it('voices grid-action targets at schedule time and does not double them on tap', () => {
+    const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
+    const sound = { play: vi.fn(), cancel: vi.fn() };
+    const round = new RoundController(sound, events);
+    round.start(parsePattern('p', 'X X - X'), 100, 0, 0, RHYTHM.leadSec, RHYTHM.leadInBeats, true);
+    const plan = round.plan!;
+    expect(sound.play).toHaveBeenCalledTimes(plan.cues.length + plan.targets.length);
+    expect(sound.play.mock.calls.filter(call => call[0] === plan.targets[0] && call[1] === 'action').length).toBe(1);
+    let now = 0;
+    const advance = (until: number) => {
+      while (now + 0.02 < until) { now += 0.02; round.tick(now, now * 1000); }
+      now = until; round.tick(now, now * 1000);
+    };
+    for (const target of plan.targets) {
+      advance(target);
+      expect(round.tap(target, target, target * 1000)?.grade).toBe('Perfect');
+    }
+    expect(events.tap).toHaveBeenCalledTimes(plan.targets.length);
+    expect(sound.play).toHaveBeenCalledTimes(plan.cues.length + plan.targets.length);
+  });
+  it('reveals the plaque after a scored result, not between tasks', () => {
+    expect(pauseShouldShowSummary('result', true)).toBe(true);
+    expect(pauseShouldShowSummary('result', false)).toBe(false);
+    expect(pauseShouldShowSummary('respond', true)).toBe(false);
+    expect(pauseShouldShowSummary('paused', true)).toBe(false);
   });
   it('restarts repeatedly and ignores input from old attempts', () => {
     const { round, advance, events } = setup();

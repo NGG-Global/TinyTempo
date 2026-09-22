@@ -9,6 +9,8 @@ import { createCucumberSounds } from '../src/audio/cucumberSounds';
 import { createBananaSounds } from '../src/audio/bananaSounds';
 import { createWindowSounds } from '../src/audio/windowSounds';
 import { createPaperSounds } from '../src/audio/paperSounds';
+import { createClapSounds } from '../src/audio/clapSounds';
+import { createScratchSounds } from '../src/audio/scratchSounds';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -23,7 +25,10 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
     destination = {};
     close = close;
     createGain() {
-      return { gain: { value: 1 }, connect: vi.fn((target: object) => target), disconnect: vi.fn() };
+      return {
+        gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+        connect: vi.fn((target: object) => target), disconnect: vi.fn(),
+      };
     }
     createBuffer(_channels: number, length: number) {
       return { getChannelData: () => new Float32Array(length) };
@@ -43,7 +48,7 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
   const buffers = createImpactBuffers(engine.context);
   engine.setSounds({ action: buffers.hit, success: buffers.flush, rough: buffers.bent, scrape: buffers.skid, judder: buffers.dead });
   engine.play(12, 'action');
-  engine.playFinish(12.5, true);
+  engine.playFinish(12.5, 'success');
   expect(nodes[0]!.start).toHaveBeenCalledWith(12);
   expect(nodes[1]!.start).toHaveBeenCalledWith(12.5);
   expect(engine.activeSources).toBe(2);
@@ -55,7 +60,7 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
     expect(node.disconnect).toHaveBeenCalledTimes(1);
     expect(node.onended).toBeNull();
   }
-  engine.playFinish(13, false);
+  engine.playFinish(13, 'rough');
   nodes[2]!.onended!();
   expect(engine.activeSources).toBe(0);
   await engine.music.load();
@@ -246,4 +251,65 @@ it('synthesizes the hammer accents as sound rather than silence', () => {
     expect(peak, `${kind} peak`).toBeGreaterThan(0.05);
     expect(samples.every(Number.isFinite), `${kind} finite`).toBe(true);
   }
+});
+
+/**
+ * A coda is the one voice that can outlive the task it belongs to: the clap's applause is
+ * four seconds against a hold of under three at the fastest tempo. It is faded out before
+ * the next task's downbeat, and left to ring out when nothing follows it.
+ */
+it('plays the middle coda where an act has one, and clears the room before the next task', () => {
+  const sources: { buffer: AudioBuffer | null; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn> }[] = [];
+  const gains: { setValueAtTime: ReturnType<typeof vi.fn>; linearRampToValueAtTime: ReturnType<typeof vi.fn> }[] = [];
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 10;
+    state = 'running';
+    sampleRate = 8000;
+    destination = {};
+    close = vi.fn(() => Promise.resolve());
+    createGain() {
+      const gain = { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() };
+      gains.push(gain);
+      return { gain, connect: vi.fn((target: object) => target), disconnect: vi.fn() };
+    }
+    createBuffer(_channels: number, length: number) {
+      return { length, getChannelData: () => new Float32Array(length) };
+    }
+    createBufferSource() {
+      const node = {
+        buffer: null, connect: vi.fn((target: object) => target), start: vi.fn(), stop: vi.fn(),
+        disconnect: vi.fn(), onended: null as (() => void) | null,
+      };
+      sources.push(node);
+      return node;
+    }
+  });
+  const engine = new AudioEngine();
+  const clap = createClapSounds(engine.context);
+  engine.setSounds(clap);
+
+  // The middle ending has its own recording, and the deadline is the next task's downbeat.
+  engine.playFinish(12, 'partial', 14);
+  expect(sources[0]!.buffer).toBe(clap.partial);
+  expect(sources[0]!.start).toHaveBeenCalledWith(12);
+  expect(sources[0]!.stop).toHaveBeenCalledWith(14);
+  // The last gain built is the coda's own envelope; the first is the engine's master.
+  const envelope = gains.at(-1)!;
+  expect(envelope.linearRampToValueAtTime).toHaveBeenCalledWith(0, 14);
+  const fadeFrom = envelope.setValueAtTime.mock.calls[0]![1] as number;
+  expect(fadeFrom).toBeGreaterThan(12);
+  expect(fadeFrom).toBeGreaterThanOrEqual(13.5); // under a beat at every tempo the game runs
+  expect(fadeFrom).toBeLessThan(14);
+
+  // After the last task there is no next task: the applause rings out under the summary.
+  engine.playFinish(16, 'success');
+  expect(sources[1]!.buffer).toBe(clap.success);
+  expect(sources[1]!.stop).not.toHaveBeenCalled();
+
+  // An act with three endings and two voices keeps the behaviour it shipped with.
+  const scratch = createScratchSounds(engine.context);
+  engine.setSounds(scratch);
+  engine.playFinish(18, 'partial');
+  expect(sources.at(-1)!.buffer).toBe(scratch.rough);
+  engine.dispose();
 });
