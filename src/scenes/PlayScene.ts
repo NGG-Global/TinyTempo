@@ -19,7 +19,7 @@ import type { RoundResult } from '@/game/scoring';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Handover, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, GO_HOLD_BEATS, handover, markFor, trackGeometry, turnCount, type Handover, type Mark } from '@/game/beatTrack';
 import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
@@ -44,7 +44,7 @@ import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { VIGNETTES } from '@/vignettes/registry';
 import type { Vignette } from '@/vignettes/Vignette';
-import { easeOut } from '@/vignettes/motion';
+import { clamp01, easeOut } from '@/vignettes/motion';
 
 /**
  * The first-run demonstration pass: one whole cycle at a teaching tempo, played by the
@@ -228,11 +228,16 @@ export class PlayScene extends BaseScene {
   private trackY = 0;
   private trackWidth = 0;
   private verdictY = 0;
+  private turnCallY = 0;
   private struckIndex = -1;
   private struckAt = -Infinity;
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
+  /** The count into the player's turn: "3 2 1 Go!", in the free band under the face. */
+  private turnCall!: Phaser.GameObjects.Text;
+  /** The numeral currently rasterised, so the beat pays for `setText` and nothing else does. */
+  private turnCalled: number | null = null;
   private headlineColour = SHELL.cream;
   private sequence: TaskSequence | null = null;
   /** Beat-aligned table slide between tasks; the next task and the music's new tempo both start at `next`. */
@@ -302,6 +307,7 @@ export class PlayScene extends BaseScene {
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.turnCall = display(this, '', { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.taskMarks = this.add.graphics().setDepth(11);
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
@@ -357,6 +363,18 @@ export class PlayScene extends BaseScene {
     this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    // Under the player's row, not in the verdict's band above the shelf. The two would
+    // otherwise want the same line at the same instant: a tap landing on the downbeat is
+    // judged there and then, so the verdict would wipe the "Go!" for exactly the player
+    // who got it right. Below the face is also the furthest point on the screen from the
+    // act, which is where a count-in belongs — it is counting the player in, not narrating
+    // the example. The band is free for it because the action block is hidden for the
+    // whole of a task: `setAction('')` on both `prepare` and `respond`, which is every
+    // phase the count can appear in. A resize leaves the numeral dressed at the old
+    // scale, so the cache is dropped and the next beat re-dresses it.
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCall.setPosition(safe.centerX, this.turnCallY);
+    this.turnCalled = null;
     this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
@@ -760,6 +778,7 @@ export class PlayScene extends BaseScene {
     this.struckIndex = -1;
     this.struckAt = this.extraAt = this.verdictAt = -Infinity;
     this.verdict.setAlpha(0);
+    this.turnCall.setAlpha(0);
     this.controller!.start(this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(), startAt, this.task.leadBeats);
     this.vignette.reset(this.controller!.plan!);
     if (this.replayOffset !== null) {
@@ -1090,6 +1109,7 @@ export class PlayScene extends BaseScene {
     // the band: the moment the last beat lands is exactly when a player wants to read it.
     if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) {
       this.roomDim.setAlpha(0);
+      this.turnCall.setAlpha(0);
       return;
     }
     const { safe } = this.viewport;
@@ -1138,9 +1158,57 @@ export class PlayScene extends BaseScene {
         else g.lineStyle(2.5 * s, ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
+    this.drawTurnCall(plan, now);
     // The workshop steps back as the turn arrives, so the block comes forward without
     // anything on it having to get brighter.
     this.roomDim.setAlpha(turn.yours * 0.17);
+  }
+
+  /**
+   * The count into the player's turn, under their own row: "3", "2", "1" on the beats
+   * before their first target and "Go!" on the target itself.
+   *
+   * The block already says all of this, and says it early — but it says it in colour,
+   * position and motion, and a player meeting it for the first time has nothing to hold
+   * on to while it happens. Testers were still missing the downbeat with the whole
+   * handover in front of them. A count-in is the one form of this everybody already
+   * knows, so it is added as a count-in rather than as a label: on the grid and at the
+   * thumb, under the row it is counting the player onto, so it reinforces where to look
+   * instead of adding a second place to look. It sits below the face rather than in the
+   * verdict's band above the shelf, because the two want the same line at the same
+   * instant — a tap on the downbeat is judged there and then, and the verdict would wipe
+   * the "Go!" for exactly the player who got it right.
+   *
+   * Two things keep it off the example. It is weighted — quiet at "3", where the
+   * demonstration is still the thing to watch, and full only at "Go!", where the
+   * demonstration is over. And the slot is occupied from the first numeral onward, so
+   * "Go!" *replaces* the "1" in place rather than arriving on the beat it announces:
+   * the block's property still holds, and by the downbeat nothing new appears.
+   */
+  private drawTurnCall(plan: RoundPlan | null, now: number): void {
+    const call = plan && turnCount(plan, now);
+    if (!plan || !call) {
+      if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
+      return;
+    }
+    const s = this.uiScale;
+    const go = call.count === 0;
+    if (call.count !== this.turnCalled) {
+      this.turnCalled = call.count;
+      // setFontSize re-measures and re-rasterises, so the size is paid once per beat.
+      this.turnCall.setText(go ? 'Go!' : String(call.count));
+      resize(this.turnCall, (34 + 18 * call.weight) * s, go ? PALETTE.coral : this.definition.ink);
+    }
+    const beat = 60 / plan.bpm;
+    const still = this.reducedMotion;
+    // A landing rather than an entrance: the numeral takes the knock of the beat it sits
+    // on and settles inside it, so the motion is the pulse and not a second event.
+    const punch = still ? 0 : squash(call.age, beat * 0.5, 0.16);
+    // The "Go!" leaves rather than blinking out, over the back of its own hold.
+    const leaving = go && !still
+      ? 1 - clamp01((call.age - beat * GO_HOLD_BEATS * 0.45) / (beat * GO_HOLD_BEATS * 0.55))
+      : 1;
+    this.turnCall.setAlpha((0.42 + 0.58 * call.weight) * leaving).setScale(1 + punch);
   }
 
   /**

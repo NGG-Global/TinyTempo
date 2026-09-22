@@ -26,7 +26,7 @@ import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
-import { resizedScroll, scrollStep } from '@/ui/navigation';
+import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
@@ -45,10 +45,56 @@ const MAP = {
    * on every entry and re-laid them out on every resize.
    */
   window: 48, history: 20,
+  /**
+   * The world is baked into strips of this many levels, and a strip the camera cannot
+   * see is not drawn at all.
+   *
+   * Baking a Graphics buys freedom from *rebuild* cost, not from *render* cost: Phaser
+   * walks a Graphics' whole command buffer and re-tessellates it on every frame it is
+   * rendered, and it culls nothing by bounds. One Graphics holding the whole road was
+   * 82,000 commands for a world 10,700 units tall showing 1,560 of them, and cost 25 ms
+   * of main-thread time per frame — the entire 60 fps budget, ~85% of it spent on
+   * geometry off the top and bottom of the screen.
+   */
+  stripLevels: 3,
+  /**
+   * How far above its own row a terrain motif, a plaque or a road dash may stand.
+   *
+   * Strips are baked bottom to top, so anything that overhangs a seam has to overhang
+   * *downward*, into a strip already painted, or the strip above paints over it. Each of
+   * those three is therefore claimed by the strip holding its topmost extent rather than
+   * its centre, and this is that extent. Props are exempt: they are in the detail layer,
+   * which every strip's ground is drawn before.
+   */
+  overhang: { motif: 24, plaque: 42 },
+  /**
+   * How far outside the camera a strip is still drawn. It has to clear the tallest thing
+   * a strip can carry past its own edge, which is a prop: 128 design units at up to 1.36
+   * scale, so roughly 175.
+   */
+  cullMargin: 260,
   /** The frontier puck hops once a bar at the game's own tempo. */
   hopSec: 1.6,
   sign: { width: 340, height: 92, top: 26, ropeInset: 40 },
 } as const;
+
+/**
+ * One baked slice of the world, and the node indices it owns.
+ *
+ * Two layers rather than one, because a strip must never paint over its neighbour: every
+ * strip's `ground` is drawn before any strip's `detail`, so the terrain of the strip
+ * above cannot land on top of a prop standing across the boundary below it.
+ */
+interface Strip {
+  readonly ground: Phaser.GameObjects.Graphics;
+  readonly detail: Phaser.GameObjects.Graphics;
+  /** Node indices, `to` exclusive. Strips are level-aligned, so nothing has to be clipped. */
+  readonly from: number;
+  readonly to: number;
+  /** The band this strip covers, from `stripBounds`. `top` is the smaller y: the road climbs. */
+  top: number;
+  bottom: number;
+}
 
 /**
  * Endless, scrollable road of levels grouped into themed areas. Pure presentation of
@@ -56,7 +102,9 @@ const MAP = {
  *
  * Everything except the frontier puck, the tap ripple and a live press is baked in
  * `layout()`, so the depth work — the raised road, cast shadows, terrain and scenery —
- * costs nothing per frame. The header is a sign hung over the road and the footer a
+ * is never rebuilt per frame. It is not free per frame, though, which is what `MAP.stripLevels`
+ * is about: the bake is split into strips and only the strips the camera can see are
+ * drawn. The header is a sign hung over the road and the footer a
  * bench with the next level's block on it; both are fixed to the camera and drawn in
  * screen space, since a Container cannot hold a scroll factor.
  */
@@ -67,7 +115,7 @@ export class MapScene extends BaseScene {
   /** Lowest level rendered. Node i is level `first + i`. */
   private first = 1;
   private firstBand = 0;
-  private world!: Phaser.GameObjects.Graphics;
+  private strips: Strip[] = [];
   private pulse!: Phaser.GameObjects.Graphics;
   private touch!: Phaser.GameObjects.Graphics;
   private glow!: Phaser.GameObjects.Image;
@@ -116,6 +164,13 @@ export class MapScene extends BaseScene {
   private curtain!: SceneCurtain;
   private footerTop = 0;
   private lastHeight = 0;
+  /**
+   * What the baked world is a function of, so a resize that cannot have changed it does
+   * not redraw it. Assigned in `build()`, never merely initialised: a second entry into
+   * the scene makes fresh, empty strips, and a key left over from the first would skip
+   * the one bake that fills them.
+   */
+  private bakeKey = '';
   private feedbackAt = -Infinity;
   private lockedIndex = -1;
   private frontierIndex = -1;
@@ -180,7 +235,16 @@ export class MapScene extends BaseScene {
     this.shown = Math.min(top, this.first + MAP.window - 1) - this.first + 1;
     // Bands are addressed absolutely, because the window rarely starts on a band edge.
     this.firstBand = Math.floor((this.first - 1) / PROGRESSION.areaSize);
-    this.world = this.add.graphics().setDepth(1);
+    this.bakeKey = '';
+    // Ground under every strip's detail, so a strip cannot paint over its neighbour. The
+    // bands are filled in by `layout()`, which is where the world gets its size.
+    this.strips = Array.from({ length: Math.max(1, Math.ceil(this.shown / MAP.stripLevels)) }, (_, j) => ({
+      ground: this.add.graphics().setDepth(0),
+      detail: this.add.graphics().setDepth(1),
+      from: j * MAP.stripLevels,
+      to: Math.min(this.shown, (j + 1) * MAP.stripLevels),
+      top: 0, bottom: 0,
+    }));
     // The frontier puck lives here, under the numbers, so it can hop without a baked copy beneath.
     this.pulse = this.add.graphics().setDepth(3);
     this.touch = this.add.graphics().setDepth(5);
@@ -260,21 +324,44 @@ export class MapScene extends BaseScene {
     this.hudHeight = safe.top + 144 * s;
     this.footerTop = safe.bottom - 210 * s;
     this.worldHeight = (MAP.topPad + MAP.bottomPad + (this.shown - 1) * MAP.step) * s + this.hudHeight;
-    // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
-    this.nodes = Array.from({ length: this.shown }, (_, i) => ({
-      x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
-      y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
-    }));
-    // The road runs one span past the last node so it leaves the frame rather than stopping.
-    const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
-    this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
-    const g = this.world.clear();
-    this.drawTerrain(g, s);
-    this.drawRoad(g, s);
-    this.drawScenery(g, s);
-    this.drawPlaques(g, s);
-    this.drawNodes(g, s);
-    this.drawGate(g, s);
+    // Everything the bake reads, and nothing else. The height of the frame is not in it,
+    // which is the point: `layout()` runs on every resize, and on Android the commonest
+    // resize by far is Chrome collapsing its URL bar — one event per frame of the
+    // animation, changing the height and nothing more. `uiScale` is
+    // `min(safe.width / 720, safe.height / 1150)`, which the width pins on any handset, so
+    // the road's scale, its world height and every node come out identical. Re-baking them
+    // cost 11.8 ms a frame for fifteen frames — 177 ms of main-thread work per collapse,
+    // to redraw geometry byte for byte the same as what was already on screen.
+    const key = [s, this.worldHeight, full.x, full.width, safe.left, safe.right, safe.centerX, safe.width, this.first, this.shown].join('|');
+    if (key !== this.bakeKey) {
+      this.bakeKey = key;
+      // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
+      this.nodes = Array.from({ length: this.shown }, (_, i) => ({
+        x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
+        y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
+      }));
+      // The road runs one span past the last node so it leaves the frame rather than stopping.
+      const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
+      this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
+      // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
+      // clipped: every node, prop and road span belongs whole to one strip, and only the
+      // terrain — the one thing that fills rather than sits — is cut at the seam.
+      const bounds = stripBounds(this.shown, MAP.stripLevels, this.worldHeight, i => this.nodes[i]!.y, MAP.step * s);
+      this.strips.forEach((strip, j) => {
+        strip.top = bounds[j]!.top;
+        strip.bottom = bounds[j]!.bottom;
+      });
+      this.frontierIndex = -1;
+      for (const strip of this.strips) {
+        this.drawTerrain(strip.ground.clear(), s, strip);
+        const g = strip.detail.clear();
+        this.drawRoad(g, s, strip);
+        this.drawScenery(g, s, strip);
+        this.drawPlaques(g, s, strip);
+        this.drawNodes(g, s, strip);
+      }
+      this.drawGate(s);
+    }
     const size = Math.max(full.width, full.height) * 1.25;
     this.glow.setPosition(full.x + full.width * 0.38, full.y + full.height * 0.34).setDisplaySize(size, size)
       .setTint(mix(0xf6e6bc, areaOf(this.progress.unlocked).area.sky, 0.4));
@@ -291,6 +378,37 @@ export class MapScene extends BaseScene {
     this.drag = null;
     this.velocity = 0;
     this.clampScroll();
+    this.cullStrips();
+  }
+
+  /**
+   * Which strips and numbers are drawn at all, from the camera's own window.
+   *
+   * Phaser culls nothing by bounds — `willRender` asks about visibility and alpha, never
+   * about where an object is — so an off-screen Graphics is walked and re-tessellated in
+   * full every frame unless something says not to. This is that something, and it is the
+   * whole point of the strips. The numbers ride along because each `Text` carries its own
+   * texture, and a texture bind is the draw-call cost this project's conventions warn
+   * about; 48 of them for the eight that are on screen is the same waste in another form.
+   */
+  private cullStrips(): void {
+    const height = this.viewport.full.height;
+    const margin = MAP.cullMargin * this.uiScale;
+    const top = this.scrollY - margin;
+    const bottom = this.scrollY + height + margin;
+    for (const strip of this.strips) {
+      const on = stripInView(strip, this.scrollY, height, margin);
+      if (strip.ground.visible !== on) { strip.ground.setVisible(on); strip.detail.setVisible(on); }
+    }
+    for (let i = 0; i < this.numbers.length; i++) {
+      const y = this.nodes[i]?.y ?? 0;
+      const on = y > top && y < bottom;
+      if (this.numbers[i]!.visible !== on) this.numbers[i]!.setVisible(on);
+    }
+    for (const title of this.areaTitles) {
+      const on = title.y > top && title.y < bottom;
+      if (title.visible !== on) title.setVisible(on);
+    }
   }
 
   /**
@@ -314,9 +432,18 @@ export class MapScene extends BaseScene {
   }
 
   /** Ground, haze up each area, a soft blend at every boundary, and per-area texture. */
-  private drawTerrain(g: Phaser.GameObjects.Graphics, s: number): void {
+  private drawTerrain(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     const { full } = this.viewport;
     const size = PROGRESSION.areaSize;
+    // Every fill here is a full-width band, so cutting one to the strip is a clamp on y.
+    // The band's own geometry is unchanged — only the painted rectangle is cut — which is
+    // what keeps the haze ramp and the boundary blend reading across a seam.
+    const fill = (colour: number, alpha: number, y: number, h: number): void => {
+      const t = Math.max(y, strip.top);
+      const b = Math.min(y + h, strip.bottom);
+      if (b <= t) return;
+      g.fillStyle(colour, alpha).fillRect(full.x, t, full.width, b - t);
+    };
     for (let k = 0; k < this.areaTitles.length; k++) {
       const band = this.band(k);
       const area = band.area;
@@ -326,15 +453,14 @@ export class MapScene extends BaseScene {
       const top = isLast ? 0 : last.y - MAP.step * s / 2;
       const bottom = band.atBottom ? this.worldHeight : first.y + MAP.step * s / 2;
       const height = bottom - top;
-      g.fillStyle(area.ground).fillRect(full.x, top, full.width, height);
+      fill(area.ground, 1, top, height);
       // Atmospheric recession: the far end of a band hazes toward its own sky colour.
       for (let b = 0; b < MAP.hazeBands; b++) {
         const t = b / MAP.hazeBands;
         const bandTop = top + height * t * 0.55;
-        g.fillStyle(mix(area.ground, area.sky, 0.32 * (1 - t)), 1);
-        g.fillRect(full.x, bandTop, full.width, height * 0.55 / MAP.hazeBands + 1);
+        fill(mix(area.ground, area.sky, 0.32 * (1 - t)), 1, bandTop, height * 0.55 / MAP.hazeBands + 1);
       }
-      this.drawTexture(g, area, this.firstBand + k, top, bottom, s);
+      this.drawTexture(g, area, this.firstBand + k, top, bottom, s, strip);
       if (!isLast) {
         const next = areaOf((this.firstBand + k + 1) * size + 1).area;
         const blend = MAP.blendHeight * s;
@@ -343,30 +469,39 @@ export class MapScene extends BaseScene {
           const t = b / MAP.blendBands;
           // t = 0 is the boundary itself, so it starts on the neighbour's ground and
           // walks back into this area's. The other way round paints a slab.
-          g.fillStyle(mix(next.ground, hazed, t), 1);
-          g.fillRect(full.x, top + blend * t, full.width, blend / MAP.blendBands + 1);
+          fill(mix(next.ground, hazed, t), 1, top + blend * t, blend / MAP.blendBands + 1);
         }
       }
     }
   }
 
   /** Plaques are drawn after the scenery, or a prop lands on top of the name. */
-  private drawPlaques(g: Phaser.GameObjects.Graphics, s: number): void {
+  private drawPlaques(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     for (let k = 0; k < this.areaTitles.length; k++) {
       const band = this.band(k);
       const first = this.nodes[band.from]!;
-      this.placePlaque(g, band.area, band.name, k, band.atBottom ? this.worldHeight : first.y + MAP.step * s / 2, s);
+      const bottom = band.atBottom ? this.worldHeight : first.y + MAP.step * s / 2;
+      // A plaque belongs to one strip, not to every strip its band crosses: claimed by
+      // its top, half-open, as `MAP.overhang` sets out.
+      const claim = bottom - (72 + MAP.overhang.plaque) * s;
+      if (claim < strip.top || claim >= strip.bottom) continue;
+      this.placePlaque(g, band.area, band.name, k, bottom, s);
     }
   }
 
   /** A quiet repeating motif per area, so a band reads as ground rather than paint. */
-  private drawTexture(g: Phaser.GameObjects.Graphics, area: Area, band: number, top: number, bottom: number, s: number): void {
+  private drawTexture(g: Phaser.GameObjects.Graphics, area: Area, band: number, top: number, bottom: number, s: number, strip: Strip): void {
     const kind = band % 5;
     const ink = shade(area.ground, -0.14);
     const pale = shade(area.ground, 0.16);
     const rows = Math.max(1, Math.floor((bottom - top) / (76 * s)));
     for (let r = 0; r < rows; r++) {
       const y = bottom - (r + 0.5) * (bottom - top) / rows;
+      // Rows are keyed to the band, not the strip, so the motif does not shift at a seam.
+      // Claimed by the strip holding the row's *top* — see `MAP.overhang` — and half-open,
+      // or a row on a seam is painted by both strips and its half-alpha slabs double up.
+      const claim = y - MAP.overhang.motif * s;
+      if (claim < strip.top || claim >= strip.bottom) continue;
       const jitter = MapScene.noise(band * 97 + r);
       for (let c = 0; c < 5; c++) {
         const x = this.viewport.full.x + (c + 0.5 + (MapScene.noise(band * 31 + r * 7 + c) - 0.5) * 0.6) * this.viewport.full.width / 5;
@@ -441,7 +576,7 @@ export class MapScene extends BaseScene {
   }
 
   /** The ribbon: a cast shadow, a casing, the surface, a top sheen and dashed markings. */
-  private drawRoad(g: Phaser.GameObjects.Graphics, s: number): void {
+  private drawRoad(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     const width = MAP.roadWidth * s;
     const outline = STYLE.current.outline * s * 0.55;
     const stroke = (path: readonly Point[], w: number, colour: number, alpha: number, dy = 0): void => {
@@ -451,12 +586,16 @@ export class MapScene extends BaseScene {
       g.strokePath();
     };
     const shadow = castShadow(6);
-    stroke(this.road, width + 10 * s, 0x1a1410, shadow.alpha, shadow.dy * s);
+    // The shadow is one continuous path per strip, abutting its neighbours on a shared
+    // point rather than overlapping them: it is the only stroke here drawn at an alpha
+    // below 1, so a doubled segment at a seam would read as a dark tick under the road.
+    const shadowTo = strip.to >= this.shown ? this.road.length : strip.to * MAP.smoothing + 1;
+    stroke(this.road.slice(strip.from * MAP.smoothing, shadowTo), width + 10 * s, 0x1a1410, shadow.alpha, shadow.dy * s);
     // One stretch per level. A span that crosses an area boundary is split at its
     // midpoint, which is exactly where the ground changes, so surface and terrain
     // change on the same line instead of a node apart.
     const slices: [readonly Point[], number][] = [];
-    for (let i = 0; i < this.shown; i++) {
+    for (let i = strip.from; i < strip.to; i++) {
       const from = Math.max(0, i * MAP.smoothing - 1);
       const to = i * MAP.smoothing + MAP.smoothing + 1;
       const here = areaOf(this.first + i).area.road;
@@ -476,14 +615,18 @@ export class MapScene extends BaseScene {
       stroke(slice, width * 0.42, f.rim, 0.45, -width * 0.24);
     }
     for (const [from, to] of dashes(this.road, 26 * s, 30 * s)) {
+      // Spaced along the whole road so the rhythm of the dashes never breaks at a seam,
+      // then claimed by the strip holding the dash's upper end — `to`, since the road
+      // climbs — so a dash across a seam hangs down onto a surface already laid.
+      if (to.y < strip.top || to.y >= strip.bottom) continue;
       g.lineStyle(4 * s, 0xffffff, 0.45).lineBetween(from.x, from.y, to.x, to.y);
     }
   }
 
   /** Props beside the road, each with a cast shadow. The shadows are the depth. */
-  private drawScenery(g: Phaser.GameObjects.Graphics, s: number): void {
+  private drawScenery(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     const { safe } = this.viewport;
-    for (let i = 0; i < this.shown; i++) {
+    for (let i = strip.from; i < strip.to; i++) {
       const node = this.nodes[i]!;
       const y = node.y - MAP.step * s * 0.5;
       const roadX = this.roadXAt(y);
@@ -627,9 +770,10 @@ export class MapScene extends BaseScene {
   }
 
   /** Raised pucks with cast shadows, a star plate under each cleared one and a padlock under each locked one. */
-  private drawNodes(g: Phaser.GameObjects.Graphics, s: number): void {
-    this.frontierIndex = -1;
-    for (let i = 0; i < this.shown; i++) {
+  private drawNodes(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
+    // `frontierIndex` is reset by the caller: each node is visited by exactly one strip,
+    // so a reset here would clear whatever an earlier strip had found.
+    for (let i = strip.from; i < strip.to; i++) {
       const level = this.first + i;
       const { area } = areaOf(level);
       const node = this.nodes[i]!;
@@ -654,17 +798,21 @@ export class MapScene extends BaseScene {
    * Destination at the end of the reachable stretch: a lock and a reason to come back,
    * with greyed preview levels continuing above it so the road does not clip off.
    */
-  private drawGate(g: Phaser.GameObjects.Graphics, s: number): void {
+  private drawGate(s: number): void {
     const lastReachable = this.progress.unlocked + PROGRESSION.mapLookahead;
     const i = lastReachable - this.first;
     let y: number | null = null;
     if (i >= 0 && i < this.shown - 1) y = (this.nodes[i]!.y + this.nodes[i + 1]!.y) / 2;
     else if (i === this.shown - 1) y = this.nodes[i]!.y - MAP.step * s / 2;
     else if (i === -1 && this.shown > 0) y = this.nodes[0]!.y + MAP.step * s / 2;
-    if (y === null) {
+    // Drawn last, into whichever strip holds it, so it sits over that strip's own road
+    // and pucks exactly as it did when the world was one buffer.
+    const strip = this.strips.find(candidate => y! >= candidate.top && y! < candidate.bottom);
+    if (y === null || !strip) {
       this.gateLabel.setVisible(false);
       return;
     }
+    const g = strip.detail;
     const { safe } = this.viewport;
     const w = Math.min(460 * s, safe.width - 40 * s);
     const h = 108 * s;
@@ -1272,6 +1420,9 @@ export class MapScene extends BaseScene {
       const ring = spring(touchAge / 0.35, 5, 1.6);
       this.touch.lineStyle(STYLE.current.outline * s * 0.55, PALETTE.ink, (1 - touchAge / 0.35) * 0.6).strokeCircle(this.touchPoint.x, this.touchPoint.y + this.scrollY, 12 * s + ring * 30 * s);
     }
+    // Every frame, because the scroll moves on inertia and under a thumb alike, and the
+    // test is a dozen comparisons against numbers the strips already carry.
+    this.cullStrips();
     // Presses redraw only while live, then one frame at rest.
     const press = pressAmount(now, this.pressedAt);
     if (press > 0.001 || this.pressDirty) { this.drawDock(s, Math.max(0, press)); this.pressDirty = press > 0.001; }

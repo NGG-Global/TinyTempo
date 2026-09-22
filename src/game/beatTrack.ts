@@ -130,6 +130,67 @@ export function handover(plan: RoundPlan | null, now: number): Handover {
 }
 
 /**
+ * The count into the player's turn: "3", "2", "1" landing on the beats before their
+ * first target, and "Go!" on the target itself.
+ *
+ * The block says whose turn it is and says it early, but it says it only in colour,
+ * position and motion — a player who has not yet learnt to read it has nothing to hold
+ * on to while it happens. This is the same information in the one form everybody already
+ * knows, and it is measured the way a musician's count-in is measured: in beats back from
+ * the event, never in seconds, so it holds at every tempo and on a phrase that runs two
+ * bars as readily as one. Nothing here is scheduled and nothing sounds. The numerals land
+ * on beats the plan already carries, which is what keeps them on the grid the player is
+ * about to be judged against rather than beside it.
+ *
+ * `weight` answers the one risk a count-in carries here, which is that it competes with
+ * the demonstration it is counting through. It ramps from a quarter at the first numeral
+ * to full on the "Go!", so the count is faintest where the example is still the thing to
+ * watch and loudest at the moment the example is over.
+ */
+export interface TurnCount {
+  /** The numeral showing: `beats` down to 1, then 0 for the "Go!" on the first target. */
+  readonly count: number;
+  /** Seconds since this numeral landed on its beat. */
+  readonly age: number;
+  /** How present it should be, 0 → 1 across the count. The scene maps it to size and alpha. */
+  readonly weight: number;
+}
+
+/** How long the "Go!" holds before the slot empties again, as a fraction of a beat. */
+export const GO_HOLD_BEATS = 0.75;
+
+/** Tolerance, in beats, for a time that is meant to be exactly on one. See `turnCount`. */
+const BEAT_EPSILON = 1e-9;
+
+// `beats` is annotated because `RHYTHM` is `as const`: the default would otherwise fix
+// the parameter's type at the literal 3 and no other count could be passed, not even in a test.
+export function turnCount(plan: RoundPlan | null, now: number, beats: number = RHYTHM.turnCountBeats): TurnCount | null {
+  if (!plan || !Number.isFinite(now) || beats < 1) return null;
+  const first = plan.targets[0] ?? plan.response;
+  const beat = 60 / plan.bpm;
+  if (!Number.isFinite(first) || !(beat > 0)) return null;
+  // Never in front of the phrase it is counting. The count belongs to the demonstration's
+  // own last beats, and on a pattern that opened on a rest rather than its downbeat it
+  // would otherwise start before there was anything to count through.
+  const from = Math.max(first - beats * beat, plan.demo);
+  if (now < from || now >= first + GO_HOLD_BEATS * beat) return null;
+  // Nudged before the ceiling, because a time sampled exactly on a beat does not divide
+  // exactly: `(first - now) / beat` at the "1" came back as 1.0000000000000002 and the
+  // numeral read 2 for that frame. The tolerance is a billionth of a beat — some orders
+  // of magnitude above the error and some below anything a player could hear.
+  // Clamped rather than extrapolated: where the phrase is too short to carry the whole
+  // count the first numeral simply holds longer, and every numeral after it is still on
+  // its own beat. A count that opened at "4" would be a count to a beat that is not there.
+  const remaining = Math.ceil((first - now) / beat - BEAT_EPSILON);
+  const count = now >= first ? 0 : Math.min(beats, Math.max(1, remaining));
+  return {
+    count,
+    age: Math.max(0, now - (first - count * beat)),
+    weight: (beats - count + 1) / (beats + 1),
+  };
+}
+
+/**
  * How far the socket at `index` has been lit by the runway: a fuse burning left to
  * right, so the row reads as a sequence being handed over rather than a bank of lamps
  * switching on together. Full the moment the turn actually arrives, whatever the runway

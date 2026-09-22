@@ -207,7 +207,16 @@ have rung up left to right and the baton has landed. That is the property to pro
 that arrives on the beat it announces arrives too late to wind up for. The stage light moves
 with it (`turnOpen` in `vignettes/motion.ts`, keyed to the plan in each act's `reset`) and is
 the only thing that does: the demonstration is still running, so nothing that consumes the
-act's subject may start there. `showPhase` sets no turn words. The first run adds one 0.75×
+act's subject may start there. `showPhase` sets no turn words. What does carry words is `turnCount` in `game/beatTrack.ts`:
+**"3", "2", "1" on the beats before the player's first target and "Go!" on the target itself**,
+under the player's own row. It is a count-in and is built as one — measured in beats back from
+`targets[0]` rather than in seconds, opening `RHYTHM.turnCountBeats` (one beat ahead of the
+runway) inside the demonstration's own bar, scheduling and sounding nothing. Its `weight` ramps
+from a quarter to full so the count is faintest where the example is still the thing to watch,
+and it sits *below the face* rather than in the verdict's band, because a tap on the downbeat is
+judged there and then and the verdict would wipe the "Go!" for the player who got it right. The
+slot is occupied from "3" onward, so "Go!" replaces the "1" in place and the property still holds.
+The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
 coral on a coral plate is invisible. See `docs/TURN_CUE.md`.
@@ -250,6 +259,36 @@ never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
 beside `seenDemonstration` in `game/progress.ts`, in one stored object that a write to
 either flag preserves whole, and neither travels in a save code.
+
+**A baked Graphics is free of rebuild cost, not of render cost.** Phaser walks a
+Graphics' whole command buffer and re-tessellates it on every frame it renders, and it
+culls nothing by bounds — `willRender` asks about visibility and alpha, never about where
+an object is. `MapScene` bakes its road once in `layout()` and used to bake it into one
+Graphics, which on a 64-level save was 82,000 commands for a world 10,700 units tall
+showing 1,560 of them: 23.6 ms of main-thread time per frame, more than the whole 60 fps
+budget, ~85% of it spent off the top and bottom of the screen. The bake is now cut into
+strips of `MAP.stripLevels` levels (`stripBounds` in `ui/navigation.ts`, which
+`tests/navigation.test.ts` pins as a true tiling — a gap is a screen-wide band of missing
+ground) and `cullStrips` draws only the strips the camera can reach, with the level
+numbers, since each `Text` carries its own texture. Two things follow for anyone editing
+the map's drawing. Each strip has a **ground layer under every strip's detail layer**, so
+the terrain of the strip above can never land on a prop standing across the seam below it.
+And within the ground layer strips are painted bottom to top, so anything that overhangs a
+seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and hangs
+down onto paint already laid; claiming by centre instead drew a row of half-alpha terrain
+motifs twice, at every seam.
+
+**`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
+work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
+frame's *height* and nothing else, and `uiScale` is `min(safe.width / 720, safe.height / 1150)`,
+which the width pins on any handset — so the map's scale, its world height and every node
+come out identical fifteen frames running. Re-baking them cost 11.8 ms a frame, 177 ms of
+main-thread work per collapse, to redraw geometry byte for byte the same as what was
+already on screen. `MapScene.bakeKey` is every value the bake reads and nothing else (the
+frame's height is deliberately not in it), and the bake is skipped when it has not moved.
+Like any field holding scene state, **it is assigned in `build()`**: a second entry makes
+fresh, empty strips, and a key left over from the first would skip the one bake that fills
+them.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
@@ -410,7 +449,7 @@ src/
     BootScene.ts       Input tuning, orientation guard
     PreloadScene.ts    Texture generation and font registration
     MenuScene.ts       Title; owns the first audio gesture
-    MapScene.ts        The endless road, rendered as a bounded window
+    MapScene.ts        The endless road: a bounded window, baked into culled strips
     PlayScene.ts       One level: hosts a vignette, never judges
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
