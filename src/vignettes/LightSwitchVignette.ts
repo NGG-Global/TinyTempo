@@ -109,8 +109,11 @@ export class LightSwitchVignette extends HouseholdVignette {
     // Window over the sink, morning sky, a herb on the sill.
     slab(g, -292, -177, 136, 168, room(0xd6c4a0), 8, room(0x8a7058));
     slab(g, -280, -165, 112, 144, room(0x7eb0d4), 4, room(0xc9b37f));
-    g.fillStyle(room(0xf7e6a8)).fillCircle(-198, -132, 18);
-    g.fillStyle(room(0x7eb0d4)).fillCircle(-188, -140, 16);
+    g.fillStyle(room(0xf7e6a8)).fillCircle(-198, -128, 20);
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4;
+      g.lineStyle(3, room(0xf7e6a8)).lineBetween(-198 + Math.cos(a) * 16, -128 + Math.sin(a) * 16, -198 + Math.cos(a) * 28, -128 + Math.sin(a) * 28);
+    }
     g.lineStyle(5, room(0xb49c77)).lineBetween(-224, -163, -224, -22).lineBetween(-278, -92, -170, -92);
     for (const x of [-307, -163]) {
       shape(g, [x - 8, -178, x + 20, -178, x + 12, -70, x + 22, 8, x - 10, 8], room(look.curtain), room(0x4e6e61), 3);
