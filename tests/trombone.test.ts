@@ -47,9 +47,10 @@ describe('trombone act', () => {
     expect(TROMBONE_MOTION.positions).toEqual([0, 1]);
   });
 
-  it('voices its action on the grid, unlike every earlier act', () => {
-    expect(VIGNETTES.at(-1)?.gridAction).toBe(true);
-    expect(VIGNETTES.slice(0, -1).every(act => act.gridAction !== true)).toBe(true);
+  it('voices its action on the grid, unlike every other act', () => {
+    const trombone = VIGNETTES.find(act => act.id === 'trombone');
+    expect(trombone?.gridAction).toBe(true);
+    expect(VIGNETTES.filter(act => act.id !== 'trombone').every(act => act.gridAction !== true)).toBe(true);
   });
 
   it('resets the slide count on a new attempt and carries it across tasks of the same one', () => {
