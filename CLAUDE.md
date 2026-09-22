@@ -207,7 +207,16 @@ have rung up left to right and the baton has landed. That is the property to pro
 that arrives on the beat it announces arrives too late to wind up for. The stage light moves
 with it (`turnOpen` in `vignettes/motion.ts`, keyed to the plan in each act's `reset`) and is
 the only thing that does: the demonstration is still running, so nothing that consumes the
-act's subject may start there. `showPhase` sets no turn words. The first run adds one 0.75×
+act's subject may start there. `showPhase` sets no turn words. What does carry words is `turnCount` in `game/beatTrack.ts`:
+**"3", "2", "1" on the beats before the player's first target and "Go!" on the target itself**,
+under the player's own row. It is a count-in and is built as one — measured in beats back from
+`targets[0]` rather than in seconds, opening `RHYTHM.turnCountBeats` (one beat ahead of the
+runway) inside the demonstration's own bar, scheduling and sounding nothing. Its `weight` ramps
+from a quarter to full so the count is faintest where the example is still the thing to watch,
+and it sits *below the face* rather than in the verdict's band, because a tap on the downbeat is
+judged there and then and the verdict would wipe the "Go!" for the player who got it right. The
+slot is occupied from "3" onward, so "Go!" replaces the "1" in place and the property still holds.
+The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
 coral on a coral plate is invisible. See `docs/TURN_CUE.md`.

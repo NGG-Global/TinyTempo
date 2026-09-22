@@ -97,16 +97,69 @@ gone from them. **The light is the only thing that moves this early.** The
 demonstration is still running, so nothing that consumes the act's subject may
 start here.
 
-## No words
+## No words at the top
 
 `showPhase` no longer sets `'Watch'` or `'Your turn'`, and the timber sign that hung
 behind them is gone — it existed to tell those two words apart as two objects, and
 there are no longer two words. The headline is kept for outcomes (`Cleared`,
 `Again?`, `Paused`, `No hearts`), which are results rather than cues, and for
 `Breathe`, which marks the one place in a level where nothing at all is being
-asked. The row's coral line, the baton, the fuse and the lift carry the whole cue,
-which is also what lets the game ship in any locale without the turn being the
-thing that breaks.
+asked. The row's coral line, the baton, the fuse and the lift carry the cue.
+
+## The count
+
+The block above says all of this and says it early, and it is still what teaches. But it
+says it only in colour, position and motion, and a player meeting it for the first time
+has nothing to hold on to while it happens: playtesters were still missing the downbeat
+with the whole handover in front of them. `turnCount(plan, now)` in `game/beatTrack.ts`
+adds the one form of it everybody already knows — **"3", "2", "1" on the beats before the
+player's first target, and "Go!" on the target itself**.
+
+It is a count-in and is built as one, not as a label.
+
+- **It is measured in beats back from the event**, never in seconds — the way a musician's
+  count-in is, and the way [osu!'s countdown offset][osu] is. So it holds at every tempo
+  the curve produces, and on a subdivided phrase that runs two bars as readily as on one
+  that runs one.
+- **It opens `RHYTHM.turnCountBeats` before `plan.targets[0]`**, one beat ahead of the
+  handover, so the first numeral is a heads-up rather than one more thing arriving with
+  the baton. Like the runway it lands inside the demonstration's own bar: nothing is added
+  to the loop, nothing is scheduled and nothing sounds.
+- **It is weighted.** `weight` ramps from a quarter at "3" to full at "Go!", and the scene
+  maps it to size and alpha — so the count is faintest where the demonstration is still
+  the thing to watch and loudest at the moment the demonstration is over. That is the
+  answer to the one real risk a count-in carries here, which is competing with the example
+  it is counting through.
+- **It sits under the player's own row**, not in the verdict's band above the shelf. The
+  two want the same line at the same instant: a tap landing on the downbeat is judged
+  there and then, so the verdict would wipe the "Go!" for exactly the player who got it
+  right. Below the face is also the furthest point on the screen from the act.
+
+**"Go!" does not break the property above.** The slot is occupied from the first numeral
+onward, so "Go!" *replaces* the "1" in place rather than appearing on the beat it
+announces — nothing new arrives on the downbeat, something already there changes. And the
+anticipatory information is all in the 3-2-1; "Go!" is confirmation, which is what the
+last beat of any count-in is.
+
+Two things it deliberately is not. It has **no voice**: the demonstration's own beats are
+sounding through it, and a second rhythmic sound there would be a competing pulse rather
+than a cue. And it is **on every task**, not once per level the way osu!'s is — a count-in
+that sometimes appears is worse than one that always does, and a musician's count happens
+every take. If playtesting says it wears, `RHYTHM.turnCountBeats` shortens it, and gating
+it on `guidedLevel(progress)` — the same derivation the socket ring already uses — confines
+it to the level that still teaches.
+
+The separate `TutorialScene` does not draw it. It already names every moment in words
+(`coach`), its band above the shelf carries the row's own label, and a third voice on a
+screen that has a heading, copy, two row labels and a travelling pointer would crowd the
+lesson rather than clarify it.
+
+The numerals are locale-neutral; "Go!" is not, and is the one string on the play HUD that
+would need translating. That is a real cost against the reasoning that removed the words
+in the first place, and it was taken knowingly: three glyphs everybody reads are worth
+more to a player who cannot find the downbeat than the strict no-string rule was.
+
+[osu]: https://osu.ppy.sh/wiki/en/Beatmap/Countdown
 
 ## Widening the rows
 
@@ -127,8 +180,9 @@ the band they used to sit in.
 
 `reducedMotion()` is read per use, as before. Under it the baton has two states and
 no travel, the fuse lights every socket together at 50% and then 100%, the heat
-steps rather than ramps, and there is no lift, bow or glow pulse. The information
-survives; only the motion is removed.
+steps rather than ramps, and there is no lift, bow or glow pulse. The count keeps its
+numerals and its weight — it is information, not motion — and loses the knock on each
+beat and the fade off the "Go!". The information survives; only the motion is removed.
 
 ## The first run
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatsPlayed, countIn, fuse, ghostRing, handover, handoverAt, markFor, trackGeometry } from '../src/game/beatTrack';
+import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, markFor, trackGeometry, turnCount } from '../src/game/beatTrack';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { parsePattern } from '../src/rhythm/patterns';
 import type { Judgement } from '../src/rhythm/judge';
@@ -124,6 +124,77 @@ describe('the handover', () => {
     expect(fuse({ runway: 1, yours: 0 }, 3)).toBe(1);
     // An interrupted or stepped handover still ends with every socket lit.
     for (let i = 0; i < 8; i++) expect(fuse({ runway: 0, yours: 1 }, i)).toBe(1);
+  });
+});
+
+describe('the count into the turn', () => {
+  const plan = (bpm = 120, lead = 4) => createRoundPlan(1, parsePattern('p', 'X X - X'), bpm, 100, lead);
+
+  it('lands each numeral on its own beat, and the Go on the first target', () => {
+    for (const bpm of [80, 120, 168]) {
+      const p = plan(bpm);
+      const beat = 60 / bpm;
+      const first = p.targets[0]!;
+      for (const n of [3, 2, 1]) {
+        // On the beat, and still showing the same numeral a hair before the next one.
+        expect(turnCount(p, first - n * beat)?.count).toBe(n);
+        expect(turnCount(p, first - n * beat + beat * 0.99)?.count).toBe(n);
+      }
+      expect(turnCount(p, first)?.count).toBe(0);
+      expect(turnCount(p, first)?.age).toBeCloseTo(0);
+    }
+  });
+
+  it('is a count-in: it opens inside the example and never before it', () => {
+    const p = plan();
+    const beat = 60 / p.bpm;
+    const first = p.targets[0]!;
+    expect(turnCount(p, first - 3 * beat - 0.001)).toBeNull();
+    expect(turnCount(p, first - 3 * beat)).not.toBeNull();
+    // The example is running while the count runs; nothing is added to the loop.
+    expect(first - 3 * beat).toBeGreaterThan(p.demo);
+    // And it opens a beat ahead of the block's own handover, so the first numeral is a
+    // heads-up rather than one more thing arriving with the baton.
+    expect(first - 3 * beat).toBeLessThan(handoverAt(p));
+  });
+
+  it('swells toward the turn, so the example keeps the attention until it is over', () => {
+    const p = plan();
+    const beat = 60 / p.bpm;
+    const first = p.targets[0]!;
+    const weights = [3, 2, 1, 0].map(n => turnCount(p, first - n * beat)!.weight);
+    for (let i = 1; i < weights.length; i++) expect(weights[i]!).toBeGreaterThan(weights[i - 1]!);
+    expect(weights[0]!).toBeLessThan(0.3);
+    expect(weights.at(-1)!).toBe(1);
+  });
+
+  it('holds the Go for part of a beat and then empties the slot', () => {
+    const p = plan();
+    const beat = 60 / p.bpm;
+    const first = p.targets[0]!;
+    expect(turnCount(p, first + beat * GO_HOLD_BEATS * 0.99)?.count).toBe(0);
+    expect(turnCount(p, first + beat * GO_HOLD_BEATS)).toBeNull();
+  });
+
+  it('never counts to a beat that is not there, and never runs backwards', () => {
+    const p = plan();
+    let previous = Infinity;
+    for (let t = p.start; t <= p.end; t += 0.01) {
+      const call = turnCount(p, t);
+      if (!call) continue;
+      expect(call.count).toBeLessThanOrEqual(3);
+      expect(call.count).toBeGreaterThanOrEqual(0);
+      expect(call.age).toBeGreaterThanOrEqual(0);
+      expect(call.count).toBeLessThanOrEqual(previous);
+      previous = call.count;
+    }
+    expect(previous).toBe(0);
+  });
+
+  it('survives a missing plan, a stopped clock and a count of none', () => {
+    expect(turnCount(null, 10)).toBeNull();
+    expect(turnCount(plan(), Number.NaN)).toBeNull();
+    expect(turnCount(plan(), plan().targets[0]!, 0)).toBeNull();
   });
 });
 
