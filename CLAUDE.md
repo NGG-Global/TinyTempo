@@ -278,6 +278,18 @@ seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and
 down onto paint already laid; claiming by centre instead drew a row of half-alpha terrain
 motifs twice, at every seam.
 
+**`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
+work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
+frame's *height* and nothing else, and `uiScale` is `min(safe.width / 720, safe.height / 1150)`,
+which the width pins on any handset — so the map's scale, its world height and every node
+come out identical fifteen frames running. Re-baking them cost 11.8 ms a frame, 177 ms of
+main-thread work per collapse, to redraw geometry byte for byte the same as what was
+already on screen. `MapScene.bakeKey` is every value the bake reads and nothing else (the
+frame's height is deliberately not in it), and the bake is skipped when it has not moved.
+Like any field holding scene state, **it is assigned in `build()`**: a second entry makes
+fresh, empty strips, and a key left over from the first would skip the one bake that fills
+them.
+
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
 request** — a new entry in the registry reassigns every level.

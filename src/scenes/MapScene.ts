@@ -164,6 +164,13 @@ export class MapScene extends BaseScene {
   private curtain!: SceneCurtain;
   private footerTop = 0;
   private lastHeight = 0;
+  /**
+   * What the baked world is a function of, so a resize that cannot have changed it does
+   * not redraw it. Assigned in `build()`, never merely initialised: a second entry into
+   * the scene makes fresh, empty strips, and a key left over from the first would skip
+   * the one bake that fills them.
+   */
+  private bakeKey = '';
   private feedbackAt = -Infinity;
   private lockedIndex = -1;
   private frontierIndex = -1;
@@ -228,6 +235,7 @@ export class MapScene extends BaseScene {
     this.shown = Math.min(top, this.first + MAP.window - 1) - this.first + 1;
     // Bands are addressed absolutely, because the window rarely starts on a band edge.
     this.firstBand = Math.floor((this.first - 1) / PROGRESSION.areaSize);
+    this.bakeKey = '';
     // Ground under every strip's detail, so a strip cannot paint over its neighbour. The
     // bands are filled in by `layout()`, which is where the world gets its size.
     this.strips = Array.from({ length: Math.max(1, Math.ceil(this.shown / MAP.stripLevels)) }, (_, j) => ({
@@ -316,32 +324,44 @@ export class MapScene extends BaseScene {
     this.hudHeight = safe.top + 144 * s;
     this.footerTop = safe.bottom - 210 * s;
     this.worldHeight = (MAP.topPad + MAP.bottomPad + (this.shown - 1) * MAP.step) * s + this.hudHeight;
-    // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
-    this.nodes = Array.from({ length: this.shown }, (_, i) => ({
-      x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
-      y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
-    }));
-    // The road runs one span past the last node so it leaves the frame rather than stopping.
-    const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
-    this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
-    // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
-    // clipped: every node, prop and road span belongs whole to one strip, and only the
-    // terrain — the one thing that fills rather than sits — is cut at the seam.
-    const bounds = stripBounds(this.shown, MAP.stripLevels, this.worldHeight, i => this.nodes[i]!.y, MAP.step * s);
-    this.strips.forEach((strip, j) => {
-      strip.top = bounds[j]!.top;
-      strip.bottom = bounds[j]!.bottom;
-    });
-    this.frontierIndex = -1;
-    for (const strip of this.strips) {
-      this.drawTerrain(strip.ground.clear(), s, strip);
-      const g = strip.detail.clear();
-      this.drawRoad(g, s, strip);
-      this.drawScenery(g, s, strip);
-      this.drawPlaques(g, s, strip);
-      this.drawNodes(g, s, strip);
+    // Everything the bake reads, and nothing else. The height of the frame is not in it,
+    // which is the point: `layout()` runs on every resize, and on Android the commonest
+    // resize by far is Chrome collapsing its URL bar — one event per frame of the
+    // animation, changing the height and nothing more. `uiScale` is
+    // `min(safe.width / 720, safe.height / 1150)`, which the width pins on any handset, so
+    // the road's scale, its world height and every node come out identical. Re-baking them
+    // cost 11.8 ms a frame for fifteen frames — 177 ms of main-thread work per collapse,
+    // to redraw geometry byte for byte the same as what was already on screen.
+    const key = [s, this.worldHeight, full.x, full.width, safe.left, safe.right, safe.centerX, safe.width, this.first, this.shown].join('|');
+    if (key !== this.bakeKey) {
+      this.bakeKey = key;
+      // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
+      this.nodes = Array.from({ length: this.shown }, (_, i) => ({
+        x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
+        y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
+      }));
+      // The road runs one span past the last node so it leaves the frame rather than stopping.
+      const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
+      this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
+      // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
+      // clipped: every node, prop and road span belongs whole to one strip, and only the
+      // terrain — the one thing that fills rather than sits — is cut at the seam.
+      const bounds = stripBounds(this.shown, MAP.stripLevels, this.worldHeight, i => this.nodes[i]!.y, MAP.step * s);
+      this.strips.forEach((strip, j) => {
+        strip.top = bounds[j]!.top;
+        strip.bottom = bounds[j]!.bottom;
+      });
+      this.frontierIndex = -1;
+      for (const strip of this.strips) {
+        this.drawTerrain(strip.ground.clear(), s, strip);
+        const g = strip.detail.clear();
+        this.drawRoad(g, s, strip);
+        this.drawScenery(g, s, strip);
+        this.drawPlaques(g, s, strip);
+        this.drawNodes(g, s, strip);
+      }
+      this.drawGate(s);
     }
-    this.drawGate(s);
     const size = Math.max(full.width, full.height) * 1.25;
     this.glow.setPosition(full.x + full.width * 0.38, full.y + full.height * 0.34).setDisplaySize(size, size)
       .setTint(mix(0xf6e6bc, areaOf(this.progress.unlocked).area.sky, 0.4));
