@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  batonCrossing, blockGeometry, blockWidth, columnRoom, faceHeat, faceLift, socketFuse, TRACK,
+  batonAt, batonCrossing, batonTrail, blockGeometry, blockWidth, columnRoom, dropLine, faceHeat, faceLift, glyphFlip,
+  landingRipple, landingSquash, socketFuse, socketPop, TRACK,
 } from '../src/ui/turnBlock';
 import type { Handover } from '../src/game/beatTrack';
 
@@ -111,5 +112,89 @@ describe('what the handover does to the block', () => {
     expect(lit[0]!).toBeGreaterThan(lit[1]!);
     expect(lit[1]!).toBeGreaterThanOrEqual(lit[2]!);
     expect(lit.every(v => v >= 0 && v <= 1)).toBe(true);
+  });
+});
+
+describe('the baton’s travel', () => {
+  const geo = blockGeometry(360, 1000, 600, 1);
+
+  it('bows over the columns and arrives at each slot exactly', () => {
+    const start = batonAt(geo, 1, 0, 0, false);
+    const end = batonAt(geo, 1, 1, 0, false);
+    expect(start).toMatchObject({ x: geo.shelfSlot.x, y: geo.shelfSlot.y, arc: 0 });
+    expect(end.x).toBeCloseTo(geo.faceSlot.x);
+    expect(end.y).toBeCloseTo(geo.faceSlot.y);
+    // Mid-crossing it is out over the columns, to the right of the straight line.
+    const mid = batonAt(geo, 1, 0.5, 0, false);
+    expect(mid.x).toBeGreaterThan((geo.shelfSlot.x + geo.faceSlot.x) / 2 + TRACK.batonBow * 0.9);
+    expect(mid.arc).toBeCloseTo(1);
+  });
+
+  it('travels straight and unbowed under reduced motion', () => {
+    expect(batonAt(geo, 1, 0.5, 0, true).x).toBeCloseTo((geo.shelfSlot.x + geo.faceSlot.x) / 2);
+  });
+
+  it('leaves ghosts behind it on the arc, strongest mid-crossing, and none at either slot', () => {
+    expect(batonTrail(0, false)).toEqual([]);
+    expect(batonTrail(1, false)).toEqual([]);
+    const mid = batonTrail(0.5, false);
+    expect(mid.length).toBeGreaterThan(0);
+    for (const ghost of mid) expect(ghost.t).toBeLessThan(0.5);
+    // Fainter the further behind.
+    for (let i = 1; i < mid.length; i++) expect(mid[i]!.alpha).toBeLessThan(mid[i - 1]!.alpha);
+    expect(mid[0]!.alpha).toBeGreaterThan(batonTrail(0.1, false)[0]!.alpha);
+    // Never reaching back past the shelf slot.
+    for (const ghost of batonTrail(0.1, false)) expect(ghost.t).toBeGreaterThan(0);
+  });
+
+  it('leaves no trail under reduced motion, where there is no travel to show', () => {
+    expect(batonTrail(0.5, true)).toEqual([]);
+  });
+
+  it('turns over like a coin: the glyph is a sliver at the midpoint and whole at either end', () => {
+    expect(glyphFlip(0)).toBeCloseTo(1);
+    expect(glyphFlip(1)).toBeCloseTo(1);
+    expect(glyphFlip(0.5)).toBeLessThan(0.3);
+    expect(glyphFlip(0.5)).toBeGreaterThan(0);
+  });
+});
+
+describe('the landing', () => {
+  it('throws a ring that spreads and fades, and is gone within half a second', () => {
+    const early = landingRipple(0.05, false);
+    const late = landingRipple(0.3, false);
+    expect(early.alpha).toBeGreaterThan(late.alpha);
+    expect(late.spread).toBeGreaterThan(early.spread);
+    expect(landingRipple(0.5, false).alpha).toBe(0);
+    expect(landingRipple(-Infinity, false).alpha).toBe(0);
+  });
+
+  it('squashes the baton on impact and lets it back to round', () => {
+    expect(landingSquash(0, false)).toBe(0);
+    expect(landingSquash(0.15, false)).toBeGreaterThan(0.1);
+    expect(landingSquash(0.4, false)).toBe(0);
+    expect(landingSquash(-Infinity, false)).toBe(0);
+  });
+
+  it('is still under reduced motion', () => {
+    expect(landingRipple(0.1, true).alpha).toBe(0);
+    expect(landingSquash(0.1, true)).toBe(0);
+  });
+});
+
+describe('the pattern dropping into the sockets', () => {
+  it('pops a socket as the fuse reaches it and leaves it alone once lit', () => {
+    expect(socketPop(0)).toBe(0);
+    expect(socketPop(0.5)).toBeGreaterThan(0.1);
+    expect(socketPop(1)).toBeCloseTo(0);
+  });
+
+  it('draws the line down with the fuse, left to right, and thins it once the turn has arrived', () => {
+    expect(dropLine(turn(0), 0, false)).toBe(0);
+    expect(dropLine(turn(0.3), 0, false)).toBeGreaterThan(dropLine(turn(0.3), 2, false));
+    const lit = dropLine(turn(1), 0, false);
+    expect(lit).toBeGreaterThan(0);
+    expect(dropLine(turn(1, 1), 0, false)).toBeLessThan(lit);
+    expect(dropLine(turn(1, 1), 0, false)).toBeGreaterThan(0);
   });
 });

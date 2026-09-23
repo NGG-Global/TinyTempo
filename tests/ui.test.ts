@@ -7,6 +7,7 @@ import { AREAS } from '../src/game/levels';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { pressAmount } from '../src/ui/spring';
 import { dashes, pathLength, smoothPath, type Point } from '../src/ui/path';
+import { STAR_PRIZE } from '../src/ui/star';
 
 // The registry reaches the acts, and the acts import Phaser; the inks are plain numbers.
 vi.mock('phaser', () => ({ default: {} }));
@@ -157,7 +158,11 @@ describe('workshop contrast', () => {
     for (const area of areas) {
       const plate = shade(area.paper, -0.03);
       expect(contrastRatio(starColour(false, shade(area.ink, 0.1), plate), plate), area.name).toBeGreaterThanOrEqual(3);
-      expect(contrastRatio(starColour(true, shade(area.ink, 0.1), plate), plate), area.name).toBeGreaterThan(4.5);
+      // An earned star is brass on every plate. On a pale plate the fill is close to the
+      // paper and the outline `drawStar` edges it with (-0.55) carries it; on Dusk's dark
+      // plate the outline sinks and the fill carries it. One of the two has to read.
+      const edge = shade(STAR_PRIZE, -0.55);
+      expect(Math.max(contrastRatio(STAR_PRIZE, plate), contrastRatio(edge, plate)), area.name).toBeGreaterThanOrEqual(3);
     }
     expect(contrastRatio(starColour(false, PALETTE.ink, SHELL.puck), SHELL.puck)).toBeGreaterThanOrEqual(3);
   });

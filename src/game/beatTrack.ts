@@ -1,6 +1,7 @@
 import { RHYTHM } from '@/config/rhythm';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
+import { overshoot, settle } from '@/ui/spring';
 import { clamp01, easeInOutCubic } from '@/vignettes/motion';
 
 /**
@@ -188,6 +189,79 @@ export function turnCount(plan: RoundPlan | null, now: number, beats: number = R
     age: Math.max(0, now - (first - count * beat)),
     weight: (beats - count + 1) / (beats + 1),
   };
+}
+
+/**
+ * How a numeral of the count is posed at `age` seconds after its beat, as plain numbers
+ * the scene maps onto one Text.
+ *
+ * The count used to arrive as a fade with a knock on it, which read as a caption
+ * updating rather than as anything counting. A count-in is percussive — each numeral is
+ * *struck* on its beat — so each one now drops in from above, oversized, and stamps down
+ * to size with a small overshoot, the way the medals land on the plaque. The numerals
+ * lean alternate ways so the row of them reads as three separate strikes rather than one
+ * label changing, and a ring leaves each one as it lands, which is the visible report of
+ * the beat it sat on. The "Go!" is the biggest strike and the one that has stopped leaning.
+ *
+ * All of it is `f(age)`, sampled from the audio clock like every other curve on the block,
+ * so a dropped frame costs nothing but the frame. `heat` is how far the numeral has warmed
+ * from the act's ink toward coral: the count is the row's colour arriving, one beat at a time.
+ */
+export interface TurnCountPose {
+  /** Scale about the numeral's own centre; oversized on the strike, then settled. */
+  readonly scale: number;
+  /** Vertical offset in design units, negative above its line: it drops in, never fades in. */
+  readonly rise: number;
+  readonly alpha: number;
+  /** Radians. Numerals lean alternately; the "Go!" stands upright with a shimmy off the strike. */
+  readonly tilt: number;
+  /** 0 on "3" through 1 on "Go!": how far the numeral's ink has warmed to coral. */
+  readonly heat: number;
+  /** The ring the strike leaves: how far it has spread, 0 → 1, and how much of it is left. */
+  readonly ring: { readonly spread: number; readonly alpha: number };
+}
+
+/** How long a numeral takes to stamp down to size, as a fraction of a beat. */
+const STAMP_BEATS = 0.34;
+/** How long the strike's ring is visible, as a fraction of a beat. */
+const RING_BEATS = 0.6;
+/** How far above its line the numeral starts, in design units. */
+const DROP = 26;
+
+export function turnCountPose(call: TurnCount, beat: number, still: boolean, beats: number = RHYTHM.turnCountBeats): TurnCountPose {
+  const go = call.count === 0;
+  const heat = beats > 0 ? clamp01((beats - call.count) / beats) : 1;
+  // The "Go!" leaves rather than blinking out, over the back of its own hold; the numerals
+  // are replaced in place by the next strike and never leave on their own.
+  const leaving = go ? 1 - clamp01((call.age - beat * GO_HOLD_BEATS * 0.45) / (beat * GO_HOLD_BEATS * 0.55)) : 1;
+  const presence = 0.55 + 0.45 * call.weight;
+  if (still) {
+    // Information without motion: the numeral is there at full size on its beat and the
+    // "Go!" still fades, since a hold that ends is not a movement.
+    return { scale: 1, rise: 0, alpha: presence * leaving, tilt: 0, heat, ring: { spread: 1, alpha: 0 } };
+  }
+  const stamp = beat * STAMP_BEATS;
+  const p = clamp01(call.age / stamp);
+  // Oversized on arrival and driven past its rest size, so the settle reads as a stamp
+  // landing rather than as a zoom. The "Go!" starts larger still: it is the strike the
+  // others were counting toward.
+  const from = go ? 1.9 : 1.45;
+  const scale = 1 + (from - 1) * (1 - overshoot(p, 0.18));
+  const rise = -DROP * (1 - overshoot(p, 0.1));
+  const alpha = presence * clamp01(call.age / (stamp * 0.3)) * leaving;
+  const tilt = go
+    ? settle(call.age, 26, 7) * 0.09
+    : (call.count % 2 === 0 ? 1 : -1) * 0.085 * (1 - 0.35 * p);
+  const ringP = clamp01(call.age / (beat * RING_BEATS));
+  return {
+    scale, rise, alpha, tilt, heat,
+    ring: { spread: ringP, alpha: ringP > 0 && ringP < 1 ? (1 - ringP) ** 1.6 * (0.5 + 0.5 * call.weight) : 0 },
+  };
+}
+
+/** Every beat answered Perfect, and at least one beat to answer: the flourish's one condition. */
+export function isFlawless(marks: readonly Mark[]): boolean {
+  return marks.length > 0 && marks.every(mark => mark === 'perfect');
 }
 
 /**

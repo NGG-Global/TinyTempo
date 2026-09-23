@@ -148,7 +148,7 @@ export class SettingsScene extends BaseScene {
     this.sheen = new Sheen(this, 3);
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
-    this.headline = display(this, 'Settings', { size: 62, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
+    this.headline = display(this, 'Settings', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
     // Assigned, never appended to. A field initializer runs once per scene *instance*
     // while `build` runs once per *entry*, and Phaser keeps the instance and destroys the
     // display list — so pushing here left seven new eyebrows behind the seven destroyed
@@ -199,7 +199,9 @@ export class SettingsScene extends BaseScene {
       heartCount: this.banded(display(this, '', { size: 42, colour: ink })).setOrigin(1, 0.5),
       heartWait: rowNote(''),
       premium: this.banded(display(this, STORE_COPY.premiumTitle, { size: 48, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
-      premiumTerms: this.banded(body(this, STORE_COPY.premiumTerms, { size: 25, colour: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
+      // Top-anchored: the terms wrap on a narrow handset, and a second line has to grow
+      // down into the card rather than up into the title.
+      premiumTerms: this.banded(body(this, STORE_COPY.premiumTerms, { size: 22, colour: shade(BRASS, -0.62) })).setOrigin(0, 0),
       premiumBadge: chip('Best value', cream),
       unlock: this.banded(display(this, 'Unlock', { size: 38, colour: cream })).setOrigin(1, 0.5),
       unlockPrice: this.banded(label(this, '', { size: 27, colour: cream })).setOrigin(0, 0.5),
@@ -225,9 +227,10 @@ export class SettingsScene extends BaseScene {
       level: rowTitle(''),
       levelNote: rowNote(''),
       reset: chip('Reset'),
-      notice: rowNote(''),
+      // Centred on the card and aligned to match: a wrapped notice with a left align
+      // inside a centred box came out ragged against the card's own centre line.
+      notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
-    this.texts.notice!.setOrigin(0.5, 0.5);
     this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
     this.texts.version = body(this, `v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
@@ -248,7 +251,7 @@ export class SettingsScene extends BaseScene {
 
   protected override layout(): void {
     const { safe } = this.viewport;
-    const s = Math.min(safe.width / 720, safe.height / 1200);
+    const s = Math.min(safe.width / 720, safe.height / 1150);
     this.uiScale = s;
     this.backdrop.layout(this.viewport);
     const control = Math.max(88 * s, 48 * this.viewport.unitScale);
@@ -259,7 +262,7 @@ export class SettingsScene extends BaseScene {
     // Header: a back puck and the title, both pinned.
     const backAt = { x: left + CHROME.puckRadius * s, y: safe.top + 66 * s };
     this.headlineAt = { x: backAt.x + (CHROME.puckRadius + 26) * s, y: backAt.y };
-    resize(this.headline, 62 * s, PALETTE.ink);
+    resize(this.headline, 56 * s, PALETTE.ink);
     this.headline.setPosition(this.headlineAt.x, this.headlineAt.y);
     this.hits.push({ name: 'back', rect: new Phaser.Geom.Rectangle(backAt.x - control / 2, backAt.y - control / 2, control, control), pinned: true });
 
@@ -310,7 +313,8 @@ export class SettingsScene extends BaseScene {
     const eyebrow = (index: number): void => {
       const text = this.eyebrows[index]!;
       resize(text, 21 * s, PALETTE.muted, STYLE.current, false);
-      text.setPosition(left + 10 * s, y + 12 * s);
+      // On the rows' own text column, so a section's label lines up with its first title.
+      text.setPosition(left + 28 * s, y + 12 * s);
       y += SETTINGS.eyebrowGap * s;
     };
     const plate = (height: number): Phaser.Geom.Rectangle => {
@@ -390,7 +394,7 @@ export class SettingsScene extends BaseScene {
     this.texts.premium!.setPosition(medal.x + medal.r + 24 * s, medal.y - 20 * s);
     resize(this.texts.premiumTerms!, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
     this.texts.premiumTerms!.setWordWrapWidth(width - (medal.x + medal.r + 24 * s - store.x) - 28 * s, false);
-    this.texts.premiumTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 26 * s);
+    this.texts.premiumTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 14 * s);
     this.texts.premiumBadge!.setPosition(store.right - 104 * s, store.y + 4 * s);
     const buyH = Math.max(100 * s, control);
     const buyY = store.bottom - 26 * s - buyH;
@@ -432,8 +436,8 @@ export class SettingsScene extends BaseScene {
     this.rows.progress = progress;
     const transferRow = new Phaser.Geom.Rectangle(left, progress.y, width, row);
     this.rows.transferRow = transferRow;
-    this.texts.transfer!.setPosition(left + 30 * s, transferRow.centerY - 15 * s);
-    this.texts.transferNote!.setPosition(left + 30 * s, transferRow.centerY + 19 * s);
+    this.texts.transfer!.setPosition(left + 28 * s, transferRow.centerY - 15 * s);
+    this.texts.transferNote!.setPosition(left + 28 * s, transferRow.centerY + 19 * s);
     const goW = Math.max(150 * s, control);
     const goRect = new Phaser.Geom.Rectangle(transferRow.right - 26 * s - goW, transferRow.centerY - control / 2, goW, control);
     this.rows.transfer = goRect;
@@ -441,8 +445,8 @@ export class SettingsScene extends BaseScene {
     this.hits.push({ name: 'transfer', rect: goRect, pinned: false });
 
     const resetRow = new Phaser.Geom.Rectangle(left, progress.y + row, width, row);
-    this.texts.level!.setPosition(left + 30 * s, resetRow.centerY);
-    this.texts.levelNote!.setPosition(left + 30 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
+    this.texts.level!.setPosition(left + 28 * s, resetRow.centerY);
+    this.texts.levelNote!.setPosition(left + 28 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
     const resetW = Math.max(160 * s, control);
     const resetRect = new Phaser.Geom.Rectangle(resetRow.right - 26 * s - resetW, resetRow.centerY - control / 2, resetW, control);
     this.rows.reset = resetRect;
@@ -458,14 +462,14 @@ export class SettingsScene extends BaseScene {
     const privacy = plate(row * (adPrivacy ? 2 : 1));
     this.rows.privacyCard = privacy;
     this.rows.analytics = switchRect(privacy, privacy.y, row);
-    this.texts.analytics!.setPosition(left + 30 * s, privacy.y + row / 2 - 15 * s);
-    this.texts.analyticsNote!.setPosition(left + 30 * s, privacy.y + row / 2 + 19 * s);
+    this.texts.analytics!.setPosition(left + 28 * s, privacy.y + row / 2 - 15 * s);
+    this.texts.analyticsNote!.setPosition(left + 28 * s, privacy.y + row / 2 + 19 * s);
     this.hits.push({ name: 'analytics', rect: new Phaser.Geom.Rectangle(left, privacy.y, width, row), pinned: false });
     if (adPrivacy) {
       const privacyRow = new Phaser.Geom.Rectangle(left, privacy.y + row, width, row);
       this.rows.adPrivacyRow = privacyRow;
-      this.texts.adPrivacy!.setPosition(left + 30 * s, privacyRow.centerY - 15 * s);
-      this.texts.adPrivacyNote!.setPosition(left + 30 * s, privacyRow.centerY + 19 * s);
+      this.texts.adPrivacy!.setPosition(left + 28 * s, privacyRow.centerY - 15 * s);
+      this.texts.adPrivacyNote!.setPosition(left + 28 * s, privacyRow.centerY + 19 * s);
       const goW = Math.max(150 * s, control);
       const goRect = new Phaser.Geom.Rectangle(privacyRow.right - 26 * s - goW, privacyRow.centerY - control / 2, goW, control);
       this.rows.adPrivacy = goRect;
@@ -482,8 +486,8 @@ export class SettingsScene extends BaseScene {
     eyebrow(6);
     const help = plate(row);
     this.rows.helpCard = help;
-    this.texts.help!.setPosition(left + 30 * s, help.centerY - 15 * s);
-    this.texts.helpNote!.setPosition(left + 30 * s, help.centerY + 19 * s);
+    this.texts.help!.setPosition(left + 28 * s, help.centerY - 15 * s);
+    this.texts.helpNote!.setPosition(left + 28 * s, help.centerY + 19 * s);
     const helpW = Math.max(150 * s, control);
     const helpRect = new Phaser.Geom.Rectangle(help.right - 26 * s - helpW, help.centerY - control / 2, helpW, control);
     this.rows.help = helpRect;

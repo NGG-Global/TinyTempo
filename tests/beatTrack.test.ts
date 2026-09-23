@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, markFor, trackGeometry, turnCount } from '../src/game/beatTrack';
+import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, markFor, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { parsePattern } from '../src/rhythm/patterns';
 import type { Judgement } from '../src/rhythm/judge';
@@ -216,5 +216,81 @@ describe('the guiding ring', () => {
   it('shows nothing rather than throwing on a degenerate plan', () => {
     expect(ghostRing(Number.NaN, 0.5, 1).alpha).toBe(0);
     expect(ghostRing(10, 0, 1).alpha).toBe(0);
+  });
+});
+
+describe('how a numeral of the count is posed', () => {
+  const plan = createRoundPlan(1, parsePattern('p', 'X X - X'), 120, 100, 4);
+  const beat = 60 / plan.bpm;
+  const first = plan.targets[0]!;
+  const at = (n: number, into: number) => turnCount(plan, first - n * beat + into)!;
+
+  it('strikes: oversized and above its line on the beat, at rest inside the beat', () => {
+    const struck = turnCountPose(at(3, 0), beat, false);
+    expect(struck.scale).toBeGreaterThan(1.3);
+    expect(struck.rise).toBeLessThan(-20);
+    const rested = turnCountPose(at(3, beat * 0.9), beat, false);
+    expect(rested.scale).toBeCloseTo(1, 5);
+    expect(rested.rise).toBeCloseTo(0, 5);
+    expect(rested.alpha).toBeGreaterThan(0.5);
+  });
+
+  it('drives past its rest size on the way down, so the settle reads as a landing', () => {
+    let smallest = Infinity;
+    for (let age = 0; age < beat * 0.4; age += beat * 0.01) smallest = Math.min(smallest, turnCountPose(at(2, age), beat, false).scale);
+    expect(smallest).toBeLessThan(0.97);
+  });
+
+  it('leans alternate ways from one numeral to the next, and the Go stands up', () => {
+    const three = turnCountPose(at(3, beat * 0.5), beat, false).tilt;
+    const two = turnCountPose(at(2, beat * 0.5), beat, false).tilt;
+    const one = turnCountPose(at(1, beat * 0.5), beat, false).tilt;
+    expect(Math.sign(three)).not.toBe(Math.sign(two));
+    expect(Math.sign(two)).not.toBe(Math.sign(one));
+    // The Go shimmies off its strike and is upright well inside its hold.
+    expect(Math.abs(turnCountPose(turnCount(plan, first + beat * 0.5)!, beat, false).tilt)).toBeLessThan(0.01);
+  });
+
+  it('warms from the ink toward coral one strike at a time, full on the Go', () => {
+    const heats = [3, 2, 1].map(n => turnCountPose(at(n, 0), beat, false).heat);
+    expect(heats[0]).toBe(0);
+    expect(heats[1]).toBeGreaterThan(heats[0]!);
+    expect(heats[2]).toBeGreaterThan(heats[1]!);
+    expect(turnCountPose(turnCount(plan, first)!, beat, false).heat).toBe(1);
+  });
+
+  it('leaves a ring on each strike that spreads and is gone before the next beat', () => {
+    const early = turnCountPose(at(2, beat * 0.1), beat, false).ring;
+    const late = turnCountPose(at(2, beat * 0.4), beat, false).ring;
+    expect(early.alpha).toBeGreaterThan(late.alpha);
+    expect(late.spread).toBeGreaterThan(early.spread);
+    expect(turnCountPose(at(2, beat * 0.95), beat, false).ring.alpha).toBe(0);
+  });
+
+  it('is the Go leaving over the back of its hold, and never before the numerals have had their say', () => {
+    const go = (into: number) => turnCountPose(turnCount(plan, first + into)!, beat, false);
+    expect(go(beat * 0.3).alpha).toBeGreaterThan(go(beat * GO_HOLD_BEATS * 0.9).alpha);
+    expect(turnCountPose(at(1, beat * 0.9), beat, false).alpha).toBeGreaterThan(0.5);
+  });
+
+  it('keeps the information and drops the motion under reduced motion', () => {
+    const pose = turnCountPose(at(3, 0), beat, true);
+    expect(pose).toMatchObject({ scale: 1, rise: 0, tilt: 0 });
+    expect(pose.alpha).toBeGreaterThan(0.5);
+    expect(pose.ring.alpha).toBe(0);
+    expect(pose.heat).toBe(0);
+  });
+});
+
+describe('a flawless task', () => {
+  it('is every beat Perfect, and nothing less', () => {
+    expect(isFlawless(['perfect', 'perfect', 'perfect'])).toBe(true);
+    expect(isFlawless(['perfect', 'good', 'perfect'])).toBe(false);
+    expect(isFlawless(['perfect', 'pending'])).toBe(false);
+    expect(isFlawless(['perfect', 'miss'])).toBe(false);
+  });
+
+  it('needs at least one beat to have been answered', () => {
+    expect(isFlawless([])).toBe(false);
   });
 });

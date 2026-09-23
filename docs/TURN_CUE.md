@@ -161,6 +161,60 @@ more to a player who cannot find the downbeat than the strict no-string rule was
 
 [osu]: https://osu.ppy.sh/wiki/en/Beatmap/Countdown
 
+### How the count is struck
+
+The count arrived as a fade with a knock on it, which read as a caption updating rather
+than as anything counting, and the first thing playtesters called bland. A count-in is
+percussive — each numeral is *struck* on its beat — and `turnCountPose(call, beat, still)`
+in `game/beatTrack.ts` now poses it that way, as plain numbers the scene maps onto the one
+Text. Each numeral drops in from above, oversized, and stamps down to size with a small
+overshoot, the way the medals land on the plaque. The numerals lean alternate ways so three
+strikes read as three rather than as one label changing; the "Go!" is the biggest strike,
+stands upright with a shimmy off its landing, and throws one burst of sparks. A ring leaves
+each numeral as it lands — the visible report of the beat it sat on — drawn on the block's
+own Graphics so it clears with it. The numeral's fill warms from the act's ink toward coral
+one strike at a time (`heat`), so the count is the row's colour arriving rather than a
+caption in a third colour. Everything is `f(age)` from the audio clock; under reduced motion
+the numeral is simply there at full size on its beat, and the "Go!" still fades, since a
+hold that ends is not a movement.
+
+## How the baton travels
+
+One coral disc moving between two slots read as a light that moved rather than as an object
+handed over. Four things on `drawBaton` answer that, all pure functions in `ui/turnBlock.ts`
+pinned by `tests/turnBlock.test.ts`: `batonTrail` leaves fainter ghosts of the baton behind
+it on the arc, strongest mid-crossing where it moves fastest and none at either slot;
+`glyphFlip` turns the glyph over like a coin, a sliver at the midpoint and whole at either
+end, so the glyph that arrives is the player's rather than a swap; `landingRipple` throws a
+ring across the face as it lands and `landingSquash` compresses the disc for an instant —
+Graphics has no rotation for an ellipse, and the landing is the one moment the squash is on
+an axis. The landing is keyed to `BlockState.landed`, seconds since the first target, which
+each scene passes from the plan; the `Handover` shape is unchanged.
+
+Two more things make the metaphor of the pattern dropping from their row into yours
+literal. `dropLine` draws one thin line per column from the shelf bead to the socket under
+it, arriving with the fuse and thinning once the turn has arrived, so it never competes with
+the answer; and `socketPop` swells each pending socket as its fuse reaches it, so the row
+visibly counts itself off left to right. Under reduced motion there is no trail, no ripple,
+no squash and no pop; the lines still arrive, since they are information.
+
+## The flawless flourish
+
+A clean row of full rings is the best thing that can happen in a task, and the game said
+nothing about it: the last "Perfect" looked exactly like the eleven before it. `ui/flourish.ts`
+is the one moment a task gets its own celebration, and it is earned on the block it was
+played on. When the round resolves with every mark `perfect` (`isFlawless` in
+`game/beatTrack.ts`, reading the judge's own marks so it can never disagree with the row),
+`PlayScene` records `flawlessAt` and: the word *Flawless!* strikes onto the verdict's line
+over the shelf — it is the verdict on the whole task, so the last tap's word yields to it —
+under a warm halo; a band of light crosses the face left to right (`sweepBand`); each socket
+glints as the band reaches it (`socketGlint`), in the order the fuse lit them, and throws a
+burst of sparks from where it is drawn; and the thumb gets the plaque's `stamp` haptic. The
+hold is 1.5 s, longer than a verdict because it belongs to the task and not to a tap, and it
+runs under the act's own coda without touching it. Under reduced motion it is the word and
+the glints, every ring at once, with no sweep, no sparks and no motion on the word. Nothing
+here is scheduled or tweened; `tests/flourish.test.ts` pins the curves.
+
 ## Widening the rows
 
 The owner slot occupies a row's left end, so the rows have to be wide enough for it

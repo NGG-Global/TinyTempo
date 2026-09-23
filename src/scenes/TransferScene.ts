@@ -94,20 +94,22 @@ export class TransferScene extends BaseScene {
     this.backMark = this.add.graphics().setDepth(3);
     this.headline = display(this, 'Save code', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(1);
     this.intro = body(this, 'Keep this somewhere safe. Entering it on another device brings your levels across.', {
-      size: 28, colour: PALETTE.muted, align: 'center',
+      size: 27, colour: PALETTE.muted, align: 'center',
     }).setOrigin(0.5, 0).setDepth(1);
     // Flat, not dressed: an outline at this size closes the counters on a string that has
     // to be read one character at a time, which is the one thing this text must support.
     this.codeText = body(this, '', { size: TRANSFER.codeSize, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(1);
-    this.codeNote = label(this, 'Your progress, as of now', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(1);
+    this.codeNote = label(this, 'Your progress, as of now', { size: 19, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(1);
     // Said plainly and on the screen itself, because the alternative is a player restoring
     // a code, finding their hearts and their purchase missing, and writing in about it.
     this.scope = body(this, 'It carries your levels and settings. Hearts and purchases aren’t in it — a purchase comes back through Restore in Settings.', {
       size: 24, colour: PALETTE.muted, align: 'center',
     }).setOrigin(0.5, 1).setDepth(1);
-    this.notice = body(this, '', { size: 25, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setDepth(1);
+    // Bottom-anchored, as Help's is, so a two-line notice grows up into the gap rather
+    // than down into the button.
+    this.notice = body(this, '', { size: 24, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5, 1).setDepth(1);
     this.buttons = {
-      copy: this.button('Copy', true, 42),
+      copy: this.button('Copy', true, 40),
       enter: this.button('Enter a code', false, 26),
     };
     this.curtain = new SceneCurtain(this);
@@ -128,7 +130,7 @@ export class TransferScene extends BaseScene {
 
   protected override layout(): void {
     const { safe } = this.viewport;
-    const s = Math.min(safe.width / 720, safe.height / 1200);
+    const s = Math.min(safe.width / 720, safe.height / 1150);
     this.uiScale = s;
     this.backdrop.layout(this.viewport);
     const control = Math.max(88 * s, 48 * this.viewport.unitScale);
@@ -148,7 +150,7 @@ export class TransferScene extends BaseScene {
     this.buttons.copy.rect.setTo(left, this.buttons.enter.rect.y - 16 * s - heroH, width, heroH);
 
     this.intro.setWordWrapWidth(Math.min(560 * s, width), false);
-    resize(this.intro, 28 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.intro, 27 * s, PALETTE.muted, STYLE.current, false);
     this.intro.setPosition(safe.centerX, safe.top + 132 * s);
 
     // Laid out from the bottom up, so that on a short 16:9 screen the card gives way and
@@ -156,8 +158,8 @@ export class TransferScene extends BaseScene {
     // the buttons before the card is given what is left. Laying it out top-down instead
     // let the card grow into the footnote's space and put two lines of text on each other.
     this.notice.setWordWrapWidth(width - 20 * s, false);
-    resize(this.notice, 25 * s, PALETTE.coral, STYLE.current, false);
-    this.notice.setPosition(safe.centerX, this.buttons.copy.rect.y - 40 * s);
+    resize(this.notice, 24 * s, PALETTE.coral, STYLE.current, false);
+    this.notice.setPosition(safe.centerX, this.buttons.copy.rect.y - 22 * s);
     this.scope.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.scope, 24 * s, PALETTE.muted, STYLE.current, false);
     const scopeBottom = this.buttons.copy.rect.y - 84 * s;
@@ -166,7 +168,7 @@ export class TransferScene extends BaseScene {
     // The card is sized to the code, not to the space left over. Stretched to fill, it
     // read as an empty box with a few characters adrift in the middle of it; the room
     // belongs around the card, where it sets the one thing on screen apart from the paper.
-    resize(this.codeNote, 20 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.codeNote, 19 * s, PALETTE.muted, STYLE.current, false);
     this.codeText.setWordWrapWidth(width - 76 * s, false);
     resize(this.codeText, TRANSFER.codeSize * s, PALETTE.ink, STYLE.current, false);
     const bandTop = this.intro.y + this.intro.height + 28 * s;
@@ -177,7 +179,7 @@ export class TransferScene extends BaseScene {
     );
     this.cardRect.setTo(left, (bandTop + bandBottom) / 2 - cardHeight / 2, width, cardHeight);
     this.codeText.setPosition(this.cardRect.centerX, this.cardRect.y + TRANSFER.cardPadding * s + this.codeText.height / 2);
-    this.codeNote.setPosition(this.cardRect.centerX, this.cardRect.bottom - 30 * s);
+    this.codeNote.setPosition(this.cardRect.centerX, this.cardRect.bottom - 26 * s);
 
     this.drawPlates();
     this.drawControls(0);
@@ -211,7 +213,7 @@ export class TransferScene extends BaseScene {
         depth, press: p, hero: button.hero,
         radius: Math.min(button.rect.height / 2, STYLE.current.radius * 1.4),
       });
-      const size = (button.hero ? 42 : 26) * s;
+      const size = (button.hero ? 40 : 26) * s;
       resize(button.text, size, button.hero ? SHELL.cream : PALETTE.ink, STYLE.current, button.hero);
       button.text.setPosition(button.rect.centerX, button.rect.centerY + depth * s * p * 0.8);
     }

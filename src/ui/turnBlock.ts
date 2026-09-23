@@ -1,10 +1,12 @@
 import Phaser from 'phaser';
 import { PALETTE, SHELL } from '@/config/theme';
 import { fuse, type Handover, type Mark } from '@/game/beatTrack';
-import { easeInOutCubic, easeOut } from '@/vignettes/motion';
+import { clamp01, easeInOutCubic, easeOut } from '@/vignettes/motion';
 import { mix, shade } from './colour';
+import { socketGlint, sweepBand } from './flourish';
 import { drawHammerMark, drawTapMark } from './icons';
 import { drawPanel } from './panel';
+import { squash } from './spring';
 
 /**
  * The turn block: two rows at the thumb that say whose turn it is, and one token that
@@ -171,6 +173,10 @@ export interface BlockState {
   readonly ghost: Ghost | null;
   /** The act's ink, for the bar through a missed socket. */
   readonly ink: number;
+  /** Seconds since the turn arrived in the player's hand; -Infinity before it has. */
+  readonly landed: number;
+  /** Seconds since every beat of the task was judged Perfect; omitted or -Infinity otherwise. */
+  readonly flawless?: number;
 }
 
 /** How far the face has warmed toward coral, and how far it has risen into the thumb. */
@@ -191,6 +197,76 @@ export function batonCrossing(turn: Handover, still: boolean): number {
 }
 
 /**
+ * The baton's place on its arc at crossing `t`, and how far up the arc it is (0 at either
+ * slot, 1 at the top of the bow). The bow matters: the token passes *over* the columns it
+ * is handing across, rather than sliding down a wall beside them.
+ */
+export function batonAt(geo: BlockGeometry, s: number, t: number, lift: number, still: boolean): { x: number; y: number; arc: number } {
+  const arc = still ? 0 : Math.sin(Math.PI * t);
+  return {
+    x: geo.shelfSlot.x + (geo.faceSlot.x - geo.shelfSlot.x) * t + TRACK.batonBow * s * arc,
+    y: geo.shelfCentreY + (geo.faceCentreY - geo.shelfCentreY) * t - lift * t,
+    arc,
+  };
+}
+
+/**
+ * The ghosts a crossing baton leaves behind it on the arc: earlier crossings, fainter
+ * with distance, so the token visibly *travels* rather than being somewhere else each
+ * frame. Empty at either slot and under reduced motion, where there is no travel to show.
+ */
+export function batonTrail(t: number, still: boolean, count = 4, spacing = 0.06): readonly { readonly t: number; readonly alpha: number }[] {
+  if (still || t <= 0 || t >= 1) return [];
+  const ghosts: { t: number; alpha: number }[] = [];
+  // Strongest mid-arc, where the baton moves fastest; nothing when it is barely moving.
+  const speed = Math.sin(Math.PI * t);
+  for (let k = 1; k <= count; k++) {
+    const behind = t - k * spacing;
+    if (behind <= 0) break;
+    ghosts.push({ t: behind, alpha: speed * (0.34 - 0.07 * k) });
+  }
+  return ghosts;
+}
+
+/** How long the landing's ring and squash last, in seconds. */
+const LANDING_SEC = 0.46;
+
+/** The ring the baton throws across the face as it lands: spread 0 → 1 and the alpha left. */
+export function landingRipple(age: number, still: boolean): { readonly spread: number; readonly alpha: number } {
+  if (still || !Number.isFinite(age) || age < 0 || age >= LANDING_SEC) return { spread: 1, alpha: 0 };
+  const p = age / LANDING_SEC;
+  return { spread: easeOut(p), alpha: (1 - p) ** 1.5 * 0.7 };
+}
+
+/** The baton's compression on landing: wider than tall for an instant, then round again. */
+export function landingSquash(age: number, still: boolean): number {
+  return still ? 0 : squash(age, LANDING_SEC * 0.7, 0.22);
+}
+
+/**
+ * The glyph on the baton, shrinking to a sliver at the midpoint of the crossing and
+ * growing back as the other owner's — a coin turning over, which is what a token that
+ * has changed hands should look like, rather than one whose face was swapped.
+ */
+export function glyphFlip(t: number): number {
+  return 0.25 + 0.75 * Math.abs(Math.cos(Math.PI * clamp01(t)));
+}
+
+/** A pending socket swells as the fuse reaches it — a small pop, gone once it is fully lit. */
+export function socketPop(lit: number): number {
+  return Math.sin(Math.PI * clamp01(lit)) * 0.14;
+}
+
+/**
+ * How visible the line dropping from a shelf bead to its socket is. It arrives with the
+ * fuse — the pattern is visibly handed *down* from their row to yours, which is the whole
+ * metaphor — and thins once the turn has arrived, so it never competes with the answer.
+ */
+export function dropLine(turn: Handover, index: number, still: boolean): number {
+  return socketFuse(turn, index, still) * (1 - 0.7 * turn.yours) * 0.42;
+}
+
+/**
  * How lit one socket's ring is. A fuse burning left to right during the runway, so the
  * row reads as a sequence being handed over rather than a bank of lamps coming on
  * together; under reduced motion all of them, in two steps.
@@ -207,7 +283,7 @@ export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s:
   drawShelf(g, geo, s, state, rattle);
   const face = drawFace(g, geo, s, state, heat, lift, rattle);
   drawOwnerSlots(g, geo, s, turn, face, lift, rattle);
-  drawBaton(g, geo, s, turn, still, lift, rattle);
+  drawBaton(g, geo, s, turn, still, lift, rattle, state.landed);
 }
 
 /** The demonstration's row: a plank recessed into the scene, and the beats landing on it. */
@@ -272,12 +348,26 @@ function drawFace(
   }
 
   const y = geo.faceCentreY - lift;
+  // The pattern dropping from their row into yours: one thin line per column, from the
+  // bead on the shelf to the socket under it, arriving with the fuse. Drawn before the
+  // sockets so a socket's own ring sits over the line's end.
+  const shelfBead = TRACK.shelfBeadRadius * s;
+  for (let i = 0; i < state.centres.length; i++) {
+    const alpha = dropLine(state.turn, i, state.still);
+    if (alpha <= 0.01) continue;
+    const x = geo.face.centerX + state.centres[i]! + rattle;
+    g.lineStyle(2.4 * s, SOCKET_RING, alpha)
+      .lineBetween(x, geo.shelfCentreY + shelfBead + 3 * s, x, y - state.socketRadius - 2 * s);
+  }
   for (let i = 0; i < state.centres.length; i++) {
     const x = geo.face.centerX + state.centres[i]! + rattle;
     const mark = state.marks[i] ?? 'pending';
     const lit = socketFuse(state.turn, i, state.still);
     const struck = mark === 'perfect' || mark === 'good';
-    const r = state.socketRadius * (1 + (i === state.struck.index ? state.struck.amount : 0));
+    // The struck swell for an answered socket; for a pending one, the pop as its fuse
+    // reaches it, so the row visibly counts itself off left to right.
+    const swell = i === state.struck.index ? state.struck.amount : struck ? 0 : state.still ? 0 : socketPop(lit);
+    const r = state.socketRadius * (1 + swell);
     if (struck) {
       // Good sits inside a full ring, so a Perfect and a Good still read apart at a glance.
       const disc = mark === 'good' ? r * 0.62 : r;
@@ -295,6 +385,8 @@ function drawFace(
     }
   }
 
+  drawFlawless(g, geo, s, state, plate, y);
+
   const ghost = state.ghost;
   if (ghost && ghost.alpha > 0.01) {
     const gx = geo.face.centerX + (state.centres[ghost.index] ?? 0) + rattle;
@@ -304,6 +396,41 @@ function drawFace(
     g.lineStyle(4 * s, SHELL.cream, ghost.alpha).strokeCircle(gx, y, radius);
   }
   return fill;
+}
+
+/**
+ * The flourish for a flawless task, on the row it was earned on: a band of light crosses
+ * the face left to right and each socket glints as it passes. The word is the scene's;
+ * this is the part that belongs to the block, and under reduced motion it is the glint
+ * alone — every ring at once, without the sweep — since the information is in the glint.
+ */
+function drawFlawless(
+  g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, plate: Phaser.Geom.Rectangle, y: number,
+): void {
+  const age = state.flawless;
+  if (age === undefined || !Number.isFinite(age) || age < 0) return;
+  const band = state.still ? { at: 0, alpha: 0 } : sweepBand(age);
+  if (band.alpha > 0.01) {
+    // A vertical band, clipped to the plate by arithmetic since Graphics cannot clip: its
+    // left and right edges are held inside the plate and it simply narrows at either end.
+    const half = plate.width * 0.09;
+    const centre = plate.x + plate.width * band.at;
+    const left = Math.max(plate.x, centre - half);
+    const right = Math.min(plate.x + plate.width, centre + half);
+    if (right > left) {
+      const inset = 4 * s;
+      g.fillStyle(SHELL.cream, band.alpha).fillRect(left, plate.y + inset, right - left, plate.height - inset * 2);
+    }
+  }
+  for (let i = 0; i < state.centres.length; i++) {
+    const glint = state.still ? Math.min(1, age / 0.4) : socketGlint(age, i, state.centres.length);
+    if (glint < 0 || glint >= 1) continue;
+    const x = geo.face.centerX + state.centres[i]! + state.rattle;
+    const r = state.socketRadius;
+    const fade = (1 - glint) ** 1.4;
+    g.lineStyle((5 - 3 * glint) * s, 0xffe7a0, fade * 0.85).strokeCircle(x, y, r * (1.05 + 1.6 * glint));
+    g.fillStyle(SHELL.cream, fade * 0.45).fillCircle(x, y, r * 0.9);
+  }
 }
 
 /**
@@ -333,23 +460,47 @@ function drawOwnerSlots(
 
 /**
  * The turn itself, changing hands. The bow matters: the token passes *over* the columns
- * it is handing across, rather than sliding down a wall beside them.
+ * it is handing across, rather than sliding down a wall beside them. On the way it leaves
+ * a trail of itself, turns over like a coin so the glyph that arrives is the player's, and
+ * lands with a squash and a ring across the face — all of which is what makes one coral
+ * disc read as an object being handed to you rather than as a light that moved.
  */
 function drawBaton(
-  g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, turn: Handover, still: boolean, lift: number, rattle: number,
+  g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, turn: Handover, still: boolean, lift: number, rattle: number, landed: number,
 ): void {
   const t = batonCrossing(turn, still);
-  const arc = still ? 0 : Math.sin(Math.PI * t);
-  const x = geo.shelfSlot.x + (geo.faceSlot.x - geo.shelfSlot.x) * t + TRACK.batonBow * s * arc + rattle;
-  const y = geo.shelfCentreY + (geo.faceCentreY - geo.shelfCentreY) * t - lift * t;
+  const at = batonAt(geo, s, t, lift, still);
+  const x = at.x + rattle;
+  const y = at.y;
+  const arc = at.arc;
   const r = TRACK.batonRadius * s * (1 + 0.16 * arc);
+
+  for (const ghost of batonTrail(t, still)) {
+    const past = batonAt(geo, s, ghost.t, lift, still);
+    const pr = TRACK.batonRadius * s * (1 + 0.16 * past.arc) * (0.72 + 0.2 * ghost.alpha);
+    g.fillStyle(PALETTE.coral, ghost.alpha).fillCircle(past.x + rattle, past.y, pr);
+  }
+
+  const ripple = landingRipple(landed, still);
+  if (ripple.alpha > 0.01) {
+    const reach = r * (1 + 3.2 * ripple.spread);
+    g.lineStyle((6 - 4 * ripple.spread) * s, PALETTE.coral, ripple.alpha).strokeCircle(x, y, reach);
+    g.lineStyle(2 * s, SHELL.cream, ripple.alpha * 0.6).strokeCircle(x, y, reach * 0.82);
+  }
+
   const glow = (10 + 30 * arc) * s;
   for (let i = 3; i >= 1; i--) {
     g.fillStyle(PALETTE.coral, 0.5 * (i === 3 ? 0.18 : i === 2 ? 0.26 : 0.34)).fillCircle(x, y, r + glow * (i / 3));
   }
-  g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillCircle(x, y + 3 * s, r);
-  g.fillStyle(PALETTE.coral, 1).fillCircle(x, y, r);
-  const glyph = r * 0.5;
+  // Wider than tall for an instant as it lands, then round again; Graphics has no
+  // rotation for an ellipse, and a landing is the one moment the squash is on an axis.
+  const sq = landingSquash(landed, still);
+  const w = r * 2 * (1 + sq), h = r * 2 * (1 - sq);
+  g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillEllipse(x, y + 3 * s, w, h);
+  g.fillStyle(PALETTE.coral, 1).fillEllipse(x, y, w, h);
+  // A catch of light on the top-left, so the disc has the thickness the pucks have.
+  g.fillStyle(SHELL.cream, 0.28).fillEllipse(x - r * 0.22, y - r * 0.3, w * 0.36, h * 0.22);
+  const glyph = r * 0.5 * (still ? 1 : glyphFlip(t));
   if (t < 0.5) drawHammerMark(g, x, y, glyph, SHELL.cream);
   else drawTapMark(g, x, y, glyph, SHELL.cream);
 }

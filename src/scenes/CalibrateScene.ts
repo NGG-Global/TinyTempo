@@ -140,7 +140,7 @@ export class CalibrateScene extends BaseScene {
 
   protected override layout(): void {
     const { safe } = this.viewport;
-    const s = Math.min(safe.width / 720, safe.height / 1200);
+    const s = Math.min(safe.width / 720, safe.height / 1150);
     this.uiScale = s;
     this.backdrop.layout(this.viewport);
     const control = Math.max(88 * s, 48 * this.viewport.unitScale);
