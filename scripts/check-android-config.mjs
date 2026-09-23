@@ -183,30 +183,35 @@ if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(bo
  * check it names this project. The layout is observed rather than documented by Google,
  * so a mismatch is a warning to go and copy the id again, never a failed build.
  */
-/** The Games project and item type a Console id carries, or null if it does not parse. */
+/**
+ * The Games project and item number a Console id carries, or null if it does not parse.
+ * `0x0a <len> 0x08 <varint project> 0x10 0x02 0x10 <varint number>`: the leaderboard and the
+ * five achievements all carry the same `0x10 0x02`, so it is not an item type, and the last
+ * field numbers every item the project has, leaderboards and achievements together.
+ */
 function decodeGamesId(id) {
   try {
     const bytes = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    // 0x0a <len> 0x08 <varint project> 0x10 <type> ... : field 1 holds the project and type.
     if (bytes[0] !== 0x0a || bytes[2] !== 0x08) return null;
-    let value = 0n, shift = 0n, i = 3;
-    for (; i < bytes.length && i < 14; i++) {
-      value |= BigInt(bytes[i] & 0x7f) << shift;
-      shift += 7n;
-      if ((bytes[i] & 0x80) === 0) break;
-    }
-    if (bytes[i + 1] !== 0x10) return null;
-    return { project: value.toString(), type: bytes[i + 2] };
+    const varint = start => {
+      let value = 0n, shift = 0n;
+      for (let i = start; i < bytes.length && i < start + 10; i++) {
+        value |= BigInt(bytes[i] & 0x7f) << shift;
+        shift += 7n;
+        if ((bytes[i] & 0x80) === 0) return { value, next: i + 1 };
+      }
+      return null;
+    };
+    const project = varint(3);
+    if (!project || bytes[project.next] !== 0x10 || bytes[project.next + 2] !== 0x10) return null;
+    const number = varint(project.next + 3);
+    return number ? { project: project.value.toString(), number: number.value.toString() } : null;
   } catch {
     return null;
   }
 }
-// Type 2 is a leaderboard, the only type a known-good id has confirmed so far.
-function projectOfLeaderboard(id) {
-  const decoded = decodeGamesId(id);
-  return decoded && decoded.type === 0x02 ? decoded.project : null;
-}
-if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOfLeaderboard(boardId) !== PGS_PROJECT_ID) {
+const projectOf = id => decodeGamesId(id)?.project ?? null;
+if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOf(boardId) !== PGS_PROJECT_ID) {
   notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id that does not decode to\n'
     + `    Games project ${PGS_PROJECT_ID}:\n`
     + `      found    ${boardId}\n`
@@ -215,12 +220,19 @@ if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOfLeaderbo
 }
 /*
  * Achievement ids (`src/config/achievements.ts`), checked the same way. Empty is allowed —
- * that achievement is simply off. Only the project is checked, not the type: the type byte
- * an achievement id carries has not been confirmed against a real one yet.
+ * that achievement is simply off. An id pasted into two entries, or the leaderboard's id
+ * pasted into one, names this project and would pass; it is caught as a repeat instead.
  */
 const achievementsConfig = read('src/config/achievements.ts') ?? '';
+const seenIds = new Map(boardId === '' ? [] : [[boardId, 'the Daily Tempo leaderboard']]);
 for (const [, key, id] of achievementsConfig.matchAll(/key:\s*'([^']+)'[^}]*?id:\s*'([^']*)'/g)) {
   if (id === '') continue;
+  if (seenIds.has(id)) {
+    notes.push(`src/config/achievements.ts gives ${key} the same id as ${seenIds.get(id)}:\n`
+      + `      found    ${id}\n`
+      + '    Each achievement has its own id; copy this one again from its own Console page.');
+  }
+  seenIds.set(id, key);
   const shapeOk = /^[A-Za-z0-9_-]{8,64}$/.test(id) && !/^\d+$/.test(id);
   if (!shapeOk || decodeGamesId(id)?.project !== PGS_PROJECT_ID) {
     notes.push(`src/config/achievements.ts has an id for ${key} that does not name Games project ${PGS_PROJECT_ID}:\n`

@@ -250,8 +250,8 @@ nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
 past a finale is owed it on their first signed-in launch. v2's `unlock` queues offline and
 ignores repeats, so `playgames/achievementSync.ts` hands every earned one over once a
 session — after a *saved* result (an unlock cannot be taken back) and at boot once signed
-in — and keeps no ledger. Ids are empty until created; an empty id leaves that achievement
-off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
+in — and keeps no ledger. All five ids are set and pinned by `tests/achievements.test.ts`; an
+empty id leaves an achievement off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
 
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is
 scheduled on the grid and drawn from the heard clock, so it stays together on any route; the

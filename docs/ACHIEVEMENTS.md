@@ -49,17 +49,29 @@ prompts; the Achievements button is the one place sign-in is offered.
 
 ## Configuration
 
-`src/config/achievements.ts` — each `id` is empty until the achievement exists, and an empty
-id simply leaves that one achievement off:
+`src/config/achievements.ts` holds each Achievement ID from the Console. An empty id simply
+leaves that one achievement off, which is how a new entry waits for its Console id.
 
-```ts
-{ key: 'clear-10', clearLevel: 10, id: '' },   // ← Achievement ID from the Console
-```
+| Key | Achievement ID | Item |
+| --- | --- | --- |
+| `clear-10` | `CgkI0Mey9o8ZEAIQAg` | 2 |
+| `clear-20` | `CgkI0Mey9o8ZEAIQAw` | 3 |
+| `clear-30` | `CgkI0Mey9o8ZEAIQBA` | 4 |
+| `clear-40` | `CgkI0Mey9o8ZEAIQBQ` | 5 |
+| `clear-50` | `CgkI0Mey9o8ZEAIQBg` | 6 |
+
+All five decode to Games project `863268283344`; the item number counts leaderboards and
+achievements together, and the Daily Tempo leaderboard is item 1. They were supplied as a
+list in level order and assigned in that order, which matches the order they were created
+in. **Confirm on the device**: clearing level 10 must pop *Grass Complete*, not another
+area's. `tests/achievements.test.ts` pins every id, its project and its item number.
 
 **Copy each id with the Console's copy button; never retype it** — the first leaderboard id
 supplied was retyped and would have failed on every call (`docs/LEADERBOARDS.md`).
 `scripts/check-android-config.mjs` decodes every achievement id after `cap sync` and warns
-unless it names Games project `863268283344`.
+unless it names Games project `863268283344`, and warns when two entries share an id or one
+repeats the leaderboard's — a paste into the wrong row names the right project and would
+otherwise pass.
 
 **The list is append-only.** Never change what an existing entry is earned by: Play Games
 cannot take an unlocked achievement back, so moving one hands it to players who did not earn
@@ -97,11 +109,11 @@ Then **Save as draft**. A draft achievement works for accounts on the PGS Tester
 and a published achievement cannot be deleted. Name, description, points and icon can be
 edited and republished later.
 
-### 3. Send me the five ids
+### 3. Put the ids in the config (done for the first five)
 
-Each achievement's page shows its **Achievement ID**. Copy each with the copy button and send
-all five, labelled by level. They go into `src/config/achievements.ts`, and the check script
-confirms each names this project.
+Each achievement's page shows its **Achievement ID**. Copy each with the copy button,
+labelled by level. They go into `src/config/achievements.ts`, and the check script confirms
+each names this project.
 
 ### 4. Test with an internal tester
 

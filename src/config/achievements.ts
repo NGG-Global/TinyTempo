@@ -20,15 +20,15 @@ export interface AchievementConfig {
   readonly key: string;
   /** Earned by clearing this level — each is an area finale. */
   readonly clearLevel: number;
-  /** The Console's Achievement ID; empty until created. */
+  /** The Console's Achievement ID; empty until created, which leaves it off. */
   readonly id: string;
 }
 
 export const ACHIEVEMENTS: readonly AchievementConfig[] = Object.freeze([
   // The five area finales: Grass, Pavement, Sand, Snow and Dusk complete.
-  { key: 'clear-10', clearLevel: 10, id: '' },
-  { key: 'clear-20', clearLevel: 20, id: '' },
-  { key: 'clear-30', clearLevel: 30, id: '' },
-  { key: 'clear-40', clearLevel: 40, id: '' },
-  { key: 'clear-50', clearLevel: 50, id: '' },
+  { key: 'clear-10', clearLevel: 10, id: 'CgkI0Mey9o8ZEAIQAg' },
+  { key: 'clear-20', clearLevel: 20, id: 'CgkI0Mey9o8ZEAIQAw' },
+  { key: 'clear-30', clearLevel: 30, id: 'CgkI0Mey9o8ZEAIQBA' },
+  { key: 'clear-40', clearLevel: 40, id: 'CgkI0Mey9o8ZEAIQBQ' },
+  { key: 'clear-50', clearLevel: 50, id: 'CgkI0Mey9o8ZEAIQBg' },
 ]);

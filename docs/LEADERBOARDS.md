@@ -120,10 +120,12 @@ warns after `cap sync` if the value is malformed, or if Daily Tempo is switched 
 this leaderboard arrived as `CgklOMey908ZEAIQAQ` — three characters swapped for look-alikes
 (`I`→`l`, `0`→`O`, `o`→`0`). It passed the character check, and would have failed every call
 on device. The Console's ids are URL-safe base64 of a small protobuf that carries the Games
-project id, the item type (2 for a leaderboard) and its number, so the check script decodes
-the id and warns unless it names project `863268283344`, and `tests/leaderboard.test.ts`
-pins the configured one. `CgkI0Mey9o8ZEAIQAQ` decodes to project `863268283344`, leaderboard
-#1. That layout is observed, not documented by Google, which is why the script only warns.
+project id and the item's number, so the check script decodes the id and warns unless it
+names project `863268283344`, and `tests/leaderboard.test.ts` pins the configured one.
+`CgkI0Mey9o8ZEAIQAQ` decodes to project `863268283344`, item 1. The number counts
+leaderboards and achievements together — the five achievements are items 2 to 6 — and the
+`0x10 0x02` between the two is the same in all six, so it is not a type. That layout is
+observed, not documented by Google, which is why the script only warns.
 
 ## Play Console
 

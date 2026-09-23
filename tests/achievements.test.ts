@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ACHIEVEMENTS } from '../src/config/achievements';
+import { LEADERBOARDS } from '../src/config/leaderboards';
 import { isAreaFinale, levelSpec } from '../src/game/levels';
 import { mergeProgress, recordResult, type Progress } from '../src/game/progress';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
@@ -68,6 +69,28 @@ describe('the configured achievements', () => {
     // An empty id leaves that achievement off rather than failing.
     expect(achievementsFrom([{ key: 'x', clearLevel: 10, id: '' }])[0]!.id).toBeNull();
     expect(achievementsFrom([{ key: 'x', clearLevel: 10, id: '863268283344' }])[0]!.id).toBeNull();
+  });
+
+  it('are the five ids the Console gave this Games project, each its own', () => {
+    // URL-safe base64 of 0x0a <len> 0x08 <project varint> 0x10 0x02 0x10 <item number>. The
+    // leaderboard is item 1 and these were created next, 2 to 6, in level order.
+    const decode = (id: string) => {
+      const bytes = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+      let project = 0n, shift = 0n, i = 3;
+      for (; bytes[i]! & 0x80; i++, shift += 7n) project |= BigInt(bytes[i]! & 0x7f) << shift;
+      project |= BigInt(bytes[i]!) << shift;
+      return { head: [bytes[0], bytes[2], bytes[i + 1], bytes[i + 3]], project, item: bytes[i + 4] };
+    };
+    expect(decode(LEADERBOARDS.dailyTempo).item).toBe(1);
+    for (const [n, a] of ACHIEVEMENTS.entries()) {
+      expect(playGamesId(a.id), a.key).toBe(a.id);
+      const { head, project, item } = decode(a.id);
+      expect(head, a.key).toEqual([0x0a, 0x08, 0x10, 0x10]);
+      expect(project, a.key).toBe(863268283344n);
+      expect(item, a.key).toBe(n + 2);
+    }
+    const all = [LEADERBOARDS.dailyTempo, ...ACHIEVEMENTS.map(a => a.id)];
+    expect(new Set(all).size).toBe(all.length);
   });
 });
 

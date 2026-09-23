@@ -124,7 +124,7 @@ describe('configuration', () => {
   it('is configured with a leaderboard of this Games project, and nothing surfaces while Daily Tempo does not exist', async () => {
     expect(leaderboardId(LEADERBOARDS.dailyTempo)).toBe(LEADERBOARDS.dailyTempo);
     // The id is URL-safe base64 of 0x0a <len> 0x08 <project varint> 0x10 0x02 …: it must name
-    // project 863268283344 as a leaderboard. The first id supplied was retyped (I/l, O/0, o/0)
+    // project 863268283344. The first id supplied was retyped (I/l, O/0, o/0)
     // and named nothing, which only decoding it revealed.
     const bytes = Buffer.from(LEADERBOARDS.dailyTempo.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
     expect([bytes[0], bytes[2]]).toEqual([0x0a, 0x08]);
