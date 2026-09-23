@@ -158,6 +158,96 @@ if (declaresGamesV1) {
     + '    used; the two do not belong in the same build.');
 }
 
+/*
+ * The Daily Tempo leaderboard id (`src/config/leaderboards.ts`). Empty is allowed — it is
+ * how a build ships before the leaderboard exists, and the game simply offers no
+ * leaderboard. What is not allowed is a value the Games SDK will refuse on every call: the
+ * numeric Games project id pasted into the wrong field is the likely one, and it fails as
+ * silently as a wrong APP_ID does. The rule is the one `leaderboardId` applies at runtime.
+ */
+const leaderboards = read('src/config/leaderboards.ts') ?? '';
+const dailyTempo = read('src/config/dailyTempo.ts') ?? '';
+const boardId = /^\s*dailyTempo:\s*'([^']*)'/m.exec(leaderboards)?.[1] ?? '';
+const modeShips = /DAILY_TEMPO_AVAILABLE\s*=\s*true/.test(dailyTempo);
+if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(boardId))) {
+  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id the Games SDK will refuse:\n'
+    + `      found    ${boardId}\n`
+    + '    It must be the Leaderboard ID from Play Console → Play Games Services → Leaderboards\n'
+    + `    (letters, digits, - and _), not the numeric Games project id ${PGS_PROJECT_ID}.`);
+}
+/*
+ * A leaderboard id that passes the character rule can still be wrong in a way that fails
+ * silently on device: one retyped from a screenshot, where I and l, O and 0, o and 0 look
+ * alike. The first id this game was given arrived exactly that way. The Console's ids are
+ * URL-safe base64 of a small protobuf that carries the Games project id, so decode it and
+ * check it names this project. The layout is observed rather than documented by Google,
+ * so a mismatch is a warning to go and copy the id again, never a failed build.
+ */
+/**
+ * The Games project and item number a Console id carries, or null if it does not parse.
+ * `0x0a <len> 0x08 <varint project> 0x10 0x02 0x10 <varint number>`: the leaderboard and the
+ * five achievements all carry the same `0x10 0x02`, so it is not an item type, and the last
+ * field numbers every item the project has, leaderboards and achievements together.
+ */
+function decodeGamesId(id) {
+  try {
+    const bytes = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    if (bytes[0] !== 0x0a || bytes[2] !== 0x08) return null;
+    const varint = start => {
+      let value = 0n, shift = 0n;
+      for (let i = start; i < bytes.length && i < start + 10; i++) {
+        value |= BigInt(bytes[i] & 0x7f) << shift;
+        shift += 7n;
+        if ((bytes[i] & 0x80) === 0) return { value, next: i + 1 };
+      }
+      return null;
+    };
+    const project = varint(3);
+    if (!project || bytes[project.next] !== 0x10 || bytes[project.next + 2] !== 0x10) return null;
+    const number = varint(project.next + 3);
+    return number ? { project: project.value.toString(), number: number.value.toString() } : null;
+  } catch {
+    return null;
+  }
+}
+const projectOf = id => decodeGamesId(id)?.project ?? null;
+if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOf(boardId) !== PGS_PROJECT_ID) {
+  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id that does not decode to\n'
+    + `    Games project ${PGS_PROJECT_ID}:\n`
+    + `      found    ${boardId}\n`
+    + '    Copy it again with the copy button in Play Console → Play Games Services → Leaderboards;\n'
+    + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every call.');
+}
+/*
+ * Achievement ids (`src/config/achievements.ts`), checked the same way. Empty is allowed —
+ * that achievement is simply off. An id pasted into two entries, or the leaderboard's id
+ * pasted into one, names this project and would pass; it is caught as a repeat instead.
+ */
+const achievementsConfig = read('src/config/achievements.ts') ?? '';
+const seenIds = new Map(boardId === '' ? [] : [[boardId, 'the Daily Tempo leaderboard']]);
+for (const [, key, id] of achievementsConfig.matchAll(/key:\s*'([^']+)'[^}]*?id:\s*'([^']*)'/g)) {
+  if (id === '') continue;
+  if (seenIds.has(id)) {
+    notes.push(`src/config/achievements.ts gives ${key} the same id as ${seenIds.get(id)}:\n`
+      + `      found    ${id}\n`
+      + '    Each achievement has its own id; copy this one again from its own Console page.');
+  }
+  seenIds.set(id, key);
+  const shapeOk = /^[A-Za-z0-9_-]{8,64}$/.test(id) && !/^\d+$/.test(id);
+  if (!shapeOk || decodeGamesId(id)?.project !== PGS_PROJECT_ID) {
+    notes.push(`src/config/achievements.ts has an id for ${key} that does not name Games project ${PGS_PROJECT_ID}:\n`
+      + `      found    ${id}\n`
+      + '    Copy it again with the copy button in Play Console → Play Games Services → Achievements;\n'
+      + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every unlock.');
+  }
+}
+
+if (modeShips && boardId === '') {
+  notes.push('Daily Tempo is switched on (src/config/dailyTempo.ts) but no leaderboard id is set in\n'
+    + '    src/config/leaderboards.ts, so its scores are never submitted and the leaderboard button\n'
+    + '    never appears. See docs/LEADERBOARDS.md.');
+}
+
 if (notes.length > 0) {
   console.warn(`\n  ⚠ ${notes.join('\n\n  ⚠ ')}\n`);
 }

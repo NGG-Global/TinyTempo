@@ -23,6 +23,7 @@ import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, mark
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
+import { syncAchievements } from '@/playgames/achievementSync';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
@@ -1645,6 +1646,9 @@ export class PlayScene extends BaseScene {
         perfect: this.tally.perfect, flawless: this.tally.flawless, keepsake: this.keepsake !== null,
       });
       playAnalytics.objectives(recordObjectives(report, Date.now(), objectiveContext(before)));
+      // Play Games achievements follow the saved clears. Not when the save failed: an unlock
+      // cannot be taken back, and the next launch would not find the clear that earned it.
+      void syncAchievements(outcome.progress);
     }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);

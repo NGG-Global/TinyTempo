@@ -54,7 +54,17 @@ export const GAMEPLAY_EVENTS = [
   'practice_completed',
 ] as const;
 
-export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS] as const;
+/**
+ * Play Games services, reported by `playgames/dailyTempo.ts` rather than the gameplay
+ * ledger: a leaderboard is an account feature on top of a result, not part of the result.
+ */
+export const SERVICE_EVENTS = [
+  'leaderboard_score_submitted',
+  'leaderboard_opened',
+  'leaderboard_submit_failed',
+] as const;
+
+export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS, ...SERVICE_EVENTS] as const;
 
 export type AnalyticsEvent = typeof ANALYTICS_EVENTS[number];
 export type GameplayEvent = typeof GAMEPLAY_EVENTS[number];
@@ -248,6 +258,33 @@ export interface AnalyticsPayloads {
     readonly stamps: number;
     /** Stamped days among the last seven. */
     readonly week: number;
+  };
+  /**
+   * Play Games leaderboards (`playgames/leaderboard.ts`). Only attempts are reported: a
+   * signed-out player, a browser and an unconfigured build send nothing on submit, because
+   * nothing was asked of Play Games. No score in these is identifying and no player id is
+   * ever sent — `accuracy` is the rounded percentage, as every level result carries.
+   */
+  readonly leaderboard_score_submitted: {
+    /** Which leaderboard: 'daily_tempo'. */
+    readonly leaderboard: string;
+    readonly accuracy: number;
+    /** Play Games said this beat the player's best on the daily view. */
+    readonly new_best: Flag;
+    /** 1 when this was a best kept from an earlier failed attempt, sent later. */
+    readonly retry: Flag;
+  };
+  readonly leaderboard_submit_failed: {
+    readonly leaderboard: string;
+    readonly reason: 'offline' | 'timeout' | 'failed' | 'invalid' | 'unavailable';
+    readonly retry: Flag;
+  };
+  /** The leaderboard button was tapped, and what came of it. */
+  readonly leaderboard_opened: {
+    readonly leaderboard: string;
+    readonly result: 'shown' | 'signed_out' | 'failed' | 'invalid' | 'unavailable' | 'unconfigured';
+    /** 1 when the tap had to offer Play Games sign-in first. */
+    readonly sign_in: Flag;
   };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };

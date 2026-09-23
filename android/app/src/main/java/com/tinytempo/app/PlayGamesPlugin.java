@@ -3,16 +3,24 @@ package com.tinytempo.app;
 import android.app.Activity;
 import android.util.Log;
 
+import androidx.activity.result.ActivityResult;
+
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.ActivityCallback;
 import com.getcapacitor.annotation.CapacitorPlugin;
 
+import com.google.android.gms.common.api.ApiException;
+import com.google.android.gms.common.api.CommonStatusCodes;
 import com.google.android.gms.games.AuthenticationResult;
+import com.google.android.gms.games.GamesClientStatusCodes;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.Player;
+import com.google.android.gms.games.leaderboard.LeaderboardVariant;
+import com.google.android.gms.games.leaderboard.ScoreSubmissionData;
 
 /**
  * Play Games Services v2, exposed to the web layer.
@@ -33,6 +41,11 @@ import com.google.android.gms.games.Player;
  * reintroduced: v2 signs the player in automatically at startup and has no interactive
  * client to drive.
  *
+ * <p><b>Leaderboards and achievements never sign in.</b> {@link #submitScore},
+ * {@link #showLeaderboard}, {@link #unlockAchievement} and {@link #showAchievements} use v2's
+ * {@code LeaderboardsClient} and {@code AchievementsClient}. None prompts; the web layer
+ * offers sign-in only when the player taps a leaderboard or achievements button.
+ *
  * <p><b>Nothing sensitive is logged.</b> There are no tokens here to leak —
  * {@code requestServerSideAccess} is the only call that returns one and this plugin does
  * not make it — and the player id is treated as identifying, so it crosses the bridge but
@@ -44,6 +57,8 @@ import com.google.android.gms.games.Player;
 public class PlayGamesPlugin extends Plugin {
 
     private static final String TAG = "TinyTempoPGS";
+    /** The highest score the game ever sends: 100% in thousandths (see playgames/leaderboard.ts). */
+    private static final long MAX_SCORE = 100_000L;
 
     /**
      * Whether Play Games has already signed this player in.
@@ -139,6 +154,223 @@ public class PlayGamesPlugin extends Plugin {
                 resolveAuthenticated(call, false, "unavailable");
             }
         });
+    }
+
+    /**
+     * Submit one score to one leaderboard, and say whether Play Games took it.
+     *
+     * {@code submitScoreImmediate} rather than the fire-and-forget {@code submitScore}, so
+     * the game learns whether the score arrived and can keep a failed one to send later —
+     * v2 has no deferred-operation status of its own. It never prompts for sign-in and never
+     * rejects: a signed-out player, a network failure and a missing SDK are all reasons.
+     * Only the reason is logged; the score, the leaderboard id and the player are not.
+     */
+    @PluginMethod
+    public void submitScore(final PluginCall call) {
+        final String leaderboardId = call.getString("leaderboardId", "");
+        final Long score = call.getLong("score");
+        final String tag = call.getString("tag", null);
+        if (leaderboardId == null || leaderboardId.isEmpty() || score == null || score < 0 || score > MAX_SCORE) {
+            resolveSubmission(call, false, false, "invalid");
+            return;
+        }
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveSubmission(call, false, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                PlayGames.getLeaderboardsClient(activity)
+                        .submitScoreImmediate(leaderboardId, score, tag)
+                        .addOnSuccessListener(data -> resolveSubmission(call, true, newBestToday(data), "submitted"))
+                        .addOnFailureListener(error -> {
+                            String reason = failureReason(error);
+                            Log.i(TAG, "Leaderboard submission failed: " + reason);
+                            resolveSubmission(call, false, false, reason);
+                        });
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games leaderboards are unavailable on this device.", error);
+                resolveSubmission(call, false, false, "unavailable");
+            }
+        });
+    }
+
+    /**
+     * Open Play Games' own screen for one leaderboard, on the requested timespan.
+     *
+     * Play Games keeps a daily, a weekly and an all-time view of every leaderboard, and
+     * the screen lets the player switch between them; {@code span} only picks which one it
+     * opens on. Resolves when the player closes it. Signed out, it resolves
+     * {@code signed_out} without showing anything — the caller decides whether to offer
+     * sign-in, because only a tap on the leaderboard button should ever lead to a prompt.
+     */
+    @PluginMethod
+    public void showLeaderboard(final PluginCall call) {
+        final String leaderboardId = call.getString("leaderboardId", "");
+        if (leaderboardId == null || leaderboardId.isEmpty()) {
+            resolveView(call, false, "invalid");
+            return;
+        }
+        final int span = timeSpan(call.getString("span", "daily"));
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveView(call, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                PlayGames.getLeaderboardsClient(activity)
+                        .getLeaderboardIntent(leaderboardId, span)
+                        .addOnSuccessListener(intent -> startActivityForResult(call, intent, "leaderboardClosed"))
+                        .addOnFailureListener(error -> {
+                            String reason = failureReason(error);
+                            Log.i(TAG, "Leaderboard screen unavailable: " + reason);
+                            resolveView(call, false, "offline".equals(reason) || "timeout".equals(reason) ? "failed" : reason);
+                        });
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games leaderboards are unavailable on this device.", error);
+                resolveView(call, false, "unavailable");
+            }
+        });
+    }
+
+    /**
+     * Unlock one achievement.
+     *
+     * v2's fire-and-forget {@code unlock}, deliberately rather than {@code unlockImmediate}:
+     * Play Games queues an unlock made offline and syncs it when the device is back, and an
+     * achievement already unlocked is left as it is, so the game can hand over every earned
+     * achievement each session without keeping a ledger. Signed out, the SDK has no player to
+     * unlock for, so that is answered here rather than handed over and lost. Never prompts,
+     * never rejects, and never logs the id.
+     */
+    @PluginMethod
+    public void unlockAchievement(final PluginCall call) {
+        final String achievementId = call.getString("achievementId", "");
+        if (achievementId == null || achievementId.isEmpty()) {
+            resolveUnlock(call, false, "invalid");
+            return;
+        }
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveUnlock(call, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                signInClient(activity)
+                        .isAuthenticated()
+                        .addOnSuccessListener(result -> {
+                            if (!authenticated(result)) {
+                                resolveUnlock(call, false, "signed_out");
+                                return;
+                            }
+                            try {
+                                PlayGames.getAchievementsClient(activity).unlock(achievementId);
+                                resolveUnlock(call, true, "sent");
+                            } catch (Throwable error) {
+                                Log.w(TAG, "Achievement unlock could not be handed over.", error);
+                                resolveUnlock(call, false, "failed");
+                            }
+                        })
+                        .addOnFailureListener(error -> resolveUnlock(call, false, "signed_out"));
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games achievements are unavailable on this device.", error);
+                resolveUnlock(call, false, "unavailable");
+            }
+        });
+    }
+
+    /**
+     * Open Play Games' own achievements screen. Resolves when the player closes it; signed
+     * out, resolves {@code signed_out} without showing anything, as the leaderboard does.
+     */
+    @PluginMethod
+    public void showAchievements(final PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveView(call, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                PlayGames.getAchievementsClient(activity)
+                        .getAchievementsIntent()
+                        .addOnSuccessListener(intent -> startActivityForResult(call, intent, "achievementsClosed"))
+                        .addOnFailureListener(error -> {
+                            String reason = failureReason(error);
+                            Log.i(TAG, "Achievements screen unavailable: " + reason);
+                            resolveView(call, false, "offline".equals(reason) || "timeout".equals(reason) ? "failed" : reason);
+                        });
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games achievements are unavailable on this device.", error);
+                resolveView(call, false, "unavailable");
+            }
+        });
+    }
+
+    /** The achievements screen closed. */
+    @ActivityCallback
+    private void achievementsClosed(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        resolveView(call, true, "shown");
+        getBridge().releaseCall(call);
+    }
+
+    private void resolveUnlock(PluginCall call, boolean sent, String reason) {
+        JSObject payload = new JSObject();
+        payload.put("sent", sent);
+        payload.put("reason", reason);
+        call.resolve(payload);
+    }
+
+    /** The leaderboard screen closed. It was shown, whatever it returned. */
+    @ActivityCallback
+    private void leaderboardClosed(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        resolveView(call, true, "shown");
+        getBridge().releaseCall(call);
+    }
+
+    private static int timeSpan(String span) {
+        if ("weekly".equals(span)) return LeaderboardVariant.TIME_SPAN_WEEKLY;
+        if ("all_time".equals(span)) return LeaderboardVariant.TIME_SPAN_ALL_TIME;
+        return LeaderboardVariant.TIME_SPAN_DAILY;
+    }
+
+    private static boolean newBestToday(ScoreSubmissionData data) {
+        if (data == null) return false;
+        ScoreSubmissionData.Result daily = data.getScoreResult(LeaderboardVariant.TIME_SPAN_DAILY);
+        return daily != null && daily.newBest;
+    }
+
+    /** A closed set the web layer knows: never the exception's message, which may carry ids. */
+    private static String failureReason(Exception error) {
+        if (error instanceof ApiException) {
+            int code = ((ApiException) error).getStatusCode();
+            if (code == CommonStatusCodes.SIGN_IN_REQUIRED) return "signed_out";
+            if (code == CommonStatusCodes.NETWORK_ERROR
+                    || code == GamesClientStatusCodes.NETWORK_ERROR_OPERATION_FAILED
+                    || code == GamesClientStatusCodes.NETWORK_ERROR_NO_DATA) return "offline";
+            if (code == CommonStatusCodes.TIMEOUT) return "timeout";
+        }
+        return "failed";
+    }
+
+    private void resolveSubmission(PluginCall call, boolean submitted, boolean newBest, String reason) {
+        JSObject payload = new JSObject();
+        payload.put("submitted", submitted);
+        payload.put("newBest", newBest);
+        payload.put("reason", reason);
+        call.resolve(payload);
+    }
+
+    private void resolveView(PluginCall call, boolean shown, String reason) {
+        JSObject payload = new JSObject();
+        payload.put("shown", shown);
+        payload.put("reason", reason);
+        call.resolve(payload);
     }
 
     private GamesSignInClient signInClient(Activity activity) {

@@ -33,6 +33,22 @@ export async function bootPlayGames(): Promise<void> {
     const status = await adapter.refresh();
     // The status, never the player id: a breadcrumb rides along on crash reports.
     breadcrumb('play games', { authenticated: status.authenticated, reason: status.reason });
+    // A Daily Tempo best that could not be sent earlier — offline, or before sign-in —
+    // goes now. Loaded lazily and never awaited by anything: it cannot slow the boot.
+    // Its own try: the outer catch puts the stub back, and a leaderboard problem must never
+    // cost the player a sign-in that already succeeded.
+    if (status.authenticated) {
+      try {
+        const { dailyTempoLeaderboard } = await import('./dailyTempo');
+        void dailyTempoLeaderboard().retry();
+      } catch { /* the best stays pending for the next chance */ }
+      // Achievements are derived from the save, so a sync is all "catching up" takes: one
+      // earned while signed out or offline is handed over now. Play Games ignores repeats.
+      try {
+        const [{ syncAchievements }, { loadProgress }] = await Promise.all([import('./achievementSync'), import('@/game/progress')]);
+        void syncAchievements(loadProgress());
+      } catch { /* the next sync sends them */ }
+    }
   } catch {
     // Stub stays. A missing plugin must not take the game down.
     installed = stubPlayGames;

@@ -231,6 +231,28 @@ the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, w
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
 
+**One leaderboard, for a Daily Tempo that does not exist yet.** `LEADERBOARDS.dailyTempo`
+(`config/leaderboards.ts`) holds the Console id, but `DAILY_TEMPO_AVAILABLE`
+(`config/dailyTempo.ts`) is false, so nothing is submitted and no button shows. **A
+leaderboard id is copied, never retyped**: I/l, O/0 and o/0 pass every format check and fail
+on every call, so `check-android-config.mjs` decodes the id and warns unless it names project
+`863268283344` — the first id supplied failed exactly that way. The score is `round(accuracy × 1000)`
+from `leaderboardScore` alone, never re-derived. Play Games keeps daily, weekly and all-time
+views of one leaderboard by itself and resets the daily one at UTC−7, so `dailyTempoDay`
+reads that clock, not the local date. Only a score that beats the day's best is sent; a
+failed one is kept and retried; nothing here prompts except the leaderboard button, and
+nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
+`docs/LEADERBOARDS.md`.
+
+**Achievements are derived from the save and re-sent, never remembered.** The first five
+(`config/achievements.ts`) are earned by *clearing* levels 10–50, the area finales;
+`hasEarned` reads the save, so old saves, codes and merges carry them and a player already
+past a finale is owed it on their first signed-in launch. v2's `unlock` queues offline and
+ignores repeats, so `playgames/achievementSync.ts` hands every earned one over once a
+session — after a *saved* result (an unlock cannot be taken back) and at boot once signed
+in — and keeps no ledger. All five ids are set and pinned by `tests/achievements.test.ts`; an
+empty id leaves an achievement off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
+
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is
 scheduled on the grid and drawn from the heard clock, so it stays together on any route; the
 player's own beat, started at `currentTime` by the tap, reaches a Bluetooth headset 150–400 ms
@@ -529,6 +551,9 @@ src/
     game.ts            Phaser game config (every non-default value is justified)
     music.ts           Measured musical model of the shipped track
     progression.ts     The one difficulty curve and its knobs
+    dailyTempo.ts      Whether the Daily Tempo mode exists; everything built for it reads this
+    leaderboards.ts    Play Games leaderboard ids and the daily reset clock
+    achievements.ts    Play Games achievements: key, the level that earns it, Console id
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
     support.ts         The address a player writes to; mirrored in the legal pages
@@ -571,6 +596,11 @@ src/
     playGames.ts       Signed in or not, and who; pure, and the inert browser stub
     native.ts          The PlayGames bridge; validates the payload rather than casting it
     boot.ts            Native-only gate; the browser never leaves the stub
+    leaderboard.ts     Score conversion, the day's best, submission and retry; pure
+    dailyTempo.ts      The Daily Tempo leaderboard wired to config, adapter and analytics
+    ids.ts             Validates a Console leaderboard or achievement id
+    achievements.ts    What a save has earned, and the idempotent sync; pure
+    achievementSync.ts The achievements wired to config and the installed adapter
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling

@@ -262,6 +262,9 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `objective_progress` | A daily objective moved without finishing (`docs/OBJECTIVES.md`). Once per objective per finished level — a level of twenty Perfects is one event, never twenty | `objective` (pool id), `slot` (1–3), `progress`, `target` |
 | `objective_completed` | A daily objective reached its target, in place of its progress event | `objective`, `slot`, `target`, `completed` (finished today, 1–3) |
 | `daily_objectives_all_completed` | The day's third objective finished and the day was stamped. Once per local day | `stamps` (total held), `week` (stamped days of the last seven) |
+| `leaderboard_score_submitted` | Play Games accepted a Daily Tempo best (`docs/LEADERBOARDS.md`). Only a score that beat the day's best is ever sent | `leaderboard` (`daily_tempo`), `accuracy` (rounded %), `new_best` (Play Games' own daily-best flag), `retry` (a kept best sent later) |
+| `leaderboard_submit_failed` | A submission Play Games did not accept. The best is kept and retried. Never sent for a signed-out player, a browser or an unconfigured build — nothing was attempted | `leaderboard`, `reason` (`offline` \| `timeout` \| `failed` \| `invalid` \| `unavailable`), `retry` |
+| `leaderboard_opened` | The leaderboard button was tapped, whatever came of it | `leaderboard`, `result` (`shown` \| `signed_out` \| `failed` \| `invalid` \| `unavailable` \| `unconfigured`), `sign_in` (the tap had to offer sign-in first) |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 

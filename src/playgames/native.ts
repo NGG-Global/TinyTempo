@@ -1,11 +1,19 @@
 import { registerPlugin } from '@capacitor/core';
 
-import { SIGNED_OUT, type PlayGamesClient, type PlayGamesStatus } from './playGames';
+import {
+  NOT_SHOWN, NOT_SUBMITTED, NOT_UNLOCKED, SIGNED_OUT,
+  type AchievementUnlock, type LeaderboardReason, type LeaderboardView, type PlayGamesClient, type PlayGamesStatus, type ScoreSubmission,
+  type SubmitReason,
+} from './playGames';
 
 interface PlayGamesPlugin {
   isAuthenticated(): Promise<unknown>;
   signIn(): Promise<unknown>;
   getPlayerInfo(): Promise<unknown>;
+  submitScore(options: { leaderboardId: string; score: number; tag: string | null }): Promise<unknown>;
+  showLeaderboard(options: { leaderboardId: string; span: string }): Promise<unknown>;
+  unlockAchievement(options: { achievementId: string }): Promise<unknown>;
+  showAchievements(): Promise<unknown>;
 }
 
 /**
@@ -39,10 +47,46 @@ export function toStatus(value: unknown): PlayGamesStatus {
   };
 }
 
+const SUBMIT_REASONS: readonly SubmitReason[] = ['submitted', 'signed_out', 'offline', 'timeout', 'failed', 'invalid', 'unavailable'];
+const VIEW_REASONS: readonly LeaderboardReason[] = ['shown', 'signed_out', 'failed', 'invalid', 'unavailable'];
+
+/** A submission answer from the bridge, validated. Anything malformed reads as a failure. */
+export function toSubmission(value: unknown): ScoreSubmission {
+  if (typeof value !== 'object' || value === null) return NOT_SUBMITTED('failed');
+  const record = value as { submitted?: unknown; newBest?: unknown; reason?: unknown };
+  const reason = SUBMIT_REASONS.find(r => r === record.reason);
+  if (record.submitted === true) return { submitted: true, newBest: record.newBest === true, reason: 'submitted' };
+  return NOT_SUBMITTED(reason === undefined || reason === 'submitted' ? 'failed' : reason);
+}
+
+/** A leaderboard-screen answer from the bridge, validated the same way. */
+export function toView(value: unknown): LeaderboardView {
+  if (typeof value !== 'object' || value === null) return NOT_SHOWN('failed');
+  const record = value as { shown?: unknown; reason?: unknown };
+  if (record.shown === true) return { shown: true, reason: 'shown' };
+  const reason = VIEW_REASONS.find(r => r === record.reason);
+  return NOT_SHOWN(reason === undefined || reason === 'shown' ? 'failed' : reason);
+}
+
+const UNLOCK_REASONS: readonly AchievementUnlock['reason'][] = ['sent', 'signed_out', 'failed', 'invalid', 'unavailable'];
+
+/** An unlock answer from the bridge, validated. Anything malformed reads as a failure. */
+export function toUnlock(value: unknown): AchievementUnlock {
+  if (typeof value !== 'object' || value === null) return NOT_UNLOCKED('failed');
+  const record = value as { sent?: unknown; reason?: unknown };
+  if (record.sent === true) return { sent: true, reason: 'sent' };
+  const reason = UNLOCK_REASONS.find(r => r === record.reason);
+  return NOT_UNLOCKED(reason === undefined || reason === 'sent' ? 'failed' : reason);
+}
+
 export function nativePlayGamesClient(): PlayGamesClient {
   return {
     isAuthenticated: async () => toStatus(await PlayGamesNative.isAuthenticated()),
     signIn: async () => toStatus(await PlayGamesNative.signIn()),
     getPlayerInfo: async () => toStatus(await PlayGamesNative.getPlayerInfo()),
+    submitScore: async (leaderboardId, score, tag) => toSubmission(await PlayGamesNative.submitScore({ leaderboardId, score, tag })),
+    showLeaderboard: async (leaderboardId, span) => toView(await PlayGamesNative.showLeaderboard({ leaderboardId, span })),
+    unlockAchievement: async achievementId => toUnlock(await PlayGamesNative.unlockAchievement({ achievementId })),
+    showAchievements: async () => toView(await PlayGamesNative.showAchievements()),
   };
 }
