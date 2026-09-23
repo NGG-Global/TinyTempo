@@ -158,8 +158,22 @@ export function markSubdivisionSeen(grid: Grid, storage: Storage | null = safeSt
   return writeTeach(storage, { [grid]: true });
 }
 
+/**
+ * Has the player been told what a keepsake is — by the first reveal's longer note, or by
+ * opening the Scrapbook? Only the telling is stored: which keepsakes they own is derived
+ * from their stars (`game/scrapbook.ts`) and never written anywhere.
+ */
+export function seenScrapbook(storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage).scrapbook === true;
+}
+
+/** False means nothing was written, and the longer note will simply be shown once more. */
+export function markScrapbookSeen(storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { scrapbook: true });
+}
+
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
-const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth'] as const;
+const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook'] as const;
 type Teach = { readonly [K in typeof TEACH_FLAGS[number]]?: unknown };
 
 function readTeach(storage: Storage | null): Teach {

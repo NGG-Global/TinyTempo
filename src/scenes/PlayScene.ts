@@ -29,8 +29,10 @@ import {
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import {
   guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, markSubdivisionSeen, recordResult, saveProgress,
-  seenDemonstration, seenReplayTip, seenSubdivisions, type LevelOutcome, type Progress,
+  markScrapbookSeen, seenDemonstration, seenReplayTip, seenScrapbook, seenSubdivisions, type LevelOutcome, type Progress,
 } from '@/game/progress';
+import { collectionCount, keepsakeEarned, ownedKeepsakes, type Keepsake } from '@/game/scrapbook';
+import { drawKeepsake } from '@/ui/keepsakes';
 import { introCopy, introGrid, SUBDIVISION_INTRO, SubdivisionIntroRun } from '@/game/subdivisionIntro';
 import type { EarnedStars } from '@/game/stars';
 import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit } from '@/game/playAnalytics';
@@ -112,6 +114,22 @@ const PLATE = {
   keptWidth: 300,
 } as const;
 
+/**
+ * A keepsake's reveal on the result screen, in design units and seconds from the summary.
+ * It waits for the last medal to land — about 0.85 s in — so the stars keep their own
+ * moment, and it rises in the space between the plaque and the block, where it never
+ * covers the score or intercepts the tap that moves on.
+ */
+const KEEPSAKE_CARD = {
+  delay: 1.0,
+  rise: 0.5,
+  width: 540,
+  height: 168,
+  /** The first keepsake's card carries a second line saying what keepsakes are. */
+  firstHeight: 212,
+  art: 124,
+} as const;
+
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
 export class PlayScene extends BaseScene {
   private audio: AudioEngine | null = null;
@@ -184,6 +202,20 @@ export class PlayScene extends BaseScene {
    * never to `results`, the sequence's accuracy or the level's analytics.
    */
   private intro: { readonly run: SubdivisionIntroRun; readonly visit: SubdivisionIntroVisit | null; readonly bpm: number } | null = null;
+  /** The keepsake this run earned, if it earned one; revealed under the plaque. */
+  private keepsake: Keepsake | null = null;
+  /** The player's first keepsake on this device, whose card says what keepsakes are. */
+  private keepsakeFirst = false;
+  private keepsakeCard!: Phaser.GameObjects.Graphics;
+  private keepsakeLabel!: Phaser.GameObjects.Text;
+  private keepsakeName!: Phaser.GameObjects.Text;
+  private keepsakeNote!: Phaser.GameObjects.Text;
+  private keepsakeRect = new Phaser.Geom.Rectangle();
+  /** The top of the action block, which the card must stay above; kept for re-placing it. */
+  private keepsakeFloor = 0;
+  /** Once the card has settled it is drawn once more and left alone, until a layout moves it. */
+  private keepsakeSettled = false;
+  private keepsakeStruck = false;
   /** The introduction's second line, under the headline: "3 inside the beat". */
   private introCaption!: Phaser.GameObjects.Text;
   /** Judgements that scored in the early window while the example was still on screen. */
@@ -300,6 +332,7 @@ export class PlayScene extends BaseScene {
     this.outcome = null;
     this.levelRun = null;
     this.intro = null;
+    this.keepsake = null;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -348,6 +381,10 @@ export class PlayScene extends BaseScene {
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.turnCall = display(this, '', { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.keepsakeCard = this.add.graphics().setDepth(11).setVisible(false);
+    this.keepsakeLabel = label(this, 'New keepsake', { size: 20, colour: PALETTE.coral }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.keepsakeName = display(this, '', { size: 34, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.keepsakeNote = body(this, '', { size: 21, colour: PALETTE.muted }).setOrigin(0, 0).setDepth(11).setVisible(false);
     this.flawlessAt = -Infinity;
     this.flawlessSwept = 0;
     this.goStruck = false;
@@ -446,6 +483,8 @@ export class PlayScene extends BaseScene {
     // little enough that the space left under it still belongs to the act.
     const free = Math.max(0, bandBottom - bandTop - rig);
     this.plaqueAt = { x: safe.centerX, y: Math.max(safe.top + 220 * s, bandTop + free * 0.22) };
+    this.keepsakeFloor = bandBottom + 44 * s;
+    this.placeKeepsakeCard();
     this.drawStars();
     this.drawTaskMarks();
   }
@@ -664,6 +703,10 @@ export class PlayScene extends BaseScene {
     // it is only marked seen once a try has been judged.
     this.intro = null;
     this.setIntroCaption('');
+    this.keepsake = null;
+    this.keepsakeFirst = false;
+    this.keepsakeSettled = this.keepsakeStruck = false;
+    this.hideKeepsakeCard();
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -1100,6 +1143,7 @@ export class PlayScene extends BaseScene {
     }
     if (this.summaryShown) this.animateStars(now);
     else this.accuracy.setAlpha(1);
+    this.drawKeepsakeCard(now);
     this.drawBeatTrack(now);
     const wall = performance.now() / 1000;
     const puckPress = pressAmount(wall, this.puckPressedAt);
@@ -1496,7 +1540,8 @@ export class PlayScene extends BaseScene {
   private recordOutcome(): void {
     if (this.outcome) return;
     const accuracy = meanAccuracy(this.results);
-    const outcome = recordResult(loadProgress(), this.spec.level, accuracy);
+    const before = loadProgress();
+    const outcome = recordResult(before, this.spec.level, accuracy);
     this.outcome = outcome;
     // Beside the save, not the summary: this is the one step every finished run passes
     // exactly once, including the one a notification interrupts during its coda.
@@ -1509,6 +1554,14 @@ export class PlayScene extends BaseScene {
       reportError(new Error('Progress save failed'), {
         context: { level: this.spec.level, unlocked: outcome.progress.unlocked },
       });
+    }
+    // A keepsake is a fact about the saved stars, so one that did not save was not earned:
+    // the card would promise a Scrapbook entry that the next launch could not find.
+    const earned = keepsakeEarned(before, outcome.progress, this.spec.level);
+    this.keepsake = earned !== null && !this.saveFailed ? earned : null;
+    if (this.keepsake) {
+      this.keepsakeFirst = !seenScrapbook();
+      playAnalytics.collectibleUnlocked(this.keepsake, this.keepsakeFirst, ownedKeepsakes(outcome.progress).length);
     }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);
@@ -1524,6 +1577,11 @@ export class PlayScene extends BaseScene {
       attempts: this.attempts,
     });
     this.summaryAt = this.now();
+    // The longer note is shown once, here; after it, every later card is the short one.
+    if (this.keepsake && this.keepsakeFirst) markScrapbookSeen();
+    this.keepsakeStruck = false;
+    // Placed again now that the card knows whether it carries the first keepsake's longer note.
+    this.placeKeepsakeCard();
     this.starsLanded = 0;
     this.replay = null;
     const accuracy = meanAccuracy(this.results);
@@ -1538,6 +1596,77 @@ export class PlayScene extends BaseScene {
     this.drawTaskMarks();
   }
   /** Quiet progress, not another score counter: a row of beads, the done ones filled. Uses completed tasks, never frame time. */
+  /** Where the card goes: centred in the gap under the plaque, shrunk if that gap is short. */
+  private placeKeepsakeCard(): void {
+    const s = this.uiScale;
+    // Read live: the plaque grows when a heart is refunded, which is exactly what a first
+    // three-star clear — the usual keepsake moment — does after the last layout ran.
+    const plaqueBottom = this.plaqueAt.y + (PLATE.ropeLength + (this.heartRefunded ? PLATE.keptHeight : PLATE.height)) * s;
+    const blockTop = this.keepsakeFloor;
+    const height = (this.keepsakeFirst ? KEEPSAKE_CARD.firstHeight : KEEPSAKE_CARD.height) * s;
+    const room = blockTop - plaqueBottom - 36 * s;
+    const k = Math.max(0.6, Math.min(1, room / height));
+    const w = Math.min(KEEPSAKE_CARD.width * s, this.viewport.safe.width - 40 * s) * k, h = height * k;
+    const cy = plaqueBottom + Math.max(18 * s, (blockTop - plaqueBottom) / 2);
+    this.keepsakeRect.setTo(this.viewport.safe.centerX - w / 2, cy - h / 2, w, h);
+    this.keepsakeSettled = false;
+  }
+
+  /** The card is a Graphics *and* three Texts, the same lesson the plaque taught: hide them together. */
+  private hideKeepsakeCard(): void {
+    for (const part of [this.keepsakeCard, this.keepsakeLabel, this.keepsakeName, this.keepsakeNote]) part?.setVisible(false);
+    this.keepsakeCard?.clear();
+  }
+
+  /**
+   * The new keepsake, mounted on a card that rises into place after the medals. f(age) from
+   * the summary's own clock, like the plaque; still under reduced motion. It asks for
+   * nothing — the tap that moves on works from the first frame of the summary.
+   */
+  private drawKeepsakeCard(now: number): void {
+    const keepsake = this.keepsake;
+    const age = now - this.summaryAt - KEEPSAKE_CARD.delay;
+    if (!this.summaryShown || !keepsake || age < 0) {
+      if (this.keepsakeCard.visible) this.hideKeepsakeCard();
+      return;
+    }
+    const still = this.reducedMotion;
+    if (this.keepsakeSettled && (still || age > KEEPSAKE_CARD.rise + 0.3)) return;
+    this.keepsakeSettled = still || age > KEEPSAKE_CARD.rise + 0.3;
+    const s = this.uiScale;
+    const pose = still ? { rise: 0, alpha: 1 } : arrive(age, KEEPSAKE_CARD.rise);
+    const r = new Phaser.Geom.Rectangle(this.keepsakeRect.x, this.keepsakeRect.y + pose.rise * 40 * s, this.keepsakeRect.width, this.keepsakeRect.height);
+    const k = r.width / (KEEPSAKE_CARD.width * s);
+    const g = this.keepsakeCard.clear().setVisible(true).setAlpha(pose.alpha);
+    drawPanel(g, r, s, { fill: SHELL.cream, depth: 8, radius: 18, hero: true });
+    // The keepsake on its own small mount, stamped down as the card arrives.
+    const artSize = KEEPSAKE_CARD.art * s * k;
+    const ax = r.x + 28 * s * k + artSize / 2, ay = r.y + Math.min(r.height / 2, 96 * s * k);
+    const stamp = still ? 1 : squash(age - 0.25, 0.22, 0.45) * 0.12 + 1;
+    g.fillStyle(SHELL.bench, 1).fillRoundedRect(ax - artSize / 2, ay - artSize / 2, artSize, artSize, 10 * s * k);
+    drawKeepsake(g, keepsake.id, ax, ay, artSize * 0.86 * stamp, false, SHELL.bench);
+    if (!this.keepsakeStruck && age >= 0.25) {
+      this.keepsakeStruck = true;
+      if (!still) this.fx.burst('sparks', ax, ay, [SHELL.sun, 0xffe7a0, PALETTE.coral], 10);
+      vibrate('tap');
+    }
+    const tx = ax + artSize / 2 + 24 * s * k;
+    const textW = r.right - 24 * s * k - tx;
+    resize(this.keepsakeLabel, 20 * s * k, PALETTE.coral, STYLE.current, false);
+    this.keepsakeLabel.setPosition(tx, r.y + 38 * s * k).setAlpha(pose.alpha).setVisible(true);
+    this.keepsakeName.setText(keepsake.name);
+    resize(this.keepsakeName, 34 * s * k, PALETTE.ink, STYLE.current, false);
+    this.keepsakeName.setPosition(tx, r.y + 78 * s * k).setAlpha(pose.alpha).setVisible(true);
+    const count = collectionCount(this.outcome?.progress ?? loadProgress());
+    // The first says what just happened and where it went; after that, only the tally.
+    this.keepsakeNote.setText(this.keepsakeFirst
+      ? `Three stars on a level earn its keepsake. Yours are in the Scrapbook on the title screen.`
+      : `In your Scrapbook · ${count.owned}/${count.total}`);
+    resize(this.keepsakeNote, 21 * s * k, PALETTE.muted, STYLE.current, false);
+    this.keepsakeNote.setWordWrapWidth(Math.max(80 * s, textW), false);
+    this.keepsakeNote.setPosition(tx, r.y + 106 * s * k).setAlpha(pose.alpha).setVisible(true);
+  }
+
   private drawTaskMarks(): void {
     const s = this.uiScale, { safe } = this.viewport;
     const count = this.spec.tasks.length;

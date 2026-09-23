@@ -10,11 +10,13 @@ import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { tutorialComplete } from '@/game/TutorialRun';
+import { loadProgress, seenScrapbook } from '@/game/progress';
+import { ownedKeepsakes } from '@/game/scrapbook';
 import { MaterialKey } from '@/textures/materials';
 import { shade } from '@/ui/colour';
 import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { drawGear } from '@/ui/gear';
-import { drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBook, drawPlay, drawSpeaker } from '@/ui/icons';
 import { faces } from '@/ui/light';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -63,10 +65,14 @@ export class MenuScene extends BaseScene {
   private controlSize = 96;
   private muteAt = { x: 0, y: 0 };
   private setupAt = { x: 0, y: 0 };
+  /** The Scrapbook, top left: the right-hand corner is the sign's rope at full swing. */
+  private bookAt = { x: 0, y: 0 };
+  /** A coral dot on the book while it holds keepsakes the player has never opened it to see. */
+  private bookDot = false;
   private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'mute' | 'setup' | null = null;
+  private puckPressed: 'mute' | 'setup' | 'book' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   private muted = false;
@@ -82,6 +88,10 @@ export class MenuScene extends BaseScene {
     this.pressedAt = this.puckPressedAt = -Infinity;
     this.puckPressed = null;
     this.muted = isMuted(this);
+    // Read, not stored: a player whose old save already three-starred a keepsake's level
+    // sees the dot on their first launch after the Scrapbook shipped, and never again once
+    // they have looked.
+    this.bookDot = !seenScrapbook() && ownedKeepsakes(loadProgress()).length > 0;
     // The hammer's idle sway doubles as the title illustration; it never receives a plan.
     this.illustration = new HammerNailVignette(this, true);
 
@@ -142,6 +152,7 @@ export class MenuScene extends BaseScene {
     // Both pucks stay right of the sign's ropes even at full swing.
     this.muteAt = { x: safe.right - 56 * s, y: safe.top + 66 * s };
     this.setupAt = { x: this.muteAt.x - Math.max(88 * s, this.controlSize + 4 * s), y: this.muteAt.y };
+    this.bookAt = { x: safe.left + 56 * s, y: this.muteAt.y };
     this.drawPucks(s, 0);
     this.puckDirty = true;
 
@@ -159,10 +170,17 @@ export class MenuScene extends BaseScene {
 
   private drawPucks(s: number, press: number): void {
     const g = this.pucks.clear();
-    const sinkOf = (key: 'mute' | 'setup') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'mute' | 'setup' | 'book') => (this.puckPressed === key ? press : 0);
     drawPuck(g, this.muteAt.x, this.muteAt.y, s, sinkOf('mute'));
     drawPuck(g, this.setupAt.x, this.setupAt.y, s, sinkOf('setup'));
+    drawPuck(g, this.bookAt.x, this.bookAt.y, s, sinkOf('book'));
     const r = CHROME.puckRadius * s;
+    drawBook(g, this.bookAt.x, this.bookAt.y + puckSink(s, sinkOf('book')), r * 0.56, PALETTE.ink, 1);
+    if (this.bookDot) {
+      const dx = this.bookAt.x + r * 0.72, dy = this.bookAt.y - r * 0.72 + puckSink(s, sinkOf('book'));
+      g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+      g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+    }
     drawSpeaker(g, this.muteAt.x, this.muteAt.y + puckSink(s, sinkOf('mute')), r * 0.5, PALETTE.ink, this.muted);
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), r * 0.52, PALETTE.ink, 1);
   }
@@ -243,6 +261,14 @@ export class MenuScene extends BaseScene {
       this.puckDirty = true;
       this.closeTheme();
       this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: SceneKey.Menu }));
+      return;
+    }
+    if (Math.abs(tap.x - this.bookAt.x) < half && Math.abs(tap.y - this.bookAt.y) < half) {
+      this.puckPressed = 'book';
+      this.puckPressedAt = performance.now() / 1000;
+      this.puckDirty = true;
+      this.closeTheme();
+      this.curtain.cover(() => this.scene.start(SceneKey.Scrapbook, { from: SceneKey.Menu }));
       return;
     }
     if (Phaser.Geom.Rectangle.Contains(this.buttonRect, tap.x, tap.y)) {

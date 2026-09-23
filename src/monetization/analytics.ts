@@ -40,6 +40,8 @@ export const GAMEPLAY_EVENTS = [
   'star_gate_opened',
   'subdivision_intro_shown',
   'subdivision_intro_completed',
+  'scrapbook_opened',
+  'collectible_unlocked',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -178,6 +180,23 @@ export interface AnalyticsPayloads {
     /** The better answer's accuracy, rounded. It never counts toward the level. */
     readonly accuracy: number;
     readonly passed: Flag;
+  };
+  /** The Scrapbook was opened, and how full it was (`game/scrapbook.ts`). */
+  readonly scrapbook_opened: { readonly source: 'menu' | 'map'; readonly owned: number; readonly total: number };
+  /**
+   * A finished level earned its keepsake: three stars where it had fewer. Never sent for a
+   * keepsake a player already held — including the ones an existing save owned on arrival.
+   */
+  readonly collectible_unlocked: {
+    /** The act's registry id: 25 values. */
+    readonly vignette: string;
+    /** The keepsake's stable id: one per keepsake, never renamed. */
+    readonly collectible: string;
+    readonly level: number;
+    /** 1 on the player's first keepsake on this device, which gets the longer note. */
+    readonly first: Flag;
+    /** Keepsakes owned once this one is counted. */
+    readonly owned: number;
   };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };

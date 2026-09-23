@@ -98,6 +98,13 @@ to answer: there is nothing to warn about, because nothing can be lost.
 Settings and the tutorial flag are preferences rather than achievements, so they come
 across whole.
 
+## What rides along without being written
+
+Stars and the Scrapbook's keepsakes are both derived from the accuracies a save already
+carries (`game/stars.ts`, `game/scrapbook.ts`), so a code restores them, and a merge can
+only add to them, without either appearing in the format. Nothing about them needs a
+version bump.
+
 ## The screen
 
 `TransferScene`, reached from Settings → Progress → Save code, on the same pattern

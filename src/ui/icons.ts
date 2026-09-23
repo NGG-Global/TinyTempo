@@ -144,6 +144,19 @@ export function drawMap(g: Phaser.GameObjects.Graphics, x: number, y: number, r:
   ]).points, true);
 }
 
+/** An open scrapbook: two pages off a spine, the right one holding a mounted square. */
+export function drawBook(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const w = r * 0.8, h = r * 1.05, dip = r * 0.16;
+  g.fillStyle(colour, alpha);
+  g.fillTriangle(x, y - h / 2 + dip, x - w, y - h / 2, x - w, y + h / 2);
+  g.fillTriangle(x, y - h / 2 + dip, x - w, y + h / 2, x, y + h / 2 + dip);
+  g.fillStyle(colour, alpha * 0.72);
+  g.fillTriangle(x, y - h / 2 + dip, x + w, y - h / 2, x + w, y + h / 2);
+  g.fillTriangle(x, y - h / 2 + dip, x + w, y + h / 2, x, y + h / 2 + dip);
+  // A mounted square on the right-hand page: the thing a scrapbook is for.
+  g.fillStyle(0xfff4dc, alpha).fillRect(x + w * 0.28, y - h * 0.18, w * 0.46, w * 0.46);
+}
+
 /** A chevron pointing right: "this opens its own screen". */
 export function drawChevron(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
   g.lineStyle(Math.max(2.4, r * 0.34), colour, alpha);

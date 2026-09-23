@@ -308,6 +308,7 @@ export class PlayAnalytics {
   private readonly closed: string[] = [];
   private readonly failStreak = new Map<number, number>();
   private readonly gatesReported = new Set<number>();
+  private readonly keepsakesReported = new Set<string>();
 
   public constructor(
     private readonly sink: Emit = track,
@@ -384,6 +385,25 @@ export class PlayAnalytics {
       const visit = new SubdivisionIntroVisit(this, grid, level);
       this.emit('subdivision_intro_shown', { grid, level, mode });
       return visit;
+    });
+  }
+
+  public scrapbookOpened(source: 'menu' | 'map', owned: number, total: number): void {
+    guard(undefined, () => this.emit('scrapbook_opened', { source, owned, total }));
+  }
+
+  /**
+   * A keepsake was earned. Once per keepsake per session, whatever calls this: the scene
+   * already reports from the one step a finished level passes once, and this is the
+   * backstop that keeps "no duplicates" true in the data as well as on the page.
+   */
+  public collectibleUnlocked(keepsake: { readonly id: string; readonly vignette: string; readonly level: number }, first: boolean, owned: number): void {
+    guard(undefined, () => {
+      if (this.keepsakesReported.has(keepsake.id)) return;
+      this.keepsakesReported.add(keepsake.id);
+      this.emit('collectible_unlocked', {
+        vignette: keepsake.vignette, collectible: keepsake.id, level: keepsake.level, first: flag(first), owned,
+      });
     });
   }
 

@@ -336,6 +336,18 @@ named — *Too early* for taps in the hammer's turn, *That was your turn* for a 
 went by — rather than scored. Nothing in it waits for a tap: the loop's whole lesson is
 that it does not. See `docs/TUTORIAL.md`.
 
+**Three stars on a designated level earns a keepsake, and ownership is never stored.**
+`game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
+that act plays for the `lap`-th time, and it is owned exactly when that level has three stars
+— so old saves, save codes, merges and Auto Backup carry the collection without knowing it
+exists, and nothing can be owned twice. **The list is append-only**: an entry's `id`,
+`vignette` and `lap` are pinned by `tests/fixtures/keepsakes.json`, because changing one moves
+a keepsake players hold. Each has a drawing in `ui/keepsakes.ts` whose identifying detail sits
+in `pen.detail`, which is what keeps it out of the silhouette. `ScrapbookScene` is reached from
+the book puck at the title screen's top left (the right-hand corner is the sign's rope at full
+swing); the result screen raises a card under the plaque a second into the summary, after the
+medals. The only stored bit is the `scrapbook` teach flag. See `docs/SCRAPBOOK.md`.
+
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
@@ -517,6 +529,7 @@ src/
     beatTrack.ts       What the two rows show, and the handover, as pure functions
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
+    scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -540,6 +553,7 @@ src/
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
     TransferScene.ts   The save code: show it, copy it, restore from one
     SupportScene.ts    The address, and the details worth sending with it
+    ScrapbookScene.ts  The keepsakes, a page per act, found or in silhouette
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -552,6 +566,7 @@ src/
     path.ts            Catmull-Rom smoothing and dash spacing
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
+    keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     sheen.ts           The light crossing a brass panel; still under reduced motion

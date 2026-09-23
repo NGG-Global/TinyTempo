@@ -15,6 +15,7 @@ export const SceneKey = {
   Transfer: 'transfer',
   Support: 'support',
   Tutorial: 'tutorial',
+  Scrapbook: 'scrapbook',
 } as const;
 
 export type SceneKey = (typeof SceneKey)[keyof typeof SceneKey];

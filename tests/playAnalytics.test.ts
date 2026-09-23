@@ -322,6 +322,25 @@ describe('a finer grid’s introduction', () => {
   });
 });
 
+describe('the Scrapbook', () => {
+  it('reports each opening with how full the book was', () => {
+    ledger.scrapbookOpened('menu', 0, 32);
+    ledger.scrapbookOpened('menu', 5, 32);
+    expect(only('scrapbook_opened')).toEqual([{ source: 'menu', owned: 0, total: 32 }, { source: 'menu', owned: 5, total: 32 }]);
+  });
+
+  it('reports a keepsake once, by its stable ids, however often the scene reaches it', () => {
+    const nail = { id: 'hammer-lucky-nail', vignette: 'hammer', level: 1 };
+    ledger.collectibleUnlocked(nail, true, 1);
+    ledger.collectibleUnlocked(nail, true, 1);
+    ledger.collectibleUnlocked({ id: 'window-squeegee', vignette: 'window', level: 2 }, false, 2);
+    expect(only('collectible_unlocked')).toEqual([
+      { vignette: 'hammer', collectible: 'hammer-lucky-nail', level: 1, first: 1, owned: 1 },
+      { vignette: 'window', collectible: 'window-squeegee', level: 2, first: 0, owned: 2 },
+    ]);
+  });
+});
+
 describe('practice, before practice exists', () => {
   it('reports a start and one completion', () => {
     const run = ledger.beginPractice(43)!;
@@ -371,6 +390,8 @@ describe('every gameplay event, as the game actually fires it', () => {
     playThrough(5, road(10, 1), levelSpec(5).starAccuracy[2]!);
     ledger.beginPractice(2)!.complete(60);
     ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
+    ledger.scrapbookOpened('menu', 3, 32);
+    ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
     expect(new Set(names())).toEqual(new Set(GAMEPLAY_EVENTS));
     for (const { event, payload } of sent) {
       expect(validEventName(event), event).toBe(true);
