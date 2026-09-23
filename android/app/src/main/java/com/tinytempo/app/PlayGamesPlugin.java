@@ -41,9 +41,10 @@ import com.google.android.gms.games.leaderboard.ScoreSubmissionData;
  * reintroduced: v2 signs the player in automatically at startup and has no interactive
  * client to drive.
  *
- * <p><b>Leaderboards submit, they never sign in.</b> {@link #submitScore} and
- * {@link #showLeaderboard} use the v2 {@code LeaderboardsClient}. Neither prompts; the web
- * layer offers sign-in only when the player taps the leaderboard button.
+ * <p><b>Leaderboards and achievements never sign in.</b> {@link #submitScore},
+ * {@link #showLeaderboard}, {@link #unlockAchievement} and {@link #showAchievements} use v2's
+ * {@code LeaderboardsClient} and {@code AchievementsClient}. None prompts; the web layer
+ * offers sign-in only when the player taps a leaderboard or achievements button.
  *
  * <p><b>Nothing sensitive is logged.</b> There are no tokens here to leak —
  * {@code requestServerSideAccess} is the only call that returns one and this plugin does
@@ -232,6 +233,96 @@ public class PlayGamesPlugin extends Plugin {
                 resolveView(call, false, "unavailable");
             }
         });
+    }
+
+    /**
+     * Unlock one achievement.
+     *
+     * v2's fire-and-forget {@code unlock}, deliberately rather than {@code unlockImmediate}:
+     * Play Games queues an unlock made offline and syncs it when the device is back, and an
+     * achievement already unlocked is left as it is, so the game can hand over every earned
+     * achievement each session without keeping a ledger. Signed out, the SDK has no player to
+     * unlock for, so that is answered here rather than handed over and lost. Never prompts,
+     * never rejects, and never logs the id.
+     */
+    @PluginMethod
+    public void unlockAchievement(final PluginCall call) {
+        final String achievementId = call.getString("achievementId", "");
+        if (achievementId == null || achievementId.isEmpty()) {
+            resolveUnlock(call, false, "invalid");
+            return;
+        }
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveUnlock(call, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                signInClient(activity)
+                        .isAuthenticated()
+                        .addOnSuccessListener(result -> {
+                            if (!authenticated(result)) {
+                                resolveUnlock(call, false, "signed_out");
+                                return;
+                            }
+                            try {
+                                PlayGames.getAchievementsClient(activity).unlock(achievementId);
+                                resolveUnlock(call, true, "sent");
+                            } catch (Throwable error) {
+                                Log.w(TAG, "Achievement unlock could not be handed over.", error);
+                                resolveUnlock(call, false, "failed");
+                            }
+                        })
+                        .addOnFailureListener(error -> resolveUnlock(call, false, "signed_out"));
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games achievements are unavailable on this device.", error);
+                resolveUnlock(call, false, "unavailable");
+            }
+        });
+    }
+
+    /**
+     * Open Play Games' own achievements screen. Resolves when the player closes it; signed
+     * out, resolves {@code signed_out} without showing anything, as the leaderboard does.
+     */
+    @PluginMethod
+    public void showAchievements(final PluginCall call) {
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveView(call, false, "unavailable");
+            return;
+        }
+        activity.runOnUiThread(() -> {
+            try {
+                PlayGames.getAchievementsClient(activity)
+                        .getAchievementsIntent()
+                        .addOnSuccessListener(intent -> startActivityForResult(call, intent, "achievementsClosed"))
+                        .addOnFailureListener(error -> {
+                            String reason = failureReason(error);
+                            Log.i(TAG, "Achievements screen unavailable: " + reason);
+                            resolveView(call, false, "offline".equals(reason) || "timeout".equals(reason) ? "failed" : reason);
+                        });
+            } catch (Throwable error) {
+                Log.w(TAG, "Play Games achievements are unavailable on this device.", error);
+                resolveView(call, false, "unavailable");
+            }
+        });
+    }
+
+    /** The achievements screen closed. */
+    @ActivityCallback
+    private void achievementsClosed(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        resolveView(call, true, "shown");
+        getBridge().releaseCall(call);
+    }
+
+    private void resolveUnlock(PluginCall call, boolean sent, String reason) {
+        JSObject payload = new JSObject();
+        payload.put("sent", sent);
+        payload.put("reason", reason);
+        call.resolve(payload);
     }
 
     /** The leaderboard screen closed. It was shown, whatever it returned. */

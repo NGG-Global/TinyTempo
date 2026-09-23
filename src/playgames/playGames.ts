@@ -66,7 +66,22 @@ export interface PlayGamesClient {
   /** `tag` is optional metadata stored with the score: at most 64 URI-safe characters. */
   submitScore(leaderboardId: string, score: number, tag: string | null): Promise<ScoreSubmission>;
   showLeaderboard(leaderboardId: string, span: LeaderboardSpan): Promise<LeaderboardView>;
+  /** Hand one unlock to Play Games, which queues it offline and ignores a repeat. */
+  unlockAchievement(achievementId: string): Promise<AchievementUnlock>;
+  showAchievements(): Promise<LeaderboardView>;
 }
+
+/**
+ * What handing an unlock over came to. `sent` means Play Games took it, not that it has
+ * reached the server: v2's `unlock` queues offline and syncs later by itself.
+ */
+export interface AchievementUnlock {
+  readonly sent: boolean;
+  readonly reason: 'sent' | 'signed_out' | 'failed' | 'invalid' | 'unavailable';
+}
+
+export const NOT_UNLOCKED = (reason: Exclude<AchievementUnlock['reason'], 'sent'>): AchievementUnlock =>
+  Object.freeze({ sent: false, reason });
 
 export interface PlayGames {
   /** The last known status, without asking the platform again. */
@@ -81,6 +96,10 @@ export interface PlayGames {
   submitScore(leaderboardId: string, score: number, tag?: string | null): Promise<ScoreSubmission>;
   /** Open Play Games' own leaderboard screen. Never rejects. */
   showLeaderboard(leaderboardId: string, span?: LeaderboardSpan): Promise<LeaderboardView>;
+  /** Unlock one achievement. Never prompts, never rejects; a repeat is harmless. */
+  unlockAchievement(achievementId: string): Promise<AchievementUnlock>;
+  /** Open Play Games' own achievements screen. Never rejects. */
+  showAchievements(): Promise<LeaderboardView>;
 }
 
 export const SIGNED_OUT: PlayGamesStatus = Object.freeze({
@@ -99,6 +118,8 @@ export const stubPlayGames: PlayGames = Object.freeze({
   player: () => Promise.resolve(null),
   submitScore: () => Promise.resolve(NOT_SUBMITTED('unavailable')),
   showLeaderboard: () => Promise.resolve(NOT_SHOWN('unavailable')),
+  unlockAchievement: () => Promise.resolve(NOT_UNLOCKED('unavailable')),
+  showAchievements: () => Promise.resolve(NOT_SHOWN('unavailable')),
 });
 
 export function createPlayGames(client: PlayGamesClient): PlayGames {
@@ -141,6 +162,22 @@ export function createPlayGames(client: PlayGamesClient): PlayGames {
     async showLeaderboard(leaderboardId, span = 'daily') {
       try {
         return await client.showLeaderboard(leaderboardId, span);
+      } catch {
+        return NOT_SHOWN('failed');
+      }
+    },
+    async unlockAchievement(achievementId) {
+      try {
+        const result = await client.unlockAchievement(achievementId);
+        if (result.reason === 'signed_out') current = { ...SIGNED_OUT, reason: 'signed out' };
+        return result;
+      } catch {
+        return NOT_UNLOCKED('failed');
+      }
+    },
+    async showAchievements() {
+      try {
+        return await client.showAchievements();
       } catch {
         return NOT_SHOWN('failed');
       }

@@ -183,10 +183,11 @@ if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(bo
  * check it names this project. The layout is observed rather than documented by Google,
  * so a mismatch is a warning to go and copy the id again, never a failed build.
  */
-function projectOfLeaderboard(id) {
+/** The Games project and item type a Console id carries, or null if it does not parse. */
+function decodeGamesId(id) {
   try {
     const bytes = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
-    // 0x0a <len> 0x08 <varint project> 0x10 0x02 ... : field 1 holds field 1 = project id.
+    // 0x0a <len> 0x08 <varint project> 0x10 <type> ... : field 1 holds the project and type.
     if (bytes[0] !== 0x0a || bytes[2] !== 0x08) return null;
     let value = 0n, shift = 0n, i = 3;
     for (; i < bytes.length && i < 14; i++) {
@@ -194,12 +195,16 @@ function projectOfLeaderboard(id) {
       shift += 7n;
       if ((bytes[i] & 0x80) === 0) break;
     }
-    // Type 2 is a leaderboard; achievements carry another type.
-    if (bytes[i + 1] !== 0x10 || bytes[i + 2] !== 0x02) return null;
-    return value.toString();
+    if (bytes[i + 1] !== 0x10) return null;
+    return { project: value.toString(), type: bytes[i + 2] };
   } catch {
     return null;
   }
+}
+// Type 2 is a leaderboard, the only type a known-good id has confirmed so far.
+function projectOfLeaderboard(id) {
+  const decoded = decodeGamesId(id);
+  return decoded && decoded.type === 0x02 ? decoded.project : null;
 }
 if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOfLeaderboard(boardId) !== PGS_PROJECT_ID) {
   notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id that does not decode to\n'
@@ -208,6 +213,23 @@ if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOfLeaderbo
     + '    Copy it again with the copy button in Play Console → Play Games Services → Leaderboards;\n'
     + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every call.');
 }
+/*
+ * Achievement ids (`src/config/achievements.ts`), checked the same way. Empty is allowed —
+ * that achievement is simply off. Only the project is checked, not the type: the type byte
+ * an achievement id carries has not been confirmed against a real one yet.
+ */
+const achievementsConfig = read('src/config/achievements.ts') ?? '';
+for (const [, key, id] of achievementsConfig.matchAll(/key:\s*'([^']+)'[^}]*?id:\s*'([^']*)'/g)) {
+  if (id === '') continue;
+  const shapeOk = /^[A-Za-z0-9_-]{8,64}$/.test(id) && !/^\d+$/.test(id);
+  if (!shapeOk || decodeGamesId(id)?.project !== PGS_PROJECT_ID) {
+    notes.push(`src/config/achievements.ts has an id for ${key} that does not name Games project ${PGS_PROJECT_ID}:\n`
+      + `      found    ${id}\n`
+      + '    Copy it again with the copy button in Play Console → Play Games Services → Achievements;\n'
+      + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every unlock.');
+  }
+}
+
 if (modeShips && boardId === '') {
   notes.push('Daily Tempo is switched on (src/config/dailyTempo.ts) but no leaderboard id is set in\n'
     + '    src/config/leaderboards.ts, so its scores are never submitted and the leaderboard button\n'

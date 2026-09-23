@@ -42,6 +42,12 @@ export async function bootPlayGames(): Promise<void> {
         const { dailyTempoLeaderboard } = await import('./dailyTempo');
         void dailyTempoLeaderboard().retry();
       } catch { /* the best stays pending for the next chance */ }
+      // Achievements are derived from the save, so a sync is all "catching up" takes: one
+      // earned while signed out or offline is handed over now. Play Games ignores repeats.
+      try {
+        const [{ syncAchievements }, { loadProgress }] = await Promise.all([import('./achievementSync'), import('@/game/progress')]);
+        void syncAchievements(loadProgress());
+      } catch { /* the next sync sends them */ }
     }
   } catch {
     // Stub stays. A missing plugin must not take the game down.

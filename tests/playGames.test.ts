@@ -13,6 +13,8 @@ function client(overrides: Partial<PlayGamesClient> = {}): PlayGamesClient {
     getPlayerInfo: async () => SIGNED_OUT,
     submitScore: async () => NOT_SUBMITTED('signed_out'),
     showLeaderboard: async () => NOT_SHOWN('signed_out'),
+    unlockAchievement: async () => ({ sent: false, reason: 'signed_out' }),
+    showAchievements: async () => NOT_SHOWN('signed_out'),
     ...overrides,
   };
 }

@@ -1,8 +1,8 @@
 import { registerPlugin } from '@capacitor/core';
 
 import {
-  NOT_SHOWN, NOT_SUBMITTED, SIGNED_OUT,
-  type LeaderboardReason, type LeaderboardView, type PlayGamesClient, type PlayGamesStatus, type ScoreSubmission,
+  NOT_SHOWN, NOT_SUBMITTED, NOT_UNLOCKED, SIGNED_OUT,
+  type AchievementUnlock, type LeaderboardReason, type LeaderboardView, type PlayGamesClient, type PlayGamesStatus, type ScoreSubmission,
   type SubmitReason,
 } from './playGames';
 
@@ -12,6 +12,8 @@ interface PlayGamesPlugin {
   getPlayerInfo(): Promise<unknown>;
   submitScore(options: { leaderboardId: string; score: number; tag: string | null }): Promise<unknown>;
   showLeaderboard(options: { leaderboardId: string; span: string }): Promise<unknown>;
+  unlockAchievement(options: { achievementId: string }): Promise<unknown>;
+  showAchievements(): Promise<unknown>;
 }
 
 /**
@@ -66,6 +68,17 @@ export function toView(value: unknown): LeaderboardView {
   return NOT_SHOWN(reason === undefined || reason === 'shown' ? 'failed' : reason);
 }
 
+const UNLOCK_REASONS: readonly AchievementUnlock['reason'][] = ['sent', 'signed_out', 'failed', 'invalid', 'unavailable'];
+
+/** An unlock answer from the bridge, validated. Anything malformed reads as a failure. */
+export function toUnlock(value: unknown): AchievementUnlock {
+  if (typeof value !== 'object' || value === null) return NOT_UNLOCKED('failed');
+  const record = value as { sent?: unknown; reason?: unknown };
+  if (record.sent === true) return { sent: true, reason: 'sent' };
+  const reason = UNLOCK_REASONS.find(r => r === record.reason);
+  return NOT_UNLOCKED(reason === undefined || reason === 'sent' ? 'failed' : reason);
+}
+
 export function nativePlayGamesClient(): PlayGamesClient {
   return {
     isAuthenticated: async () => toStatus(await PlayGamesNative.isAuthenticated()),
@@ -73,5 +86,7 @@ export function nativePlayGamesClient(): PlayGamesClient {
     getPlayerInfo: async () => toStatus(await PlayGamesNative.getPlayerInfo()),
     submitScore: async (leaderboardId, score, tag) => toSubmission(await PlayGamesNative.submitScore({ leaderboardId, score, tag })),
     showLeaderboard: async (leaderboardId, span) => toView(await PlayGamesNative.showLeaderboard({ leaderboardId, span })),
+    unlockAchievement: async achievementId => toUnlock(await PlayGamesNative.unlockAchievement({ achievementId })),
+    showAchievements: async () => toView(await PlayGamesNative.showAchievements()),
   };
 }

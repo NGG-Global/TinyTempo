@@ -1,3 +1,4 @@
+import { playGamesId } from './ids';
 import type { LeaderboardReason, PlayGames, SubmitReason } from './playGames';
 
 /**
@@ -46,10 +47,7 @@ export function accuracyFromScore(score: number): number {
  * field, which would fail on every call, so it is refused here instead.
  */
 export function leaderboardId(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null;
-  const id = raw.trim();
-  if (!/^[A-Za-z0-9_-]{8,64}$/.test(id) || /^\d+$/.test(id)) return null;
-  return id;
+  return playGamesId(raw);
 }
 
 /** The score tag a submission carries: the Daily Tempo day it was played on. */

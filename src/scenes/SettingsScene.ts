@@ -11,6 +11,7 @@ import { areaOf } from '@/game/levels';
 import { clearProgress, loadProgress } from '@/game/progress';
 import { redrawToday } from '@/game/objectives';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard } from '@/playgames/dailyTempo';
+import { achievementsOffered, openAchievements } from '@/playgames/achievementSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
@@ -43,7 +44,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'leaderboard' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -229,6 +230,9 @@ export class SettingsScene extends BaseScene {
       leaderboard: rowTitle('Daily Tempo leaderboard'),
       leaderboardNote: rowNote('Your best today, against everyone'),
       leaderboardGo: chip('Open'),
+      achievements: rowTitle('Achievements'),
+      achievementsNote: rowNote('Your Play Games achievements'),
+      achievementsGo: chip('Open'),
       level: rowTitle(''),
       levelNote: rowNote(''),
       reset: chip('Reset'),
@@ -261,6 +265,11 @@ export class SettingsScene extends BaseScene {
    */
   private leaderboardOffered(): boolean {
     return dailyTempoLeaderboardOffered();
+  }
+
+  /** Play Games achievements, on a native build with at least one configured. */
+  private achievementsOffered(): boolean {
+    return achievementsOffered();
   }
 
   protected override layout(): void {
@@ -447,7 +456,9 @@ export class SettingsScene extends BaseScene {
     // a player who reads this far and taps the wrong one should land on the recoverable one.
     eyebrow(4);
     const leaderboard = this.leaderboardOffered();
-    const progress = plate(row * (leaderboard ? 3 : 2));
+    const achievements = this.achievementsOffered();
+    const extra = (leaderboard ? 1 : 0) + (achievements ? 1 : 0);
+    const progress = plate(row * (2 + extra));
     this.rows.progress = progress;
     const transferRow = new Phaser.Geom.Rectangle(left, progress.y, width, row);
     this.rows.transferRow = transferRow;
@@ -473,9 +484,23 @@ export class SettingsScene extends BaseScene {
       delete this.rows.leaderboard;
       delete this.rows.leaderboardRow;
     }
+    if (achievements) {
+      const badgeRow = new Phaser.Geom.Rectangle(left, progress.y + row * (leaderboard ? 2 : 1), width, row);
+      this.rows.achievementsRow = badgeRow;
+      this.texts.achievements!.setPosition(left + 28 * s, badgeRow.centerY - 15 * s);
+      this.texts.achievementsNote!.setPosition(left + 28 * s, badgeRow.centerY + 19 * s);
+      const badgeW = Math.max(150 * s, control);
+      const badgeRect = new Phaser.Geom.Rectangle(badgeRow.right - 26 * s - badgeW, badgeRow.centerY - control / 2, badgeW, control);
+      this.rows.achievements = badgeRect;
+      this.texts.achievementsGo!.setPosition(badgeRect.centerX - 14 * s, badgeRect.centerY);
+      this.hits.push({ name: 'achievements', rect: badgeRect, pinned: false });
+    } else {
+      delete this.rows.achievements;
+      delete this.rows.achievementsRow;
+    }
 
     // Reset stays last: the destructive row is the one furthest from the thumb's first reach.
-    const resetRow = new Phaser.Geom.Rectangle(left, progress.y + row * (leaderboard ? 2 : 1), width, row);
+    const resetRow = new Phaser.Geom.Rectangle(left, progress.y + row * (1 + extra), width, row);
     this.texts.level!.setPosition(left + 28 * s, resetRow.centerY);
     this.texts.levelNote!.setPosition(left + 28 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
     const resetW = Math.max(160 * s, control);
@@ -645,6 +670,14 @@ export class SettingsScene extends BaseScene {
       drawChevron(g, this.rows.leaderboard.right - 30 * s, this.rows.leaderboard.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.leaderboardGo!.setPosition(this.rows.leaderboard.centerX - 14 * s, this.rows.leaderboard.centerY + sink);
     }
+    if (this.rows.achievements && this.rows.achievementsRow) {
+      const line = this.rows.achievementsRow;
+      g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(line.x + 24 * s, line.bottom - 1.5 * s, line.width - 48 * s, 3 * s);
+      drawPanel(g, this.rows.achievements, s, { fill: SHELL.cream, depth: 8, press: sunk('achievements'), radius: 18 });
+      const sink = 8 * s * sunk('achievements') * 0.8;
+      drawChevron(g, this.rows.achievements.right - 30 * s, this.rows.achievements.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.achievementsGo!.setPosition(this.rows.achievements.centerX - 14 * s, this.rows.achievements.centerY + sink);
+    }
     if (this.rows.analytics) drawSwitch(g, this.rows.analytics, s, this.switchAt.analytics);
     if (this.rows.adPrivacy && this.rows.adPrivacyRow) {
       const line = this.rows.adPrivacyRow;
@@ -712,6 +745,8 @@ export class SettingsScene extends BaseScene {
     for (const key of ['adPrivacy', 'adPrivacyNote', 'adPrivacyGo']) this.texts[key]!.setVisible(adPrivacy);
     const leaderboard = this.leaderboardOffered();
     for (const key of ['leaderboard', 'leaderboardNote', 'leaderboardGo']) this.texts[key]!.setVisible(leaderboard);
+    const achievements = this.achievementsOffered();
+    for (const key of ['achievements', 'achievementsNote', 'achievementsGo']) this.texts[key]!.setVisible(achievements);
     const area = areaOf(progress.unlocked);
     this.texts.level!.setText(`Level ${progress.unlocked}`);
     this.texts.levelNote!.setText(`· ${area.name}`);
@@ -882,6 +917,7 @@ export class SettingsScene extends BaseScene {
       case 'analytics': this.toggleAnalytics(); return;
       case 'adPrivacy': void this.openAdPrivacy(); return;
       case 'leaderboard': void this.openLeaderboard(); return;
+      case 'achievements': void this.openAchievements(); return;
       case 'unlock': void this.buy(PRODUCT.premium); return;
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
@@ -942,16 +978,24 @@ export class SettingsScene extends BaseScene {
    * game offers sign-in, because they asked; anything that stops the screen opening is
    * said once in the notice line rather than as an error.
    */
-  private async openLeaderboard(): Promise<void> {
+  private openLeaderboard(): Promise<void> {
+    return this.openPlayGamesScreen(openDailyTempoLeaderboard, 'the leaderboard');
+  }
+
+  private openAchievements(): Promise<void> {
+    return this.openPlayGamesScreen(openAchievements, 'achievements');
+  }
+
+  private async openPlayGamesScreen(open: () => Promise<{ readonly result: string }>, what: string): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
     this.commerceBusy = true;
     try {
-      const outcome = await openDailyTempoLeaderboard();
+      const outcome = await open();
       if (this.disposed || this.curtain.active) return;
       this.notice = outcome.result === 'shown' ? ''
-        : outcome.result === 'signed_out' ? 'Sign in to Play Games to see the leaderboard.'
+        : outcome.result === 'signed_out' ? `Sign in to Play Games to see ${what}.`
           : outcome.result === 'unavailable' || outcome.result === 'unconfigured' ? 'Play Games isn’t available on this device.'
-            : 'Couldn’t open the leaderboard. Try again later.';
+            : `Couldn’t open ${what}. Try again later.`;
       this.refreshCopy();
       this.layout();
     } finally {

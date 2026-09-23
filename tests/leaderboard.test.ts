@@ -41,6 +41,8 @@ function client(over: Partial<PlayGamesClient> = {}) {
     getPlayerInfo: async () => SIGNED_IN,
     submitScore: async (id, score, tag) => { calls.submit.push([id, score, tag]); return OK; },
     showLeaderboard: async (_id, span) => { calls.show.push(span); return { shown: true, reason: 'shown' }; },
+    unlockAchievement: async () => ({ sent: true, reason: 'sent' }),
+    showAchievements: async () => ({ shown: true, reason: 'shown' }),
     ...over,
   };
   return { native, calls };
