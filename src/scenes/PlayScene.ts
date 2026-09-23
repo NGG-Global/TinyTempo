@@ -22,6 +22,7 @@ import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, markFor, trackGeometry, turnCount, turnCountPose, type Handover, type Mark } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
+import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
@@ -242,6 +243,12 @@ export class PlayScene extends BaseScene {
   private finaleCleared = false;
   /** The context time the level's music started, which a finale's opening swell is keyed to. */
   private levelOrigin = -Infinity;
+  /**
+   * What the pass that finishes hands the daily objectives: Perfect hits and tasks answered
+   * Perfect throughout. Summed here and reported once, at the record step, which is what
+   * keeps objective analytics to one event per objective per level instead of one per hit.
+   */
+  private tally = { perfect: 0, flawless: 0 };
   /** Judgements that scored in the early window while the example was still on screen. */
   private heldJudgements: Judgement[] = [];
   /** The three pucks — map, restart, mute — drawn as one baked graphic. */
@@ -745,6 +752,8 @@ export class PlayScene extends BaseScene {
     this.hideKeepsakeCard();
     this.finale?.reset();
     this.finaleCleared = false;
+    // A restart is a new pass: only the pass that finishes is counted.
+    this.tally = { perfect: 0, flawless: 0 };
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -1562,7 +1571,9 @@ export class PlayScene extends BaseScene {
     // Every beat Perfect: the one moment a task earns its own celebration. It reads the
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
+    this.tally.perfect += result.perfect;
     if (isFlawless(this.outcomes)) {
+      this.tally.flawless++;
       this.flawlessAt = this.now();
       this.flawlessSwept = 0;
       this.verdictAt = -Infinity;
@@ -1625,6 +1636,15 @@ export class PlayScene extends BaseScene {
     if (this.keepsake) {
       this.keepsakeFirst = !seenScrapbook();
       playAnalytics.collectibleUnlocked(this.keepsake, this.keepsakeFirst, ownedKeepsakes(outcome.progress).length);
+    }
+    // The daily objectives hear about the level once, here. Not when the save failed: stars
+    // and clears the next launch will not find must not tick an objective either.
+    if (!this.saveFailed) {
+      const report = objectiveReport({
+        level: this.spec.level, before, after: outcome.progress, cleared: outcome.cleared, stars: outcome.stars,
+        perfect: this.tally.perfect, flawless: this.tally.flawless, keepsake: this.keepsake !== null,
+      });
+      playAnalytics.objectives(recordObjectives(report, Date.now(), objectiveContext(before)));
     }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);

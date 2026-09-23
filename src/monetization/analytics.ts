@@ -45,6 +45,9 @@ export const GAMEPLAY_EVENTS = [
   'area_finale_started',
   'area_finale_completed',
   'area_finale_failed',
+  'objective_progress',
+  'objective_completed',
+  'daily_objectives_all_completed',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -219,6 +222,33 @@ export interface AnalyticsPayloads {
   readonly area_finale_started: FinaleParams & { readonly retry_count: number; readonly heart_cost: Flag };
   readonly area_finale_completed: FinaleParams & { readonly stars: number; readonly accuracy: number };
   readonly area_finale_failed: FinaleParams & { readonly accuracy: number };
+  /**
+   * A daily objective moved (`game/objectives.ts`). Sent once per objective per finished
+   * level, never per hit: a level that lands twenty Perfects is one event, not twenty.
+   * An advance that completes the objective sends `objective_completed` instead.
+   */
+  readonly objective_progress: {
+    /** The objective's stable id: one of the pool's, at most 12 characters. */
+    readonly objective: string;
+    /** 1–3: its place on the day's card. */
+    readonly slot: number;
+    readonly progress: number;
+    readonly target: number;
+  };
+  readonly objective_completed: {
+    readonly objective: string;
+    readonly slot: number;
+    readonly target: number;
+    /** Objectives finished today once this one is counted: 1–3. */
+    readonly completed: number;
+  };
+  /** The day's third objective finished and the day was stamped. Once per local day. */
+  readonly daily_objectives_all_completed: {
+    /** Every stamp this device holds, this one included. */
+    readonly stamps: number;
+    /** Stamped days among the last seven. */
+    readonly week: number;
+  };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
 }

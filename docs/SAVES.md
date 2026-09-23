@@ -105,6 +105,10 @@ carries (`game/stars.ts`, `game/scrapbook.ts`), so a code restores them, and a m
 only add to them, without either appearing in the format. Nothing about them needs a
 version bump.
 
+The daily objectives and their stamps (`tiny-tempo.objectives.v1`, `docs/OBJECTIVES.md`)
+do **not** travel in a code: a day's set belongs to the device's local date, and stamps are
+a per-device record of play. Auto Backup carries the key with the rest of the WebView store.
+
 ## The screen
 
 `TransferScene`, reached from Settings → Progress → Save code, on the same pattern

@@ -51,6 +51,9 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   area_finale_started: ['level', 'area', 'treatment', 'mode', 'retry_count', 'heart_cost'],
   area_finale_completed: ['level', 'area', 'treatment', 'mode', 'stars', 'accuracy'],
   area_finale_failed: ['level', 'area', 'treatment', 'mode', 'accuracy'],
+  objective_progress: ['objective', 'slot', 'progress', 'target'],
+  objective_completed: ['objective', 'slot', 'target', 'completed'],
+  daily_objectives_all_completed: ['stamps', 'week'],
   practice_started: ['level'],
   practice_completed: ['level', 'accuracy', 'duration_ms'],
 };
