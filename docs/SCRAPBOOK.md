@@ -17,9 +17,9 @@ no drop, no roll, no pack and no shop — a keepsake is a fact about a level's s
 
 Keepsake `lap` of an act is earned by **three stars on the level where that act plays for
 the `lap`-th time**: `registry index + 1 + lap × 25`. The first set is one keepsake per
-act on levels 1–25; the second is one for each act whose look changes on its second
-appearance, on that appearance's level, drawn in that look's colours — the ladybird pin is
-earned on level 28, where the shoe chases the ladybird.
+act on levels 1–25; the second is one per act, on that act's second appearance, drawn
+in that look's colours — the ladybird pin is earned on level 28, where the shoe chases
+the ladybird, and the brass hammer on level 26.
 
 Every slot prints its level whether it is found or not, and touching one says it again in
 words ("Three stars on level 14 finds it"), so a player can always see what earns what.
@@ -36,7 +36,7 @@ code of their own:
 - **Save codes and Auto Backup carry the collection** because they carry the accuracies.
 - **Merges only add.** `mergeProgress` keeps the better accuracy per level, so a merged save
   owns exactly the union of what the two sides owned.
-- **The totals are deterministic.** 32 today, from the list alone.
+- **The totals are deterministic.** 50 today, from the list alone.
 
 What it depends on is the star thresholds, which `tests/fixtures/level-thresholds.json`
 already pins because saved stars depend on them too.
@@ -119,6 +119,24 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 | 38 | Doorbell | Crimson knocker | `doorbell-crimson-knocker` |
 | 49 | Slushy | Blue slushy | `slushy-blue-cup` |
 | 50 | Apple | Ripe pear | `apple-pear` |
+| 26 | Hammer & nail | Brass hammer | `hammer-brass-head` |
+| 27 | Window cleaning | Harbour frame | `window-harbour-frame` |
+| 29 | Saw & timber | Cherry round | `saw-cherry-round` |
+| 30 | Knife & tomato | Golden tomato | `tomato-gold-slice` |
+| 32 | Knife & cucumber | Dark cucumber | `cucumber-dark-coin` |
+| 33 | Knife & banana | Green banana | `banana-green-sticker` |
+| 35 | Egg cracking | Brown egg | `egg-brown` |
+| 36 | Bubble wrap | Pink bubbles | `bubble-pink-square` |
+| 39 | Paint roller | Sage swatch | `roller-sage-swatch` |
+| 40 | Hotel bell | Brass bell | `bell-brass-bell` |
+| 41 | Balloon pump | Teal balloon | `balloon-teal` |
+| 42 | Stapler | Teal stapler | `stapler-teal` |
+| 43 | Fisherman | Navy mac | `fisherman-navy-mac` |
+| 44 | DJ scratch | Amber label | `scratch-amber-label` |
+| 45 | Trombone | Silver horn | `trombone-silver-horn` |
+| 46 | Clapping hands | Plum cuffs | `clap-plum-cuffs` |
+| 47 | Snare drum | Blue snare | `snare-blue-shell` |
+| 48 | Bongos | Walnut bongos | `bongos-walnut` |
 
 ## Analytics
 
@@ -126,12 +144,13 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 (`vignette`, `collectible`, `level`, `first`, `owned`) when a finished level earns a
 keepsake — at most once per keepsake per session, and never for keepsakes an existing save
 owned on arrival, since nothing was unlocked then. Both ids are stable and low-cardinality:
-25 acts, 32 keepsakes. See `docs/ANALYTICS.md`.
+25 acts, 50 keepsakes. See `docs/ANALYTICS.md`.
 
 ## Checked, and not
 
-The book and the reveal were driven in headless Chromium with seeded saves: a partial
-collection (17/32), a full one (32/32, every drawing), a touch on a card, a scroll, the
+The book and the reveal were driven in headless Chromium with seeded saves, against
+the original thirty-two: a partial collection (17/32), a full one (32/32, every drawing
+then), a touch on a card, a scroll, the
 reveal card with and without the refunded-heart plaque, and first versus later notes. The
 reveal was attached to a real result screen rather than earned, because that environment
 renders at ~12 fps and its replayed taps cannot score three stars. Not yet seen on a device

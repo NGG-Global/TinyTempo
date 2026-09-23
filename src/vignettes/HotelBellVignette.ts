@@ -3,13 +3,20 @@ import { HouseholdVignette } from './HouseholdVignette';
 import { contactPulse } from './householdMotion';
 import { HOME_INK, plant, shape, slab, sparkle } from './householdArt';
 import { backSoonCard, bellboyArrival } from './errandMotion';
+import { bellLook, type BellLook } from './bellLooks';
 import { clamp01 } from './motion';
 
 const BELL = { x: 0, y: -10 } as const;
 
 /** A desk bell rings on every beat. A clean round brings the bell boy; a rough one brings nobody. */
 export class HotelBellVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xefe3d3, 0xf2cf98); }
+  /** Which bell, and which lobby. The press does not change. */
+  private readonly look: BellLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    const look = bellLook(lap);
+    super(scene, look.paper, look.glow);
+    this.look = look;
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -18,8 +25,8 @@ export class HotelBellVignette extends HouseholdVignette {
     const arrival = bellboyArrival(ending, this.successful, this.still);
     const card = backSoonCard(ending, this.successful, this.still);
     // Lobby wall: warm striped paper, a key rack, a clock and a palm.
-    slab(g, -346, -246, 692, 490, 0xd8b98f, 22, 0xa88860);
-    g.fillStyle(0xe6cfa9, 0.7);
+    slab(g, -346, -246, 692, 490, this.look.wall, 22, 0xa88860);
+    g.fillStyle(this.look.stripe, 0.7);
     for (let i = 0; i < 12; i++) g.fillRect(-330 + i * 58, -232, 22, 270);
     g.lineStyle(6, 0x9c7a52).lineBetween(-346, 38, 346, 38);
     slab(g, -312, -206, 170, 140, 0x6b4630, 8, 0x3f2a1e);
@@ -67,7 +74,7 @@ export class HotelBellVignette extends HouseholdVignette {
   private bell(g: Phaser.GameObjects.Graphics, press: number, age: number, ending: number): void {
     const { x, y } = BELL;
     const dull = ending >= 0 && !this.successful;
-    const chrome = dull ? 0xb6b6b0 : 0xd5dbe0;
+    const chrome = dull ? 0xb6b6b0 : this.look.metal;
     g.fillStyle(HOME_INK, 0.18).fillEllipse(x + 8, y + 34, 150, 22);
     slab(g, x - 66, y + 20, 132, 14, 0x2f2f33, 6, 0x1c1c1f);
     g.fillStyle(chrome).fillEllipse(x, y + 20, 128, 24);
@@ -94,16 +101,16 @@ export class HotelBellVignette extends HouseholdVignette {
   private bellboy(x: number, y: number, tip: number): void {
     const g = this.art;
     const cap = tip * 22;
-    g.fillStyle(0xc0392b).fillRoundedRect(x - 46, y - 96, 92, 100, 18);
-    g.lineStyle(3, 0x7a231b).strokeRoundedRect(x - 46, y - 96, 92, 100, 18);
-    g.lineStyle(3, 0xf1c40f).lineBetween(x - 12, y - 90, x - 12, y - 10).lineBetween(x + 12, y - 90, x + 12, y - 10);
-    for (let i = 0; i < 3; i++) g.fillStyle(0xf1c40f).fillCircle(x - 12, y - 78 + i * 22, 3.5).fillCircle(x + 12, y - 78 + i * 22, 3.5);
+    g.fillStyle(this.look.livery).fillRoundedRect(x - 46, y - 96, 92, 100, 18);
+    g.lineStyle(3, this.look.liveryInk).strokeRoundedRect(x - 46, y - 96, 92, 100, 18);
+    g.lineStyle(3, this.look.trim).lineBetween(x - 12, y - 90, x - 12, y - 10).lineBetween(x + 12, y - 90, x + 12, y - 10);
+    for (let i = 0; i < 3; i++) g.fillStyle(this.look.trim).fillCircle(x - 12, y - 78 + i * 22, 3.5).fillCircle(x + 12, y - 78 + i * 22, 3.5);
     // Left arm at his side; right arm raised to the cap as the tip comes.
-    g.lineStyle(16, 0xc0392b).lineBetween(x - 40, y - 84, x - 54, y - 30);
+    g.lineStyle(16, this.look.livery).lineBetween(x - 40, y - 84, x - 54, y - 30);
     g.fillStyle(0xffffff).fillCircle(x - 56, y - 22, 10);
     const ax = x + 40 + tip * 6, ay = y - 84;
     const hx = x + 34 + tip * 4, hy = y - 30 - tip * 130;
-    g.lineStyle(16, 0xc0392b).lineBetween(ax, ay, x + 62 - tip * 20, y - 60 - tip * 40).lineBetween(x + 62 - tip * 20, y - 60 - tip * 40, hx, hy);
+    g.lineStyle(16, this.look.livery).lineBetween(ax, ay, x + 62 - tip * 20, y - 60 - tip * 40).lineBetween(x + 62 - tip * 20, y - 60 - tip * 40, hx, hy);
     g.fillStyle(0xffffff).fillCircle(hx, hy, 10);
     g.fillStyle(0xe8b48a).fillRoundedRect(x - 26, y - 152, 52, 60, 20);
     g.fillStyle(0x2c1e1a).fillRoundedRect(x - 27, y - 156, 54, 18, 8);
@@ -112,8 +119,8 @@ export class HotelBellVignette extends HouseholdVignette {
     g.fillStyle(0xd98a8a, 0.5).fillEllipse(x - 18, y - 110, 10, 6).fillEllipse(x + 18, y - 110, 10, 6);
     // The pillbox cap, lifted by the raised glove.
     const cy = y - 158 - cap;
-    g.fillStyle(0xc0392b).fillRoundedRect(x - 30 + tip * 8, cy - 24, 60, 26, 6);
-    g.lineStyle(3, 0x7a231b).strokeRoundedRect(x - 30 + tip * 8, cy - 24, 60, 26, 6);
-    g.lineStyle(4, 0xf1c40f).lineBetween(x - 26 + tip * 8, cy - 6, x + 26 + tip * 8, cy - 6);
+    g.fillStyle(this.look.livery).fillRoundedRect(x - 30 + tip * 8, cy - 24, 60, 26, 6);
+    g.lineStyle(3, this.look.liveryInk).strokeRoundedRect(x - 30 + tip * 8, cy - 24, 60, 26, 6);
+    g.lineStyle(4, this.look.trim).lineBetween(x - 26 + tip * 8, cy - 6, x + 26 + tip * 8, cy - 6);
   }
 }

@@ -3,6 +3,7 @@ import { faces } from '@/ui/light';
 import { HouseholdVignette } from './HouseholdVignette';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { pileFinale, staplerClose, staplerJaw } from './errandMotion';
+import { staplerLook, type StaplerLook } from './staplerLooks';
 import { clamp01 } from './motion';
 
 /** The pile in an oblique view: a back edge, a front edge below and left, and a thickness. */
@@ -15,7 +16,12 @@ const STAPLER_ARM_H = 22;
 
 /** A staple per beat along the pile's back edge; the coda's staple binds the whole pile. */
 export class StaplerVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe9e3d8, 0xf1d6a2); }
+  /** Which stapler, and which leather. The jaw does not change. */
+  private readonly look: StaplerLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe9e3d8, 0xf1d6a2);
+    this.look = staplerLook(lap);
+  }
 
   private get slots(): number { return (this.plan?.targets.length ?? 4) + 1; }
   private slotX(index: number): number {
@@ -34,7 +40,7 @@ export class StaplerVignette extends HouseholdVignette {
     slab(g, -346, -246, 692, 490, 0x9a6b45, 22, 0x5b3d26);
     g.lineStyle(2, 0x7e5535, 0.5);
     for (let i = 0; i < 9; i++) g.lineBetween(-346, -220 + i * 56, 346, -214 + i * 56);
-    slab(g, -300, -60, 600, 290, 0x3f6b57, 14, 0x24443a);
+    slab(g, -300, -60, 600, 290, this.look.leather, 14, this.look.leatherInk);
     g.lineStyle(2, 0xd4b46a, 0.6).strokeRoundedRect(-286, -46, 572, 262, 10);
     this.mug();
     this.pens();
@@ -199,7 +205,7 @@ export class StaplerVignette extends HouseholdVignette {
     );
     g.fillStyle(0x8b9096).fillRoundedRect(x - 18, y - bh - 2, 40, 5, 2);
 
-    const body = faces(0xc7423a);
+    const body = faces(this.look.body);
     const length = STAPLER_LENGTH;
     const armH = STAPLER_ARM_H;
     // Top, near side, and jaw of the arm. Hinge is local x = 0; the jaw is −length.
@@ -212,7 +218,7 @@ export class StaplerVignette extends HouseholdVignette {
     g.lineStyle(2.5, chrome.edge).strokeCircle(hx, hy, 8);
     g.fillStyle(base.face).fillCircle(hx, hy, 3.5);
     const [rimx, rimy] = map(-length * 0.42, armH, depth * 0.28);
-    g.lineStyle(4, 0xe8837b, 0.75).lineBetween(hx - 10, hy - 8, rimx, rimy);
+    g.lineStyle(4, this.look.highlight, 0.75).lineBetween(hx - 10, hy - 8, rimx, rimy);
     if (close > 0.6) {
       const [jx, jy] = map(-length, 2, depth * 0.4);
       g.lineStyle(3, 0xfff2c8, (close - 0.6) / 0.4);

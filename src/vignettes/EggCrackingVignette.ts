@@ -4,16 +4,20 @@ import { STYLE } from '@/config/style';
 import { HouseholdVignette } from './HouseholdVignette';
 import { contactPulse, eggReveal } from './householdMotion';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
+import { eggLook, type EggLook } from './eggLooks';
 import { clamp01, easeOut } from './motion';
-
-const SHELL = 0xffe7ba;
 const EGG = cubicContour(0, -66, [
   [29, -66, 52, -10, 49, 21], [46, 64, -46, 64, -49, 21],
   [-52, -10, -29, -66, 0, -66],
 ]);
 
 export class EggCrackingVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xf3e8d5, 0xf8c977); }
+  /** Which egg is over the bowl. The crack does not change. */
+  private readonly look: EggLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xf3e8d5, 0xf8c977);
+    this.look = eggLook(lap);
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -86,12 +90,12 @@ export class EggCrackingVignette extends HouseholdVignette {
         ]);
         half.push(side * 9, 35, -side * 6, 20, side * 8, 3, -side * 5, -14, side * 7, -32, 0, -61);
         const a = side * open * 0.5;
-        shape(g, half.map((v, i) => i % 2 ? y + half[i - 1]! * Math.sin(a) + v * Math.cos(a) : x + v * Math.cos(a) - half[i + 1]! * Math.sin(a)), SHELL, 0xa17c51);
+        shape(g, half.map((v, i) => i % 2 ? y + half[i - 1]! * Math.sin(a) + v * Math.cos(a) : x + v * Math.cos(a) - half[i + 1]! * Math.sin(a)), this.look.shell, this.look.ink);
         g.fillStyle(0xffffff, 0.32).fillEllipse(x + side * 20, y - 12, 14, 43);
       }
       if (!this.successful) {
         g.lineStyle(3, 0x986b44).lineBetween(40, -146, 32, -126).lineBetween(32, -126, 43, -112);
-        g.fillStyle(SHELL).fillTriangle(74, 33, 89, 28, 84, 42);
+        g.fillStyle(this.look.shell).fillTriangle(74, 33, 89, 28, 84, 42);
       } else if (!this.still) {
         const a = Math.sin(clamp01((ending - 0.68) / 0.75) * Math.PI);
         sparkle(g, -94, -126, 13 * a, a);
@@ -101,11 +105,11 @@ export class EggCrackingVignette extends HouseholdVignette {
   }
   private egg(x: number, y: number, angle: number): void {
     const g = this.art;
-    shape(g, EGG.map((v, i) => i % 2 ? y + EGG[i - 1]! * Math.sin(angle) + v * Math.cos(angle) : x + v * Math.cos(angle) - EGG[i + 1]! * Math.sin(angle)), SHELL, 0xa17c51);
-    g.fillStyle(0xfff9e2).fillEllipse(x - 16, y - 19, 20, 43);
+    shape(g, EGG.map((v, i) => i % 2 ? y + EGG[i - 1]! * Math.sin(angle) + v * Math.cos(angle) : x + v * Math.cos(angle) - EGG[i + 1]! * Math.sin(angle)), this.look.shell, this.look.ink);
+    g.fillStyle(this.look.highlight).fillEllipse(x - 16, y - 19, 20, 43);
     for (let i = 0; i < 13; i++) {
       const dx = ((i * 19) % 63) - 27, dy = ((i * 31) % 74) - 26;
-      g.fillStyle(0xbd9367, 0.3).fillCircle(x + dx, y + dy, 1.2 + i % 2);
+      g.fillStyle(this.look.speck, this.look.speckAlpha).fillCircle(x + dx, y + dy, 1.2 + i % 2);
     }
   }
 }

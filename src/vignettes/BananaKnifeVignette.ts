@@ -29,6 +29,7 @@ import {
   sliceTumble,
 } from './bananaMotion';
 import { handoverAt } from '@/game/beatTrack';
+import { bananaLook, type BananaLook } from './bananaLooks';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /**
@@ -137,11 +138,14 @@ export class BananaKnifeVignette implements Vignette {
   private baseX = 0;
   private baseY = 0;
   private scale = 1;
+  /** Which banana is on the board. The knife does not change. */
+  private readonly fruit: BananaLook;
   private get reducedMotion(): boolean {
     return reducedMotion();
   }
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.fruit = bananaLook(lap);
     this.backdrop = new Backdrop(scene, BREAKFAST.paper, BREAKFAST.board, {
       glowAt: { x: 0.42, y: 0.42 },
       glowAlpha: 0.5,
@@ -239,7 +243,7 @@ export class BananaKnifeVignette implements Vignette {
   private takeSlice(now: number, targets: number): void {
     const at = bananaAt(this.cutTo);
     if (!this.reducedMotion)
-      this.bursts.burst('dust', at.x, at.y, [BREAKFAST.flesh, BREAKFAST.peel, BREAKFAST.pith], 6);
+      this.bursts.burst('dust', at.x, at.y, [this.fruit.flesh, this.fruit.peel, this.fruit.pith], 6);
     this.sliceAt.push(now);
     this.sliceFrom.push(at.x);
     this.sliceFromY.push(at.y + this.bananaG.y);
@@ -369,7 +373,7 @@ export class BananaKnifeVignette implements Vignette {
     const mid = bananaAt(this.cutT * 0.5);
     g.fillStyle(BREAKFAST.ink, 0.12);
     fan(g, disc(mid.x, 5 - settle, Math.max(20, (cut.x - BANANA_MOTION.stemX) * 0.43), 10, 0));
-    paintedContour(g, pts, BREAKFAST.peel, 0x85602b, STYLE.current.outline);
+    paintedContour(g, pts, this.fruit.peel, 0x85602b, STYLE.current.outline);
     const band = (from: number, to: number): number[] => {
       const out: number[] = [];
       for (let i = 0; i <= 32; i++) {
@@ -382,9 +386,9 @@ export class BananaKnifeVignette implements Vignette {
       }
       return out;
     };
-    g.fillStyle(BREAKFAST.peelDark);
+    g.fillStyle(this.fruit.peelDark);
     fan(g, band(-0.94, -0.42));
-    g.fillStyle(BREAKFAST.peelLit);
+    g.fillStyle(this.fruit.peelLit);
     fan(g, band(0.16, 0.84));
     g.lineStyle(2.5, 0xffef9d, 0.9);
     const ridge: number[] = [];
@@ -405,17 +409,17 @@ export class BananaKnifeVignette implements Vignette {
     ]) {
       if (t! >= this.cutT - 0.035) continue;
       const p = bananaAt(t!);
-      g.fillStyle(BREAKFAST.speckle, 0.65).fillCircle(p.x + p.nx * p.half * side!, p.y + p.ny * p.half * side!, r!);
+      g.fillStyle(this.fruit.speckle, this.fruit.speckleAlpha).fillCircle(p.x + p.nx * p.half * side!, p.y + p.ny * p.half * side!, r!);
     }
     if (this.cutT < 0.995) {
       const tilt = Math.atan2(cut.ny, cut.nx) + Math.PI / 2;
-      paintedContour(g, disc(cut.x, cut.y, 12, cut.half, tilt), BREAKFAST.flesh, 0x9a742e, 3);
-      g.fillStyle(BREAKFAST.fleshRing);
+      paintedContour(g, disc(cut.x, cut.y, 12, cut.half, tilt), this.fruit.flesh, 0x9a742e, 3);
+      g.fillStyle(this.fruit.fleshRing);
       fan(g, disc(cut.x + 1, cut.y, 5, cut.half * 0.64, tilt));
-      g.fillStyle(BREAKFAST.pith);
+      g.fillStyle(this.fruit.pith);
       fan(g, disc(cut.x + 2, cut.y, 3, cut.half * 0.22, tilt));
     } else {
-      paintedContour(g, disc(cut.x, cut.y, 8, cut.half * 0.92, -0.45), BREAKFAST.speckle, 0x71502b, 2);
+      paintedContour(g, disc(cut.x, cut.y, 8, cut.half * 0.92, -0.45), this.fruit.speckle, 0x71502b, 2);
     }
     const stem = bananaAt(0);
     paintedContour(
@@ -426,11 +430,11 @@ export class BananaKnifeVignette implements Vignette {
         [stem.x - 7, stem.y - 30, stem.x + 4, stem.y - 18, stem.x + 8, stem.y - 5],
         [stem.x + 4, stem.y + 3, stem.x - 3, stem.y + 1, stem.x - 4, stem.y - 8],
       ]),
-      BREAKFAST.stem,
+      this.fruit.stem,
       0x675637,
       4,
     );
-    g.lineStyle(4, BREAKFAST.stemLit).lineBetween(stem.x - 17, stem.y - 41, stem.x - 10, stem.y - 23);
+    g.lineStyle(4, this.fruit.stemLit).lineBetween(stem.x - 17, stem.y - 41, stem.x - 10, stem.y - 23);
   }
 
   /** Each slice is an oval that flops from the cut and leans on the last one. */
@@ -453,21 +457,21 @@ export class BananaKnifeVignette implements Vignette {
       paintedContour(
         g,
         disc(x - 9 * Math.min(1, p), cy + 2, a, b, lean),
-        BREAKFAST.peelDark,
+        this.fruit.peelDark,
         0x98743c,
         STYLE.current.outline * 0.65,
       );
-      paintedContour(g, disc(x, cy, a, b, lean), BREAKFAST.peel, 0x98743c, STYLE.current.outline * 0.65);
-      g.fillStyle(BREAKFAST.flesh);
+      paintedContour(g, disc(x, cy, a, b, lean), this.fruit.peel, 0x98743c, STYLE.current.outline * 0.65);
+      g.fillStyle(this.fruit.flesh);
       fan(g, disc(x, cy, a * 0.89, b * 0.9, lean));
-      g.lineStyle(2, BREAKFAST.fleshRing);
+      g.lineStyle(2, this.fruit.fleshRing);
       strokePoly(g, disc(x, cy, a * 0.73, b * 0.76, lean));
       if (a > 16) {
         for (let lobe = 0; lobe < 3; lobe++) {
           const t = (lobe * Math.PI * 2) / 3 - 0.7;
           const sx = Math.cos(t) * a * 0.54,
             sy = Math.sin(t) * b * 0.54;
-          g.lineStyle(2.5, BREAKFAST.pith, 0.7).lineBetween(
+          g.lineStyle(2.5, this.fruit.pith, 0.7).lineBetween(
             x,
             cy,
             x + sx * Math.cos(lean) - sy * Math.sin(lean),
@@ -477,7 +481,7 @@ export class BananaKnifeVignette implements Vignette {
             const st = t + (seed ? -0.3 : 0.3);
             const dx = Math.cos(st) * a * 0.16,
               dy = Math.sin(st) * b * 0.16;
-            g.fillStyle(BREAKFAST.seed, 0.7).fillEllipse(
+            g.fillStyle(this.fruit.seed, 0.7).fillEllipse(
               x + dx * Math.cos(lean) - dy * Math.sin(lean),
               cy + dx * Math.sin(lean) + dy * Math.cos(lean),
               3,
@@ -511,7 +515,7 @@ export class BananaKnifeVignette implements Vignette {
       const seed = (i * 29 + 7) % 17;
       const x = this.strikeX + (seed / 17 - 0.5) * spread * 1.2;
       const y = at.y - 8 - Math.sin(i * 1.7) * spread * 0.4 + fall * (0.65 + seed / 34);
-      g.fillStyle(i % 2 ? BREAKFAST.flesh : BREAKFAST.pith, life * 0.9);
+      g.fillStyle(i % 2 ? this.fruit.flesh : this.fruit.pith, life * 0.9);
       g.fillEllipse(x, y, 5 + (seed % 3), 7 + (seed % 3), 6);
     }
   }

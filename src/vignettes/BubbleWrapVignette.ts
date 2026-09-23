@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { bubbleLook, type BubbleLook } from './bubbleLooks';
 import { HouseholdVignette } from './HouseholdVignette';
 import { BUBBLE_CHAIN, contactPulse } from './householdMotion';
 import { shape, slab, sparkle } from './householdArt';
@@ -7,7 +8,12 @@ import { clamp01, easeOut } from './motion';
 const COLS = 6, ROWS = 5, STEP = 84;
 
 export class BubbleWrapVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe5eee6, 0xc9e9cf); }
+  /** Which sheet is on the table. The pops do not change. */
+  private readonly look: BubbleLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe5eee6, 0xc9e9cf);
+    this.look = bubbleLook(lap);
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -18,8 +24,8 @@ export class BubbleWrapVignette extends HouseholdVignette {
     const active = Math.min(COLS * ROWS - 1, times.length + chained);
     const ripple = this.still ? 0 : contactPulse(now - this.strikeAt) * 3;
     g.fillStyle(0x3c6066, 0.11).fillRoundedRect(-267, -191, 551, 452, 30);
-    slab(g, -285, -225, 558, 460, 0xb9cfc6, 20, 0x7a9995);
-    slab(g, -273, -235, 550, 457, 0xe1f2e7, 20, 0x8eaeab);
+    slab(g, -285, -225, 558, 460, this.look.shadow, 20, 0x7a9995);
+    slab(g, -273, -235, 550, 457, this.look.sheet, 20, this.look.sheetEdge);
     // Translucent welded seams, perimeter perforations, and folded film corners.
     g.lineStyle(2, 0xffffff, 0.6);
     for (let c = 0; c < COLS - 1; c++) g.lineBetween(-168 + c * STEP, -214, -168 + c * STEP, 202);
@@ -27,7 +33,7 @@ export class BubbleWrapVignette extends HouseholdVignette {
     for (let i = 0; i < 24; i++) {
       g.fillStyle(0x90b5b0, 0.45).fillCircle(-252 + i * 22, -224, 1.6).fillCircle(-252 + i * 22, 211, 1.6);
     }
-    shape(g, [242, -235, 277, -202, 241, -200], 0xf5fff2, 0x8eaeab, 2);
+    shape(g, [242, -235, 277, -202, 241, -200], 0xf5fff2, this.look.sheetEdge, 2);
     for (let i = 0; i < COLS * ROWS; i++) {
       const row = Math.floor(i / COLS), col = row % 2 ? COLS - 1 - i % COLS : i % COLS;
       const x = -210 + col * STEP, y = -168 + row * STEP;
@@ -37,8 +43,8 @@ export class BubbleWrapVignette extends HouseholdVignette {
       const squash = popped ? easeOut(age / 0.09) : 0;
       const r = 33 - squash * 3;
       g.fillStyle(0x648c90, popped ? 0.07 : 0.18).fillEllipse(x + 3, y + 7, 68, 66 - squash * 23);
-      g.fillStyle(popped ? 0xcde0d6 : 0xaed4d1, 0.85).fillEllipse(x, y, r * 2, r * (2 - squash * 0.3));
-      g.lineStyle(2, popped ? 0x8eb5ad : 0x6d999e, 0.65).strokeEllipse(x, y, r * 2, r * (2 - squash * 0.3));
+      g.fillStyle(popped ? this.look.popped : this.look.bubble, 0.85).fillEllipse(x, y, r * 2, r * (2 - squash * 0.3));
+      g.lineStyle(2, popped ? this.look.sheetEdge : this.look.bubbleInk, 0.65).strokeEllipse(x, y, r * 2, r * (2 - squash * 0.3));
       if (popped) {
         g.fillStyle(0xf4fff1, 0.38).fillEllipse(x, y + 3, 48, 36);
         g.lineStyle(1.5, 0x7fa7a1, 0.6);
@@ -57,7 +63,7 @@ export class BubbleWrapVignette extends HouseholdVignette {
         }
       } else {
         // Nested highlights give each air pocket a rounded, slippery dome.
-        g.fillStyle(0xe5faf1, 0.78).fillEllipse(x - 6, y - 7, 49, 47);
+        g.fillStyle(this.look.highlight, 0.78).fillEllipse(x - 6, y - 7, 49, 47);
         g.fillStyle(0xffffff, 0.9).fillEllipse(x - 12, y - 17, 19, 10);
         g.fillStyle(0xffffff, 0.6).fillCircle(x + 15, y + 13, 4);
         g.lineStyle(2, 0xfaffed, 0.8).beginPath().arc(x, y, 28, 0.25, 1.4).strokePath();

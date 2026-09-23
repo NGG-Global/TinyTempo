@@ -8,12 +8,17 @@ import {
   clapFinale, clapOutcome, clapRing, crowdClap, CROWD_HANDS, handGap, palmSquash, roomWarmth,
   type ClapFinale, type ClapOutcome, type CrowdHand,
 } from './clapMotion';
+import { clapLook, type ClapLook } from './clapLooks';
 import { clamp01 } from './motion';
 
 /** The room's palette. The ink is a deep warm brown, so dressed type takes no outline. */
 export const ROOM = { ink: 0x3b2a2e, wall: 0xdcc3a6, floor: 0xb4906d, warm: 0xf7d489 } as const;
-/** The clapping hands, and the sleeve one of them comes out of. */
-const MAIN = { skin: faces(0xdb9d6e), nail: 0xf3ddc4, sleeve: faces(0x4f7a6a), cuff: 0xf2e6d2 } as const;
+interface ClapHands {
+  readonly skin: Faces;
+  readonly nail: number;
+  readonly sleeve: Faces;
+  readonly cuff: number;
+}
 /** Three tones in the crowd, so it is a room of people and not one hand drawn eleven times. */
 const CROWD_SKIN: readonly Faces[] = [faces(0xe4b184), faces(0xc18351), faces(0x8f5c35)];
 const CROWD_SLEEVE: readonly number[] = [0x9a5f52, 0x4a6478, 0x7a6a94];
@@ -59,9 +64,15 @@ function roundedBox(at: Local, u0: number, v0: number, u1: number, v1: number, r
  * hold the shrug.
  */
 export class ClappingHandsVignette extends HouseholdVignette {
+  /** Which pair is clapping. The contact does not change. */
+  private readonly hands: ClapHands;
   private outcome: ClapOutcome = 'fail';
 
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe7d5bd, ROOM.warm); }
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe7d5bd, ROOM.warm);
+    const look: ClapLook = clapLook(lap);
+    this.hands = { skin: faces(look.skin), nail: look.nail, sleeve: faces(look.sleeve), cuff: look.cuff };
+  }
 
   public override finish(successful: boolean, contactSec: number, accuracy = successful ? 100 : 0): void {
     super.finish(successful, contactSec);
@@ -140,7 +151,7 @@ export class ClappingHandsVignette extends HouseholdVignette {
    * each other.
    */
   private hand(g: Phaser.GameObjects.Graphics, side: -1 | 1, gap: number, squash: number, finale: ClapFinale, jolt: number): void {
-    const { skin, nail, sleeve } = MAIN;
+    const { skin, nail, sleeve } = this.hands;
     const cx = side * (SPREAD.contact + gap * (SPREAD.open - SPREAD.contact)) + jolt;
     const cy = SPREAD.y - finale.shrug * 20;
     // The hands hinge at the wrist, so their tops come apart further than their heels do;
@@ -161,7 +172,7 @@ export class ClappingHandsVignette extends HouseholdVignette {
     g.lineStyle(46, sleeve.face).lineBetween(side * 236, STAGE.bottom, wrist[0], wrist[1]);
     g.lineStyle(11, sleeve.lit, 0.45).lineBetween(side * 222, STAGE.bottom, wrist[0] - side * 12, wrist[1] - 4);
     g.lineStyle(9, sleeve.edge, 0.55).lineBetween(side * 252, STAGE.bottom, wrist[0] + side * 12, wrist[1] + 8);
-    shape(g, roundedBox(at, -46, PALM.wrist - 18, 46, PALM.wrist + 8, 9), MAIN.cuff, shade(MAIN.cuff, -0.4), 2.5);
+    shape(g, roundedBox(at, -46, PALM.wrist - 18, 46, PALM.wrist + 8, 9), this.hands.cuff, shade(this.hands.cuff, -0.4), 2.5);
 
     // Fingers first, so the palm covers their roots. They fan a little, and wider still in
     // the shrug, where the hand has given up holding itself together.

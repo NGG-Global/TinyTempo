@@ -4,6 +4,7 @@ import { castShadow, faces } from '@/ui/light';
 import { HouseholdVignette } from './HouseholdVignette';
 import { shape, slab, sparkle } from './householdArt';
 import { faderCut, meterLevel, scratchFinale, scratchPush, SCRATCH_MOTION, type ScratchFinale } from './scratchMotion';
+import { scratchLook, type ScratchLook } from './scratchLooks';
 import { clamp01 } from './motion';
 
 /** The booth's palette. The ink is near black, so dressed type takes no outline, like the household ink. */
@@ -14,7 +15,12 @@ const PIVOT = { x: 306, y: -150 } as const;
 /** Where the stylus sits in the groove: a radius on the record, and the angle it is reached at. */
 const STYLUS = { r: 118, angle: -0.95 } as const;
 const FADER = { x: -210, y: 128, travel: 52 } as const;
-const HAND = { skin: faces(0xc98a5e), nail: 0xf1d3bd, sleeve: faces(0x6a4c93), band: 0xf1c04f } as const;
+interface ScratchHands {
+  readonly skin: ReturnType<typeof faces>;
+  readonly nail: number;
+  readonly sleeve: ReturnType<typeof faces>;
+  readonly band: number;
+}
 /** Three labels, cycling by task, so a level's records are not all the same pressing. */
 const LABELS = [
   { paper: 0xe25c5c, ring: 0xf6e0c8, motif: 'sun' },
@@ -29,7 +35,15 @@ const LABELS = [
  * clean off the record and the platter runs down.
  */
 export class DjScratchVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0x3a3344, 0xe04f9a); }
+  /** Which night in the booth. The scratch does not change. */
+  private readonly look: ScratchLook;
+  private readonly hands: ScratchHands;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    const look = scratchLook(lap);
+    super(scene, look.paper, look.glow);
+    this.look = look;
+    this.hands = { skin: faces(0xc98a5e), nail: 0xf1d3bd, sleeve: faces(look.sleeve), band: look.band };
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -74,7 +88,7 @@ export class DjScratchVignette extends HouseholdVignette {
     // The back wall of the booth, a shade darker, with a strip of LED tape along the join.
     g.fillStyle(shade(BOOTH.table, -0.35)).fillRoundedRect(-340, -240, 680, 60, { tl: 18, tr: 18, br: 0, bl: 0 });
     const glow = 0.35 + finale.lights * 0.65;
-    g.fillStyle(mix(BOOTH.magenta, BOOTH.cyan, 0.5 + Math.sin(now * 2) * 0.5 * (this.still ? 0 : 1)), glow * 0.8).fillRect(-330, -184, 660, 4);
+    g.fillStyle(mix(this.look.warm, this.look.cool, 0.5 + Math.sin(now * 2) * 0.5 * (this.still ? 0 : 1)), glow * 0.8).fillRect(-330, -184, 660, 4);
     g.fillStyle(0xffffff, glow * 0.25).fillRect(-330, -185, 660, 1.5);
     // The table's front edge and its wear.
     g.fillStyle(table.lit, 0.35).fillRect(-330, -178, 660, 3);
@@ -82,9 +96,9 @@ export class DjScratchVignette extends HouseholdVignette {
     // Two moving-head beams cross the booth when the round lands, drawn before the gear so they fall behind it.
     if (finale.lights > 0) {
       const sweep = this.still ? 0 : Math.sin(now * 1.6) * 60;
-      g.fillStyle(BOOTH.magenta, 0.3 * finale.lights);
+      g.fillStyle(this.look.warm, 0.3 * finale.lights);
       g.fillTriangle(-300, -246, 40 + sweep, 120, -160 + sweep, 160);
-      g.fillStyle(BOOTH.cyan, 0.3 * finale.lights);
+      g.fillStyle(this.look.cool, 0.3 * finale.lights);
       g.fillTriangle(300, -246, -40 - sweep, 120, 160 - sweep, 160);
       g.fillStyle(0xffffff, 0.1 * finale.lights).fillRoundedRect(-346, -246, 692, 490, 22);
     }
@@ -140,7 +154,7 @@ export class DjScratchVignette extends HouseholdVignette {
     g.lineStyle(2, cup.lit, 0.6).beginPath().arc(-300, -151, 26, Math.PI * 1.15, Math.PI * 1.5, false).strokePath();
     for (const side of [-1, 1]) {
       g.fillStyle(cup.face).fillEllipse(-300 + side * 26, -142, 18, 26);
-      g.fillStyle(BOOTH.magenta, 0.8).fillEllipse(-300 + side * 26, -142, 10, 16);
+      g.fillStyle(this.look.warm, 0.8).fillEllipse(-300 + side * 26, -142, 10, 16);
       g.lineStyle(2, cup.edge).strokeEllipse(-300 + side * 26, -142, 18, 26);
     }
     g.lineStyle(2.5, 0x1e2126).beginPath().moveTo(-274, -132).lineTo(-262, -110).lineTo(-278, -96).lineTo(-262, -84).strokePath();
@@ -287,7 +301,7 @@ export class DjScratchVignette extends HouseholdVignette {
    * the table's edge, so the wrist bends with the reach.
    */
   private scratchHand(g: Phaser.GameObjects.Graphics, push: number, finale: ScratchFinale, now: number, jolt: number): void {
-    const { skin, sleeve } = HAND;
+    const { skin, sleeve } = this.hands;
     // The palm rests low on the record's near side; it turns about the spindle with the shove.
     const rest = 0.78, reach = 100;
     const a = rest - push * SCRATCH_MOTION.pushRadians;
@@ -305,8 +319,8 @@ export class DjScratchVignette extends HouseholdVignette {
     g.lineStyle(38, sleeve.face).lineBetween(320, 262, wrist[0], wrist[1]);
     g.lineStyle(10, sleeve.lit, 0.6).lineBetween(312, 262, wrist[0] - 8, wrist[1] - 2);
     g.lineStyle(8, sleeve.edge, 0.7).lineBetween(328, 262, wrist[0] + 8, wrist[1] + 6);
-    g.lineStyle(12, HAND.band).lineBetween(...at(-38, -20), ...at(-38, 20));
-    g.lineStyle(3, shade(HAND.band, -0.4), 0.8).lineBetween(...at(-36, -18), ...at(-36, 18));
+    g.lineStyle(12, this.hands.band).lineBetween(...at(-38, -20), ...at(-38, 20));
+    g.lineStyle(3, shade(this.hands.band, -0.4), 0.8).lineBetween(...at(-36, -18), ...at(-36, 18));
     // Fingers first, so the palm covers their roots; the thumb spread wide on the near side.
     const fingers: readonly [number, number, number][] = [[-22, 44, 0.9], [-8, 56, 1], [8, 54, 1], [22, 42, 0.9]];
     for (const [side, len, w] of fingers) {
@@ -316,25 +330,25 @@ export class DjScratchVignette extends HouseholdVignette {
       g.lineStyle(5 * w, skin.lit, 0.7).lineBetween(...at(10, side - 4), ...at(2 + len * 0.8, side - 4));
       // Knuckle creases, and the nail on the tip.
       g.lineStyle(1.5, skin.edge, 0.6).lineBetween(...at(6 + len * 0.55, side - 6), ...at(6 + len * 0.55, side + 6));
-      g.fillStyle(HAND.nail, 0.9).fillEllipse(...at(6 + len - 4, side), 8 * w, 6 * w);
+      g.fillStyle(this.hands.nail, 0.9).fillEllipse(...at(6 + len - 4, side), 8 * w, 6 * w);
     }
     const thumbTip = at(18, 46 + lift * 6);
     g.lineStyle(16, skin.face).lineBetween(...at(-12, 24), ...thumbTip);
     g.lineStyle(4, skin.lit, 0.7).lineBetween(...at(-10, 20), ...at(14, 40));
-    g.fillStyle(HAND.nail, 0.9).fillEllipse(...thumbTip, 8, 6);
+    g.fillStyle(this.hands.nail, 0.9).fillEllipse(...thumbTip, 8, 6);
     // The palm, its shaded heel, and a ring on the third finger.
     shape(g, [...at(-30, -28), ...at(14, -30), ...at(20, 30), ...at(-24, 32)], skin.face, skin.edge, 2.5);
     g.fillStyle(skin.shade, 0.7);
     g.beginPath().moveTo(...at(-30, -28)).lineTo(...at(-12, -28)).lineTo(...at(-10, 30)).lineTo(...at(-24, 32)).closePath().fillPath();
     g.fillStyle(skin.lit, 0.6).fillEllipse(...at(0, -10), 20, 14);
     g.lineStyle(1.5, skin.edge, 0.5).lineBetween(...at(-6, -22), ...at(4, 18)).lineBetween(...at(-14, -10), ...at(-4, 24));
-    g.lineStyle(4, HAND.band).lineBetween(...at(14, 4), ...at(14, 14));
+    g.lineStyle(4, this.hands.band).lineBetween(...at(14, 4), ...at(14, 14));
     g.fillStyle(0x4fd3e0).fillCircle(...at(14, 9), 2.5);
   }
 
   /** The fader hand: index finger on the crossfader knob, the rest curled, cutting on the beat. */
   private faderHand(g: Phaser.GameObjects.Graphics, cut: number, finale: ScratchFinale): void {
-    const { skin, sleeve } = HAND;
+    const { skin, sleeve } = this.hands;
     const lift = finale.handsUp;
     const knobX = FADER.x - FADER.travel + cut * FADER.travel * 2;
     const px = knobX - 30 + lift * 30, py = FADER.y + 40 - lift * 200;
@@ -346,7 +360,7 @@ export class DjScratchVignette extends HouseholdVignette {
     const wrist = at(-30, 0);
     g.lineStyle(32, sleeve.face).lineBetween(-300, 262, wrist[0], wrist[1]);
     g.lineStyle(8, sleeve.lit, 0.6).lineBetween(-306, 262, wrist[0] - 6, wrist[1] - 2);
-    g.lineStyle(10, HAND.band).lineBetween(...at(-32, -16), ...at(-32, 16));
+    g.lineStyle(10, this.hands.band).lineBetween(...at(-32, -16), ...at(-32, 16));
     // Curled fingers as a stack of short knuckles, then the index reaching the knob.
     for (let i = 0; i < 3; i++) {
       const v = -2 + i * 12;
@@ -357,7 +371,7 @@ export class DjScratchVignette extends HouseholdVignette {
     const tip: [number, number] = [knobX, FADER.y - 2 - lift * 160];
     g.lineStyle(14, skin.face).lineBetween(...at(10, -18), ...tip);
     g.lineStyle(4, skin.lit, 0.7).lineBetween(...at(12, -22), tip[0] - 4, tip[1] - 3);
-    g.fillStyle(HAND.nail, 0.9).fillEllipse(tip[0] + 2, tip[1] - 2, 7, 5);
+    g.fillStyle(this.hands.nail, 0.9).fillEllipse(tip[0] + 2, tip[1] - 2, 7, 5);
     shape(g, [...at(-26, -22), ...at(10, -24), ...at(12, 24), ...at(-22, 26)], skin.face, skin.edge, 2.5);
     g.fillStyle(skin.shade, 0.7);
     g.beginPath().moveTo(...at(-26, -22)).lineTo(...at(-12, -22)).lineTo(...at(-10, 24)).lineTo(...at(-22, 26)).closePath().fillPath();

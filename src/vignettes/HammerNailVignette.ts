@@ -12,6 +12,7 @@ import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { anticipation, clamp01, easeOut, HAMMER_MOTION, nailHeight, recoil } from './hammerMotion';
+import { hammerLook, type HammerLook } from './hammerLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
@@ -30,6 +31,8 @@ export const WORKSHOP = {
  * not touched by any of this.
  */
 export class HammerNailVignette implements Vignette {
+  /** Which bench this lap of the rotation is at. The swing does not change. */
+  private readonly look: HammerLook;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly backdrop: Backdrop;
   private readonly disc: Phaser.GameObjects.Image;
@@ -67,12 +70,13 @@ export class HammerNailVignette implements Vignette {
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
-  public constructor(private readonly scene: Phaser.Scene, private readonly cover = false) {
+  public constructor(private readonly scene: Phaser.Scene, private readonly cover = false, lap = 0) {
+    this.look = hammerLook(lap);
     this.backdrop = new Backdrop(scene, WORKSHOP.paper, WORKSHOP.sun);
     this.stage = scene.add.container(0, 0).setDepth(-10);
     // The pool of light is one soft-edged image: a real falloff, one draw.
     this.disc = scene.add.image(270, -285, FxKey.glow).setDisplaySize(620, 620).setTint(WORKSHOP.sun).setAlpha(0.5);
-    this.bench = scene.add.tileSprite(-2500, 0, 5700, 2500, MaterialKey.wood).setOrigin(0).setTint(WORKSHOP.wood);
+    this.bench = scene.add.tileSprite(-2500, 0, 5700, 2500, MaterialKey.wood).setOrigin(0).setTint(this.look.wood);
     this.bench.setTileScale(1.5, 1.5);
     this.wood = scene.add.graphics();
     this.shadow = scene.add.ellipse(340, 8, 142, 22, WORKSHOP.ink, 0.12);
@@ -88,7 +92,7 @@ export class HammerNailVignette implements Vignette {
     const g = this.scene.add.graphics();
     const t = STYLE.current;
     const line = t.outline * 1.4;
-    const red = faces(WORKSHOP.red), ink = faces(WORKSHOP.ink);
+    const red = faces(this.look.handle), ink = faces(WORKSHOP.ink), head = faces(this.look.head);
     // The grip is the rotation pivot. The striking face is exactly (-290, 36).
     // Contact shadow the handle throws on the bench when it lies flat.
     g.fillStyle(WORKSHOP.ink, 0.08).fillRoundedRect(-256, -14, 275, 52, 16);
@@ -107,19 +111,19 @@ export class HammerNailVignette implements Vignette {
     // Forged head, poll on the left and a deliberately graphic split claw on the right.
     const claw = [[-210, -52], [-158, -44], [-139, -3], [-167, -18], [-196, -23], [-209, -16]].map(([x, y]) => new Phaser.Math.Vector2(x!, y!));
     if (line > 0) {
-      g.lineStyle(line, ink.edge, 1);
+      g.lineStyle(line, head.edge, 1);
       g.strokeRoundedRect(-322, -63, 78, 101, 8).strokeRect(-247, -52, 42, 36).strokePoints(claw, true);
     }
-    g.fillStyle(ink.face);
+    g.fillStyle(head.face);
     g.fillRoundedRect(-322, -63, 78, 101, 8);
     g.fillRect(-247, -52, 42, 36);
     g.fillPoints(claw, true);
     // The lit top face of the head, its bright edge, and the darker striking face.
-    g.fillStyle(ink.lit).fillRoundedRect(-322, -63, 78, 16, 5);
-    g.fillStyle(ink.rim, 0.6).fillRect(-316, -60, 66, 3);
-    g.fillStyle(ink.lit, 0.7).fillRect(-247, -52, 42, 7);
-    g.fillStyle(ink.shade).fillRect(-322, -8, 78, 46);
-    g.fillStyle(ink.edge).fillRoundedRect(-327, 25, 88, 13, 4);
+    g.fillStyle(head.lit).fillRoundedRect(-322, -63, 78, 16, 5);
+    g.fillStyle(head.rim, 0.6).fillRect(-316, -60, 66, 3);
+    g.fillStyle(head.lit, 0.7).fillRect(-247, -52, 42, 7);
+    g.fillStyle(head.shade).fillRect(-322, -8, 78, 46);
+    g.fillStyle(head.edge).fillRoundedRect(-327, 25, 88, 13, 4);
     g.fillStyle(0xa9b6a1).fillRoundedRect(-327, 33, 88, 5, 2);
     g.fillStyle(WORKSHOP.paper).fillCircle(-275, -34, 4);
     this.hammer.add(g);
@@ -135,16 +139,16 @@ export class HammerNailVignette implements Vignette {
     this.baseY = benchY ?? safe.top + safe.height * 0.68;
     this.stage.setPosition(this.baseX, this.baseY).setScale(this.scale);
     this.backdrop.layout(viewport);
-    const wood = faces(WORKSHOP.wood);
+    const wood = faces(this.look.wood);
     const g = this.wood.clear();
     // The bench top: a lit face along the edge, its rim, and the shade line beneath it
     // where the top meets the front. The material carries the grain.
     g.fillStyle(wood.lit).fillRect(-2500, 0, 5700, 22);
     g.fillStyle(wood.rim, 0.55).fillRect(-2500, 0, 5700, 4);
     g.fillStyle(wood.shade, 0.7).fillRect(-2500, 22, 5700, 6);
-    if (t.outline > 0) g.fillStyle(shade(WORKSHOP.wood, -0.6)).fillRect(-2500, -t.outline * 0.7, 5700, t.outline * 0.7);
+    if (t.outline > 0) g.fillStyle(shade(this.look.wood, -0.6)).fillRect(-2500, -t.outline * 0.7, 5700, t.outline * 0.7);
     // One knot, so the plank reads as a plank and not a texture swatch.
-    g.lineStyle(2.5, WORKSHOP.woodDark, 0.35).strokeEllipse(538, 124, 58, 16).strokeEllipse(538, 124, 26, 6);
+    g.lineStyle(2.5, this.look.woodDark, 0.35).strokeEllipse(538, 124, 58, 16).strokeEllipse(538, 124, 26, 6);
   }
 
   public reset(plan: RoundPlan): void {
@@ -203,7 +207,7 @@ export class HammerNailVignette implements Vignette {
     // Input callbacks can render contact immediately, independently of the next frame.
     this.pose(0, this.depth);
     // Sawdust off the bench. Decorative, so it may skip under reduced motion.
-    if (!this.reducedMotion) this.bursts.burst('dust', this.impactX, this.impactY + 6, [WORKSHOP.cream, WORKSHOP.sun, WORKSHOP.wood], Math.round(8 * strength));
+    if (!this.reducedMotion) this.bursts.burst('dust', this.impactX, this.impactY + 6, [WORKSHOP.cream, WORKSHOP.sun, this.look.wood], Math.round(8 * strength));
   }
   private pose(angle: number, depth: number): void {
     this.hammer.setPosition(600, -nailHeight(depth) - 48).setRotation(angle);
@@ -265,7 +269,7 @@ export class HammerNailVignette implements Vignette {
     const x = 310;
     const bentX = this.bend * 48;
     const wobble = this.phase === 'result' && this.bend > 0 ? Math.sin((now - (this.finishAt ?? now)) * 19) * Math.exp(-(now - (this.finishAt ?? now)) * 3) * 4 : 0;
-    const ink = faces(WORKSHOP.ink);
+    const ink = faces(this.look.head);
     const line = t.outline * 1.4;
     const g = this.nail.clear();
     // A long, low-contrast cast shadow anchors the slender shaft to the timber.

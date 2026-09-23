@@ -85,16 +85,22 @@ judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_P
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
 stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
 
-Seven acts carry more than one look. `LevelSpec.lap` counts how many times the
+Every act carries more than one look. `LevelSpec.lap` counts how many times the
 rotation has come round before a level, PlayScene passes it to `create(scene, lap)`,
-and the act indexes its own list with it: bug & shoe has three bugs and sneaker
+and the act indexes its own list with it. Bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), scissors & paper four sets of three shapes (`PAPER_SHAPE_SETS`),
 the light switch four interiors (`lightLooks.ts`), the doorbell four leaves
 (`doorLooks.ts`), the slushy five flavours (`slushyLooks.ts`), and the apple act an
-apple, a pear, a peach and a donut (`appleLooks.ts`). Lap 0 is always the original
-look, so the first twenty-five levels are unchanged. Add variety this way, as a new
-look inside an existing act, rather than as a registry entry. **A look that changes
+apple, a pear, a peach and a donut (`appleLooks.ts`). The other eighteen each have
+three looks in their own `*Looks.ts`, chosen by `lookAt`: the hammer, the window's
+view, the saw's timber, the tomato, cucumber and banana, the egg, the bubble sheet,
+the roller's wall and gallery (`rollerImage`, leaving `paintImage` on the original
+three), the hotel bell, the balloons, the stapler, the fisherman's mac, the DJ
+booth, the trombone, the clap's sleeves, the snare's lacquer and the bongos.
+Lap 0 is always the original look, so the first twenty-five levels are unchanged.
+Add variety this way, as a new look inside an existing act, rather than as a
+registry entry. **A look that changes
 what the subject is also changes its words**: `VignetteDefinition.looks` holds a
 title, intro and verdict per look, and `definitionForLap` is what PlayScene and the
 map read, so a donut is never announced as "Apple". The donut is the one look with
