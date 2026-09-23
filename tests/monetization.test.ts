@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import {
-  ANALYTICS_EVENTS, PRODUCT, createMonetization, installAnalytics, installMonetization,
+  ANALYTICS_EVENTS, COMMERCE_EVENTS, PRODUCT, createMonetization, installAnalytics, installMonetization,
   monetization, purchaseFeedback, restoreFeedback, rewardedFeedback, stubAds, stubBilling, track,
   type AnalyticsEvent, type Billing, type RewardedAds,
 } from '../src/monetization';
@@ -177,7 +177,10 @@ describe('successful adapters still report through the facade', () => {
 
 describe('analytics boundary', () => {
   it('names every prepared commerce event', () => {
-    expect([...ANALYTICS_EVENTS]).toEqual([
+    // Gameplay events share the bus (see game/playAnalytics.ts); the commerce funnel is
+    // still exactly these ten, and still first.
+    expect([...ANALYTICS_EVENTS].slice(0, COMMERCE_EVENTS.length)).toEqual([...COMMERCE_EVENTS]);
+    expect([...COMMERCE_EVENTS]).toEqual([
       'health_empty',
       'rewarded_offer_shown',
       'rewarded_started',

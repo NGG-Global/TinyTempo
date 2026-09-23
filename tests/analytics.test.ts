@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  FIREBASE_LIMITS, RESERVED_PREFIXES, shapeParams, validEventName, validName,
+  FIREBASE_LIMITS, RESERVED_EVENT_NAMES, RESERVED_PREFIXES, shapeParams, validEventName, validName,
 } from '../src/analytics/eventShape';
 import { ANALYTICS_EVENTS, installAnalytics, track, type AnalyticsEvent } from '../src/monetization/analytics';
 
@@ -11,6 +11,12 @@ vi.mock('phaser', () => ({ default: {} }));
  * here as data so the check below can run over them; a new key that Firebase would
  * discard fails this file rather than going quiet in the dashboard.
  */
+const LEVEL = [
+  'level', 'area', 'task_count', 'bpm', 'pattern_tier', 'grid', 'clear_accuracy', 'mode', 'previous_stars',
+  'retry_count', 'heart_cost',
+] as const;
+const LEVEL_RESULT = [...LEVEL, 'accuracy', 'duration_ms', 'restarts', 'weakest_task', 'weakest_accuracy'] as const;
+
 const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   health_empty: ['level'],
   rewarded_offer_shown: ['placement'],
@@ -22,6 +28,24 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   purchase_completed: ['product'],
   purchase_cancelled: ['product'],
   purchase_failed: ['product', 'reason'],
+  tutorial_started: ['source', 'repeat'],
+  tutorial_completed: ['tries', 'passed', 'duration_ms', 'repeat'],
+  tutorial_skipped: ['step', 'tries', 'duration_ms', 'repeat'],
+  level_started: LEVEL,
+  level_retried: LEVEL,
+  level_replayed: LEVEL,
+  level_completed: [...LEVEL_RESULT, 'stars'],
+  level_failed: LEVEL_RESULT,
+  level_abandoned: [...LEVEL, 'task_index', 'duration_ms', 'restarts'],
+  task_completed: [
+    'level', 'area', 'mode', 'task_index', 'task_count', 'bpm', 'pattern_tier', 'grid', 'accuracy',
+    'perfect', 'good', 'miss', 'extra', 'flawless', 'error_ms',
+  ],
+  star_improved: ['level', 'area', 'stars', 'previous_stars', 'accuracy', 'gate_have'],
+  star_gate_reached: ['area', 'level', 'gate_required', 'gate_have', 'gate_short'],
+  star_gate_opened: ['area', 'level', 'gate_required', 'gate_have'],
+  practice_started: ['level'],
+  practice_completed: ['level', 'accuracy', 'duration_ms'],
 };
 
 describe('every event the game already fires', () => {
@@ -44,6 +68,22 @@ describe('every event the game already fires', () => {
   it('is covered by this file — a new event cannot be added without one', () => {
     expect(Object.keys(PAYLOAD_KEYS).sort()).toEqual([...ANALYTICS_EVENTS].sort());
   });
+
+  it('fits in one Firebase event, with room to spare', () => {
+    for (const [event, keys] of Object.entries(PAYLOAD_KEYS)) {
+      expect(keys.length, event).toBeLessThanOrEqual(FIREBASE_LIMITS.params);
+      expect(new Set(keys).size, `${event} repeats a key`).toBe(keys.length);
+    }
+  });
+
+  it('never names anything that could identify the player', () => {
+    // The schema is numbers and closed sets. A key that reads like any of these is a
+    // design change to argue about in review, not something to slip in beside a level.
+    const personal = /(^|_)(id|uid|user|name|email|device|ip|timestamp|time|tap|taps|ad_id|player)($|_)/;
+    for (const [event, keys] of Object.entries(PAYLOAD_KEYS)) {
+      for (const key of keys) expect(personal.test(key), `${event}.${key}`).toBe(false);
+    }
+  });
 });
 
 describe('a name Firebase would discard', () => {
@@ -52,6 +92,13 @@ describe('a name Firebase would discard', () => {
       expect(validEventName(`${prefix}thing`)).toBe(false);
       expect(validEventName(`${prefix.toUpperCase()}thing`)).toBe(false);
     }
+  });
+
+  it('refuses a name the SDK keeps for itself', () => {
+    for (const name of ['error', 'session_start', 'app_update', 'first_open', 'Screen_View']) {
+      expect(validEventName(name), name).toBe(false);
+    }
+    for (const event of ANALYTICS_EVENTS) expect(RESERVED_EVENT_NAMES.has(event), event).toBe(false);
   });
 
   it('refuses what the character rules exclude', () => {

@@ -1,4 +1,12 @@
-# Commerce analytics
+# Analytics
+
+Two families of event travel on one bus: the **commerce funnel** below, and the
+**gameplay and progression** events that follow it (see
+[Gameplay and progression events](#gameplay-and-progression-events)). Both share the
+provider, the consent switch, the shaping rules and the crash-breadcrumb bridge, which is
+why gameplay was added to this bus rather than given one of its own.
+
+## Commerce
 
 Ten commerce events were already fired at every offer, purchase and watch —
 `health_empty`, `rewarded_offer_shown`, `purchase_completed` and the rest — and every
@@ -27,7 +35,8 @@ Three layers, the same split `diagnostics/` uses for crash reporting.
 
 | Layer | File | What it is |
 | --- | --- | --- |
-| Bus | `src/monetization/analytics.ts` | Typed events, no provider. Unchanged by this work. |
+| Bus | `src/monetization/analytics.ts` | Typed events, no provider. Commerce and gameplay names and payloads. |
+| Ledger | `src/game/playAnalytics.ts` | What a level, the tutorial and practice report, and the one-shot rules. Pure, tested under node. |
 | Rules | `src/analytics/eventShape.ts` | Firebase's name and parameter limits, as pure functions. No plugin import, unit-tested under node. |
 | Vendor | `src/analytics/firebase.ts` | The Firebase adapter. The only file that knows the vendor. |
 | Wiring | `src/analytics/boot.ts` | Attaches the provider on native, when a build asked for one. |
@@ -63,9 +72,14 @@ somebody asks why a number looks low.
   representation Firebase keeps.
 - **Parameter count** — capped at 25.
 
-The ten event names and every payload key are asserted against these rules in
-`tests/analytics.test.ts`, and the test fails if an eleventh event is added without being
-listed. That is where the mistake is cheap; at runtime it is invisible.
+- **Reserved event names** — `error`, `session_start`, `app_update`, `first_open` and the
+  rest of the names the SDK logs for itself (`RESERVED_EVENT_NAMES`).
+
+Every event name and every payload key is asserted against these rules in
+`tests/analytics.test.ts`, and the test fails if an event is added without being listed.
+`tests/playAnalytics.test.ts` goes further for gameplay: it plays a scripted session that
+reaches every gameplay event and checks each payload *as sent* passes `shapeParams`
+unchanged. That is where the mistake is cheap; at runtime it is invisible.
 
 **Re-check the numbers rather than trusting the comment.** These are Google Analytics for
 Firebase's documented limits, and Google has changed them before. What will not change is
@@ -102,6 +116,13 @@ neither the vendor chunk nor the web stub, because the platform check comes firs
 Collection starts **denied** and is turned on only by `VITE_ANALYTICS_CONSENT=granted`.
 `setConsent` is called before `setEnabled`, because the other order leaves a window,
 however short, in which the SDK collects under a consent state nobody has set.
+
+**The adapter also gates on its own side.** Denied consent turns the SDK's collection off,
+but that is the SDK's promise; `firebase.ts` additionally refuses to hand any event across
+the bridge while consent is not granted. The gate closes *before* the SDK is told of a
+denial and opens only *after* the SDK has accepted a grant, and a slower grant that
+resolves after a newer denial cannot reopen it. `tests/analyticsConsent.test.ts` stages
+each of those orders against a mocked plugin.
 
 **It is deliberately not wired to the AdMob consent flow.** The game already runs
 Google's UMP form for ads, and `canRequestAds` is tempting to reuse — but it answers a
@@ -171,6 +192,128 @@ under an app this is not, and the two copies of the AdMob app ID drifting apart.
 rather than errors, because a quick debug APK is a legitimate thing to build without any
 of it.
 
+## Gameplay and progression events
+
+Fifteen events, fired from `src/game/playAnalytics.ts`, which PlayScene, TutorialScene and
+MapScene call. The ledger is pure — no Phaser, no vendor — so each guarantee here is a unit
+test rather than a hope.
+
+### What they answer
+
+| Question | Read it from |
+| --- | --- |
+| Where do players stop progressing? | `level_started` with `mode = frontier`, by `level`: the last level each player started and never completed |
+| Which levels fail unusually often? | `level_failed` ÷ (`level_completed` + `level_failed`), by `level`, `mode = frontier` |
+| Where do retries increase? | `level_retried` count and `retry_count` on `level_completed`, by `level` |
+| Do triplets and sixteenths spike difficulty? | `task_completed.accuracy` by `grid`, holding `level` or `bpm` steady; `level_failed.grid` |
+| How often are old levels replayed? | `level_replayed`, or `level_started` with `mode = replay` |
+| How often does a star rating improve? | `star_improved`, with `previous_stars` → `stars` |
+| How often does a star gate block a player, and by how much? | `star_gate_reached` with `gate_short`; `star_gate_opened` for the ones got through |
+| How many complete or skip the tutorial? | `tutorial_started` → `tutorial_completed` / `tutorial_skipped`, by `source` |
+| Which task inside a failed level is hardest? | `level_failed.weakest_task`, and `task_completed.accuracy` by `task_index` |
+
+### Schema
+
+Every parameter is a number or a string from a closed set of at most three values. No tap
+timestamp, no pattern, no id, no name and nothing about the device is sent. Indices are
+**1-based** — `level`, `area`, `task_index`, `weakest_task` — so a dashboard reads the way
+the game does. `area` is `floor((level - 1) / 10) + 1`.
+
+The **level parameters** (`LevelParams`) ride on every level event:
+
+| Parameter | Type | Meaning |
+| --- | --- | --- |
+| `level` | int | The level number |
+| `area` | int | 1-based area; area 1 is levels 1–10 |
+| `task_count` | int | Tasks in the level |
+| `bpm` | int | The level's peak tempo (its last task's) |
+| `pattern_tier` | int | Highest pattern tier among its tasks, 0–4 |
+| `grid` | `eighth` \| `triplet` \| `sixteenth` | The finest grid any task asks for. `eighth` is the tiers' own grid |
+| `clear_accuracy` | int | Mean accuracy that clears it (one star) |
+| `mode` | `frontier` \| `replay` | `replay` when the level was already cleared before this attempt |
+| `previous_stars` | int | Stars the level held before this attempt, 0–3 |
+| `retry_count` | int | Failed attempts on this level earlier in this app session, with no clear since |
+| `heart_cost` | 0 \| 1 | Whether this attempt spent a heart |
+
+| Event | Fires | Parameters |
+| --- | --- | --- |
+| `level_started` | An attempt's audio is running and its heart is settled. Once per attempt | Level parameters |
+| `level_retried` | With `level_started`, when `retry_count ≥ 1` | Level parameters |
+| `level_replayed` | With `level_started`, when `mode = replay` | Level parameters |
+| `level_completed` | The level is scored and earned at least one star. Once per attempt | Level parameters, `accuracy`, `stars`, `duration_ms`, `restarts`, `weakest_task`, `weakest_accuracy` |
+| `level_failed` | The level is scored and earned no star. Once per attempt | Level parameters, `accuracy`, `duration_ms`, `restarts`, `weakest_task`, `weakest_accuracy` |
+| `level_abandoned` | The player leaves an unfinished attempt (the map puck, or the scene going away mid-level) | Level parameters, `task_index` (the task left during), `duration_ms`, `restarts` |
+| `task_completed` | A task is judged to its end. Once per task per pass | `level`, `area`, `mode`, `task_index`, `task_count`, `bpm`, `pattern_tier`, `grid`, `accuracy`, `perfect`, `good`, `miss`, `extra`, `flawless`, `error_ms` |
+| `star_improved` | A cleared **replay** earns more stars than the level held. A first clear is not an improvement | `level`, `area`, `stars`, `previous_stars`, `accuracy`, `gate_have` |
+| `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short` |
+| `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have` |
+| `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
+| `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
+| `tutorial_skipped` | *Skip* | `step` (`watch` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
+| `practice_started` | Reserved: no practice mode exists yet | `level` |
+| `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
+
+On a task: `accuracy` is the task's own, rounded 0–100; `perfect`, `good`, `miss` and
+`extra` are counts; `flawless` is 1 when every beat was Perfect, the same test the
+*Flawless!* strike applies; `error_ms` is the mean absolute timing error of the landed
+taps, rounded, and **absent** when nothing landed rather than sent as a misleading zero.
+On a level result, `duration_ms` is wall-clock from the start of the pass that finished
+(a restart resets it), `accuracy` is the same mean the save used, and `weakest_task` is
+the lowest-accuracy task of that pass, earliest on a tie.
+
+### One report per thing that happened
+
+- **An attempt is PlayScene's heart attempt id.** Resume after a pause and the restart
+  puck are the same attempt by the heart rules, so they continue the run — `restarts`
+  counts them — instead of firing a second `level_started`. A finished or abandoned id is
+  never reopened.
+- **`level_completed` / `level_failed` fire from `recordOutcome`,** the one step every
+  finished run passes exactly once — including the run whose coda a notification
+  interrupts, which is why it is not the summary. The ledger closes the run as well, so a
+  second call cannot report twice even if the scene's own guard were lost.
+- **A task is reported once per pass.** A resumed attempt goes back to task 1 and plays its
+  tasks again; those plays are real and are reported, and `restarts` on the result says
+  how many passes there were. They are rare, but a per-task report that must exclude them
+  can use `level_completed.restarts = 0` runs.
+- **Scene recreation.** Phaser reuses a scene instance, so field initializers do not run on
+  a second visit. PlayScene's `build()` now clears the attempt id, outcome and run, which
+  is also what stops a stale Resume id from a level the player walked away from reaching
+  the ledger. The ledger itself is module state and outlives every scene.
+- **Session scope.** `retry_count` and the gate dedupe live in memory and reset with the
+  process. Nothing new is stored, so there is no new storage key for Auto Backup to carry
+  and nothing for a save code to leak.
+
+`level_started` − (`level_completed` + `level_failed` + `level_abandoned`) is the number of
+attempts cut off by the app being killed mid-level — there is no reliable moment to report
+those, and none is attempted.
+
+### Never at the game's expense
+
+Every public method of the ledger swallows its own failure, and the bus already swallows
+the sink's; `tests/playAnalytics.test.ts` drives a whole session through a sink and a clock
+that both throw. Nothing in a level waits on analytics: `track` is synchronous and the
+Firebase call is fire-and-forget.
+
+### The breadcrumb trail
+
+The crash-breadcrumb bridge now forwards every event **except `task_completed`**. The trail
+is a ring of 24, and a level fires up to eight task events — enough to push the purchase
+that caused a crash off the report meant to explain it. PlayScene already writes its own
+`level started` / `level finished` breadcrumbs, which is the gameplay a crash report needs.
+
+### Setting it up in Firebase
+
+Custom event parameters are collected without any console work, but **GA4 only shows them
+in standard reports and Explorations once they are registered** as custom definitions
+(Admin → Custom definitions), and registration is not retroactive. Register dimensions for
+the parameters used to group — `level`, `area`, `mode`, `grid`, `pattern_tier`, `task_index`,
+`weakest_task`, `source`, `step`, `stars`, `previous_stars` — and metrics for the ones
+averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `weakest_accuracy`,
+`restarts`, `error_ms`. GA4 caps custom definitions per property (at the time of writing,
+50 event-scoped dimensions and 50 metrics on a standard property); check the current limit
+before registering everything. The BigQuery export, if it is linked, carries every
+parameter without registration.
+
 ## Not verified
 
 - **No event has ever reached a Firebase project.** The project now exists and its
@@ -182,5 +325,8 @@ of it.
 - **DebugView is the check to run first.** `adb shell setprop debug.firebase.analytics.app
   <package>` then watch DebugView in the Firebase console: Firebase batches events for up
   to an hour otherwise, and a first look at an empty dashboard proves nothing.
+- **No gameplay event has reached Firebase either.** The ledger, the scene wiring and the
+  consent gate are tested under node; the path through the native plugin is the same one
+  the commerce events take and is just as unexercised on a device.
 - No user properties and no user id are set. The game has no accounts, and an id would be
   a new category of data in the privacy policy for no question anyone is asking.

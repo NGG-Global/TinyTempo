@@ -330,7 +330,10 @@ export class MenuScene extends BaseScene {
       this.playLabel.setText('Play');
       const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || tutorialComplete());
       this.closeTheme();
-      this.curtain.cover(() => this.scene.start(needsTutorial ? SceneKey.Tutorial : SceneKey.Map));
+      // Which door the lesson was entered by is the difference between a player who was
+      // sent there and one who went looking; the tutorial's events carry it.
+      const tutorialData = { source: tutorial ? 'menu' : 'first_play' } as const;
+      this.curtain.cover(() => (needsTutorial ? this.scene.start(SceneKey.Tutorial, tutorialData) : this.scene.start(SceneKey.Map)));
     } catch (error) {
       if (this.disposed || request !== this.request) return;
       this.busy = false;

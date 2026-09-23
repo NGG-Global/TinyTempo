@@ -28,6 +28,7 @@ import {
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress, seenDemonstration, seenReplayTip, type LevelOutcome } from '@/game/progress';
 import type { EarnedStars } from '@/game/stars';
+import { playAnalytics, type LevelRun } from '@/game/playAnalytics';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -124,6 +125,8 @@ export class PlayScene extends BaseScene {
   private saveFailed = false;
   /** Set once gameplay actually begins; refunds use the same id so a double-finish cannot restore two hearts. */
   private attemptId: string | null = null;
+  /** The analytics side of the same attempt: started once, finished or abandoned once. */
+  private levelRun: LevelRun | null = null;
   private heartRefunded = false;
   private emptyTracked = false;
   /** Whether this screen has decided if it is the player's first empty bar, and what it decided. */
@@ -273,6 +276,12 @@ export class PlayScene extends BaseScene {
   protected override build(): void {
     this.disposed = false;
     this.starting = false;
+    // Assigned here, not left to the field initializers, which run once per instance. A
+    // second visit inherited the last visit's attempt id, and a Resume id from a level the
+    // player had already walked away from is exactly the duplicate analytics must not see.
+    this.attemptId = null;
+    this.outcome = null;
+    this.levelRun = null;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -703,7 +712,8 @@ export class PlayScene extends BaseScene {
       // Spend only once audio is running: a failed unlock/load above never reaches here.
       // The same id is idempotent, so Resume does not take a second heart.
       const attemptId = resumeId ?? createAttemptId(this.spec.level);
-      const begun = beginAttempt(loadHealth(), loadProgress(), this.spec.level, attemptId, Date.now(), monetization().premium());
+      const before = loadProgress();
+      const begun = beginAttempt(loadHealth(), before, this.spec.level, attemptId, Date.now(), monetization().premium());
       if (!begun.ok) {
         this.audio!.music.stop();
         this.showNoHearts();
@@ -711,6 +721,8 @@ export class PlayScene extends BaseScene {
       }
       saveHealth(begun.health);
       this.attemptId = attemptId;
+      // A resumed id continues its run rather than starting another: see playAnalytics.
+      this.levelRun = playAnalytics.beginLevel({ spec: this.spec, progress: before, attemptId, heartSpent: begun.spent });
       this.heartRefunded = false;
       this.guided = guidedLevel(loadProgress()) === this.spec.level;
       this.sequence = new TaskSequence(this.task.bpm, origin, 1);
@@ -1330,6 +1342,7 @@ export class PlayScene extends BaseScene {
       vibrate('stamp');
     }
     this.results[this.taskIndex] = result.accuracy;
+    this.levelRun?.task(this.taskIndex, result);
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
     const contact = ending.contact;
     const last = this.taskIndex >= this.spec.tasks.length - 1;
@@ -1361,8 +1374,12 @@ export class PlayScene extends BaseScene {
   /** Idempotent: the level is scored and saved once, however often this is reached. */
   private recordOutcome(): void {
     if (this.outcome) return;
-    const outcome = recordResult(loadProgress(), this.spec.level, meanAccuracy(this.results));
+    const accuracy = meanAccuracy(this.results);
+    const outcome = recordResult(loadProgress(), this.spec.level, accuracy);
     this.outcome = outcome;
+    // Beside the save, not the summary: this is the one step every finished run passes
+    // exactly once, including the one a notification interrupts during its coda.
+    this.levelRun?.finish(outcome, accuracy);
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
     // The player is told, but nobody else was: a device whose storage is blocked loses
@@ -1721,6 +1738,8 @@ export class PlayScene extends BaseScene {
     if (wasRunning || wasStarting || wasTeaching) this.vignette.pause();
   }
   private persistAbandonedAttempt(): void {
+    // A finished run has already closed, so this reports only a player leaving mid-level.
+    this.levelRun?.abandon();
     if (this.attemptId === null) return;
     saveHealth(abandonAttempt(loadHealth(), this.attemptId));
   }

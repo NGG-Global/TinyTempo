@@ -10,7 +10,8 @@ import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Mark } from '@/game/beatTrack';
 import { RoundController, type Phase } from '@/game/RoundController';
-import { coach, completeTutorial, isPlayersWindow, momentOf, TUTORIAL, TutorialRun, type Coach } from '@/game/TutorialRun';
+import { coach, completeTutorial, isPlayersWindow, momentOf, TUTORIAL, TutorialRun, tutorialComplete, type Coach } from '@/game/TutorialRun';
+import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
 import { TapInput, type Tap } from '@/input/TapInput';
 import type { Judgement } from '@/rhythm/judge';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
@@ -41,6 +42,7 @@ const ROW_LABELS = { theirs: 'THE HAMMER', yours: 'YOU' } as const;
  */
 export class TutorialScene extends BaseScene {
   private run = new TutorialRun();
+  private visit: TutorialVisit | null = null;
   private audio!: AudioEngine;
   private controller: RoundController | null = null;
   private illustration!: HammerNailVignette;
@@ -88,6 +90,9 @@ export class TutorialScene extends BaseScene {
 
   protected override build(): void {
     this.run = new TutorialRun();
+    const data = this.sys.settings.data as { source?: TutorialSource } | undefined;
+    const repeat = this.registry.get('tutorial-complete') === true || tutorialComplete();
+    this.visit = playAnalytics.beginTutorial(data?.source === 'menu' ? 'menu' : 'first_play', repeat);
     this.controller = null;
     this.watching = null;
     this.marks = [];
@@ -491,6 +496,8 @@ export class TutorialScene extends BaseScene {
     this.illustration.pause();
     this.paused = true;
     if (complete) { completeTutorial(); this.registry.set('tutorial-complete', true); }
+    if (complete) this.visit?.complete(this.run.tries, this.run.step === 'done');
+    else this.visit?.skip(this.run.step, this.run.tries);
     this.curtain.cover(() => this.scene.start(SceneKey.Map));
   }
 

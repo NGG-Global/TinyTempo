@@ -1,10 +1,15 @@
 /**
- * Typed commerce events, no provider attached. A scene or the monetization
- * facade calls `track`; sinks can listen in tests, and a real analytics SDK
- * can be installed later without touching call sites.
+ * Typed events, no provider attached. A scene, the monetization facade or
+ * `game/playAnalytics.ts` calls `track`; sinks can listen in tests, and a real
+ * analytics SDK is installed by `analytics/boot.ts` without touching call sites.
+ *
+ * The bus began as the commerce funnel and still lives beside it, because the provider,
+ * the crash-breadcrumb bridge and the shaping rules are one pipe. Gameplay events travel
+ * on the same bus rather than a second one, so consent, dedupe and Firebase's limits are
+ * each decided once. See `docs/ANALYTICS.md` for the schema.
  */
 
-export const ANALYTICS_EVENTS = [
+export const COMMERCE_EVENTS = [
   'health_empty',
   'rewarded_offer_shown',
   'rewarded_started',
@@ -17,7 +22,77 @@ export const ANALYTICS_EVENTS = [
   'purchase_failed',
 ] as const;
 
+export const GAMEPLAY_EVENTS = [
+  'tutorial_started',
+  'tutorial_completed',
+  'tutorial_skipped',
+  'level_started',
+  'level_retried',
+  'level_replayed',
+  'level_completed',
+  'level_failed',
+  'level_abandoned',
+  'task_completed',
+  'star_improved',
+  'star_gate_reached',
+  'star_gate_opened',
+  // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
+  // the day it ships its events are already in every dashboard's vocabulary.
+  'practice_started',
+  'practice_completed',
+] as const;
+
+export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS] as const;
+
 export type AnalyticsEvent = typeof ANALYTICS_EVENTS[number];
+export type GameplayEvent = typeof GAMEPLAY_EVENTS[number];
+
+/** Whether a level's result counted toward progress, or was a finished level played again. */
+export type AttemptMode = 'frontier' | 'replay';
+/** The finest grid a task (or, on a level event, any of its tasks) asks for. */
+export type GridName = 'eighth' | 'triplet' | 'sixteenth';
+/** A flag Firebase can count. Booleans are sent as 1/0 anyway; typing them so keeps the payload honest. */
+export type Flag = 0 | 1;
+
+/**
+ * Type aliases rather than interfaces: the crash-breadcrumb bridge hands a payload to
+ * `breadcrumb`, whose data is an index signature, and only an object *type* is assignable
+ * to one without a cast.
+ *
+ * What every level event carries: which level, how hard the curve made it, and how the
+ * player came to it. All numbers or closed string sets — nothing here identifies anyone,
+ * and nothing is high-cardinality enough to fill a custom dimension with noise.
+ */
+export type LevelParams = {
+  readonly level: number;
+  /** 1-based: area 1 is levels 1–10. */
+  readonly area: number;
+  readonly task_count: number;
+  /** The level's peak tempo, which its last task reaches. */
+  readonly bpm: number;
+  /** The highest pattern tier any of its tasks uses. */
+  readonly pattern_tier: number;
+  readonly grid: GridName;
+  readonly clear_accuracy: number;
+  readonly mode: AttemptMode;
+  /** Stars the level held before this attempt. */
+  readonly previous_stars: number;
+  /** Failed attempts on this level earlier in this session, with no clear since. */
+  readonly retry_count: number;
+  /** 1 when this attempt spent a heart. */
+  readonly heart_cost: Flag;
+};
+
+export type LevelResultParams = LevelParams & {
+  /** Mean task accuracy, rounded, 0–100. */
+  readonly accuracy: number;
+  readonly duration_ms: number;
+  /** Times this attempt went back to its first task: Resume after a pause, or the restart puck. */
+  readonly restarts: number;
+  /** 1-based index of the task with the lowest accuracy, and that accuracy. */
+  readonly weakest_task: number;
+  readonly weakest_accuracy: number;
+};
 
 export interface AnalyticsPayloads {
   readonly health_empty: { readonly level: number };
@@ -30,6 +105,65 @@ export interface AnalyticsPayloads {
   readonly purchase_completed: { readonly product: string };
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
+
+  readonly tutorial_started: { readonly source: 'first_play' | 'menu'; readonly repeat: Flag };
+  readonly tutorial_completed: { readonly tries: number; readonly passed: Flag; readonly duration_ms: number; readonly repeat: Flag };
+  readonly tutorial_skipped: { readonly step: 'watch' | 'try' | 'done'; readonly tries: number; readonly duration_ms: number; readonly repeat: Flag };
+  readonly level_started: LevelParams;
+  readonly level_retried: LevelParams;
+  readonly level_replayed: LevelParams;
+  readonly level_completed: LevelResultParams & { readonly stars: number };
+  readonly level_failed: LevelResultParams;
+  readonly level_abandoned: LevelParams & {
+    /** 1-based index of the task the player left during. */
+    readonly task_index: number;
+    readonly duration_ms: number;
+    readonly restarts: number;
+  };
+  readonly task_completed: {
+    readonly level: number;
+    readonly area: number;
+    readonly mode: AttemptMode;
+    /** 1-based. */
+    readonly task_index: number;
+    readonly task_count: number;
+    readonly bpm: number;
+    readonly pattern_tier: number;
+    readonly grid: GridName;
+    readonly accuracy: number;
+    readonly perfect: number;
+    readonly good: number;
+    readonly miss: number;
+    readonly extra: number;
+    readonly flawless: Flag;
+    /** Mean absolute timing error of the landed taps, rounded ms. Absent when nothing landed. */
+    readonly error_ms?: number;
+  };
+  readonly star_improved: {
+    readonly level: number;
+    readonly area: number;
+    readonly stars: number;
+    readonly previous_stars: number;
+    readonly accuracy: number;
+    /** The collection once this level's new stars are counted. */
+    readonly gate_have: number;
+  };
+  readonly star_gate_reached: {
+    /** 1-based area the gate opens, and the level it stands in front of. */
+    readonly area: number;
+    readonly level: number;
+    readonly gate_required: number;
+    readonly gate_have: number;
+    readonly gate_short: number;
+  };
+  readonly star_gate_opened: {
+    readonly area: number;
+    readonly level: number;
+    readonly gate_required: number;
+    readonly gate_have: number;
+  };
+  readonly practice_started: { readonly level: number };
+  readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
 }
 
 export type AnalyticsSink = <K extends AnalyticsEvent>(event: K, payload: AnalyticsPayloads[K]) => void;

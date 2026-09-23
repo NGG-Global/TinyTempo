@@ -14,6 +14,7 @@ import {
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
+import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { MaterialKey } from '@/textures/materials';
 import { mix, shade, starColour } from '@/ui/colour';
@@ -262,6 +263,9 @@ export class MapScene extends BaseScene {
     this.muted = isMuted(this);
     this.progress = loadProgress();
     this.health = loadHealth();
+    // Against the saved stars, not the shown count: a flight in progress is presentation,
+    // and the gate either holds the frontier or does not.
+    playAnalytics.gateOnMap(this.progress);
     this.restShown = false;
     this.restDailyOpen = false;
     this.restTipFresh = !seenReplayTip();

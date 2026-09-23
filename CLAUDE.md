@@ -161,7 +161,13 @@ report of the purchase that caused it. **Firebase enforces its limits by discard
 `tests/analytics.test.ts` checks every shipped event against them; a name Firebase
 dislikes is not an error, it is an event that never arrives. Consent is a stored setting
 with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` puts it, and
-it deliberately does not travel in a save code. See `docs/ANALYTICS.md`.
+it deliberately does not travel in a save code; the adapter also refuses to hand an event
+to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
+through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
+attempt on PlayScene's heart attempt id, so Resume and the restart puck continue a run
+instead of starting a second one, `level_completed`/`level_failed` fire once from
+`recordOutcome`, and a finished id is never reopened. Its session state (retries, the gate
+dedupe) is in memory and stores nothing. See `docs/ANALYTICS.md`.
 
 Crash reporting is `core/errors.ts` (capture, no vendor) behind `diagnostics/` (the
 Sentry adapter), the same split `monetization/` uses — see `docs/DIAGNOSTICS.md`.
@@ -493,6 +499,7 @@ src/
     supportReport.ts   The details a support email carries, as pure text
     settings.ts        Saved audio offset and mute
     beatTrack.ts       What the two rows show, and the handover, as pure functions
+    playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
