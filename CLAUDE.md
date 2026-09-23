@@ -364,6 +364,19 @@ the book puck at the title screen's top left (the right-hand corner is the sign'
 swing); the result screen raises a card under the plaque a second into the summary, after the
 medals. The only stored bit is the `scrapbook` teach flag. See `docs/SCRAPBOOK.md`.
 
+**Three daily objectives, and nothing to spend.** `game/objectives.ts` draws three a day
+from a curated pool — one *play*, one *skill*, one *mastery*, by weight — with a generator
+seeded by the local date (`calendarDay`, the daily heart's helper), filtered by what the save
+can reach that morning: finer grids only once a level using them is playable, a new level
+only while no star gate holds the frontier, the Daily Tempo never while
+`DAILY_TEMPO_AVAILABLE` is false. The set is stored when drawn, so progress cannot reshuffle
+it, and a new local day draws a new one. **A level reports once, from `recordOutcome`**, with
+the finishing pass's Perfects and flawless tasks, which is also what keeps
+`objective_progress` to one event per objective per level. The reward is a stamp per
+completed day — no currency, no streak to lose, nothing to buy. Every stored field is
+validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
+tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
+
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
@@ -548,6 +561,7 @@ src/
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
+    objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -588,6 +602,7 @@ src/
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
     finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
     finalePose.ts      Their poses as pure f(t)
+    objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser

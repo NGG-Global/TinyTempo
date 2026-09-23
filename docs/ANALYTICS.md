@@ -259,6 +259,9 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `area_finale_started` | An area finale's attempt begins (`docs/FINALES.md`), beside its `level_started`. Once per attempt: Resume and restart continue it | `level`, `area`, `treatment` (`grass` \| `pavement` \| `sand` \| `snow` \| `dusk` \| `default`), `mode`, `retry_count`, `heart_cost` |
 | `area_finale_completed` | The finale cleared, beside its `level_completed`, from the same single close | `level`, `area`, `treatment`, `mode`, `stars`, `accuracy` |
 | `area_finale_failed` | The finale scored under its clear bar, beside its `level_failed` | `level`, `area`, `treatment`, `mode`, `accuracy` |
+| `objective_progress` | A daily objective moved without finishing (`docs/OBJECTIVES.md`). Once per objective per finished level — a level of twenty Perfects is one event, never twenty | `objective` (pool id), `slot` (1–3), `progress`, `target` |
+| `objective_completed` | A daily objective reached its target, in place of its progress event | `objective`, `slot`, `target`, `completed` (finished today, 1–3) |
+| `daily_objectives_all_completed` | The day's third objective finished and the day was stamped. Once per local day | `stamps` (total held), `week` (stamped days of the last seven) |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 
@@ -320,7 +323,7 @@ that caused a crash off the report meant to explain it. PlayScene already writes
 Custom event parameters are collected without any console work, but **GA4 only shows them
 in standard reports and Explorations once they are registered** as custom definitions
 (Admin → Custom definitions), and registration is not retroactive. Register dimensions for
-the parameters used to group — `level`, `area`, `role`, `vignette`, `collectible`, `treatment`, `mode`, `grid`, `pattern_tier`, `task_index`,
+the parameters used to group — `level`, `area`, `role`, `vignette`, `collectible`, `treatment`, `objective`, `slot`, `mode`, `grid`, `pattern_tier`, `task_index`,
 `weakest_task`, `source`, `step`, `stars`, `previous_stars` — and metrics for the ones
 averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `weakest_accuracy`,
 `restarts`, `error_ms`. GA4 caps custom definitions per property (at the time of writing,

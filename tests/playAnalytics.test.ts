@@ -7,6 +7,7 @@ import {
 import { recordResult, type Progress } from '../src/game/progress';
 import type { RoundResult } from '../src/game/scoring';
 import { GAMEPLAY_EVENTS, type AnalyticsEvent } from '../src/monetization/analytics';
+import { applyReport, type ObjectivesState } from '../src/game/objectives';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -392,6 +393,19 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     ledger.scrapbookOpened('menu', 3, 32);
     ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
+    // A day of objectives: progress, a completion each, and the stamp.
+    let day: ObjectivesState = {
+      day: '2026-09-23', stampedDays: [], stamps: 0, seen: 0,
+      objectives: [{ id: 'clears', target: 2, progress: 0 }, { id: 'flawless', target: 1, progress: 0 }, { id: 'replays', target: 2, progress: 0 }],
+    };
+    for (const replay of [true, true]) {
+      const update = applyReport(day, {
+        level: 4, vignette: 'saw', cleared: true, replay, stars: 3, starsBefore: 1, starsAfter: 3,
+        perfect: 12, flawless: 1, grids: [], finale: false, keepsake: false,
+      });
+      ledger.objectives(update);
+      day = update.state;
+    }
     expect(new Set(names())).toEqual(new Set(GAMEPLAY_EVENTS));
     for (const { event, payload } of sent) {
       expect(validEventName(event), event).toBe(true);

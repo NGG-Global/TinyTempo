@@ -9,6 +9,7 @@ import { hapticsSupported, setHaptics, vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { areaOf } from '@/game/levels';
 import { clearProgress, loadProgress } from '@/game/progress';
+import { redrawToday } from '@/game/objectives';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
@@ -908,6 +909,7 @@ export class SettingsScene extends BaseScene {
     this.resetArmed = false;
     const cleared = clearProgress();
     clearHealth();
+    redrawToday();
     this.notice = cleared ? '' : 'Couldn’t reset.';
     this.refreshCopy();
     this.layout();

@@ -281,3 +281,26 @@ export function drawFinaleFlag(
   g.fillStyle(f.rim, 0.45 * alpha).fillRect(x + stroke, top + stroke * 0.4, w * 0.45, Math.max(1, h * 0.14));
   g.lineStyle(Math.max(1, stroke * 0.55), shade(colour, -0.55), alpha).strokePoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
 }
+
+/**
+ * A clipboard of three lines, each with its tick box: the daily objectives. The first
+ * `done` boxes are ticked, so the puck itself says how the day is going without a bar.
+ */
+export function drawChecklist(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, done: number, tick: number): void {
+  const w = r * 1.5, h = r * 1.85;
+  const stroke = Math.max(1.5, r * 0.13);
+  g.lineStyle(stroke, colour, 1).strokeRoundedRect(x - w / 2, y - h / 2, w, h, r * 0.18);
+  g.fillStyle(colour, 1).fillRoundedRect(x - w * 0.22, y - h / 2 - r * 0.16, w * 0.44, r * 0.3, r * 0.1);
+  for (let i = 0; i < 3; i++) {
+    const rowY = y - h * 0.22 + i * h * 0.27;
+    const box = r * 0.3, bx = x - w * 0.3;
+    if (i < done) {
+      g.fillStyle(tick, 1).fillRoundedRect(bx - box / 2, rowY - box / 2, box, box, box * 0.2);
+      g.lineStyle(stroke * 0.8, 0xffffff, 1).beginPath()
+        .moveTo(bx - box * 0.28, rowY).lineTo(bx - box * 0.05, rowY + box * 0.24).lineTo(bx + box * 0.32, rowY - box * 0.26).strokePath();
+    } else {
+      g.lineStyle(stroke * 0.8, colour, 1).strokeRoundedRect(bx - box / 2, rowY - box / 2, box, box, box * 0.2);
+    }
+    g.lineStyle(stroke, colour, i < done ? 0.45 : 1).lineBetween(bx + box * 0.9, rowY, x + w * 0.34, rowY);
+  }
+}

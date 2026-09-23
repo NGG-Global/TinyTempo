@@ -2,6 +2,7 @@ import {
   track, type AnalyticsEvent, type AnalyticsPayloads, type AttemptMode, type FinaleParams, type Flag, type GridName, type LevelParams,
 } from '../monetization/analytics';
 import { finaleTreatment } from './finale';
+import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
 import { isCleared } from './health';
 import type { LevelSpec } from './levels';
 import type { LevelOutcome, Progress } from './progress';
@@ -366,6 +367,33 @@ export class PlayAnalytics {
     if (this.closed.length > CLOSED_KEEP) this.closed.shift();
     if (cleared === true) this.failStreak.delete(level);
     else if (cleared === false) this.failStreak.set(level, (this.failStreak.get(level) ?? 0) + 1);
+  }
+
+  /**
+   * A finished level moved the day's objectives. The update is already aggregated — one
+   * change per objective per level — so this is at most three events and a stamp, and
+   * nothing at all for a level that moved none of them.
+   */
+  public objectives(update: ObjectivesUpdate | null, now: number = Date.now()): void {
+    guard(undefined, () => {
+      if (!update) return;
+      const { state } = update;
+      for (const change of update.changes) {
+        if (change.completed) {
+          this.emit('objective_completed', {
+            objective: change.id, slot: change.slot, target: change.target, completed: doneCount(state),
+          });
+        } else {
+          this.emit('objective_progress', { objective: change.id, slot: change.slot, progress: change.after, target: change.target });
+        }
+      }
+      if (update.allCompleted) {
+        this.emit('daily_objectives_all_completed', {
+          stamps: state.stamps,
+          week: stampWeek(state, now).filter(d => d.stamped).length,
+        });
+      }
+    });
   }
 
   /**

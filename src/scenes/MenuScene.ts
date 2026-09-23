@@ -16,7 +16,10 @@ import { MaterialKey } from '@/textures/materials';
 import { shade } from '@/ui/colour';
 import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { drawGear } from '@/ui/gear';
-import { drawBook, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBook, drawChecklist, drawPlay, drawSpeaker } from '@/ui/icons';
+import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
+import { ObjectivesCard } from '@/ui/objectivesCard';
+import { STAR_PRIZE } from '@/ui/star';
 import { faces } from '@/ui/light';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -69,10 +72,14 @@ export class MenuScene extends BaseScene {
   private bookAt = { x: 0, y: 0 };
   /** A coral dot on the book while it holds keepsakes the player has never opened it to see. */
   private bookDot = false;
+  /** Today's objectives, beside How to play: near the thumb and clear of the sign's swing. */
+  private objectivesAt = { x: 0, y: 0 };
+  private objectives!: ObjectivesState;
+  private objectivesCard!: ObjectivesCard;
   private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'mute' | 'setup' | 'book' | null = null;
+  private puckPressed: 'mute' | 'setup' | 'book' | 'objectives' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   private muted = false;
@@ -92,6 +99,8 @@ export class MenuScene extends BaseScene {
     // sees the dot on their first launch after the Scrapbook shipped, and never again once
     // they have looked.
     this.bookDot = !seenScrapbook() && ownedKeepsakes(loadProgress()).length > 0;
+    // Read on every entry, so a set that turned over at midnight is today's on the way back.
+    this.objectives = loadObjectives(Date.now(), objectiveContext(loadProgress()));
     // The hammer's idle sway doubles as the title illustration; it never receives a plan.
     this.illustration = new HammerNailVignette(this, true);
 
@@ -110,6 +119,7 @@ export class MenuScene extends BaseScene {
     this.tutorialSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7);
     this.tutorialLabel = display(this, 'How to play', { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
     this.pucks = this.add.graphics();
+    this.objectivesCard = new ObjectivesCard(this);
 
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.enteredAt = performance.now() / 1000;
@@ -166,11 +176,14 @@ export class MenuScene extends BaseScene {
     placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
     resize(this.tutorialLabel, 32 * s, SHELL.cream);
+    this.objectivesAt = { x: safe.left + 56 * s, y: this.tutorialRect.centerY };
+    this.drawPucks(s, 0);
+    this.objectivesCard.layout(safe, full, s);
   }
 
   private drawPucks(s: number, press: number): void {
     const g = this.pucks.clear();
-    const sinkOf = (key: 'mute' | 'setup' | 'book') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'mute' | 'setup' | 'book' | 'objectives') => (this.puckPressed === key ? press : 0);
     drawPuck(g, this.muteAt.x, this.muteAt.y, s, sinkOf('mute'));
     drawPuck(g, this.setupAt.x, this.setupAt.y, s, sinkOf('setup'));
     drawPuck(g, this.bookAt.x, this.bookAt.y, s, sinkOf('book'));
@@ -182,6 +195,16 @@ export class MenuScene extends BaseScene {
       g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
     }
     drawSpeaker(g, this.muteAt.x, this.muteAt.y + puckSink(s, sinkOf('mute')), r * 0.5, PALETTE.ink, this.muted);
+    if (this.objectivesAt.x !== 0) {
+      const oy = this.objectivesAt.y + puckSink(s, sinkOf('objectives'));
+      drawPuck(g, this.objectivesAt.x, this.objectivesAt.y, s, sinkOf('objectives'));
+      drawChecklist(g, this.objectivesAt.x, oy, r * 0.5, PALETTE.ink, doneCount(this.objectives), STAR_PRIZE);
+      if (unseenDone(this.objectives)) {
+        const dx = this.objectivesAt.x + r * 0.72, dy = oy - r * 0.72;
+        g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+        g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+      }
+    }
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), r * 0.52, PALETTE.ink, 1);
   }
 
@@ -203,6 +226,7 @@ export class MenuScene extends BaseScene {
   public override update(): void {
     const now = performance.now() / 1000;
     this.illustration.update(now);
+    this.objectivesCard.update(now, reducedMotion());
     const s = this.uiScale;
     const t = STYLE.current;
     const still = reducedMotion();
@@ -244,7 +268,18 @@ export class MenuScene extends BaseScene {
 
   private handleTap(tap: Tap): void {
     if (this.curtain.active || this.busy) return;
+    // An open card takes every tap: its Close, or anywhere off it, puts it away.
+    if (this.objectivesCard.tap(tap.x, tap.y)) { this.puckDirty = true; return; }
     const half = this.controlSize / 2;
+    if (Math.abs(tap.x - this.objectivesAt.x) < half && Math.abs(tap.y - this.objectivesAt.y) < half) {
+      this.puckPressed = 'objectives';
+      this.puckPressedAt = performance.now() / 1000;
+      this.objectives = markObjectivesSeen(Date.now(), objectiveContext(loadProgress()));
+      this.puckDirty = true;
+      this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
+      this.openTheme();
+      return;
+    }
     if (Math.abs(tap.x - this.muteAt.x) < half && Math.abs(tap.y - this.muteAt.y) < half) {
       this.muted = toggleMute(sharedAudio(this));
       this.puckPressed = 'mute';

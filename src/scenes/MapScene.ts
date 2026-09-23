@@ -23,7 +23,9 @@ import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount,
 import { FxKey } from '@/ui/feedback';
 import { dashes, smoothPath, type Point } from '@/ui/path';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
+import { ObjectivesCard } from '@/ui/objectivesCard';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
@@ -233,6 +235,13 @@ export class MapScene extends BaseScene {
   private backAt = { x: 0, y: 0 };
   private setupAt = { x: 0, y: 0 };
   private muteAt = { x: 0, y: 0 };
+  /**
+   * Today's objectives: a puck under the sign's left end. The top-right row is full, and
+   * the road below is the player's; one puck with three tick boxes is all the map carries.
+   */
+  private objectivesAt = { x: 0, y: 0 };
+  private objectives!: ObjectivesState;
+  private objectivesCard!: ObjectivesCard;
   private muted = false;
   private numbers: Phaser.GameObjects.Text[] = [];
   private areaTitles: Phaser.GameObjects.Text[] = [];
@@ -253,7 +262,7 @@ export class MapScene extends BaseScene {
   private enteredAt = 0;
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'back' | 'setup' | 'mute' | null = null;
+  private puckPressed: 'back' | 'setup' | 'mute' | 'objectives' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   /** Read per use, so a preference change applies mid-scene. */
@@ -329,6 +338,9 @@ export class MapScene extends BaseScene {
     this.dock = this.add.graphics().setScrollFactor(0).setDepth(10);
     this.dockSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(10);
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
+    // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
+    this.objectivesCard = new ObjectivesCard(this, 30);
+    this.objectives = loadObjectives(Date.now(), objectiveContext(this.progress));
     this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
     this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 26, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
@@ -397,6 +409,7 @@ export class MapScene extends BaseScene {
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
     this.hudHeight = safe.top + 144 * s;
     this.footerTop = safe.bottom - 210 * s;
+    this.objectivesCard.layout(safe, full, s);
     this.worldHeight = (MAP.topPad + MAP.bottomPad + (this.shown - 1) * MAP.step) * s + this.hudHeight;
     // Everything the bake reads, and nothing else. The height of the frame is not in it,
     // which is the point: `layout()` runs on every resize, and on Android the commonest
@@ -1233,14 +1246,25 @@ export class MapScene extends BaseScene {
     this.muteAt = { x: safe.right - 56 * s, y: safe.top + 66 * s };
     this.setupAt = { x: this.muteAt.x - gap, y: this.muteAt.y };
     this.backAt = { x: this.setupAt.x - gap, y: this.muteAt.y };
+    this.objectivesAt = { x: safe.left + 56 * s, y: safe.top + 190 * s };
     const g = this.pucks.clear();
-    const sinkOf = (key: 'back' | 'setup' | 'mute') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives') => (this.puckPressed === key ? press : 0);
     for (const [key, at] of [['back', this.backAt], ['setup', this.setupAt], ['mute', this.muteAt]] as const) {
       drawPuck(g, at.x, at.y, s, sinkOf(key));
     }
     drawBack(g, this.backAt.x, this.backAt.y + puckSink(s, sinkOf('back')), CHROME.puckRadius * s * 0.42, PALETTE.ink);
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), CHROME.puckRadius * s * 0.52, PALETTE.ink, 1);
     drawSpeaker(g, this.muteAt.x, this.muteAt.y + puckSink(s, sinkOf('mute')), CHROME.puckRadius * s * 0.5, PALETTE.ink, this.muted);
+    const r = CHROME.puckRadius * s;
+    const oy = this.objectivesAt.y + puckSink(s, sinkOf('objectives'));
+    drawPuck(g, this.objectivesAt.x, this.objectivesAt.y, s, sinkOf('objectives'));
+    drawChecklist(g, this.objectivesAt.x, oy, r * 0.5, PALETTE.ink, doneCount(this.objectives), STAR_PRIZE);
+    if (unseenDone(this.objectives)) {
+      // Something was finished since the card was last opened: the one nudge it gives.
+      const dx = this.objectivesAt.x + r * 0.72, dy = oy - r * 0.72;
+      g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+      g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+    }
   }
 
   /** The footer: a bench across the frame, the next level's block on it, the area's ten beads. */
@@ -1717,6 +1741,7 @@ export class MapScene extends BaseScene {
   }
 
   public override update(_time: number, delta: number): void {
+    this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
     if (!this.drag && Math.abs(this.velocity) > 1) {
       const step = scrollStep(this.velocity, delta, MAP.friction);
       this.scrollY += step.distance;
@@ -1875,7 +1900,7 @@ export class MapScene extends BaseScene {
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
-    this.drag = { id: pointer.id, scrollable: !this.restShown && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
+    this.drag = { id: pointer.id, scrollable: !this.restShown && !this.objectivesCard.open && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
     this.velocity = 0;
     this.touchAt = performance.now() / 1000;
     this.touchPoint = { x: pointer.x, y: pointer.y };
@@ -1903,14 +1928,22 @@ export class MapScene extends BaseScene {
     this.velocity = 0;
     this.handleTap(pointer.x, pointer.y);
   }
-  private pressPuck(key: 'back' | 'setup' | 'mute'): void {
+  private pressPuck(key: 'back' | 'setup' | 'mute' | 'objectives'): void {
     this.puckPressed = key;
     this.puckPressedAt = performance.now() / 1000;
     this.puckDirty = true;
   }
   private handleTap(x: number, y: number): void {
     if (this.curtain.active) return;
+    // An open card takes every tap: its Close, or anywhere off it, puts it away.
+    if (this.objectivesCard.tap(x, y)) { this.puckDirty = true; return; }
     const near = (at: { x: number; y: number }) => Math.abs(x - at.x) < this.controlSize / 2 && Math.abs(y - at.y) < this.controlSize / 2;
+    if (near(this.objectivesAt) && !this.restShown) {
+      this.pressPuck('objectives');
+      this.objectives = markObjectivesSeen(Date.now(), objectiveContext(this.progress));
+      this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
+      return;
+    }
     if (near(this.muteAt)) {
       this.muted = toggleMute(sharedAudio(this));
       this.pressPuck('mute');
