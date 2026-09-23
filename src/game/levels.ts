@@ -6,6 +6,9 @@ import { VIGNETTES } from '../vignettes/registry';
 /** A grid finer than the tiers' eighth note. Null for a task on the tiers. */
 export type Grid = 'triplet' | 'sixteenth';
 
+/** What a level is for inside its area, from `PROGRESSION.choreography`. */
+export type LevelRole = typeof PROGRESSION.choreography.steps[number]['role'];
+
 export interface LevelTask {
   readonly pattern: Pattern;
   readonly bpm: number;
@@ -17,7 +20,12 @@ export interface LevelTask {
 export interface Area { readonly name: string; readonly sky: number; readonly ground: number; readonly road: number; readonly ink: number; readonly paper: number }
 export interface LevelSpec {
   readonly level: number;
+  /** The curve's value for this level: the baseline the choreography shifts around. */
   readonly difficulty: number;
+  /** What this level is for inside its area. `finale` is the tenth. */
+  readonly role: LevelRole;
+  /** 1–10: where the level sits in its area. */
+  readonly areaStep: number;
   readonly vignette: string;
   /**
    * How many times the vignette rotation has come round before this level. Acts with
@@ -109,6 +117,53 @@ function ramp(value: number, from: number, to: number): number {
 }
 
 /**
+ * The continuous values the curve rounds each dimension from: tasks, BPM of headroom
+ * above the base tempo, and the fractional tier. Kept continuous so the choreography's
+ * shifts are added before rounding, and a small shift fades in rather than jumping.
+ */
+export interface LevelShape {
+  readonly tasks: number;
+  readonly tempo: number;
+  readonly tier: number;
+}
+
+/** The plain curve at a difficulty: what every level was before the choreography. */
+export function baselineShape(d: number): LevelShape {
+  const P = PROGRESSION;
+  return {
+    tasks: P.tasksMin + (P.tasksMax - P.tasksMin) * d,
+    tempo: P.peakBpmRange * d ** P.tempoExponent,
+    tier: P.tierCount * d ** P.tierExponent,
+  };
+}
+
+/** The step of its area a level sits on, and the row of the choreography that step reads. */
+export function areaStep(level: number): { readonly step: number; readonly row: typeof PROGRESSION.choreography.steps[number] } {
+  const index = (level - 1) % PROGRESSION.areaSize;
+  return { step: index + 1, row: PROGRESSION.choreography.steps[index]! };
+}
+
+/**
+ * A level's shape once its step has shifted it: the baseline plus the row's offsets, at
+ * the ramp's strength, and never past what the plain curve gives the level one
+ * `lookahead` further on. The ceilings are applied where each value is rounded.
+ */
+export function choreographedShape(level: number): LevelShape & { readonly subdivision: number } {
+  const C = PROGRESSION.choreography;
+  const base = baselineShape(difficulty(level));
+  const cap = baselineShape(difficulty(level + C.lookahead));
+  const { row } = areaStep(level);
+  const strength = ramp(level - 1, 0, C.rampLevels);
+  return {
+    tasks: Math.min(cap.tasks, base.tasks + row.tasks * strength),
+    tempo: Math.min(cap.tempo, base.tempo + row.bpm * strength),
+    tier: Math.min(cap.tier, base.tier + row.tier * strength),
+    // A multiplier on the swap chance, eased in the same way: 1 is the plain curve.
+    subdivision: 1 + (row.subdivision - 1) * strength,
+  };
+}
+
+/**
  * The closest two taps a pattern asks for at a tempo, in milliseconds.
  */
 export function tightestSpacingMs(pattern: Pattern, bpm: number): number {
@@ -130,11 +185,13 @@ export function gridFits(grid: Grid, bpm: number): boolean {
  * whose densest pattern would ask for taps closer than `minSpacingMs` at this task's
  * tempo is not offered here, which is what keeps sixteenths off the fastest tasks.
  */
-function subdivide(level: number, d: number, tasks: readonly LevelTask[]): readonly LevelTask[] {
+function subdivide(level: number, d: number, tasks: readonly LevelTask[], emphasis: number): readonly LevelTask[] {
   const S = PROGRESSION.subdivision;
-  if (d < S.tripletsFrom) return tasks;
+  // The threshold reads the plain curve, never the choreography: no step of any area can
+  // bring a finer grid in ahead of the level the curve first allows it.
+  if (d < S.tripletsFrom || emphasis <= 0) return tasks;
   const random = seeded(level + SUBDIVISION_SEED);
-  const share = S.maxShare * ramp(d, S.tripletsFrom, S.fullAt);
+  const share = Math.min(1, S.maxShare * ramp(d, S.tripletsFrom, S.fullAt) * emphasis);
   // The share is a ceiling as well as a chance: a run of lucky draws may not turn a level
   // into a subdivision drill, so no more than that fraction of its tasks ever swap.
   const most = Math.floor(tasks.length * S.maxShare);
@@ -166,13 +223,31 @@ export function breatherTask(count: number): number {
   return count >= PROGRESSION.breatherFromTasks ? Math.floor(count / 2) : -1;
 }
 
-export function levelSpec(level: number): LevelSpec {
-  const d = difficulty(level);
+/** The three whole numbers a shape rounds to, inside the curve's ceilings. */
+export interface LevelDimensions {
+  readonly tasks: number;
+  readonly peakBpm: number;
+  readonly maxTier: number;
+}
+
+export function dimensionsOf(shape: LevelShape): LevelDimensions {
   const P = PROGRESSION;
-  const count = Math.round(P.tasksMin + (P.tasksMax - P.tasksMin) * d);
-  // Whole 2 BPM steps: a 1 BPM ceiling is inaudible and would only make level 3 differ from level 1 on paper.
-  const peakBpm = P.baseBpm + 2 * Math.round(P.peakBpmRange * d ** P.tempoExponent / 2);
-  const maxTier = Math.min(P.tierCount - 1, Math.floor(P.tierCount * d ** P.tierExponent));
+  return {
+    tasks: Math.max(P.tasksMin, Math.min(P.tasksMax, Math.round(shape.tasks))),
+    // Whole 2 BPM steps: a 1 BPM ceiling is inaudible and would only make level 3 differ from level 1 on paper.
+    peakBpm: P.baseBpm + 2 * Math.round(Math.max(0, Math.min(P.peakBpmRange, shape.tempo)) / 2),
+    maxTier: Math.max(0, Math.min(P.tierCount - 1, Math.floor(shape.tier))),
+  };
+}
+
+/**
+ * The level's tasks as the tiers choose them, before any is swapped onto a finer grid.
+ * Its own function so the second stage's independence can be tested: `subdivide` may
+ * replace some of these, and must never move one it leaves.
+ */
+export function tierTasks(level: number): readonly LevelTask[] {
+  const P = PROGRESSION;
+  const { tasks: count, peakBpm, maxTier } = dimensionsOf(choreographedShape(level));
   const minTier = Math.max(0, maxTier - P.tierSpan);
   const breather = breatherTask(count);
   const random = seeded(level);
@@ -190,13 +265,23 @@ export function levelSpec(level: number): LevelSpec {
       : i === breather ? P.breatherBars * RHYTHM.beatsPerBar : 0;
     tasks.push({ pattern, tier, leadBeats, grid: null, bpm: Math.round(P.baseBpm + (peakBpm - P.baseBpm) * progress) });
   }
+  return tasks;
+}
+
+export function levelSpec(level: number): LevelSpec {
+  const d = difficulty(level);
+  const P = PROGRESSION;
+  const shape = choreographedShape(level);
+  const { step, row } = areaStep(level);
+  // The bar is the curve's, never the choreography's: see `PROGRESSION.choreography`.
   const clearAccuracy = Math.round(P.clearMin + P.clearRange * d);
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
   return Object.freeze({
-    level, difficulty: d, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
+    level, difficulty: d, role: row.role, areaStep: step, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
     lap: Math.floor((level - 1) / VIGNETTES.length), areaName: name, area,
-    tasks: Object.freeze(subdivide(level, d, tasks)), peakBpm, clearAccuracy,
+    tasks: Object.freeze(subdivide(level, d, tierTasks(level), shape.subdivision)),
+    peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });
 }

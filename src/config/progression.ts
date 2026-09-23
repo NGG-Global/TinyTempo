@@ -32,9 +32,10 @@ export const PROGRESSION = {
    * densities of its own — one group per bar, then two — and moves to the second halfway
    * to `fullAt`. The first task of a level never swaps: it is the one that sets the pulse.
    *
-   * Everything below `tripletsFrom` is untouched, to the seed: the swap draws from its
-   * own random stream, so adding this stage reassigned no existing level's tasks.
-   * `tests/levels.test.ts` holds the fingerprint that proves it.
+   * The swap draws from its own random stream after the tiers have chosen, so it never
+   * moves a task it leaves alone; `tests/levels.test.ts` checks that against `tierTasks`.
+   * The threshold reads the plain curve, so no step of the choreography brings a finer
+   * grid in early.
    */
   subdivision: {
     tripletsFrom: 0.8,
@@ -56,6 +57,52 @@ export const PROGRESSION = {
    */
   breatherBars: 4,
   breatherFromTasks: 6,
+  /**
+   * The difficulty choreography: where a level sits inside its area decides which of its
+   * dimensions lead, so a level stops being longer, faster, denser and stricter all at once.
+   *
+   * The curve above is still the baseline for every dimension. Each step of an area
+   * shifts the *continuous* value a dimension is rounded from — tasks, BPM of headroom
+   * above the base tempo, and the fractional tier `tierCount · d^tierExponent` — by the
+   * amounts in its row, and scales the chance a task swaps onto a finer grid. The shifts
+   * roughly cancel across an area, so the area's average follows the curve. Three rules
+   * keep it safe:
+   *
+   * - **Ramped in.** The shifts grow from nothing at level 1 to full strength over
+   *   `rampLevels`, so level 1 is exactly the curve and the first area plays the shape
+   *   gently, while nearly every player is still learning what a turn is.
+   * - **One area ahead at most.** No dimension may exceed what the plain curve gives the
+   *   level `lookahead` levels later. A challenge previews the next area; it never
+   *   arrives from three areas away.
+   * - **The ceilings still hold.** `tasksMax`, the tempo ceiling, the top tier and the
+   *   subdivision spacing floor clamp every result, so on the plateau the choreography can
+   *   only lower a dimension: its variety there is recovery, never a new peak.
+   *
+   * **The clear bar and the star thresholds are not choreographed.** They stay on the
+   * curve, for two reasons. A player's stars are not stored — they are recomputed from
+   * each level's best accuracy against its thresholds — so moving a threshold would move
+   * every saved star total, and a raised one could close a star gate behind a player who
+   * had already passed it. And a threshold that rises smoothly with the level number is
+   * the one a player can read: an easier level at the same bar is easier to three-star,
+   * which is what a recovery level should be.
+   */
+  choreography: {
+    rampLevels: 20,
+    lookahead: 10,
+    /** One row per step of an area, first to tenth; `areaSize` rows. */
+    steps: [
+      { role: 'opener', tasks: -1, bpm: -4, tier: -0.5, subdivision: 0.5 },
+      { role: 'pattern', tasks: 0, bpm: -4, tier: 1, subdivision: 1.5 },
+      { role: 'pattern', tasks: -1, bpm: -4, tier: 1, subdivision: 1.5 },
+      { role: 'tempo', tasks: 0, bpm: 8, tier: -1, subdivision: 0 },
+      { role: 'endurance', tasks: 2, bpm: -4, tier: -0.5, subdivision: 0.5 },
+      { role: 'recovery', tasks: -1, bpm: -6, tier: -1, subdivision: 0.5 },
+      { role: 'combination', tasks: 0, bpm: 2, tier: 0.25, subdivision: 1 },
+      { role: 'combination', tasks: 0, bpm: 4, tier: 0.5, subdivision: 1 },
+      { role: 'challenge', tasks: 1, bpm: 6, tier: 1, subdivision: 1.25 },
+      { role: 'finale', tasks: 1, bpm: 8, tier: 1, subdivision: 1.25 },
+    ],
+  },
   /**
    * The star gates: what a new area asks for before its first level will start.
    *

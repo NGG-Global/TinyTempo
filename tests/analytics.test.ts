@@ -12,7 +12,7 @@ vi.mock('phaser', () => ({ default: {} }));
  * discard fails this file rather than going quiet in the dashboard.
  */
 const LEVEL = [
-  'level', 'area', 'task_count', 'bpm', 'pattern_tier', 'grid', 'clear_accuracy', 'mode', 'previous_stars',
+  'level', 'area', 'role', 'task_count', 'bpm', 'pattern_tier', 'grid', 'clear_accuracy', 'mode', 'previous_stars',
   'retry_count', 'heart_cost',
 ] as const;
 const LEVEL_RESULT = [...LEVEL, 'accuracy', 'duration_ms', 'restarts', 'weakest_task', 'weakest_accuracy'] as const;

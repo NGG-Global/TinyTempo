@@ -225,6 +225,7 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | --- | --- | --- |
 | `level` | int | The level number |
 | `area` | int | 1-based area; area 1 is levels 1–10 |
+| `role` | 8 values | The level's step in its area: `opener`, `pattern`, `tempo`, `endurance`, `recovery`, `combination`, `challenge`, `finale` (`docs/DIFFICULTY.md`) |
 | `task_count` | int | Tasks in the level |
 | `bpm` | int | The level's peak tempo (its last task's) |
 | `pattern_tier` | int | Highest pattern tier among its tasks, 0–4 |
@@ -306,7 +307,7 @@ that caused a crash off the report meant to explain it. PlayScene already writes
 Custom event parameters are collected without any console work, but **GA4 only shows them
 in standard reports and Explorations once they are registered** as custom definitions
 (Admin → Custom definitions), and registration is not retroactive. Register dimensions for
-the parameters used to group — `level`, `area`, `mode`, `grid`, `pattern_tier`, `task_index`,
+the parameters used to group — `level`, `area`, `role`, `mode`, `grid`, `pattern_tier`, `task_index`,
 `weakest_task`, `source`, `step`, `stars`, `previous_stars` — and metrics for the ones
 averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `weakest_accuracy`,
 `restarts`, `error_ms`. GA4 caps custom definitions per property (at the time of writing,

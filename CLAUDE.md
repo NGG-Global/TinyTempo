@@ -20,9 +20,19 @@ same curve** (`PROGRESSION.subdivision`, `SUBDIVIDED_TIERS`, `subdivide` in `lev
 From level 43 a level may swap up to half of its tasks, never the first, for a one-bar
 triplet phrase, from level 59 for a sixteenth one, and only where the task's tempo leaves
 `minSpacingMs` between taps — which is what keeps sixteenths off tasks above 136 BPM. The
-swap draws from **its own seeded stream** after the tiers have chosen, so no level below 43
-changed; `tests/fixtures/levels-before-subdivision.json` is the fingerprint that proves it,
-and a change that moves any of those levels is the registry trap again. Subdivided phrases
+swap draws from **its own seeded stream** after the tiers have chosen, so it never moves a
+task it leaves alone (checked against `tierTasks`), and the threshold reads the plain curve.
+
+**Difficulty is choreographed inside each area.** The curve is the baseline; a level's step in
+its area (`PROGRESSION.choreography`, `LevelSpec.role`/`areaStep`) shifts the continuous task,
+tempo and tier values before rounding — opener, two pattern levels, tempo, endurance,
+recovery, two combinations, challenge, finale — ramped in over the first 20 levels, capped at
+what the curve gives one area ahead, inside every ceiling. **The clear bar and star thresholds
+are never choreographed**: stars are recomputed from best accuracy on every read, so moving a
+threshold moves saved star totals and can close a gate behind a player
+(`tests/fixtures/level-thresholds.json` holds them). `tests/fixtures/levels-choreography.json`
+pins levels 1–120; a change that moves any of them is the registry trap again. See
+`docs/DIFFICULTY.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
@@ -490,7 +500,7 @@ src/
     boot.ts            Installs capture, then attaches the vendor when a DSN exists
     sentry.ts          The Sentry adapter; the only file that knows the vendor
   game/
-    levels.ts          Derives a level spec from the curve
+    levels.ts          Derives a level spec from the curve and its step in the area
     RoundController.ts Phase machine for one task
     TaskSequence.ts    Task ordering within a level
     scoring.ts         Pure weighted accuracy

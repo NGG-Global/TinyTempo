@@ -33,7 +33,7 @@ async function adapter() {
 }
 
 const levelStarted = {
-  level: 12, area: 2, task_count: 5, bpm: 126, pattern_tier: 2, grid: 'eighth', clear_accuracy: 53,
+  level: 12, area: 2, role: 'pattern', task_count: 5, bpm: 126, pattern_tier: 2, grid: 'eighth', clear_accuracy: 53,
   mode: 'frontier', previous_stars: 0, retry_count: 0, heart_cost: 1,
 } as const;
 

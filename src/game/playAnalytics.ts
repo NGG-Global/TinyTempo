@@ -58,6 +58,7 @@ export function levelParams(spec: LevelSpec, progress: Progress, retryCount: num
   return {
     level: spec.level,
     area: areaNumber(spec.level),
+    role: spec.role,
     task_count: spec.tasks.length,
     bpm: spec.peakBpm,
     pattern_tier: Math.max(0, ...spec.tasks.map(task => task.tier)),

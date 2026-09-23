@@ -9,6 +9,8 @@
  * each decided once. See `docs/ANALYTICS.md` for the schema.
  */
 
+import type { LevelRole } from '../game/levels';
+
 export const COMMERCE_EVENTS = [
   'health_empty',
   'rewarded_offer_shown',
@@ -67,6 +69,8 @@ export type LevelParams = {
   readonly level: number;
   /** 1-based: area 1 is levels 1–10. */
   readonly area: number;
+  /** What the level is for inside its area: eight values, from `LevelSpec.role`. */
+  readonly role: LevelRole;
   readonly task_count: number;
   /** The level's peak tempo, which its last task reaches. */
   readonly bpm: number;

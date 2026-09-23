@@ -47,7 +47,12 @@ the tiers chose is still chosen; some are then replaced. Had the finer patterns 
 added as tiers 5 and 6 instead, `⌊tierCount · d^0.8⌋` would have shifted for every level
 and reassigned the whole road, the same way inserting a vignette into the registry does.
 
-`tests/fixtures/levels-before-subdivision.json` records every task of levels 1–120 as
+*Superseded:* the difficulty choreography (`docs/DIFFICULTY.md`) later reassigned the road
+on purpose, so the fixture described here was replaced. The property it proved is now a
+direct test — every task `subdivide` leaves alone equals `tierTasks(level)` — and the
+threshold still reads the plain curve. What follows is kept for the reasoning.
+
+`tests/fixtures/levels-before-subdivision.json` recorded every task of levels 1–120 as
 the derivation produced them before this stage existed. `tests/levels.test.ts` checks
 that every level below `tripletsFrom` still matches it exactly, and that above it the
 tasks that did not swap still do. Regenerate the fixture only for a deliberate change to

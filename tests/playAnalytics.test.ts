@@ -64,7 +64,7 @@ describe('what a level attempt reports', () => {
     const spec = levelSpec(43);
     ledger.beginLevel(start(43, road(42, 2), { heartSpent: true }));
     expect(only('level_started')[0]).toEqual({
-      level: 43, area: 5, task_count: spec.tasks.length, bpm: spec.peakBpm,
+      level: 43, area: 5, role: 'pattern', task_count: spec.tasks.length, bpm: spec.peakBpm,
       pattern_tier: Math.max(...spec.tasks.map(t => t.tier)), grid: 'triplet',
       clear_accuracy: spec.clearAccuracy, mode: 'frontier', previous_stars: 0, retry_count: 0, heart_cost: 1,
     });
