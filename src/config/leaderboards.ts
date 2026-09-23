@@ -1,6 +1,6 @@
 /**
- * Play Games Services leaderboard ids. **Empty until the leaderboard exists in the Play
- * Console**, and an empty or malformed id turns the feature off rather than failing:
+ * Play Games Services leaderboard ids. An empty or malformed id turns a leaderboard off
+ * rather than failing:
  * nothing is submitted, no button is shown, and the browser and development builds behave
  * exactly as they do without Play Games (`playgames/leaderboard.ts`, `leaderboardId`).
  *
@@ -14,8 +14,12 @@
  * Nothing else in the game names a leaderboard id: scenes ask `playgames/dailyTempo.ts`.
  */
 export const LEADERBOARDS = {
-  /** Daily Tempo: one leaderboard; Play Games provides its daily, weekly and all-time views. */
-  dailyTempo: '',
+  /**
+   * Daily Tempo: one leaderboard; Play Games provides its daily, weekly and all-time views.
+   * Leaderboard #1 of Games project 863268283344 — `scripts/check-android-config.mjs`
+   * decodes it and warns if it ever stops naming that project.
+   */
+  dailyTempo: 'CgkI0Mey9o8ZEAIQAQ',
 } as const;
 
 /**

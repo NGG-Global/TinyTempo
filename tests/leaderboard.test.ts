@@ -119,10 +119,22 @@ describe('configuration', () => {
     }
   });
 
-  it('ships unconfigured, and a mode that does not exist yet, so nothing can surface', () => {
-    expect(LEADERBOARDS.dailyTempo).toBe('');
-    expect(leaderboardId(LEADERBOARDS.dailyTempo)).toBeNull();
+  it('is configured with a leaderboard of this Games project, and nothing surfaces while Daily Tempo does not exist', async () => {
+    expect(leaderboardId(LEADERBOARDS.dailyTempo)).toBe(LEADERBOARDS.dailyTempo);
+    // The id is URL-safe base64 of 0x0a <len> 0x08 <project varint> 0x10 0x02 …: it must name
+    // project 863268283344 as a leaderboard. The first id supplied was retyped (I/l, O/0, o/0)
+    // and named nothing, which only decoding it revealed.
+    const bytes = Buffer.from(LEADERBOARDS.dailyTempo.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    expect([bytes[0], bytes[2]]).toEqual([0x0a, 0x08]);
+    let project = 0n, shift = 0n, i = 3;
+    for (; bytes[i]! & 0x80; i++, shift += 7n) project |= BigInt(bytes[i]! & 0x7f) << shift;
+    project |= BigInt(bytes[i]!) << shift;
+    expect(project).toBe(863268283344n);
+    expect([bytes[i + 1], bytes[i + 2]]).toEqual([0x10, 0x02]);
+    // Configured is not shipped: the mode is still off, so no button and no submission.
     expect(DAILY_TEMPO_AVAILABLE).toBe(false);
+    const { dailyTempoLeaderboardOffered } = await import('../src/playgames/dailyTempo');
+    expect(dailyTempoLeaderboardOffered()).toBe(false);
   });
 
   it('tags a score with its day, in the characters Play Games allows', () => {

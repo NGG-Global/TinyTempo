@@ -3,14 +3,15 @@
 One Google Play Games Services leaderboard, for Daily Tempo, on top of the existing v2
 authentication (`docs/PLAY_GAMES.md`), which it uses and does not change.
 
-**Daily Tempo does not exist yet.** `DAILY_TEMPO_AVAILABLE` in `src/config/dailyTempo.ts`
-is `false`, and the leaderboard id in `src/config/leaderboards.ts` is empty, so in every
-current build nothing is submitted and no leaderboard button is shown. Everything below is
-built and tested; the mode that feeds it is the remaining piece.
+**Daily Tempo does not exist yet.** The leaderboard is created and its id is configured
+(`CgkI0Mey9o8ZEAIQAQ`, in `src/config/leaderboards.ts`), but `DAILY_TEMPO_AVAILABLE` in
+`src/config/dailyTempo.ts` is `false`, so in every current build nothing is submitted and no
+leaderboard button is shown. Everything below is built and tested; the mode that feeds it is
+the remaining piece.
 
 | File | What it holds |
 | --- | --- |
-| `src/config/leaderboards.ts` | The leaderboard id (empty placeholder), and Play Games' daily reset offset. |
+| `src/config/leaderboards.ts` | The leaderboard id, and Play Games' daily reset offset. |
 | `src/config/dailyTempo.ts` | Whether Daily Tempo exists. |
 | `src/playgames/leaderboard.ts` | Score conversion, id validation, the day's best, submission and retry rules. Pure. |
 | `src/playgames/dailyTempo.ts` | The same, wired to the installed adapter, storage and analytics. What scenes call. |
@@ -105,7 +106,7 @@ should show the same button through `openDailyTempoLeaderboard()`.
 
 ```ts
 export const LEADERBOARDS = {
-  dailyTempo: '',   // ← the Leaderboard ID from the Play Console
+  dailyTempo: 'CgkI0Mey9o8ZEAIQAQ',   // the Leaderboard ID from the Play Console
 } as const;
 ```
 
@@ -114,6 +115,15 @@ typically beginning `CgkI`. It is not the numeric Games project id (`86326828334
 `leaderboardId()` refuses an all-digit value for that reason. It is public (it ships in
 every APK), so it lives in source like the AdMob ids. `scripts/check-android-config.mjs`
 warns after `cap sync` if the value is malformed, or if Daily Tempo is switched on with no id.
+
+**Copy the id with the Console's copy button; never retype it.** The first id supplied for
+this leaderboard arrived as `CgklOMey908ZEAIQAQ` — three characters swapped for look-alikes
+(`I`→`l`, `0`→`O`, `o`→`0`). It passed the character check, and would have failed every call
+on device. The Console's ids are URL-safe base64 of a small protobuf that carries the Games
+project id, the item type (2 for a leaderboard) and its number, so the check script decodes
+the id and warns unless it names project `863268283344`, and `tests/leaderboard.test.ts`
+pins the configured one. `CgkI0Mey9o8ZEAIQAQ` decodes to project `863268283344`, leaderboard
+#1. That layout is observed, not documented by Google, which is why the script only warns.
 
 ## Play Console
 
@@ -127,7 +137,8 @@ warns after `cap sync` if the value is malformed, or if Daily Tempo is switched 
      and it hides suspected tampered scores. The game submits only from the signed app
      through v2, which is the case it is designed for, and there is no server.
    - Save. The leaderboard is a **draft**, which accounts on the testers list can use.
-2. **Copy its Leaderboard ID** into `LEADERBOARDS.dailyTempo`.
+2. **Copy its Leaderboard ID** (with the copy button) into `LEADERBOARDS.dailyTempo`. Done:
+   `CgkI0Mey9o8ZEAIQAQ`.
 3. **Credentials.** Configuration → Credentials must have an Android credential for
    `com.tinytempo.app` with the SHA-1 of each certificate that signs a build you test: the
    Play **app signing** key for anything installed from Play, and the debug or upload key

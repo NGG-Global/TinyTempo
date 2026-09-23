@@ -231,9 +231,12 @@ the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, w
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
 
-**One leaderboard, for a Daily Tempo that does not exist yet.** `DAILY_TEMPO_AVAILABLE`
-(`config/dailyTempo.ts`) is false and `LEADERBOARDS.dailyTempo` (`config/leaderboards.ts`)
-is empty, so nothing is submitted and no button shows. The score is `round(accuracy × 1000)`
+**One leaderboard, for a Daily Tempo that does not exist yet.** `LEADERBOARDS.dailyTempo`
+(`config/leaderboards.ts`) holds the Console id, but `DAILY_TEMPO_AVAILABLE`
+(`config/dailyTempo.ts`) is false, so nothing is submitted and no button shows. **A
+leaderboard id is copied, never retyped**: I/l, O/0 and o/0 pass every format check and fail
+on every call, so `check-android-config.mjs` decodes the id and warns unless it names project
+`863268283344` — the first id supplied failed exactly that way. The score is `round(accuracy × 1000)`
 from `leaderboardScore` alone, never re-derived. Play Games keeps daily, weekly and all-time
 views of one leaderboard by itself and resets the daily one at UTC−7, so `dailyTempoDay`
 reads that clock, not the local date. Only a score that beats the day's best is sent; a

@@ -175,6 +175,39 @@ if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(bo
     + '    It must be the Leaderboard ID from Play Console → Play Games Services → Leaderboards\n'
     + `    (letters, digits, - and _), not the numeric Games project id ${PGS_PROJECT_ID}.`);
 }
+/*
+ * A leaderboard id that passes the character rule can still be wrong in a way that fails
+ * silently on device: one retyped from a screenshot, where I and l, O and 0, o and 0 look
+ * alike. The first id this game was given arrived exactly that way. The Console's ids are
+ * URL-safe base64 of a small protobuf that carries the Games project id, so decode it and
+ * check it names this project. The layout is observed rather than documented by Google,
+ * so a mismatch is a warning to go and copy the id again, never a failed build.
+ */
+function projectOfLeaderboard(id) {
+  try {
+    const bytes = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+    // 0x0a <len> 0x08 <varint project> 0x10 0x02 ... : field 1 holds field 1 = project id.
+    if (bytes[0] !== 0x0a || bytes[2] !== 0x08) return null;
+    let value = 0n, shift = 0n, i = 3;
+    for (; i < bytes.length && i < 14; i++) {
+      value |= BigInt(bytes[i] & 0x7f) << shift;
+      shift += 7n;
+      if ((bytes[i] & 0x80) === 0) break;
+    }
+    // Type 2 is a leaderboard; achievements carry another type.
+    if (bytes[i + 1] !== 0x10 || bytes[i + 2] !== 0x02) return null;
+    return value.toString();
+  } catch {
+    return null;
+  }
+}
+if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOfLeaderboard(boardId) !== PGS_PROJECT_ID) {
+  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id that does not decode to\n'
+    + `    Games project ${PGS_PROJECT_ID}:\n`
+    + `      found    ${boardId}\n`
+    + '    Copy it again with the copy button in Play Console → Play Games Services → Leaderboards;\n'
+    + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every call.');
+}
 if (modeShips && boardId === '') {
   notes.push('Daily Tempo is switched on (src/config/dailyTempo.ts) but no leaderboard id is set in\n'
     + '    src/config/leaderboards.ts, so its scores are never submitted and the leaderboard button\n'
