@@ -11,6 +11,7 @@ import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
+import { windowLook, type WindowLook } from './windowLooks';
 import { easeOut, isPlayerTurn, turnOpen } from './motion';
 
 export const GLASS = { paper: 0xe9e4e7, ink: 0x49394e, frame: 0x82718a, blue: 0xb7d9db, light: 0xfff5df, glove: 0xdc9775, sill: 0xd1c1cd };
@@ -29,6 +30,8 @@ const FRAME = { x: -272, y: -286, width: 544, height: 606, radius: 108 } as cons
  * stands on. The lateral stroke and its timing are unchanged.
  */
 export class WindowCleaningVignette implements Vignette {
+  /** Which window this lap looks through. The wipe does not change. */
+  private readonly look: WindowLook;
   private readonly backdrop: Backdrop;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly frame: Phaser.GameObjects.Graphics;
@@ -61,7 +64,8 @@ export class WindowCleaningVignette implements Vignette {
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.look = windowLook(lap);
     // The pool of light sits where the pane's own sun already is, upper right.
     this.backdrop = new Backdrop(scene, GLASS.paper, GLASS.light, { glowAt: { x: 0.6, y: 0.3 } });
     this.stage = scene.add.container(0, 0).setDepth(-10);
@@ -79,7 +83,7 @@ export class WindowCleaningVignette implements Vignette {
   private drawSqueegee(scene: Phaser.Scene): void {
     const hand = scene.add.graphics();
     const line = STYLE.current.outline * 1.4;
-    const ink = faces(GLASS.ink), glove = faces(GLASS.glove), frame = faces(GLASS.frame);
+    const ink = faces(GLASS.ink), glove = faces(this.look.glove), frame = faces(this.look.frame);
     // The contact shadow the blade throws on the pane behind it.
     const drop = castShadow(8);
     hand.fillStyle(GLASS.ink, drop.alpha).fillRoundedRect(-8 + drop.dx, -66 + drop.dy, 27, 148, 7);
@@ -118,19 +122,19 @@ export class WindowCleaningVignette implements Vignette {
     this.stage.setPosition(this.baseX, this.baseY).setScale(this.scale);
     this.backdrop.layout(viewport);
     const line = STYLE.current.outline * 1.4;
-    const frame = faces(GLASS.frame), ink = faces(GLASS.ink), sill = faces(GLASS.sill);
+    const frame = faces(this.look.frame), ink = faces(GLASS.ink), sill = faces(this.look.sill);
     // The frame: cast shadow on the wall, the painted face, its lit top edge.
     const f = this.frame.clear();
     const drop = castShadow(14);
     f.fillStyle(GLASS.ink, drop.alpha).fillRoundedRect(FRAME.x + drop.dx, FRAME.y + drop.dy, FRAME.width, FRAME.height, FRAME.radius);
-    if (line > 0) f.lineStyle(line, shade(GLASS.frame, -0.6), 1).strokeRoundedRect(FRAME.x, FRAME.y, FRAME.width, FRAME.height, FRAME.radius);
+    if (line > 0) f.lineStyle(line, shade(this.look.frame, -0.6), 1).strokeRoundedRect(FRAME.x, FRAME.y, FRAME.width, FRAME.height, FRAME.radius);
     f.fillStyle(frame.shade).fillRoundedRect(FRAME.x, FRAME.y, FRAME.width, FRAME.height, FRAME.radius);
     f.fillStyle(frame.face).fillRoundedRect(FRAME.x, FRAME.y, FRAME.width, FRAME.height - 14, FRAME.radius);
     f.lineStyle(5, frame.rim, 0.6).strokeRoundedRect(FRAME.x + 9, FRAME.y + 9, FRAME.width - 18, FRAME.height - 30, FRAME.radius - 9);
     // Painted grain, drawn rather than tiled: a material tile is a rectangle, and its
     // square corners would show past the frame's 108-unit radius. The lines run the full
     // width as if the frame were cut from one board; the pane covers their middles.
-    f.lineStyle(2.5, shade(GLASS.frame, -0.14), 0.45);
+    f.lineStyle(2.5, shade(this.look.frame, -0.14), 0.45);
     for (let i = 0; i < 9; i++) {
       const y = FRAME.y + 34 + i * (FRAME.height - 68) / 8;
       f.beginPath();
@@ -150,24 +154,48 @@ export class WindowCleaningVignette implements Vignette {
     }
 
     const g = this.glass.clear();
-    g.fillStyle(GLASS.blue).fillRoundedRect(-236, -251, 472, 529, 82);
-    // A small garden view is the reward for a clean pane: sun, clouds, hills and a cottage.
+    g.fillStyle(this.look.sky).fillRoundedRect(-236, -251, 472, 529, 82);
+    this.view(g);
+    g.lineStyle(3, GLASS.light, 0.55).lineBetween(-251, 277, 251, 277);
+    // The ledge, a solid with a lit top and a shadow under it.
+    const ledgeDrop = castShadow(10);
+    g.fillStyle(GLASS.ink, ledgeDrop.alpha).fillEllipse(13 + ledgeDrop.dx, 344 + ledgeDrop.dy, 500, 25);
+    if (line > 0) g.lineStyle(line, shade(this.look.sill, -0.6), 1).strokeRoundedRect(-291, 291, 582, 33, 6);
+    g.fillStyle(sill.shade).fillRoundedRect(-291, 291, 582, 33, 6);
+    g.fillStyle(sill.face).fillRoundedRect(-291, 291, 582, 22, 6);
+    g.fillStyle(sill.rim, 0.7).fillRoundedRect(-282, 293, 565, 6, 3);
+  }
+
+  /**
+   * What a clean pane reveals. The garden is the original; a harbour and a dusk are the
+   * later laps. Each is a few flat shapes, readable through the grime.
+   */
+  private view(g: Phaser.GameObjects.Graphics): void {
+    if (this.look.scene === 'harbour') { this.harbour(g); return; }
+    if (this.look.scene === 'dusk') { this.dusk(g); return; }
+    this.garden(g);
+  }
+
+  private cloud(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number): void {
+    g.fillStyle(GLASS.light, 0.82).fillEllipse(x, y, 97 * s, 24 * s)
+      .fillCircle(x - 18 * s, y - 10 * s, 21 * s).fillCircle(x + 10 * s, y - 16 * s, 27 * s);
+  }
+
+  private hill(g: Phaser.GameObjects.Graphics, points: number[][], colour: number): void {
+    g.fillStyle(colour).fillPoints(points.map(p => new Phaser.Math.Vector2(p[0]!, p[1]!)), true);
+  }
+
+  /** Sun, clouds, hills and a cottage. */
+  private garden(g: Phaser.GameObjects.Graphics): void {
     g.fillStyle(GLASS.light, 0.18).fillCircle(108, -155, 65);
-    g.fillStyle(0xf7de9e).fillCircle(108, -155, 40);
-    const cloud = (x: number, y: number, s: number): void => {
-      g.fillStyle(GLASS.light, 0.82).fillEllipse(x, y, 97 * s, 24 * s)
-        .fillCircle(x - 18 * s, y - 10 * s, 21 * s).fillCircle(x + 10 * s, y - 16 * s, 27 * s);
-    };
-    cloud(-115, -160, 0.95); cloud(39, -69, 0.68);
+    g.fillStyle(this.look.sun).fillCircle(108, -155, 40);
+    this.cloud(g, -115, -160, 0.95); this.cloud(g, 39, -69, 0.68);
     g.fillStyle(0xa2c2b9).fillRoundedRect(-231, 88, 462, 186, { tl: 0, tr: 0, bl: 78, br: 78 });
-    const hill = (points: number[][], colour: number): void => {
-      g.fillStyle(colour).fillPoints(points.map(p => new Phaser.Math.Vector2(p[0]!, p[1]!)), true);
-    };
-    hill([[-231, 89], [-188, 55], [-136, 39], [-73, 64], [11, 127], [102, 191], [-231, 191]], 0x9bbbae);
-    hill([[-100, 192], [-27, 117], [63, 50], [140, 40], [231, 96], [231, 209], [-100, 209]], 0x7fa99d);
+    this.hill(g, [[-231, 89], [-188, 55], [-136, 39], [-73, 64], [11, 127], [102, 191], [-231, 191]], 0x9bbbae);
+    this.hill(g, [[-100, 192], [-27, 117], [63, 50], [140, 40], [231, 96], [231, 209], [-100, 209]], 0x7fa99d);
     g.fillStyle(0x78a48b).fillRoundedRect(-227, 185, 454, 87, { tl: 0, tr: 0, bl: 71, br: 71 });
     // A winding path and a tiny house, simple enough to read through the dirt.
-    hill([[33, 188], [48, 188], [34, 217], [89, 271], [40, 271], [9, 218]], 0xc7c7a2);
+    this.hill(g, [[33, 188], [48, 188], [34, 217], [89, 271], [40, 271], [9, 218]], 0xc7c7a2);
     g.fillStyle(0xece3c6).fillRoundedRect(1, 127, 83, 67, 4);
     g.fillStyle(0xb67a65).fillTriangle(-11, 131, 43, 85, 98, 131);
     g.lineStyle(3, 0x826c60).lineBetween(-11, 131, 43, 85).lineBetween(43, 85, 98, 131);
@@ -183,14 +211,36 @@ export class WindowCleaningVignette implements Vignette {
     }
     g.fillStyle(GLASS.light, 0.3).fillTriangle(-218, -169, -127, -239, -218, 8);
     g.fillStyle(GLASS.light, 0.16).fillTriangle(-185, 97, 22, -239, 49, -239);
-    g.lineStyle(3, GLASS.light, 0.55).lineBetween(-251, 277, 251, 277);
-    // The ledge, a solid with a lit top and a shadow under it.
-    const ledgeDrop = castShadow(10);
-    g.fillStyle(GLASS.ink, ledgeDrop.alpha).fillEllipse(13 + ledgeDrop.dx, 344 + ledgeDrop.dy, 500, 25);
-    if (line > 0) g.lineStyle(line, shade(GLASS.sill, -0.6), 1).strokeRoundedRect(-291, 291, 582, 33, 6);
-    g.fillStyle(sill.shade).fillRoundedRect(-291, 291, 582, 33, 6);
-    g.fillStyle(sill.face).fillRoundedRect(-291, 291, 582, 22, 6);
-    g.fillStyle(sill.rim, 0.7).fillRoundedRect(-282, 293, 565, 6, 3);
+  }
+
+  /** Water, a sail and a low headland. */
+  private harbour(g: Phaser.GameObjects.Graphics): void {
+    g.fillStyle(GLASS.light, 0.18).fillCircle(-140, -160, 58);
+    g.fillStyle(this.look.sun).fillCircle(-140, -160, 34);
+    this.cloud(g, 40, -150, 0.8); this.cloud(g, 150, -90, 0.55);
+    g.fillStyle(0x7eb8c8).fillRoundedRect(-231, 40, 462, 234, { tl: 0, tr: 0, bl: 78, br: 78 });
+    g.fillStyle(0x5a9eb4).fillRoundedRect(-231, 120, 462, 154, { tl: 0, tr: 0, bl: 78, br: 78 });
+    this.hill(g, [[-231, 70], [-160, 28], [-80, 48], [-20, 90], [-231, 120]], 0x6a8f78);
+    // A boat: hull, a sail, a mast.
+    g.fillStyle(0xc4493a).fillRoundedRect(-20, 78, 110, 28, 8);
+    g.fillStyle(0x8a3028).fillEllipse(35, 104, 100, 16);
+    g.lineStyle(3, 0x3a3028).lineBetween(20, 78, 20, 8);
+    g.fillStyle(0xf7f4ea).fillTriangle(24, 16, 24, 74, 78, 74);
+    g.fillStyle(this.look.sun).fillTriangle(88, 4, 96, 18, 80, 18);
+  }
+
+  /** A low sun, dark hills, a cottage with its windows lit, and a moon. */
+  private dusk(g: Phaser.GameObjects.Graphics): void {
+    g.fillStyle(0xf7f0d8, 0.9).fillCircle(168, -175, 16);
+    g.fillStyle(this.look.sun, 0.35).fillCircle(-40, 20, 90);
+    g.fillStyle(this.look.sun).fillCircle(-40, 40, 48);
+    this.hill(g, [[-231, 120], [-150, 40], [-60, 70], [20, 130], [-231, 200]], 0x3a4a58);
+    this.hill(g, [[-40, 200], [40, 80], [140, 50], [231, 110], [231, 220], [-40, 220]], 0x2a3848);
+    g.fillStyle(0x243040).fillRoundedRect(-227, 170, 454, 102, { tl: 0, tr: 0, bl: 71, br: 71 });
+    g.fillStyle(0x4a4038).fillRoundedRect(-30, 100, 90, 78, 4);
+    g.fillStyle(0x6a4038).fillTriangle(-42, 104, 15, 58, 72, 104);
+    g.fillStyle(0xf6d56a).fillRect(-12, 118, 16, 18).fillRect(22, 118, 16, 18);
+    g.fillStyle(0xf6d56a, 0.35).fillCircle(-4, 140, 22).fillCircle(30, 140, 22);
   }
   public reset(plan: RoundPlan): void {
     this.plan = plan; this.phase = 'prepare'; this.cleanAt = plan.targets.map(() => Infinity);

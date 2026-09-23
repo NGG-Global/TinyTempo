@@ -16,6 +16,7 @@ import {
   REFERENCE_BEAT, sliceTumble, TOMATO_MOTION, tomatoTiming,
 } from './tomatoMotion';
 import { handoverAt } from '@/game/beatTrack';
+import { tomatoLook, type TomatoLook } from './tomatoLooks';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** A white-tiled kitchen. The tomato is the only saturated thing in it, so it is the subject. */
@@ -114,10 +115,13 @@ export class TomatoKnifeVignette implements Vignette {
   private baseX = 0;
   private baseY = 0;
   private scale = 1;
+  /** Which tomato is on the board. The knife and the kitchen do not change. */
+  private readonly fruit: TomatoLook;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.fruit = tomatoLook(lap);
     // The pool of light sits over the board, where the work happens. It is barely warm
     // and weak: this kitchen is deliberately cool, with the fruit the only saturated
     // thing in frame, and a paper-on-paper pool at full strength simply bleached it.
@@ -262,7 +266,7 @@ export class TomatoKnifeVignette implements Vignette {
   private takeSlice(now: number, targets: number): void {
     // Pulp thrown off the blade. The falling juice beside this stays hand drawn: it is
     // scaled by the task's own tempo, which a particle's fixed lifetime cannot follow.
-    if (!this.reducedMotion) this.bursts.burst('dust', this.cutTo, -RY, [KITCHEN.flesh, KITCHEN.fleshRing, KITCHEN.seed], 6);
+    if (!this.reducedMotion) this.bursts.burst('dust', this.cutTo, -RY, [this.fruit.flesh, this.fruit.fleshRing, this.fruit.seed], 6);
     this.sliceAt.push(now);
     this.sliceFrom.push(this.cutTo);
     // Off chops so far decide how crooked this slice lands; deterministic per slice.
@@ -397,11 +401,11 @@ export class TomatoKnifeVignette implements Vignette {
     fan(g, disc(TOMATO_X + 8, 6, Math.min(RX, (this.cut - (TOMATO_X - RX)) / 2 + 4), 16, 0));
     const line = STYLE.current.outline * 1.4;
     if (line > 0) {
-      g.lineStyle(line, shade(KITCHEN.tomato, -0.55), 1).beginPath();
+      g.lineStyle(line, shade(this.fruit.skin, -0.55), 1).beginPath();
       for (let i = 0; i < pts.length; i += 2) g[i === 0 ? 'moveTo' : 'lineTo'](pts[i]!, pts[i + 1]!);
       g.closePath().strokePath();
     }
-    g.fillStyle(shade(KITCHEN.tomato, -0.16));
+    g.fillStyle(shade(this.fruit.skin, -0.16));
     fan(g, pts);
     // Concentric, offset flesh tones stay clipped to the same cut plane as the fruit.
     // The shaded rim survives every slice instead of becoming a flat red circle.
@@ -415,28 +419,28 @@ export class TomatoKnifeVignette implements Vignette {
       }
       g.fillStyle(colour); fan(g, points);
     };
-    layer(TOMATO_X - 6, -RY - 9, RX - 9, RY - 12, KITCHEN.tomato);
-    layer(TOMATO_X - 17, -RY - 26, RX - 27, RY - 36, 0xe15c47);
+    layer(TOMATO_X - 6, -RY - 9, RX - 9, RY - 12, this.fruit.skin);
+    layer(TOMATO_X - 17, -RY - 26, RX - 27, RY - 36, this.fruit.skinDeep);
     if (this.cut > TOMATO_X - 60) {
-      g.fillStyle(KITCHEN.tomatoLit, 0.75);
+      g.fillStyle(this.fruit.skinLit, 0.75);
       fan(g, disc(Math.min(TOMATO_X - 58, this.cut - 30), -RY - 58, 34, 22, -0.5));
-      g.fillStyle(0xffb79a, 0.75);
+      g.fillStyle(this.fruit.shine, 0.75);
       fan(g, disc(Math.min(TOMATO_X - 67, this.cut - 38), -RY - 64, 13, 7, -0.5));
     }
     // The cut face is edge-on from the side; a strip of flesh says it is open fruit.
     const half = RY * Math.sin(th0);
-    g.fillStyle(KITCHEN.flesh).fillRect(this.cut - 7, -RY - half, 8, half * 2);
-    g.fillStyle(KITCHEN.seed, 0.8);
+    g.fillStyle(this.fruit.flesh).fillRect(this.cut - 7, -RY - half, 8, half * 2);
+    g.fillStyle(this.fruit.seed, 0.8);
     for (let i = -1; i <= 1; i++) g.fillEllipse(this.cut - 3, -RY + i * half * 0.45, 4, 9, 6);
     if (this.cut > TOMATO_X + 12) {
       const crown = -2 * RY + 14;
-      g.fillStyle(shade(KITCHEN.tomato, -0.38), 0.5).fillEllipse(TOMATO_X, crown + 8, 89, 25);
+      g.fillStyle(shade(this.fruit.skin, -0.38), 0.5).fillEllipse(TOMATO_X, crown + 8, 89, 25);
       for (const [dx, dy] of [[-62, 10], [-40, -16], [1, -21], [43, -13], [59, 16]] as const) {
-        g.fillStyle(KITCHEN.stem).fillTriangle(TOMATO_X - 14, crown + 4, TOMATO_X + dx, crown + dy, TOMATO_X + 16, crown + 12);
-        g.lineStyle(2, KITCHEN.stemLit, 0.9).lineBetween(TOMATO_X, crown + 5, TOMATO_X + dx * 0.75, crown + dy * 0.75);
+        g.fillStyle(this.fruit.stem).fillTriangle(TOMATO_X - 14, crown + 4, TOMATO_X + dx, crown + dy, TOMATO_X + 16, crown + 12);
+        g.lineStyle(2, this.fruit.stemLit, 0.9).lineBetween(TOMATO_X, crown + 5, TOMATO_X + dx * 0.75, crown + dy * 0.75);
       }
-      g.lineStyle(11, shade(KITCHEN.stem, -0.2)).beginPath().moveTo(TOMATO_X, crown + 4).lineTo(TOMATO_X + 4, crown - 17).lineTo(TOMATO_X + 16, crown - 29).strokePath();
-      g.lineStyle(4, KITCHEN.stemLit).beginPath().moveTo(TOMATO_X - 2, crown + 1).lineTo(TOMATO_X + 2, crown - 17).lineTo(TOMATO_X + 14, crown - 27).strokePath();
+      g.lineStyle(11, shade(this.fruit.stem, -0.2)).beginPath().moveTo(TOMATO_X, crown + 4).lineTo(TOMATO_X + 4, crown - 17).lineTo(TOMATO_X + 16, crown - 29).strokePath();
+      g.lineStyle(4, this.fruit.stemLit).beginPath().moveTo(TOMATO_X - 2, crown + 1).lineTo(TOMATO_X + 2, crown - 17).lineTo(TOMATO_X + 14, crown - 27).strokePath();
     }
   }
 
@@ -460,15 +464,15 @@ export class TomatoKnifeVignette implements Vignette {
       const outline = STYLE.current.outline * 1.4;
       if (outline > 0 && a > 12) {
         const ring = disc(x, cy, a, b, lean);
-        g.lineStyle(outline, shade(KITCHEN.tomato, -0.55), 1).beginPath();
+        g.lineStyle(outline, shade(this.fruit.skin, -0.55), 1).beginPath();
         for (let i = 0; i < ring.length; i += 2) g[i === 0 ? 'moveTo' : 'lineTo'](ring[i]!, ring[i + 1]!);
         g.closePath().strokePath();
       }
-      g.fillStyle(KITCHEN.tomato);
+      g.fillStyle(this.fruit.skin);
       fan(g, disc(x, cy, a, b, lean));
-      g.fillStyle(KITCHEN.fleshRing);
+      g.fillStyle(this.fruit.fleshRing);
       fan(g, disc(x, cy, a * 0.84, b * 0.86, lean));
-      g.fillStyle(KITCHEN.flesh);
+      g.fillStyle(this.fruit.flesh);
       fan(g, disc(x, cy, a * 0.72, b * 0.76, lean));
       if (a > 20) {
         const c = Math.cos(lean), sn = Math.sin(lean);
@@ -476,16 +480,16 @@ export class TomatoKnifeVignette implements Vignette {
           const t = s * Math.PI / 2 + 0.6;
           const sx = a * 0.43 * Math.cos(t), sy = b * 0.43 * Math.sin(t);
           const gx = x + sx * c - sy * sn, gy = cy + sx * sn + sy * c;
-          g.fillStyle(0xc95536, 0.9); fan(g, disc(gx, gy, a * 0.23, b * 0.22, lean));
-          g.fillStyle(0xeaa15b, 0.82); fan(g, disc(gx - 1, gy - 3, a * 0.17, b * 0.17, lean));
+          g.fillStyle(this.fruit.locule, 0.9); fan(g, disc(gx, gy, a * 0.23, b * 0.22, lean));
+          g.fillStyle(this.fruit.loculeLit, 0.82); fan(g, disc(gx - 1, gy - 3, a * 0.17, b * 0.17, lean));
           for (let seed = 0; seed < 3; seed++) {
             const angle = t + (seed - 1) * 0.95;
-            g.fillStyle(KITCHEN.seed);
+            g.fillStyle(this.fruit.seed);
             fan(g, disc(gx + Math.cos(angle) * a * 0.095, gy + Math.sin(angle) * b * 0.075, 3 + a / 32, 7, lean + angle * 0.4));
           }
-          g.lineStyle(2, KITCHEN.fleshRing, 0.65).lineBetween(x, cy, x + sx * 0.58 * c - sy * 0.58 * sn, cy + sx * 0.58 * sn + sy * 0.58 * c);
+          g.lineStyle(2, this.fruit.fleshRing, 0.65).lineBetween(x, cy, x + sx * 0.58 * c - sy * 0.58 * sn, cy + sx * 0.58 * sn + sy * 0.58 * c);
         }
-        g.fillStyle(KITCHEN.fleshRing); fan(g, disc(x, cy, a * 0.13, b * 0.15, lean));
+        g.fillStyle(this.fruit.fleshRing); fan(g, disc(x, cy, a * 0.13, b * 0.15, lean));
       }
     }
   }
@@ -500,7 +504,7 @@ export class TomatoKnifeVignette implements Vignette {
       // One late seed, after everything else has settled.
       const p = clamp01((now - this.finishAt - 0.9) / 0.32);
       if (p > 0 && p < 1) {
-        g.fillStyle(KITCHEN.seed, 1 - p * 0.5);
+        g.fillStyle(this.fruit.seed, 1 - p * 0.5);
         g.fillEllipse(this.cutFor(1) + 22, -70 + p * 68, 5, 10, 6);
       }
     }
@@ -519,7 +523,7 @@ export class TomatoKnifeVignette implements Vignette {
       const seed = (i * 29 + 7) % 17;
       const x = this.strikeX + (seed / 17 - 0.5) * spread * 1.4;
       const y = -RY - 20 - Math.sin(i * 1.9) * spread * 0.6 + fall * (0.7 + seed / 34);
-      g.fillStyle(i % 3 ? KITCHEN.flesh : KITCHEN.seed, life * 0.9);
+      g.fillStyle(i % 3 ? this.fruit.flesh : this.fruit.seed, life * 0.9);
       g.fillEllipse(x, y, 4 + seed % 3, 6 + seed % 4, 6);
     }
   }

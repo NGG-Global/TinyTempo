@@ -3,8 +3,9 @@ import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import {
-  PAINT_GRID, paintImage, rollerPass, rollerReturn, stripeColumns, type PaintImage,
+  PAINT_GRID, rollerPass, rollerReturn, stripeColumns, type PaintImage,
 } from './errandMotion';
+import { rollerImage, rollerLook, type RollerLook } from './rollerLooks';
 import { clamp01, easeOut } from './motion';
 
 /** The wall in stage units; the grid divides it evenly. */
@@ -19,9 +20,17 @@ const SLIP_AT = 0.45;
  * completes it. The picture is coarse on purpose: a stripe of any width is whole columns.
  */
 export class PaintRollerVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xebe4d6, 0xf4d9a4); }
+  /** Which wall, and which set of pictures. The pass down a stripe does not change. */
+  private readonly look: RollerLook;
+  private readonly lap: number;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    const look = rollerLook(lap);
+    super(scene, look.paper, look.glow);
+    this.look = look;
+    this.lap = lap;
+  }
 
-  private get image(): PaintImage { return paintImage(this.plan?.id ?? 1); }
+  private get image(): PaintImage { return rollerImage(this.plan?.id ?? 1, this.lap); }
   private get stripes(): number { return (this.plan?.targets.length ?? 4) + 1; }
   private stripeX(index: number): number {
     const { from, to } = stripeColumns(index, this.stripes);
@@ -36,9 +45,9 @@ export class PaintRollerVignette extends HouseholdVignette {
     const times = this.watching ? this.demoTimes : this.hitTimes;
     const finished = ending >= 0;
     // Bare plaster, a skirting board and a drop cloth: the room before any colour.
-    slab(g, -346, -246, 692, 490, 0xd9d0c1, 22, 0xa79b8a);
-    g.fillStyle(0xcfc5b4).fillRect(WALL.left, WALL.top, WALL.width, WALL.height);
-    g.lineStyle(1.5, 0xbfb4a2, 0.5);
+    slab(g, -346, -246, 692, 490, this.look.plaster, 22, 0xa79b8a);
+    g.fillStyle(this.look.wall).fillRect(WALL.left, WALL.top, WALL.width, WALL.height);
+    g.lineStyle(1.5, this.look.wallLine, 0.5);
     for (let i = 1; i < 6; i++) g.lineBetween(WALL.left, WALL.top + i * 60, WALL.left + WALL.width, WALL.top + i * 60);
     // Painted stripes: every hit lays whole columns of the picture, top to skirting.
     const paintStripe = (index: number, reveal: number): void => {
@@ -126,7 +135,7 @@ export class PaintRollerVignette extends HouseholdVignette {
     // Sleeve, cage and a handle that leaves the frame low and to the right.
     g.lineStyle(9, 0x9a9a9a).lineBetween(x + SLEEVE.w / 2 + 6, y + SLEEVE.h / 2, x + SLEEVE.w / 2 + 6, y + SLEEVE.h / 2 + 34);
     g.lineStyle(9, 0x9a9a9a).lineBetween(x + SLEEVE.w / 2 + 6, y + SLEEVE.h / 2 + 34, x + SLEEVE.w / 2 + 60, y + SLEEVE.h / 2 + 90);
-    g.lineStyle(20, 0xd9853c).lineBetween(x + SLEEVE.w / 2 + 60, y + SLEEVE.h / 2 + 90, x + SLEEVE.w / 2 + 150, y + SLEEVE.h / 2 + 200);
+    g.lineStyle(20, this.look.handle).lineBetween(x + SLEEVE.w / 2 + 60, y + SLEEVE.h / 2 + 90, x + SLEEVE.w / 2 + 150, y + SLEEVE.h / 2 + 200);
     g.lineStyle(20, HOME_INK, 0.35).lineBetween(x + SLEEVE.w / 2 + 120, y + SLEEVE.h / 2 + 163, x + SLEEVE.w / 2 + 150, y + SLEEVE.h / 2 + 200);
     const cx = x, cy = y;
     g.fillStyle(HOME_INK, 0.16).fillRoundedRect(cx - SLEEVE.w / 2 + 6, cy - SLEEVE.h / 2 + 8, SLEEVE.w, SLEEVE.h, 16);

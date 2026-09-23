@@ -3,9 +3,8 @@ import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { balloonFinale, balloonSize, pumpStroke } from './errandMotion';
+import { balloonLook, type BalloonLook } from './balloonLooks';
 import { clamp01 } from './motion';
-
-const BALLOONS = [0xe25c5c, 0x4fa3c9, 0xf1c04f] as const;
 const NOZZLE = { x: 60, y: 128 } as const;
 const PUMP = { x: -170, top: 20, bottom: 190 } as const;
 /** The full balloon's radius, and how many strokes' worth of air it holds. */
@@ -13,12 +12,17 @@ const FULL_RADIUS = 118;
 
 /** One stroke per beat inflates the balloon a step; a clean round ties it off, a rough one bursts it. */
 export class BalloonPumpVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe7eef0, 0xf5e2b8); }
+  /** Which set of balloons. The pump stroke does not change. */
+  private readonly look: BalloonLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe7eef0, 0xf5e2b8);
+    this.look = balloonLook(lap);
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
     const beat = this.plan ? 60 / this.plan.bpm : 0.5;
-    const colour = BALLOONS[((this.plan?.id ?? 1) - 1) % BALLOONS.length]!;
+    const colour = this.look.balloons[((this.plan?.id ?? 1) - 1) % this.look.balloons.length]!;
     const age = now - this.strikeAt;
     const stroke = pumpStroke(age, beat);
     const strokes = this.watching ? this.demoTimes.length : this.hitTimes.length;
@@ -34,16 +38,16 @@ export class BalloonPumpVignette extends HouseholdVignette {
     for (let i = 0; i < 12; i++) {
       const t = (i + 0.5) / 12, x = -346 + t * 692;
       const y = -200 + Math.sin(t * Math.PI) * 30;
-      g.fillStyle([0xe25c5c, 0xf1c04f, 0x4fa3c9, 0x7cb56b][i % 4]!).fillTriangle(x - 12, y, x + 12, y, x, y + 26);
+      g.fillStyle(this.look.bunting[i % 4]!).fillTriangle(x - 12, y, x + 12, y, x, y + 26);
     }
     // The floor pump: plate, barrel, gauge, and the handle that drops on the beat.
     g.fillStyle(HOME_INK, 0.15).fillEllipse(PUMP.x + 10, 204, 150, 18);
     slab(g, PUMP.x - 62, 188, 124, 14, 0x3d4a52, 5, 0x24303a);
     const rod = PUMP.top - 70 + stroke * 92;
     g.lineStyle(10, 0x9aa5ab).lineBetween(PUMP.x, PUMP.top, PUMP.x, rod);
-    slab(g, PUMP.x - 62, rod - 12, 124, 24, 0xd9853c, 12, 0x8d5220);
+    slab(g, PUMP.x - 62, rod - 12, 124, 24, this.look.grip, 12, 0x8d5220);
     g.fillStyle(0xffffff, 0.3).fillRoundedRect(PUMP.x - 54, rod - 8, 108, 6, 3);
-    slab(g, PUMP.x - 24, PUMP.top, 48, PUMP.bottom - PUMP.top, 0x3c8f8c, 10, 0x235553);
+    slab(g, PUMP.x - 24, PUMP.top, 48, PUMP.bottom - PUMP.top, this.look.barrel, 10, 0x235553);
     g.fillStyle(0xffffff, 0.25).fillRoundedRect(PUMP.x - 18, PUMP.top + 8, 10, PUMP.bottom - PUMP.top - 16, 5);
     g.fillStyle(0xf3efe4).fillCircle(PUMP.x, PUMP.top + 50, 17);
     g.lineStyle(3, 0x235553).strokeCircle(PUMP.x, PUMP.top + 50, 17);

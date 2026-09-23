@@ -1,10 +1,28 @@
 import { APPLE_LOOKS } from '../vignettes/appleLooks';
+import { BALLOON_LOOKS } from '../vignettes/balloonLooks';
+import { BANANA_LOOKS } from '../vignettes/bananaLooks';
+import { BELL_LOOKS } from '../vignettes/bellLooks';
+import { BONGO_LOOKS } from '../vignettes/bongoLooks';
+import { BUBBLE_LOOKS } from '../vignettes/bubbleLooks';
 import { BUG_LOOKS } from '../vignettes/bugLooks';
+import { CLAP_LOOKS } from '../vignettes/clapLooks';
+import { CUCUMBER_LOOKS } from '../vignettes/cucumberLooks';
 import { CURL_LOOKS } from '../vignettes/curlLooks';
 import { DOOR_LOOKS } from '../vignettes/doorLooks';
+import { EGG_LOOKS } from '../vignettes/eggLooks';
+import { FISHERMAN_LOOKS } from '../vignettes/fishermanLooks';
+import { HAMMER_LOOKS } from '../vignettes/hammerLooks';
 import { LIGHT_LOOKS } from '../vignettes/lightLooks';
 import { PAPER_CONTOURS, type PaperShape } from '../vignettes/paperMotion';
+import { ROLLER_LOOKS } from '../vignettes/rollerLooks';
+import { SAW_LOOKS } from '../vignettes/sawLooks';
+import { SCRATCH_LOOKS } from '../vignettes/scratchLooks';
 import { SLUSHY_LOOKS } from '../vignettes/slushyLooks';
+import { SNARE_LOOKS } from '../vignettes/snareLooks';
+import { STAPLER_LOOKS } from '../vignettes/staplerLooks';
+import { TOMATO_LOOKS } from '../vignettes/tomatoLooks';
+import { TROMBONE_LOOKS } from '../vignettes/tromboneLooks';
+import { WINDOW_LOOKS } from '../vignettes/windowLooks';
 import { PALETTE, SHELL } from '../config/theme';
 import { mix, shade } from './colour';
 import { BRASS } from './panel';
@@ -403,6 +421,156 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
   'slushy-blue-cup': p => slushy(p, 1),
   'apple-shiny': p => fruit(p, 0),
   'apple-pear': p => fruit(p, 1),
+  'hammer-brass-head': p => {
+    const look = HAMMER_LOOKS[1]!;
+    p.fill(look.head).box(-34, -20, 56, 26, 5);
+    p.fill(look.handle).box(-6, -6, 14, 44, 4);
+    p.detail(() => glint(p, -18, -12, 5));
+  },
+  'window-harbour-frame': p => {
+    const look = WINDOW_LOOKS[1]!;
+    p.fill(look.frame).box(-34, -32, 68, 64, 6);
+    p.fill(look.sky).box(-26, -24, 52, 48, 3);
+    p.detail(() => {
+      p.fill(0xf7f4ea).poly([[-2, 2], [16, 2], [4, -18]], false);
+      p.fill(0xc4493a).box(-16, 4, 30, 8, 2, false);
+    });
+  },
+  'saw-cherry-round': p => {
+    const look = SAW_LOOKS[1]!;
+    p.fill(look.grain).disc(0, 0, 38);
+    p.fill(look.sapwood).disc(0, 0, 32);
+    p.detail(() => {
+      for (const r of [8, 15, 22, 28]) p.ring(1, -1, r, 1.4, look.kerf);
+    });
+  },
+  'tomato-gold-slice': p => {
+    const look = TOMATO_LOOKS[1]!;
+    p.fill(look.skin).disc(0, 0, 38);
+    p.fill(look.flesh).disc(0, 0, 32, false);
+    p.detail(() => {
+      for (let i = 0; i < 4; i++) {
+        const a = i * Math.PI / 2 + Math.PI / 4;
+        p.fill(look.locule).oval(Math.cos(a) * 16, Math.sin(a) * 16, 8, 6, false);
+        p.fill(look.seed).disc(Math.cos(a) * 16, Math.sin(a) * 16, 2.2, false);
+      }
+    });
+  },
+  'cucumber-dark-coin': p => {
+    const look = CUCUMBER_LOOKS[1]!;
+    p.fill(look.skin).disc(0, 0, 36);
+    p.fill(look.flesh).disc(0, 0, 30, false);
+    p.detail(() => {
+      for (let i = 0; i < 8; i++) {
+        const a = i * Math.PI / 4;
+        p.fill(look.seed).oval(Math.cos(a) * 14, Math.sin(a) * 14, 3, 5, false);
+      }
+    });
+  },
+  'banana-green-sticker': p => {
+    const look = BANANA_LOOKS[1]!;
+    p.fill(SHELL.cream).oval(0, 0, 40, 28);
+    p.fill(0x3a6fb0).oval(0, 0, 35, 23, false);
+    p.detail(() => {
+      p.fill(look.peel).poly([...arc(0, -8, 24, 22, 0.15 * Math.PI, 0.85 * Math.PI), ...arc(0, -14, 18, 18, 0.8 * Math.PI, 0.2 * Math.PI)], false);
+    });
+  },
+  'egg-brown': p => {
+    const look = EGG_LOOKS[1]!;
+    p.fill(look.shell).oval(0, 2, 26, 36);
+    p.detail(() => {
+      for (const [x, y] of [[-10, -8], [6, -14], [-4, 8], [12, 6], [-14, 16]] as const) p.fill(look.speck).disc(x, y, 2.2, false);
+      glint(p, -8, -18, 5);
+    });
+  },
+  'bubble-pink-square': p => {
+    const look = BUBBLE_LOOKS[1]!;
+    p.fill(look.sheet).box(-36, -36, 72, 72, 8);
+    p.detail(() => {
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 3; c++) {
+        p.fill(look.highlight).disc(-22 + c * 22, -22 + r * 22, 8, false);
+      }
+    });
+  },
+  'roller-sage-swatch': p => {
+    const look = ROLLER_LOOKS[1]!;
+    p.fill(look.wall).box(-22, -38, 44, 76, 5);
+    p.detail(() => {
+      p.fill(0x3d8f4a).poly([[0, -28], [16, 4], [-16, 4]], false);
+      p.fill(0x8a5a32).box(-4, 4, 8, 22, 2, false);
+    });
+  },
+  'bell-brass-bell': p => {
+    const look = BELL_LOOKS[1]!;
+    p.fill(0x4a3a33).oval(0, 26, 36, 10);
+    p.fill(look.metal).poly([...arc(0, 20, 28, 34, Math.PI, Math.PI * 2)]);
+    p.fill(shade(look.metal, -0.25)).bar(0, -14, 0, -26, 6);
+    p.detail(() => glint(p, -10, 2, 6));
+  },
+  'balloon-teal': p => {
+    const colour = BALLOON_LOOKS[1]!.balloons[1];
+    p.line([[0, 24], [-6, 32], [4, 38]], 2, 0x6b5b4e);
+    p.fill(colour).poly([[0, 16], [-5, 24], [5, 24]]);
+    p.fill(colour).oval(0, -8, 24, 30);
+    p.detail(() => p.fill(0xffffff, 0.7).oval(-8, -18, 5, 8, false));
+  },
+  'stapler-teal': p => {
+    const look = STAPLER_LOOKS[1]!;
+    p.fill(0x2f3238).box(-28, 8, 56, 14, 3);
+    p.fill(look.body).poly([[-30, 6], [28, 6], [22, -22], [-18, -22]]);
+    p.detail(() => p.fill(look.highlight).poly([[-16, -4], [16, -4], [12, -16], [-12, -16]], false));
+  },
+  'fisherman-navy-mac': p => {
+    const look = FISHERMAN_LOOKS[1]!;
+    p.fill(look.coat).poly([[-22, 36], [22, 36], [28, -8], [-28, -8]]);
+    p.fill(look.hat).oval(0, -22, 28, 10);
+    p.fill(look.hat).box(-16, -36, 32, 16, 4);
+    p.detail(() => p.fill(look.scarf).box(-18, -4, 36, 8, 3, false));
+  },
+  'scratch-amber-label': p => {
+    const look = SCRATCH_LOOKS[1]!;
+    p.fill(0x1f1c22).disc(0, 0, 38);
+    p.detail(() => {
+      p.ring(0, 0, 28, 1.2, 0x3b3642);
+      p.fill(look.warm).disc(0, 0, 14, false);
+      p.fill(look.band).disc(0, 0, 4, false);
+    });
+  },
+  'trombone-silver-horn': p => {
+    const look = TROMBONE_LOOKS[1]!;
+    p.fill(look.brass).poly([[-8, -8], [28, -4], [28, 4], [-8, 8]]);
+    p.fill(look.brass).oval(-20, 0, 10, 18);
+    p.detail(() => glint(p, 6, -8, 5));
+  },
+  'clap-plum-cuffs': p => {
+    const look = CLAP_LOOKS[1]!;
+    p.fill(look.sleeve).poly([[-36, 20], [-8, 20], [-4, -28], [-32, -20]]);
+    p.fill(look.sleeve).poly([[36, 20], [8, 20], [4, -28], [32, -20]]);
+    p.fill(look.skin).oval(-18, -24, 12, 10);
+    p.fill(look.skin).oval(18, -24, 12, 10);
+    p.detail(() => {
+      p.fill(look.cuff).box(-30, 6, 20, 8, 2, false);
+      p.fill(look.cuff).box(10, 6, 20, 8, 2, false);
+    });
+  },
+  'snare-blue-shell': p => {
+    const look = SNARE_LOOKS[1]!;
+    p.fill(look.shell).oval(0, 8, 34, 22);
+    p.fill(look.shellLit).oval(0, -4, 34, 16);
+    p.fill(0xfaf0d9).oval(0, -10, 28, 10);
+    p.detail(() => p.fill(look.shellShine).box(-30, -2, 8, 16, 2, false));
+  },
+  'bongos-walnut': p => {
+    const look = BONGO_LOOKS[1]!;
+    p.fill(look.left).box(-34, -16, 30, 42, 6);
+    p.fill(look.right).box(4, -10, 28, 36, 6);
+    p.fill(0xe8c68d).oval(-19, -16, 14, 6);
+    p.fill(0xe8c68d).oval(18, -10, 13, 5);
+    p.detail(() => {
+      p.line([[-32, 4], [-6, 4]], 2, look.stave);
+      p.line([[6, 8], [30, 8]], 2, look.stave);
+    });
+  },
 };
 
 /** Whether a keepsake has a drawing. The test that asks this is what keeps a new entry honest. */

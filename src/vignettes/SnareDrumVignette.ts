@@ -2,11 +2,17 @@ import type Phaser from 'phaser';
 import { HouseholdVignette } from './HouseholdVignette';
 import { shape, slab } from './householdArt';
 import { contactPulse, percussionPose, SNARE_ROLL, stickDrop } from './treatMotion';
+import { snareLook, type SnareLook } from './snareLooks';
 import { celebration, rings } from './treatArt';
 
 /** A lacquered concert snare, brushed chrome hardware and two maple sticks. */
 export class SnareDrumVignette extends HouseholdVignette {
-  public constructor(scene: Phaser.Scene) { super(scene, 0xe9e4d8, 0xf5cb8f); }
+  /** Which lacquer the shell wears. The roll does not change. */
+  private readonly look: SnareLook;
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xe9e4d8, 0xf5cb8f);
+    this.look = snareLook(lap);
+  }
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
@@ -22,15 +28,15 @@ export class SnareDrumVignette extends HouseholdVignette {
       g.lineStyle(3, 0xf4f7e9).lineBetween(0, 149, s * 105, 193);
       g.fillStyle(0x263640).fillRoundedRect(s * 105 - 17, 190, 34, 12, 5);
     }
-    g.fillStyle(0x8c3337).fillRoundedRect(-168, 2, 336, 114, 20);
-    g.fillStyle(0xc6584e).fillRect(-162, 4, 255, 99);
-    g.fillStyle(0xe07a62, 0.65).fillRect(-142, 12, 31, 86);
-    g.fillStyle(0x672f3a, 0.4).fillRect(95, 12, 61, 89);
+    g.fillStyle(this.look.shell).fillRoundedRect(-168, 2, 336, 114, 20);
+    g.fillStyle(this.look.shellLit).fillRect(-162, 4, 255, 99);
+    g.fillStyle(this.look.shellShine, 0.65).fillRect(-142, 12, 31, 86);
+    g.fillStyle(this.look.shellShade, 0.4).fillRect(95, 12, 61, 89);
     for (let i = 0; i < 5; i++) {
       g.lineStyle(1, 0xf9bc83, 0.3).lineBetween(-158, 25 + i * 17, 153, 25 + i * 17);
     }
     g.fillStyle(0x9caeb2).fillEllipse(0, 105, 336, 72);
-    g.fillStyle(0xc5594e).fillEllipse(0, 92, 324, 68);
+    g.fillStyle(this.look.rim).fillEllipse(0, 92, 324, 68);
     // The lower rim is an ellipse; its shine and tension lugs pick out the cylinder.
     g.lineStyle(7, 0x8fa2aa).strokeEllipse(0, 100, 334, 70);
     g.lineStyle(3, 0xe8eeea).beginPath().moveTo(-143, 117).lineTo(-80, 131).lineTo(45, 134).strokePath();

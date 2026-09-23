@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { mix, shade } from '@/ui/colour';
 import { castShadow, faces, type Faces } from '@/ui/light';
+import { fishermanLook, type FishermanLook } from './fishermanLooks';
 import { HouseholdVignette } from './HouseholdVignette';
 import { shape, slab, sparkle } from './householdArt';
 import {
@@ -16,12 +17,17 @@ const ENTRY = { x: 218, y: SURFACE } as const;
 const FEET = { x: -232, y: SURFACE } as const;
 const ROD_TIP_REST = { x: 176, y: -212 } as const;
 const ROD_TIP_BENT = { x: 236, y: -30 } as const;
-/** The fisherman's own colours, each turned into lit, front and shaded planes once. */
-const MAN = {
-  skin: faces(0xe8b48a), coat: faces(0xf0b429), waders: faces(0x3f5a48), boot: faces(0x2c2f33),
-  hat: faces(0xf0c04b), beard: faces(0xd8d2c4), scarf: faces(0xc4463c), cork: faces(0xc9a273), reel: faces(0x3a3f45),
-} as const;
-const COAT_INK = 0x9a6d10;
+/** Cork and reel stay with the rod; the person wearing them changes with the lap. */
+const GEAR = { cork: faces(0xc9a273), reel: faces(0x3a3f45) } as const;
+interface FishermanKit {
+  readonly skin: Faces;
+  readonly coat: Faces;
+  readonly waders: Faces;
+  readonly boot: Faces;
+  readonly hat: Faces;
+  readonly beard: Faces;
+  readonly scarf: Faces;
+}
 const SMALL_FISH = { colour: 0x9fb7c6, belly: 0xe6eef2, fin: 0x6f8a9b } as const;
 /** The drawn fish is 110 units long at scale 1; the bass is a real catch, the minnow is not. */
 const BIG_FISH_SCALE = 1.2;
@@ -39,9 +45,20 @@ interface Mood {
  * middling round lifts a small fish clear; a rough round brings up an old boot or a tyre.
  */
 export class FishermanVignette extends HouseholdVignette {
+  /** Who is on the jetty. The haul does not change. */
+  private readonly look: FishermanLook;
+  private readonly man: FishermanKit;
   private outcome: FishingOutcome = 'fail';
 
-  public constructor(scene: Phaser.Scene) { super(scene, 0xdfeaf0, 0xf4e6bd); }
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0xdfeaf0, 0xf4e6bd);
+    this.look = fishermanLook(lap);
+    const look = this.look;
+    this.man = {
+      skin: faces(look.skin), coat: faces(look.coat), waders: faces(look.waders), boot: faces(look.boot),
+      hat: faces(look.hat), beard: faces(look.beard), scarf: faces(look.scarf),
+    };
+  }
 
   public override finish(successful: boolean, contactSec: number, accuracy = successful ? 100 : 0): void {
     super.finish(successful, contactSec);
@@ -240,7 +257,7 @@ export class FishermanVignette extends HouseholdVignette {
     const hipX = FEET.x - sin * 20, hipY = FEET.y - 72;
     const shoulderX = hipX - sin * 78, shoulderY = hipY - cos * 78;
     const headX = shoulderX - sin * 34, headY = shoulderY - cos * 34;
-    const { skin, coat, waders, boot, hat, beard, scarf } = MAN;
+    const { skin, coat, waders, boot, hat, beard, scarf } = this.man;
     // He stands on the boards: a soft pool of shadow thrown the light's way, longer as he leans.
     const drop = castShadow(30 + lean * 20);
     g.fillStyle(LAKESIDE.ink, drop.alpha + 0.06).fillEllipse(FEET.x + 4 + drop.dx * 0.5, FEET.y, 130 + lean * 40, 14);
@@ -262,7 +279,7 @@ export class FishermanVignette extends HouseholdVignette {
       const a = c(u0, v0), b = c(u1, v0), d = c(u1, v1), e = c(u0, v1);
       return [a[0], a[1], b[0], b[1], d[0], d[1], e[0], e[1]];
     };
-    shape(g, torso(-42, 42, 4, -80), coat.face, COAT_INK, 3);
+    shape(g, torso(-42, 42, 4, -80), coat.face, this.look.coatInk, 3);
     g.fillStyle(coat.shade);
     this.fillPoints(g, torso(22, 42, 2, -78));
     g.fillStyle(coat.lit, 0.9);
@@ -271,8 +288,8 @@ export class FishermanVignette extends HouseholdVignette {
     this.fillPoints(g, torso(-42, 42, 4, -6));
     // Wader straps over the shoulders, a storm flap down the front, and two toggles.
     g.lineStyle(7, waders.face).lineBetween(...c(-16, 0), ...c(-14, -76)).lineBetween(...c(16, 0), ...c(14, -76));
-    g.lineStyle(2.5, COAT_INK, 0.7).lineBetween(...c(4, -2), ...c(6, -74));
-    g.fillStyle(COAT_INK).fillCircle(...c(9, -22), 3.5).fillCircle(...c(9, -48), 3.5);
+    g.lineStyle(2.5, this.look.coatInk, 0.7).lineBetween(...c(4, -2), ...c(6, -74));
+    g.fillStyle(this.look.coatInk).fillCircle(...c(9, -22), 3.5).fillCircle(...c(9, -48), 3.5);
     // Both arms come forward to the rod; the far arm shows as the shaded plane, the near one is lit.
     const gripX = shoulderX + 40 - lean * 18, gripY = shoulderY + 34 - lean * 10;
     g.lineStyle(16, coat.shade).lineBetween(shoulderX - 20 * cos, shoulderY + 20 * sin, gripX - 16, gripY + 6);
@@ -302,7 +319,7 @@ export class FishermanVignette extends HouseholdVignette {
     g.fillStyle(near ? boot.face : boot.shade).fillRoundedRect(x, y + 6, 54, 14, { tl: 4, tr: 9, br: 8, bl: 4 });
     g.fillStyle(near ? boot.lit : boot.face, 0.9).fillEllipse(x + 44, y + 12, 14, 8);
     g.fillStyle(boot.edge).fillRoundedRect(x, y + 16, 54, 5, 2);
-    g.fillStyle(0xd9853c, 0.85).fillRoundedRect(x + 2, y - 8, 30, 5, 2);
+    g.fillStyle(this.look.buckle, 0.85).fillRoundedRect(x + 2, y - 8, 30, 5, 2);
     g.lineStyle(2, boot.edge).strokeRoundedRect(x, y - 8, 34, 28, 6);
   }
 
@@ -336,7 +353,7 @@ export class FishermanVignette extends HouseholdVignette {
     g.fillStyle(hat.shade).fillRoundedRect(x - 25, y - 60, 12, 32, { tl: 12, tr: 0, br: 0, bl: 4 });
     g.fillStyle(hat.lit, 0.9).fillRoundedRect(x - 4, y - 58, 22, 10, 5);
     g.fillStyle(0x6f4d21).fillRect(x - 25, y - 40, 50, 7);
-    g.lineStyle(2.5, COAT_INK).strokeRoundedRect(x - 25, y - 60, 50, 32, { tl: 12, tr: 12, br: 4, bl: 4 }).strokeEllipse(x, y - 31, 74, 16);
+    g.lineStyle(2.5, this.look.coatInk).strokeRoundedRect(x - 25, y - 60, 50, 32, { tl: 12, tr: 12, br: 4, bl: 4 }).strokeEllipse(x, y - 31, 74, 16);
     // The lure: a red and white spoon with a feather, on the brim's near side.
     g.fillStyle(0xd9534f).fillEllipse(x + 16, y - 44, 8, 12);
     g.fillStyle(0xf3f1ea).fillEllipse(x + 16, y - 47, 8, 6);
@@ -359,7 +376,7 @@ export class FishermanVignette extends HouseholdVignette {
       g.fillStyle(0xffffff).fillCircle(px - 1.5, py - 2, 1.4);
       if (expression === 'grin') {
         // Crinkled with the smile: a lid drawn down over the top of the eye.
-        g.fillStyle(MAN.skin.face).fillEllipse(ex, ey - h * 0.7, w * 2 + 2, h * 1.4);
+        g.fillStyle(this.man.skin.face).fillEllipse(ex, ey - h * 0.7, w * 2 + 2, h * 1.4);
       }
       // The brow: level when watching, pinched down with effort, arched up in surprise or delight.
       const arch = expression === 'grin' || (expression === 'wry' && near) ? -5 : expression === 'dismay' ? -4 : effort * 5;
@@ -420,7 +437,7 @@ export class FishermanVignette extends HouseholdVignette {
       g.lineStyle(2, 0x9aa5ab).strokeCircle(px, py - 5, 4);
     }
     // The butt: a cork grip behind the hand and a short one in front of the reel.
-    const cork = MAN.cork;
+    const cork = GEAR.cork;
     g.fillStyle(cork.face).fillRoundedRect(x0 - 40, y0 + 6, 32, 12, 5);
     g.fillStyle(cork.shade).fillRoundedRect(x0 - 40, y0 + 12, 32, 6, { tl: 0, tr: 0, br: 5, bl: 5 });
     g.fillStyle(cork.lit).fillRoundedRect(x0 - 38, y0 + 7, 28, 3, 2);
@@ -428,7 +445,7 @@ export class FishermanVignette extends HouseholdVignette {
     for (let i = 0; i < 4; i++) g.lineBetween(x0 - 34 + i * 8, y0 + 6, x0 - 34 + i * 8, y0 + 18);
     g.fillStyle(blank.edge).fillCircle(x0 - 42, y0 + 12, 6);
     // The reel: a body under the blank, a spool with its face turned to the light, and a crank.
-    const reel = MAN.reel;
+    const reel = GEAR.reel;
     g.fillStyle(reel.edge).fillRoundedRect(x0 + 10, y0 + 2, 16, 10, 3);
     g.fillStyle(reel.face).fillCircle(x0 + 18, y0 + 16, 13);
     g.fillStyle(reel.shade).beginPath().arc(x0 + 18, y0 + 16, 13, 0.3, Math.PI * 0.9, false).lineTo(x0 + 18, y0 + 16).closePath().fillPath();

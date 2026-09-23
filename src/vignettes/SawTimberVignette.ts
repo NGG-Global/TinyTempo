@@ -17,6 +17,7 @@ import {
   easeOut, kerfDepth, REFERENCE_BEAT, SAW_MOTION, sawDirection, sawRock, sawTiming, strokeTravel,
 } from './sawMotion';
 import { handoverAt } from '@/game/beatTrack';
+import { sawLook, type SawLook } from './sawLooks';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** Cold linen and slate. Sawdust is the only warm note, so the accent doubles as the reward. */
@@ -41,9 +42,9 @@ const TIMBER_Y = -140;
 const THICK = SAW_MOTION.boardThickness;
 
 /** A sapwood grain tile, laid over a plank's painted faces at the treatment's strength. */
-function grainTile(scene: Phaser.Scene, x: number, y: number, width: number, height: number): Phaser.GameObjects.TileSprite {
+function grainTile(scene: Phaser.Scene, x: number, y: number, width: number, height: number, tint: number): Phaser.GameObjects.TileSprite {
   const tile = scene.add.tileSprite(x, y, width, height, MaterialKey.wood).setOrigin(0)
-    .setTint(TIMBER.sapwood).setAlpha(0.45 * STYLE.current.grain);
+    .setTint(tint).setAlpha(0.45 * STYLE.current.grain);
   tile.setTileScale(0.42, 0.42);
   return tile;
 }
@@ -73,6 +74,8 @@ function quad(
 
 /** Owns an illustration and its motion. Judgement arrives already decided; it is never computed here. */
 export class SawTimberVignette implements Vignette {
+  /** Which plank this lap is cutting. The stroke does not change. */
+  private readonly wood: SawLook;
   private readonly backdrop: Backdrop;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly horses: Phaser.GameObjects.Graphics;
@@ -121,19 +124,20 @@ export class SawTimberVignette implements Vignette {
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
 
-  public constructor(scene: Phaser.Scene) {
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    this.wood = sawLook(lap);
     // The pool of light sits over the cut, which is what the eye is meant to follow.
-    this.backdrop = new Backdrop(scene, TIMBER.paper, TIMBER.lit, { glowAt: { x: 0.45, y: 0.4 } });
+    this.backdrop = new Backdrop(scene, TIMBER.paper, this.wood.lit, { glowAt: { x: 0.45, y: 0.4 } });
     this.stage = scene.add.container(0, 0).setDepth(-10);
     this.horses = scene.add.graphics();
     this.timber = scene.add.container(TIMBER_X, TIMBER_Y).setRotation(TILT);
     this.board = scene.add.graphics();
     // The grain tile rides inside the tilted container, so it runs along the board.
-    this.boardSurface = grainTile(scene, BOARD_LEFT, 0, CUT_X - KERF_HALF - BOARD_LEFT, THICK);
+    this.boardSurface = grainTile(scene, BOARD_LEFT, 0, CUT_X - KERF_HALF - BOARD_LEFT, THICK, this.wood.sapwood);
     this.kerfG = scene.add.graphics();
     this.marks = scene.add.graphics();
     this.offcutArt = scene.add.graphics();
-    this.offcutSurface = grainTile(scene, 0, -THICK, BOARD_RIGHT - CUT_X - KERF_HALF, THICK);
+    this.offcutSurface = grainTile(scene, 0, -THICK, BOARD_RIGHT - CUT_X - KERF_HALF, THICK, this.wood.sapwood);
     // The hinge is the bottom of the kerf, so a rough cut can swing from it.
     this.offcut = scene.add.container(CUT_X + KERF_HALF, THICK);
     this.offcut.add([this.offcutArt, this.offcutSurface]);
@@ -158,15 +162,15 @@ export class SawTimberVignette implements Vignette {
   }
 
   private plank(g: Phaser.GameObjects.Graphics, left: number, right: number, top: number): void {
-    const wood = faces(TIMBER.sapwood);
+    const wood = faces(this.wood.sapwood);
     const line = STYLE.current.outline * 1.4;
-    if (line > 0) g.lineStyle(line, shade(TIMBER.sapwood, -0.6), 1).strokeRect(left, top, right - left, THICK);
+    if (line > 0) g.lineStyle(line, shade(this.wood.sapwood, -0.6), 1).strokeRect(left, top, right - left, THICK);
     g.fillStyle(wood.face).fillRect(left, top, right - left, THICK);
     g.fillStyle(wood.lit).fillRect(left, top, right - left, 9);
     g.fillStyle(wood.rim, 0.6).fillRect(left, top, right - left, 3);
     g.fillStyle(wood.shade).fillRect(left, top + THICK - 8, right - left, 8);
     // Deterministic growth lines, baked once. No texture download and no per-frame sampling.
-    g.lineStyle(1.5, TIMBER.grain, 0.34);
+    g.lineStyle(1.5, this.wood.grain, 0.34);
     for (let row = 0; row < 5; row++) {
       const y = top + 15 + row * 15;
       g.beginPath();
@@ -192,7 +196,7 @@ export class SawTimberVignette implements Vignette {
     const h = this.horses.clear();
     // The floor now lives in stage space rather than on the backdrop, so it stays
     // anchored to the sawhorses' own ground line however the stage is scaled.
-    h.fillStyle(TIMBER.grip, 0.06).fillRect(-3000, GROUND_Y, 6000, 3000);
+    h.fillStyle(this.wood.grip, 0.06).fillRect(-3000, GROUND_Y, 6000, 3000);
     const slate = faces(TIMBER.ink);
     const line = STYLE.current.outline * 1.4;
     for (const lx of HORSE_X) {
@@ -218,8 +222,8 @@ export class SawTimberVignette implements Vignette {
       h.fillStyle(slate.face).fillRoundedRect(x - 78, y - 9, 156, 18, 5);
       h.fillStyle(slate.lit).fillRoundedRect(x - 78, y - 9, 156, 7, 5);
       // A sacrificial timber cap under the board, the one place the trestle borrows the board's colour.
-      const cap = faces(TIMBER.sapwood);
-      if (line > 0) h.lineStyle(line * 0.7, shade(TIMBER.sapwood, -0.6), 1).strokeRoundedRect(x - 84, y - 20, 168, 12, 3);
+      const cap = faces(this.wood.sapwood);
+      if (line > 0) h.lineStyle(line * 0.7, shade(this.wood.sapwood, -0.6), 1).strokeRoundedRect(x - 84, y - 20, 168, 12, 3);
       h.fillStyle(cap.face).fillRoundedRect(x - 84, y - 20, 168, 12, 3);
       h.fillStyle(cap.lit).fillRoundedRect(x - 84, y - 20, 168, 4, 2);
     }
@@ -285,7 +289,7 @@ export class SawTimberVignette implements Vignette {
   private chips(): void {
     if (this.reducedMotion) return;
     const c = Math.cos(TILT), s = Math.sin(TILT);
-    this.bursts.burst('chips', TIMBER_X + CUT_X * c, TIMBER_Y + CUT_X * s - 6, [TIMBER.sawdust, TIMBER.lit], 6);
+    this.bursts.burst('chips', TIMBER_X + CUT_X * c, TIMBER_Y + CUT_X * s - 6, [this.wood.sawdust, this.wood.lit], 6);
   }
 
   public onAccuracy(result: Judgement, now: number): void {
@@ -400,7 +404,7 @@ export class SawTimberVignette implements Vignette {
 
   /** The closed D-grip, its bolts, and the gloved hand and sleeve that carry the saw off frame. */
   private drawHandle(g: Phaser.GameObjects.Graphics, heel: number, line: number): void {
-    const grip = faces(TIMBER.grip);
+    const grip = faces(this.wood.grip);
     const h = heel + 6;
     // Grip plate bolted over the heel, then the closed loop the hand goes through.
     const outer = this.along([
@@ -414,10 +418,10 @@ export class SawTimberVignette implements Vignette {
     fillContour(g, this.along([[h + 8, 12], [h + 30, 8], [h + 70, 16], [h + 98, 34], [h + 92, 40], [h + 66, 24], [h + 30, 16], [h + 10, 18]]));
     // The hole is the paper behind the saw: the grip is a loop, not a slab.
     paintedContour(g, this.along([[h + 40, 34], [h + 70, 30], [h + 92, 48], [h + 90, 72], [h + 68, 84], [h + 44, 74], [h + 34, 54]]), TIMBER.paper, grip.edge, line * 0.7);
-    g.fillStyle(TIMBER.sawdust);
+    g.fillStyle(this.wood.sawdust);
     for (const [u, v] of [[heel - 22, 22], [heel - 62, 34]] as const) { const [x, y] = this.blade(u, v); g.fillCircle(x, y, 6); }
     // The glove wraps the far side of the loop: four fingers over the bar, thumb on top.
-    const glove = faces(TIMBER.glove);
+    const glove = faces(this.wood.glove);
     paintedContour(g, this.along([
       [h + 48, 26], [h + 84, 22], [h + 112, 40], [h + 126, 66], [h + 118, 96], [h + 92, 112],
       [h + 60, 108], [h + 40, 92], [h + 36, 66], [h + 40, 44],
@@ -432,8 +436,8 @@ export class SawTimberVignette implements Vignette {
     }
     paintedContour(g, this.along([[h + 44, 30], [h + 70, 18], [h + 96, 22], [h + 100, 34], [h + 76, 36], [h + 52, 44]]), glove.lit, glove.edge, line * 0.8);
     // Cuff and sleeve: the arm runs along the blade's line and leaves the frame on the right.
-    paintedContour(g, this.along([[h + 108, 32], [h + 136, 30], [h + 140, 100], [h + 114, 104]]), TIMBER.lit, shade(TIMBER.lit, -0.5), line * 0.8);
-    const sleeve = faces(TIMBER.sleeve);
+    paintedContour(g, this.along([[h + 108, 32], [h + 136, 30], [h + 140, 100], [h + 114, 104]]), this.wood.lit, shade(this.wood.lit, -0.5), line * 0.8);
+    const sleeve = faces(this.wood.sleeve);
     paintedContour(g, this.along([[h + 132, 34], [h + 520, 20], [h + 520, 118], [h + 136, 100]]), sleeve.face, sleeve.edge, line);
     g.fillStyle(sleeve.lit, 0.6);
     fillContour(g, this.along([[h + 136, 40], [h + 520, 26], [h + 520, 40], [h + 138, 52]]));
@@ -508,7 +512,7 @@ export class SawTimberVignette implements Vignette {
     const severed = this.kerf >= 1;
     // Wood still joining the two lengths below the cut.
     if (!severed) {
-      g.fillStyle(TIMBER.sapwood).fillRect(CUT_X - KERF_HALF, depth, KERF_HALF * 2, THICK - depth);
+      g.fillStyle(this.wood.sapwood).fillRect(CUT_X - KERF_HALF, depth, KERF_HALF * 2, THICK - depth);
       g.fillStyle(TIMBER.ink, 0.14).fillRect(CUT_X - KERF_HALF, THICK - 6, KERF_HALF * 2, 6);
     }
     // The pencilled line the cut is meant to follow, still showing below the kerf.
@@ -517,18 +521,18 @@ export class SawTimberVignette implements Vignette {
       for (let y = Math.max(4, depth + 4); y < THICK - 6; y += 12) g.lineBetween(CUT_X, y, CUT_X, Math.min(THICK - 6, y + 7));
     }
     if (depth <= 0) {
-      g.fillStyle(TIMBER.lit).fillRect(CUT_X - KERF_HALF, 0, KERF_HALF * 2, 7);
+      g.fillStyle(this.wood.lit).fillRect(CUT_X - KERF_HALF, 0, KERF_HALF * 2, 7);
       g.lineStyle(2, TIMBER.pencil, 0.7).lineBetween(CUT_X - 12, -6, CUT_X + 12, -6);
       return;
     }
     // Torn fibres at the mouth of the kerf, where the teeth break the top edge.
-    g.fillStyle(TIMBER.grain, 0.9);
+    g.fillStyle(this.wood.grain, 0.9);
     g.fillTriangle(CUT_X - KERF_HALF - 6, 0, CUT_X - KERF_HALF, 0, CUT_X - KERF_HALF - 2, 5);
     g.fillTriangle(CUT_X + KERF_HALF, 0, CUT_X + KERF_HALF + 7, 0, CUT_X + KERF_HALF + 3, 6);
     g.fillTriangle(CUT_X - KERF_HALF - 2, 0, CUT_X - KERF_HALF + 2, 0, CUT_X - KERF_HALF - 1, -4);
     // The cut wanders off the line as off strokes accumulate; the kerf stays vertical.
     const skew = this.drift * (depth / THICK);
-    g.fillStyle(TIMBER.kerf);
+    g.fillStyle(this.wood.kerf);
     quad(g, CUT_X - KERF_HALF, 0, CUT_X + KERF_HALF, 0, CUT_X + KERF_HALF + skew, depth, CUT_X - KERF_HALF + skew, depth);
     g.fillStyle(TIMBER.ink, 0.3).fillRect(CUT_X - KERF_HALF, 0, KERF_HALF * 2, 4);
     // The blade is only ever visible down to the depth it has actually sawn.
@@ -540,14 +544,14 @@ export class SawTimberVignette implements Vignette {
   private drawMarks(now: number): void {
     const g = this.marks.clear();
     for (const at of this.scuffs) {
-      g.lineStyle(3, TIMBER.grain, 0.5).lineBetween(CUT_X + at - 34, 12, CUT_X + at + 34, 15);
-      g.lineStyle(1.5, TIMBER.kerf, 0.3).lineBetween(CUT_X + at - 26, 18, CUT_X + at + 30, 20);
+      g.lineStyle(3, this.wood.grain, 0.5).lineBetween(CUT_X + at - 34, 12, CUT_X + at + 34, 15);
+      g.lineStyle(1.5, this.wood.kerf, 0.3).lineBetween(CUT_X + at - 26, 18, CUT_X + at + 30, 20);
     }
     if (this.finished && this.successful) {
       // One late mote of dust, after everything else has already settled.
       const p = clamp01((now - this.finishAt! - 0.95) / 0.34);
       if (p > 0 && p < 1) {
-        g.fillStyle(TIMBER.sawdust, (1 - p) * 0.85);
+        g.fillStyle(this.wood.sawdust, (1 - p) * 0.85);
         g.fillRect(CUT_X + 3, 6 + p * 74, 3.5, 4.5);
       }
     }
@@ -566,9 +570,9 @@ export class SawTimberVignette implements Vignette {
     const pile = dustPile(this.kerf);
     if (pile.height > 0) {
       g.fillStyle(TIMBER.ink, 0.1).fillEllipse(ox + 6, GROUND_Y + 4, pile.width * 1.1, pile.height * 0.5);
-      g.fillStyle(shade(TIMBER.sawdust, -0.2)).fillEllipse(ox, GROUND_Y - pile.height / 2 + 2, pile.width, pile.height);
-      g.fillStyle(TIMBER.sawdust).fillEllipse(ox - pile.width * 0.08, GROUND_Y - pile.height / 2 - 1, pile.width * 0.7, pile.height * 0.7);
-      g.fillStyle(TIMBER.lit, 0.7).fillEllipse(ox - pile.width * 0.12, GROUND_Y - pile.height * 0.7, pile.width * 0.3, pile.height * 0.25);
+      g.fillStyle(shade(this.wood.sawdust, -0.2)).fillEllipse(ox, GROUND_Y - pile.height / 2 + 2, pile.width, pile.height);
+      g.fillStyle(this.wood.sawdust).fillEllipse(ox - pile.width * 0.08, GROUND_Y - pile.height / 2 - 1, pile.width * 0.7, pile.height * 0.7);
+      g.fillStyle(this.wood.lit, 0.7).fillEllipse(ox - pile.width * 0.12, GROUND_Y - pile.height * 0.7, pile.width * 0.3, pile.height * 0.25);
     }
     if (bite <= 0 || this.kerf <= 0) return;
     const age = now - this.strokeAt;
@@ -580,7 +584,7 @@ export class SawTimberVignette implements Vignette {
       const seed = (i * 37 + 11) % 23;
       const x = ox + dir * (10 + seed * 3) + Math.cos(i * 1.7) * spread * 0.5;
       const y = oy - 6 - Math.sin(i * 2.3) * spread * 0.3 + fall * (0.6 + seed / 40);
-      g.fillStyle(i % 3 ? TIMBER.sawdust : TIMBER.lit, bite * 0.9);
+      g.fillStyle(i % 3 ? this.wood.sawdust : this.wood.lit, bite * 0.9);
       g.fillRect(x, y, 2.5 + seed % 3, 3 + seed % 4);
     }
   }
@@ -599,7 +603,7 @@ export class SawTimberVignette implements Vignette {
       this.offcut.setRotation(age > 0.42 ? rock : -TILT * drop);
       if (age >= 0.42 && !this.landed) {
         this.landed = true;
-        if (!this.reducedMotion) this.bursts.burst('dust', LANDING.x, LANDING.y, [TIMBER.sawdust, TIMBER.lit, TIMBER.grain], 9);
+        if (!this.reducedMotion) this.bursts.burst('dust', LANDING.x, LANDING.y, [this.wood.sawdust, this.wood.lit, this.wood.grain], 9);
       }
     } else {
       // A splintered hinge takes the weight and the offcut swings from it.

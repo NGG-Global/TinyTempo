@@ -81,6 +81,25 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   { id: 'doorbell-crimson-knocker', vignette: 'doorbell', lap: 1, name: 'Crimson knocker' },
   { id: 'slushy-blue-cup', vignette: 'slushy', lap: 1, name: 'Blue slushy' },
   { id: 'apple-pear', vignette: 'apple', lap: 1, name: 'Ripe pear' },
+  // The remaining second looks: every act now changes on its second appearance.
+  { id: 'hammer-brass-head', vignette: 'hammer', lap: 1, name: 'Brass hammer' },
+  { id: 'window-harbour-frame', vignette: 'window', lap: 1, name: 'Harbour frame' },
+  { id: 'saw-cherry-round', vignette: 'saw', lap: 1, name: 'Cherry round' },
+  { id: 'tomato-gold-slice', vignette: 'tomato', lap: 1, name: 'Golden tomato' },
+  { id: 'cucumber-dark-coin', vignette: 'cucumber', lap: 1, name: 'Dark cucumber' },
+  { id: 'banana-green-sticker', vignette: 'banana', lap: 1, name: 'Green banana' },
+  { id: 'egg-brown', vignette: 'egg', lap: 1, name: 'Brown egg' },
+  { id: 'bubble-pink-square', vignette: 'bubble', lap: 1, name: 'Pink bubbles' },
+  { id: 'roller-sage-swatch', vignette: 'roller', lap: 1, name: 'Sage swatch' },
+  { id: 'bell-brass-bell', vignette: 'bell', lap: 1, name: 'Brass bell' },
+  { id: 'balloon-teal', vignette: 'balloon', lap: 1, name: 'Teal balloon' },
+  { id: 'stapler-teal', vignette: 'stapler', lap: 1, name: 'Teal stapler' },
+  { id: 'fisherman-navy-mac', vignette: 'fisherman', lap: 1, name: 'Navy mac' },
+  { id: 'scratch-amber-label', vignette: 'scratch', lap: 1, name: 'Amber label' },
+  { id: 'trombone-silver-horn', vignette: 'trombone', lap: 1, name: 'Silver horn' },
+  { id: 'clap-plum-cuffs', vignette: 'clap', lap: 1, name: 'Plum cuffs' },
+  { id: 'snare-blue-shell', vignette: 'snare', lap: 1, name: 'Blue snare' },
+  { id: 'bongos-walnut', vignette: 'bongos', lap: 1, name: 'Walnut bongos' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */

@@ -52,12 +52,12 @@ describe('the collection', () => {
   });
 
   it('has a deterministic total and no duplicates of any kind', () => {
-    expect(KEEPSAKES).toHaveLength(32);
+    expect(KEEPSAKES).toHaveLength(50);
     expect(new Set(KEEPSAKES.map(k => k.id)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.level)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => `${k.vignette}:${k.lap}`)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.name)).size).toBe(KEEPSAKES.length);
-    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 32 });
+    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 50 });
   });
 
   it('gives every act at least one keepsake, and the acts with looks a second', () => {
@@ -65,7 +65,7 @@ describe('the collection', () => {
       expect(KEEPSAKES.some(k => k.vignette === definition.id && k.lap === 0), definition.id).toBe(true);
     }
     expect(KEEPSAKES.filter(k => k.lap === 1).map(k => k.vignette).sort())
-      .toEqual(['apple', 'bug', 'curl', 'doorbell', 'light', 'paper', 'slushy']);
+      .toEqual(VIGNETTES.map(definition => definition.id).sort());
   });
 
   it('puts each keepsake on the level where its act plays that lap, so it shows that level’s look', () => {
@@ -77,7 +77,7 @@ describe('the collection', () => {
     }
     expect(keepsakeAt(1)!.id).toBe('hammer-lucky-nail');
     expect(keepsakeAt(28)!.id).toBe('bug-ladybird');
-    expect(keepsakeAt(26)).toBeNull();
+    expect(keepsakeAt(26)!.id).toBe('hammer-brass-head');
     expect(() => levelOf('nobody', 0)).toThrow();
   });
 

@@ -7,6 +7,7 @@ import { shape, slab, sparkle } from './householdArt';
 import {
   blow, carryNotes, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, tromboneFinale, type TromboneFinale,
 } from './tromboneMotion';
+import { tromboneLook, type TromboneLook } from './tromboneLooks';
 import { clamp01, easeOut } from './motion';
 
 /** The rooftop's palette at dusk. The ink is deep enough that dressed type takes no outline. */
@@ -21,11 +22,18 @@ const PARAPET_TOP = 186;
  */
 const HORN = { flareFrom: 168, bell: 262, bellR: 46, slideUpper: 20, slideLower: 44, crookRest: 178, crookTravel: 118 } as const;
 const WINDOW = { x: 250, y: -34, w: 150, h: 170 } as const;
-const PLAYER = {
-  skin: faces(0xd9a07a), shirt: faces(0xf3ede0), stripe: 0x3b6e9e, braces: faces(0x7a3b3b), trousers: faces(0x3a3f5c),
-  cap: faces(0x4f6e5a), tie: 0xd9534f, shoe: faces(0x2b2a3d), hair: 0x5a3a2a,
-} as const;
-const BRASS = faces(0xd9a33a);
+interface TromboneKit {
+  readonly skin: ReturnType<typeof faces>;
+  readonly shirt: ReturnType<typeof faces>;
+  readonly stripe: number;
+  readonly braces: ReturnType<typeof faces>;
+  readonly trousers: ReturnType<typeof faces>;
+  readonly cap: ReturnType<typeof faces>;
+  readonly tie: number;
+  readonly shoe: ReturnType<typeof faces>;
+  readonly hair: number;
+  readonly brass: ReturnType<typeof faces>;
+}
 
 type Point = readonly [number, number];
 interface Figure {
@@ -42,6 +50,8 @@ interface Figure {
  * slammed shutters.
  */
 export class TromboneVignette extends HouseholdVignette {
+  /** Which horn, and who is playing it. The slide does not change. */
+  private readonly kit: TromboneKit;
   /**
    * Notes that sounded in the tasks before this one. The engine hands out the two takes
    * in level order, so the slide has to keep the same count across tasks to show the
@@ -49,7 +59,15 @@ export class TromboneVignette extends HouseholdVignette {
    */
   private notesBefore = 0;
 
-  public constructor(scene: Phaser.Scene) { super(scene, 0x3f4468, 0xf2a65a); }
+  public constructor(scene: Phaser.Scene, lap = 0) {
+    super(scene, 0x3f4468, 0xf2a65a);
+    const look: TromboneLook = tromboneLook(lap);
+    this.kit = {
+      skin: faces(look.skin), shirt: faces(look.shirt), stripe: look.stripe, braces: faces(look.braces),
+      trousers: faces(look.trousers), cap: faces(look.cap), tie: look.tie, shoe: faces(look.shoe),
+      hair: look.hair, brass: faces(look.brass),
+    };
+  }
 
   public override reset(plan: RoundPlan): void {
     const previous = this.plan ? this.actionCues(this.plan).length + this.plan.targets.length : 0;
@@ -232,7 +250,7 @@ export class TromboneVignette extends HouseholdVignette {
    * can be drawn from the one and the forearms brought to the other.
    */
   private player(g: Phaser.GameObjects.Graphics, puff: number, finale: TromboneFinale, jolt: number, now: number): Figure {
-    const { skin, shirt, braces, trousers, cap, shoe } = PLAYER;
+    const { skin, shirt, braces, trousers, cap, shoe } = this.kit;
     const lean = finale.flourish * 0.22 - finale.droop * 0.1;
     const hipX = FEET.x + 6, hipY = FEET.y - 66;
     const shoulderX = hipX - Math.sin(lean) * 70, shoulderY = hipY - Math.cos(lean) * 70;
@@ -252,12 +270,12 @@ export class TromboneVignette extends HouseholdVignette {
     shape(g, [...c(-34, 4), ...c(34, 4), ...c(38, -72), ...c(-38, -72)], shirt.face, shade(shirt.face, -0.5), 3);
     for (let i = -28; i <= 28; i += 12) {
       const a = c(i, 2), b = c(i + 3, -70);
-      g.lineStyle(3, PLAYER.stripe, 0.7).lineBetween(a[0], a[1], b[0], b[1]);
+      g.lineStyle(3, this.kit.stripe, 0.7).lineBetween(a[0], a[1], b[0], b[1]);
     }
     g.fillStyle(shirt.shade, 0.5);
     g.beginPath().moveTo(...c(20, 4)).lineTo(...c(34, 4)).lineTo(...c(38, -72)).lineTo(...c(24, -72)).closePath().fillPath();
     g.lineStyle(7, braces.face).lineBetween(...c(-14, 2), ...c(-12, -70)).lineBetween(...c(14, 2), ...c(12, -70));
-    g.fillStyle(0xd9a33a).fillRect(...c(-16, -30), 5, 5).fillRect(...c(12, -30), 5, 5);
+    g.fillStyle(this.kit.brass.face).fillRect(...c(-16, -30), 5, 5).fillRect(...c(12, -30), 5, 5);
     // The far arm first, so the shirt and the near arm cover its root.
     const elbowFar: Point = [shoulderX + 22, shoulderY + 44];
     const elbowNear: Point = [shoulderX + 44, shoulderY + 52];
@@ -265,9 +283,9 @@ export class TromboneVignette extends HouseholdVignette {
     // The bow tie, the neck and the collar.
     g.fillStyle(skin.shade).fillRoundedRect(shoulderX - 10, shoulderY - 12, 20, 18, 5);
     g.fillStyle(shirt.lit).fillTriangle(shoulderX - 14, shoulderY - 4, shoulderX + 14, shoulderY - 4, shoulderX, shoulderY + 10);
-    g.fillStyle(PLAYER.tie).fillTriangle(shoulderX - 14, shoulderY - 6, shoulderX - 2, shoulderY + 2, shoulderX - 14, shoulderY + 8);
-    g.fillStyle(PLAYER.tie).fillTriangle(shoulderX + 14, shoulderY - 6, shoulderX + 2, shoulderY + 2, shoulderX + 14, shoulderY + 8);
-    g.fillStyle(shade(PLAYER.tie, -0.3)).fillCircle(shoulderX, shoulderY + 2, 3);
+    g.fillStyle(this.kit.tie).fillTriangle(shoulderX - 14, shoulderY - 6, shoulderX - 2, shoulderY + 2, shoulderX - 14, shoulderY + 8);
+    g.fillStyle(this.kit.tie).fillTriangle(shoulderX + 14, shoulderY - 6, shoulderX + 2, shoulderY + 2, shoulderX + 14, shoulderY + 8);
+    g.fillStyle(shade(this.kit.tie, -0.3)).fillCircle(shoulderX, shoulderY + 2, 3);
     // The head: front plane, shaded back, an ear, the cap.
     g.fillStyle(skin.face).fillRoundedRect(headX - 24, headY - 30, 48, 56, 18);
     g.fillStyle(skin.shade, 0.85).fillRoundedRect(headX - 24, headY - 30, 12, 56, { tl: 18, tr: 2, br: 2, bl: 18 });
@@ -293,9 +311,9 @@ export class TromboneVignette extends HouseholdVignette {
     g.lineStyle(2, 0x8a6a3a).lineBetween(headX + 2, headY - 9, headX + 3, headY - 8).lineBetween(headX - 14, headY - 10, headX - 24, headY - 14);
     // Brows: up with the flourish, down and sorry on the droop.
     const brow = finale.flourish * -4 + finale.droop * 3;
-    g.lineStyle(3, PLAYER.hair).lineBetween(headX + 4, headY - 20 + brow, headX + 20, headY - 22 + brow * 0.5).lineBetween(headX - 12, headY - 21 + brow, headX, headY - 22);
+    g.lineStyle(3, this.kit.hair).lineBetween(headX + 4, headY - 20 + brow, headX + 20, headY - 22 + brow * 0.5).lineBetween(headX - 12, headY - 21 + brow, headX, headY - 22);
     // Moustache, the lips on the mouthpiece, a sweat bead on the effort.
-    g.fillStyle(PLAYER.hair).fillEllipse(headX + 20, headY + 4, 18, 7);
+    g.fillStyle(this.kit.hair).fillEllipse(headX + 20, headY + 4, 18, 7);
     g.fillStyle(0xb06a5a).fillEllipse(headX + 26, headY + 9, 8, 6 - puff * 2);
     if (puff > 0.7 && !this.still && finale.droop === 0) g.fillStyle(0xbfe3f5, 0.9).fillEllipse(headX + 26, headY - 30 + Math.sin(now * 6) * 2, 4, 7);
     if (finale.droop > 0.5) g.fillStyle(0xbfe3f5, 0.9).fillEllipse(headX + 4, headY + 4 + finale.droop * 10, 4, 8);
@@ -305,7 +323,7 @@ export class TromboneVignette extends HouseholdVignette {
     g.fillStyle(cap.lit, 0.8).fillRoundedRect(headX - 22, headY - 54, 30, 10, 5);
     g.fillStyle(cap.shade).fillRoundedRect(headX + 8, headY - 36, 34, 8, 4);
     g.lineStyle(2, cap.edge).strokeRoundedRect(headX - 30, headY - 56, 60, 30, { tl: 16, tr: 16, br: 6, bl: 6 });
-    g.lineStyle(2.5, PLAYER.hair).lineBetween(headX - 26, headY - 26, headX - 30, headY - 18).lineBetween(headX - 22, headY - 27, headX - 28, headY - 22);
+    g.lineStyle(2.5, this.kit.hair).lineBetween(headX - 26, headY - 26, headX - 30, headY - 18).lineBetween(headX - 22, headY - 27, headX - 28, headY - 22);
     // The near arm's upper half, out toward the slide.
     g.lineStyle(16, shirt.face).lineBetween(shoulderX + 12, shoulderY + 10, elbowNear[0], elbowNear[1]);
     g.lineStyle(3, shirt.lit, 0.7).lineBetween(shoulderX + 14, shoulderY + 6, elbowNear[0] - 4, elbowNear[1] - 6);
@@ -333,11 +351,11 @@ export class TromboneVignette extends HouseholdVignette {
       return at(u * Math.cos(sag) - dv * Math.sin(sag), HORN.slideUpper + u * Math.sin(sag) + dv * Math.cos(sag));
     };
     const tube = (a: [number, number], b: [number, number], w: number): void => {
-      g.lineStyle(w + 3, BRASS.edge).lineBetween(a[0], a[1] + 2, b[0], b[1] + 2);
-      g.lineStyle(w, BRASS.face).lineBetween(a[0], a[1], b[0], b[1]);
-      g.lineStyle(Math.max(1.5, w * 0.3), BRASS.rim, 0.85).lineBetween(a[0], a[1] - w * 0.25, b[0], b[1] - w * 0.25);
+      g.lineStyle(w + 3, this.kit.brass.edge).lineBetween(a[0], a[1] + 2, b[0], b[1] + 2);
+      g.lineStyle(w, this.kit.brass.face).lineBetween(a[0], a[1], b[0], b[1]);
+      g.lineStyle(Math.max(1.5, w * 0.3), this.kit.brass.rim, 0.85).lineBetween(a[0], a[1] - w * 0.25, b[0], b[1] - w * 0.25);
     };
-    const skin = PLAYER.skin, shirt = PLAYER.shirt;
+    const skin = this.kit.skin, shirt = this.kit.shirt;
     // The far forearm to the bell brace, behind everything.
     const farHand = at(-6, 24);
     g.lineStyle(15, shirt.shade).lineBetween(figure.elbowFar[0], figure.elbowFar[1], farHand[0], farHand[1] + 6);
@@ -349,9 +367,9 @@ export class TromboneVignette extends HouseholdVignette {
     tube(slideAt(64, HORN.slideLower), slideAt(crookU, HORN.slideLower), 10);
     const [cx, cy] = slideAt(crookU, (HORN.slideUpper + HORN.slideLower) / 2);
     const crookR = (HORN.slideLower - HORN.slideUpper) / 2;
-    g.lineStyle(13, BRASS.edge).beginPath().arc(cx, cy + 2, crookR, -Math.PI / 2 + tilt + sag, Math.PI / 2 + tilt + sag, false).strokePath();
-    g.lineStyle(10, BRASS.face).beginPath().arc(cx, cy, crookR, -Math.PI / 2 + tilt + sag, Math.PI / 2 + tilt + sag, false).strokePath();
-    g.lineStyle(3, BRASS.rim, 0.8).beginPath().arc(cx, cy - 2, crookR, -Math.PI / 2 + tilt + sag, tilt + sag, false).strokePath();
+    g.lineStyle(13, this.kit.brass.edge).beginPath().arc(cx, cy + 2, crookR, -Math.PI / 2 + tilt + sag, Math.PI / 2 + tilt + sag, false).strokePath();
+    g.lineStyle(10, this.kit.brass.face).beginPath().arc(cx, cy, crookR, -Math.PI / 2 + tilt + sag, Math.PI / 2 + tilt + sag, false).strokePath();
+    g.lineStyle(3, this.kit.brass.rim, 0.8).beginPath().arc(cx, cy - 2, crookR, -Math.PI / 2 + tilt + sag, tilt + sag, false).strokePath();
     // The slide brace, and the near hand holding it, which is what moves on every note.
     const braceU = 84 + extension * HORN.crookTravel * 0.6;
     tube(slideAt(braceU, HORN.slideUpper - 4), slideAt(braceU, HORN.slideLower + 4), 5);
@@ -381,8 +399,8 @@ export class TromboneVignette extends HouseholdVignette {
       top.push(...at(u, -8 - r));
       bottom.unshift(...at(u, -8 + r));
     }
-    shape(g, [...top, ...bottom], BRASS.face, BRASS.edge, 2.5);
-    g.lineStyle(4, BRASS.rim, 0.7);
+    shape(g, [...top, ...bottom], this.kit.brass.face, this.kit.brass.edge, 2.5);
+    g.lineStyle(4, this.kit.brass.rim, 0.7);
     g.beginPath();
     for (let i = 0; i <= 12; i++) {
       const p = i / 12, u = HORN.flareFrom + (HORN.bell - HORN.flareFrom) * p;
@@ -391,7 +409,7 @@ export class TromboneVignette extends HouseholdVignette {
       if (i === 0) g.moveTo(px, py); else g.lineTo(px, py);
     }
     g.strokePath();
-    g.fillStyle(BRASS.shade, 0.5);
+    g.fillStyle(this.kit.brass.shade, 0.5);
     g.beginPath();
     for (let i = 0; i <= 12; i++) {
       const p = i / 12, u = HORN.flareFrom + (HORN.bell - HORN.flareFrom) * p;
@@ -407,11 +425,11 @@ export class TromboneVignette extends HouseholdVignette {
     }
     g.closePath().fillPath();
     const [bx, by] = at(HORN.bell, -8);
-    g.fillStyle(BRASS.face).fillEllipse(bx, by, 16, HORN.bellR * 2);
-    g.fillStyle(BRASS.shade).fillEllipse(bx + 2, by, 11, HORN.bellR * 2 - 8);
+    g.fillStyle(this.kit.brass.face).fillEllipse(bx, by, 16, HORN.bellR * 2);
+    g.fillStyle(this.kit.brass.shade).fillEllipse(bx + 2, by, 11, HORN.bellR * 2 - 8);
     g.fillStyle(0x3a2a1a).fillEllipse(bx + 3, by, 7, HORN.bellR * 2 - 18);
-    g.lineStyle(2.5, BRASS.edge).strokeEllipse(bx, by, 16, HORN.bellR * 2);
-    g.lineStyle(2, BRASS.rim, 0.9).beginPath().arc(bx - 1, by, HORN.bellR - 2, Math.PI * 1.15, Math.PI * 1.6, false).strokePath();
+    g.lineStyle(2.5, this.kit.brass.edge).strokeEllipse(bx, by, 16, HORN.bellR * 2);
+    g.lineStyle(2, this.kit.brass.rim, 0.9).beginPath().arc(bx - 1, by, HORN.bellR - 2, Math.PI * 1.15, Math.PI * 1.6, false).strokePath();
     return [bx + 6, by];
   }
 

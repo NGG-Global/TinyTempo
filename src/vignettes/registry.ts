@@ -57,14 +57,14 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'hammer', title: 'Hammer & nail', intro: 'Make it\nstick.', ink: WORKSHOP.ink,
     success: ['Nicely\ndone.', 'Right on the head.'], rough: ['It has\ncharacter.', 'Perfectly imperfect.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new HammerNailVignette(scene),
+    create: (scene, lap) => new HammerNailVignette(scene, false, lap),
     sounds: context => { const b = createImpactBuffers(context); return { action: b.hit, success: b.flush, rough: b.bent, scrape: b.skid, judder: b.dead }; },
   },
   {
     id: 'window', title: 'Window cleaning', intro: 'A clearer\nview.', ink: GLASS.ink,
     success: ['Looking\nsharp.', 'Nothing between you and the sky.'], rough: ['Almost\ninvisible.', 'One little souvenir.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new WindowCleaningVignette(scene), sounds: createWindowSounds,
+    create: (scene, lap) => new WindowCleaningVignette(scene, lap), sounds: createWindowSounds,
   },
   {
     id: 'bug', title: 'Bug & shoe', intro: 'Watch your\nstep.', ink: GARDEN.ink,
@@ -76,13 +76,13 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'saw', title: 'Saw & timber', intro: 'Follow\nthe line.', ink: TIMBER.ink,
     success: ['Two planks\nnow.', 'Straight through, first time.'], rough: ['Nearly\nthrough.', 'It let go in its own time.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new SawTimberVignette(scene), sounds: createSawSounds,
+    create: (scene, lap) => new SawTimberVignette(scene, lap), sounds: createSawSounds,
   },
   {
     id: 'tomato', title: 'Knife & tomato', intro: 'Mind your\nfingers.', ink: KITCHEN.ink,
     success: ['Thin and\neven.', 'Every slice the same.'], rough: ['Roughly\nchopped.', 'Rustic. We are calling it rustic.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new TomatoKnifeVignette(scene), sounds: createTomatoSounds,
+    create: (scene, lap) => new TomatoKnifeVignette(scene, lap), sounds: createTomatoSounds,
   },
   // New acts are appended so the introductory levels retain their order.
   {
@@ -96,13 +96,13 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'cucumber', title: 'Knife & cucumber', intro: 'Keep it\ncrisp.', ink: CRISP.ink,
     success: ['Clean\nrounds.', 'Every disc the same.'], rough: ['A bit\nragged.', 'Still a salad. Just rustic.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new CucumberKnifeVignette(scene), sounds: createCucumberSounds,
+    create: (scene, lap) => new CucumberKnifeVignette(scene, lap), sounds: createCucumberSounds,
   },
   {
     id: 'banana', title: 'Knife & banana', intro: 'Easy does\nit.', ink: BREAKFAST.ink,
     success: ['Even\ncoins.', 'Breakfast, sorted.'], rough: ['A bit\nmushy.', 'Call it banana bread.'],
     endingSec: 1.35, successAccuracy: 70,
-    create: scene => new BananaKnifeVignette(scene), sounds: createBananaSounds,
+    create: (scene, lap) => new BananaKnifeVignette(scene, lap), sounds: createBananaSounds,
   },
   {
     id: 'paper', title: 'Scissors & paper', intro: 'A little\npaper magic.', ink: CRAFT.ink,
@@ -116,13 +116,13 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'egg', title: 'Egg cracking', intro: 'A cracking\nlittle rhythm.', ink: HOME_INK,
     success: ['Sunny\nside up.', 'One clean crack.'], rough: ['A little\nshell-shocked.', 'The bowl can wait.'],
     endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new EggCrackingVignette(scene), sounds: context => createHouseholdSounds(context, 'egg'),
+    create: (scene, lap) => new EggCrackingVignette(scene, lap), sounds: context => createHouseholdSounds(context, 'egg'),
   },
   {
     id: 'bubble', title: 'Bubble wrap', intro: 'One more\npop.', ink: HOME_INK,
     success: ['Pop, pop…\nperfect.', 'Could do this all day.'], rough: ['A few\nleft over.', 'Saved for later.'],
     endingSec: HOUSEHOLD_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new BubbleWrapVignette(scene), sounds: context => createHouseholdSounds(context, 'bubble'),
+    create: (scene, lap) => new BubbleWrapVignette(scene, lap), sounds: context => createHouseholdSounds(context, 'bubble'),
   },
   {
     id: 'light', title: 'Light switch', intro: 'Set the\nmood.', ink: HOME_INK,
@@ -141,25 +141,25 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     id: 'roller', title: 'Paint roller', intro: 'Roll it\non.', ink: HOME_INK,
     success: ['Bold as\nbrass.', 'One wall, one picture.'], rough: ['A little\npatchy.', 'It will want a second coat.'],
     endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new PaintRollerVignette(scene), sounds: context => createErrandSounds(context, 'roller'),
+    create: (scene, lap) => new PaintRollerVignette(scene, lap), sounds: context => createErrandSounds(context, 'roller'),
   },
   {
     id: 'bell', title: 'Hotel bell', intro: 'Ring for\nservice.', ink: HOME_INK,
     success: ['Right\naway.', 'Someone heard you.'], rough: ['Nobody\nabout.', 'Perhaps try the bell again.'],
     endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new HotelBellVignette(scene), sounds: context => createErrandSounds(context, 'bell'),
+    create: (scene, lap) => new HotelBellVignette(scene, lap), sounds: context => createErrandSounds(context, 'bell'),
   },
   {
     id: 'balloon', title: 'Balloon pump', intro: 'Pump it\nup.', ink: HOME_INK,
     success: ['Up and\naway.', 'Tied off and floating.'], rough: ['Oh.\nPop.', 'That one had a weak spot.'],
     endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new BalloonPumpVignette(scene), sounds: context => createErrandSounds(context, 'balloon'),
+    create: (scene, lap) => new BalloonPumpVignette(scene, lap), sounds: context => createErrandSounds(context, 'balloon'),
   },
   {
     id: 'stapler', title: 'Stapler', intro: 'Bind it\nup.', ink: HOME_INK,
     success: ['Neatly\nbound.', 'One pile, one piece.'], rough: ['Jammed\nagain.', 'A pile of loose ends.'],
     endingSec: ERRAND_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new StaplerVignette(scene), sounds: context => createErrandSounds(context, 'stapler'),
+    create: (scene, lap) => new StaplerVignette(scene, lap), sounds: context => createErrandSounds(context, 'stapler'),
   },
   // Act 18, appended at request: levels 1 to 17 keep their acts.
   {
@@ -168,21 +168,21 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     partial: { minAccuracy: FISHING_MOTION.partialAccuracy, copy: ['A little\none.', 'Back it goes. Give it a year.'] },
     rough: ['Oh.\nThat.', 'The lake keeps its fish.'],
     endingSec: FISHING_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: FISHING_MOTION.successAccuracy,
-    create: scene => new FishermanVignette(scene), sounds: createFishingSounds,
+    create: (scene, lap) => new FishermanVignette(scene, lap), sounds: createFishingSounds,
   },
   // Act 19, appended at request: levels 1 to 18 keep their acts.
   {
     id: 'scratch', title: 'DJ scratch', intro: 'Bring the\nnoise.', ink: BOOTH.ink,
     success: ['Hands\nup.', 'The whole room heard that.'], rough: ['Needle\nskip.', 'The record has opinions.'],
     endingSec: SCRATCH_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new DjScratchVignette(scene), sounds: createScratchSounds,
+    create: (scene, lap) => new DjScratchVignette(scene, lap), sounds: createScratchSounds,
   },
   // Act 20, appended at request: levels 1 to 19 keep their acts.
   {
     id: 'trombone', title: 'Trombone', intro: 'Play it\nloud.', ink: ROOFTOP.ink,
     success: ['Bravo,\nmaestro.', 'The neighbours are applauding.'], rough: ['Wah\nwah.', 'The neighbours have closed the shutters.'],
     endingSec: TROMBONE_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70, gridAction: true,
-    create: scene => new TromboneVignette(scene), sounds: createTromboneSounds,
+    create: (scene, lap) => new TromboneVignette(scene, lap), sounds: createTromboneSounds,
   },
   // Act 21, appended at request: levels 1 to 20 keep their acts.
   {
@@ -191,19 +191,19 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     partial: { minAccuracy: CLAP_MOTION.partialAccuracy, copy: ['A polite\nripple.', 'A few of them are clapping.'] },
     rough: ['Search\nme.', 'Nobody is quite sure what that was.'],
     endingSec: CLAP_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: CLAP_MOTION.successAccuracy,
-    create: scene => new ClappingHandsVignette(scene), sounds: createClapSounds,
+    create: (scene, lap) => new ClappingHandsVignette(scene, lap), sounds: createClapSounds,
   },
   {
     id: 'snare', title: 'Snare drum', intro: 'Let it\nroll.', ink: TREAT_INK,
     success: ['Drumroll,\nplease.', 'A little flourish. A big finish.'], rough: ['Dropped\nthe sticks.', 'They were getting carried away.'],
     endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new SnareDrumVignette(scene), sounds: context => createTreatSounds(context, 'snare'),
+    create: (scene, lap) => new SnareDrumVignette(scene, lap), sounds: context => createTreatSounds(context, 'snare'),
   },
   {
     id: 'bongos', title: 'Bongos', intro: 'Find your\ngroove.', ink: TREAT_INK,
     success: ['In the\ngroove.', 'Two drums. One lovely groove.'], rough: ['Bongo\n…oh no.', 'The groove took a little detour.'],
     endingSec: TREAT_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
-    create: scene => new BongosVignette(scene), sounds: context => createTreatSounds(context, 'bongos'),
+    create: (scene, lap) => new BongosVignette(scene, lap), sounds: context => createTreatSounds(context, 'bongos'),
   },
   {
     id: 'slushy', title: 'Slushy', intro: 'Sip to\nthe beat.', ink: TREAT_INK,
