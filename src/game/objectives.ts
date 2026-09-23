@@ -1,3 +1,4 @@
+import { DAILY_TEMPO_AVAILABLE } from '../config/dailyTempo';
 import { calendarDay, isCleared } from './health';
 import { levelSpec, type Grid } from './levels';
 import type { Progress } from './progress';
@@ -58,10 +59,10 @@ export interface ObjectiveContext {
 }
 
 /**
- * Whether a Daily Tempo exists. It does not yet: the objective is in the pool, typed and
- * tested, and is never drawn while this is false. Flip it where the mode ships.
+ * Whether a Daily Tempo exists (`config/dailyTempo.ts`). While it is false the Daily Tempo
+ * objective is in the pool, typed and tested, and never drawn.
  */
-export const DAILY_TEMPO_AVAILABLE = false;
+export { DAILY_TEMPO_AVAILABLE };
 
 /** The context every scene builds the same way. */
 export function objectiveContext(progress: Progress): ObjectiveContext {

@@ -158,6 +158,29 @@ if (declaresGamesV1) {
     + '    used; the two do not belong in the same build.');
 }
 
+/*
+ * The Daily Tempo leaderboard id (`src/config/leaderboards.ts`). Empty is allowed — it is
+ * how a build ships before the leaderboard exists, and the game simply offers no
+ * leaderboard. What is not allowed is a value the Games SDK will refuse on every call: the
+ * numeric Games project id pasted into the wrong field is the likely one, and it fails as
+ * silently as a wrong APP_ID does. The rule is the one `leaderboardId` applies at runtime.
+ */
+const leaderboards = read('src/config/leaderboards.ts') ?? '';
+const dailyTempo = read('src/config/dailyTempo.ts') ?? '';
+const boardId = /^\s*dailyTempo:\s*'([^']*)'/m.exec(leaderboards)?.[1] ?? '';
+const modeShips = /DAILY_TEMPO_AVAILABLE\s*=\s*true/.test(dailyTempo);
+if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(boardId))) {
+  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id the Games SDK will refuse:\n'
+    + `      found    ${boardId}\n`
+    + '    It must be the Leaderboard ID from Play Console → Play Games Services → Leaderboards\n'
+    + `    (letters, digits, - and _), not the numeric Games project id ${PGS_PROJECT_ID}.`);
+}
+if (modeShips && boardId === '') {
+  notes.push('Daily Tempo is switched on (src/config/dailyTempo.ts) but no leaderboard id is set in\n'
+    + '    src/config/leaderboards.ts, so its scores are never submitted and the leaderboard button\n'
+    + '    never appears. See docs/LEADERBOARDS.md.');
+}
+
 if (notes.length > 0) {
   console.warn(`\n  ⚠ ${notes.join('\n\n  ⚠ ')}\n`);
 }

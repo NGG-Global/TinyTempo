@@ -87,7 +87,14 @@ playGames().status              // { authenticated, player, reason }, no platfor
 await playGames().refresh()     // has v2's automatic sign-in already succeeded?
 await playGames().signIn()      // the manual retry; may show Play's own UI
 await playGames().player()      // { playerId, displayName } | null, fetched once
+await playGames().submitScore(id, score, tag)   // { submitted, newBest, reason }; never prompts
+await playGames().showLeaderboard(id, 'daily')  // { shown, reason }; Play's own screen
 ```
+
+The two leaderboard calls are v2's `LeaderboardsClient` (`submitScoreImmediate`,
+`getLeaderboardIntent`) and resolve like the rest. Scenes do not call them directly: the
+Daily Tempo leaderboard goes through `playgames/dailyTempo.ts`, which owns the id, the best
+score and the retry. See `docs/LEADERBOARDS.md`.
 
 `bootPlayGames()` runs from `main.ts` beside `bootMonetization()`, unawaited. It gates on
 `Capacitor.isNativePlatform()` — the whole of the line between a browser and a device, as
@@ -100,7 +107,8 @@ declines are all the same answer — signed out — because none of them is a fa
 game. Payloads crossing the bridge are validated rather than cast, and a malformed one
 reads as signed out, which is the safe direction: it costs a cloud feature, never a grant.
 
-There is no UI yet, deliberately.
+The only UI is the Daily Tempo leaderboard row in Settings → Progress, shown only when a
+leaderboard is configured, the build is native and Daily Tempo exists.
 
 ## Logging
 

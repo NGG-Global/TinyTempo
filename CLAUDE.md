@@ -231,6 +231,16 @@ the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, w
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
 
+**One leaderboard, for a Daily Tempo that does not exist yet.** `DAILY_TEMPO_AVAILABLE`
+(`config/dailyTempo.ts`) is false and `LEADERBOARDS.dailyTempo` (`config/leaderboards.ts`)
+is empty, so nothing is submitted and no button shows. The score is `round(accuracy × 1000)`
+from `leaderboardScore` alone, never re-derived. Play Games keeps daily, weekly and all-time
+views of one leaderboard by itself and resets the daily one at UTC−7, so `dailyTempoDay`
+reads that clock, not the local date. Only a score that beats the day's best is sent; a
+failed one is kept and retried; nothing here prompts except the leaderboard button, and
+nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
+`docs/LEADERBOARDS.md`.
+
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is
 scheduled on the grid and drawn from the heard clock, so it stays together on any route; the
 player's own beat, started at `currentTime` by the tap, reaches a Bluetooth headset 150–400 ms
@@ -529,6 +539,8 @@ src/
     game.ts            Phaser game config (every non-default value is justified)
     music.ts           Measured musical model of the shipped track
     progression.ts     The one difficulty curve and its knobs
+    dailyTempo.ts      Whether the Daily Tempo mode exists; everything built for it reads this
+    leaderboards.ts    Play Games leaderboard ids (empty until created) and the daily reset clock
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
     support.ts         The address a player writes to; mirrored in the legal pages
@@ -571,6 +583,8 @@ src/
     playGames.ts       Signed in or not, and who; pure, and the inert browser stub
     native.ts          The PlayGames bridge; validates the payload rather than casting it
     boot.ts            Native-only gate; the browser never leaves the stub
+    leaderboard.ts     Score conversion, the day's best, submission and retry; pure
+    dailyTempo.ts      The Daily Tempo leaderboard wired to config, adapter and analytics
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling
