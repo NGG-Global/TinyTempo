@@ -20,7 +20,10 @@ import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, markFor, trackGeometry, turnCount, turnCountPose, type Handover, type Mark } from '@/game/beatTrack';
-import { levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
+import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
+import { areaFinale } from '@/game/finale';
+import { createFinaleSound } from '@/audio/finaleSounds';
+import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
@@ -52,6 +55,7 @@ import { body, display, label, resize } from '@/ui/type';
 import { drawStarMark, prizeColour, STAR_PRIZE } from '@/ui/star';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { FinaleStage } from '@/ui/finaleStage';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap, type Vignette } from '@/vignettes/Vignette';
 import { easeOut } from '@/vignettes/motion';
@@ -128,6 +132,20 @@ const KEEPSAKE_CARD = {
   /** The first keepsake's card carries a second line saying what keepsakes are. */
   firstHeight: 212,
   art: 124,
+} as const;
+
+/**
+ * An area finale's presentation beats, in seconds (`game/finale.ts`, `ui/finaleStage.ts`).
+ * The title card is off the stage `cardClearBeats` before the first demonstration downbeat,
+ * so it never covers the example; the payoff ribbon unrolls once the third medal has had
+ * its moment, and a keepsake card earned by the same clear waits `keepsakeLag` behind it.
+ */
+const FINALE_PAYOFF = {
+  cardClearBeats: 0.5,
+  ribbonDelay: 1.0,
+  keepsakeLag: 0.7,
+  fanfareGain: 0.5,
+  rollGain: 0.32,
 } as const;
 
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
@@ -218,6 +236,12 @@ export class PlayScene extends BaseScene {
   private keepsakeStruck = false;
   /** The introduction's second line, under the headline: "3 inside the beat". */
   private introCaption!: Phaser.GameObjects.Text;
+  /** An area finale's pennants, title card and payoff; null on every other level. */
+  private finale: FinaleStage | null = null;
+  /** This run cleared a finale, so the result carries the "Area complete" payoff. */
+  private finaleCleared = false;
+  /** The context time the level's music started, which a finale's opening swell is keyed to. */
+  private levelOrigin = -Infinity;
   /** Judgements that scored in the early window while the example was still on screen. */
   private heldJudgements: Judgement[] = [];
   /** The three pucks — map, restart, mute — drawn as one baked graphic. */
@@ -389,6 +413,10 @@ export class PlayScene extends BaseScene {
     this.flawlessSwept = 0;
     this.goStruck = false;
     this.taskMarks = this.add.graphics().setDepth(11);
+    // Assigned on every entry, like every field that holds scene objects.
+    const finale = areaFinale(this.spec.level);
+    this.finale = finale ? new FinaleStage(this, finale, this.starFx) : null;
+    this.finaleCleared = false;
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
     if (this.debugMode) this.installReplayPanel();
@@ -484,6 +512,14 @@ export class PlayScene extends BaseScene {
     const free = Math.max(0, bandBottom - bandTop - rig);
     this.plaqueAt = { x: safe.centerX, y: Math.max(safe.top + 220 * s, bandTop + free * 0.22) };
     this.keepsakeFloor = bandBottom + 44 * s;
+    // The finale hangs its title card where the plaque will hang, its ribbon across the
+    // plaque's ropes, and its pennants under the pucks' row.
+    this.finale?.layout({
+      s, left: safe.left, right: safe.right, centerX: safe.centerX, ceiling: safe.top,
+      lineY: safe.top + 128 * s,
+      cardY: this.plaqueAt.y + (PLATE.ropeLength + PLATE.height / 2) * s,
+      ribbonY: this.plaqueAt.y + 18 * s,
+    });
     this.placeKeepsakeCard();
     this.drawStars();
     this.drawTaskMarks();
@@ -707,6 +743,8 @@ export class PlayScene extends BaseScene {
     this.keepsakeFirst = false;
     this.keepsakeSettled = this.keepsakeStruck = false;
     this.hideKeepsakeCard();
+    this.finale?.reset();
+    this.finaleCleared = false;
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -774,6 +812,7 @@ export class PlayScene extends BaseScene {
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));
       const origin = this.audio!.music.start(); // fresh sources: every level starts at the base tempo
+      this.levelOrigin = origin;
       void setMusicBed(this.audio!, 'level');
       if (this.disposed || request !== this.startRequest || this.blocked()) {
         this.audio!.music.stop();
@@ -945,6 +984,28 @@ export class PlayScene extends BaseScene {
 
   private beginTask(startAt: number): void {
     this.beginPlan(this.task.pattern, this.task.bpm, startAt, this.task.leadBeats);
+    if (this.finale && this.taskIndex === 0) this.openFinale(startAt);
+  }
+
+  /**
+   * A finale's opening: its lead-in is `PROGRESSION.finale.openingBars` long rather than
+   * one bar, and it is all presentation — the title card hangs in it, a roll builds across
+   * its last bar, and, when the level's music starts here, the loop swells from its floor to
+   * full on the first demonstration downbeat. Every sound is scheduled on the context clock
+   * at placement, like the cues; nothing here is judged or touches the grid.
+   */
+  private openFinale(startAt: number): void {
+    const audio = this.audio!;
+    const beat = 60 / this.task.bpm;
+    const demo = startAt + this.task.leadBeats * beat;
+    this.finale!.showTitle(startAt, demo - FINALE_PAYOFF.cardClearBeats * beat);
+    const rollBeats = Math.min(this.task.leadBeats, RHYTHM.beatsPerBar);
+    audio.playStinger(demo - rollBeats * beat, createFinaleSound(audio.context, 'roll', beat, rollBeats), FINALE_PAYOFF.rollGain);
+    // After an introduction the loop is already at full level, and ducking it would read as
+    // a fault rather than a build.
+    if (startAt === this.levelOrigin) {
+      audio.music.swell(MUSIC.masterGain * PROGRESSION.finale.musicFloor, MUSIC.masterGain, startAt, demo);
+    }
   }
 
   private beginPlan(pattern: Pattern, bpm: number, startAt: number, leadBeats: number): void {
@@ -1144,6 +1205,7 @@ export class PlayScene extends BaseScene {
     if (this.summaryShown) this.animateStars(now);
     else this.accuracy.setAlpha(1);
     this.drawKeepsakeCard(now);
+    this.finale?.update(now, this.reducedMotion);
     this.drawBeatTrack(now);
     const wall = performance.now() / 1000;
     const puckPress = pressAmount(wall, this.puckPressedAt);
@@ -1221,8 +1283,9 @@ export class PlayScene extends BaseScene {
    */
   private showPhase(phase: Phase): void {
     this.vignette.onPhase(phase, this.now());
-    // A lead-in longer than the level's opening bar is the breather.
-    const resting = this.task.leadBeats > RHYTHM.leadInBeats;
+    // The breather is the one task past the first that waits; a finale's longer opening is
+    // its title card, not a rest.
+    const resting = this.taskIndex > 0 && this.taskIndex === breatherTask(this.spec.tasks.length);
     // An introduction keeps its two lines up through the count-in and the example, which is
     // what they describe, and lets go of them on the player's downbeat like every word here.
     const introducing = this.intro !== null;
@@ -1587,7 +1650,16 @@ export class PlayScene extends BaseScene {
     const accuracy = meanAccuracy(this.results);
     this.recordOutcome();
     const outcome = this.outcome!;
-    this.changeHeadline(this.saveFailed ? 'Couldn’t save' : outcome.cleared ? 'Cleared' : 'Again?');
+    // A cleared finale names the area it closed, and the ribbon over the plaque says so.
+    this.finaleCleared = this.finale !== null && outcome.cleared && !this.saveFailed;
+    this.changeHeadline(this.saveFailed ? 'Couldn’t save' : this.finaleCleared ? this.spec.areaName : outcome.cleared ? 'Cleared' : 'Again?');
+    if (this.finaleCleared) {
+      const at = this.summaryAt + FINALE_PAYOFF.ribbonDelay;
+      this.finale!.showComplete(at);
+      // Scheduled at the heard time the ribbon unrolls, which on the context clock is the
+      // same number: a sound placed at T is heard when `now()` reads T.
+      if (this.audio) this.audio.playStinger(at, createFinaleSound(this.audio.context, 'fanfare'), FINALE_PAYOFF.fanfareGain);
+    }
     this.scoreValue.setText(`${Math.round(accuracy)}%`);
     this.accuracy.setText('');
     this.kept.setVisible(this.heartRefunded);
@@ -1625,7 +1697,7 @@ export class PlayScene extends BaseScene {
    */
   private drawKeepsakeCard(now: number): void {
     const keepsake = this.keepsake;
-    const age = now - this.summaryAt - KEEPSAKE_CARD.delay;
+    const age = now - this.summaryAt - KEEPSAKE_CARD.delay - (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0);
     if (!this.summaryShown || !keepsake || age < 0) {
       if (this.keepsakeCard.visible) this.hideKeepsakeCard();
       return;

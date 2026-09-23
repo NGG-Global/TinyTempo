@@ -407,6 +407,47 @@ describe('every gameplay event, as the game actually fires it', () => {
   });
 });
 
+describe('area finales', () => {
+  it('report beside the level events, once per finished attempt, and never for other levels', () => {
+    const { run, outcome } = playThrough(10, road(9, 3), 95);
+    // The scene reaches its record step more than once; the finale is still one result.
+    run.finish(outcome, 95);
+    expect(names().filter(n => n.startsWith('area_finale') || n.startsWith('level_'))).toEqual([
+      'level_started', 'area_finale_started', 'level_completed', 'area_finale_completed',
+    ]);
+    expect(only('area_finale_started')).toEqual([{ level: 10, area: 1, treatment: 'grass', mode: 'frontier', retry_count: 0, heart_cost: 0 }]);
+    expect(only('area_finale_completed')).toEqual([{ level: 10, area: 1, treatment: 'grass', mode: 'frontier', stars: 3, accuracy: 95 }]);
+    fresh();
+    playThrough(9, road(8, 3), 95);
+    playThrough(11, road(10, 3), 95);
+    expect(names().some(n => n.startsWith('area_finale'))).toBe(false);
+  });
+
+  it('fail once, and a restart of the same attempt starts nothing new', () => {
+    const begin = start(20, road(19, 2), { heartSpent: true });
+    const run = ledger.beginLevel(begin)!;
+    // Resume and the restart puck continue the attempt: no second start.
+    expect(ledger.beginLevel(begin)).toBe(run);
+    const outcome = recordResult(begin.progress, 20, 12);
+    run.finish(outcome, 12);
+    run.finish(outcome, 12);
+    expect(only('area_finale_started')).toEqual([{ level: 20, area: 2, treatment: 'pavement', mode: 'frontier', retry_count: 0, heart_cost: 1 }]);
+    expect(only('area_finale_failed')).toEqual([{ level: 20, area: 2, treatment: 'pavement', mode: 'frontier', accuracy: 12 }]);
+    expect(only('area_finale_completed')).toEqual([]);
+    // The next attempt is a retry, and says so.
+    playThrough(20, road(19, 2), 99);
+    expect(only('area_finale_started').at(-1)).toMatchObject({ retry_count: 1 });
+  });
+
+  it('call a finished finale played again a replay, and an abandoned one neither result', () => {
+    playThrough(30, road(30, 1), 99);
+    expect(only('area_finale_completed')[0]).toMatchObject({ level: 30, area: 3, treatment: 'sand', mode: 'replay' });
+    fresh();
+    ledger.beginLevel(start(40, road(39, 2)))!.abandon();
+    expect(names().filter(n => n.startsWith('area_finale'))).toEqual(['area_finale_started']);
+  });
+});
+
 describe('the small derivations', () => {
   it('numbers areas from 1', () => {
     expect([1, 10, 11, 43, 100].map(areaNumber)).toEqual([1, 1, 2, 5, 10]);

@@ -147,6 +147,26 @@ export class MusicSystem {
     this.level = value;
     // Zero gain is not a lifecycle event. The buffer source keeps running.
   }
+  /**
+   * Hold the loop at `from` until `startAt`, then ramp it to `to` by `endAt`, both on the
+   * context clock. The finale's opening build: scheduled once, like every cue, so the swell
+   * lands on the downbeat it was placed for whatever the frame rate does meanwhile.
+   */
+  public swell(from: number, to: number, startAt: number, endAt: number): void {
+    if (this.disposed) return;
+    for (const value of [from, to]) {
+      if (!Number.isFinite(value) || value < 0 || value > 1) throw new Error('Music gain must be between zero and one.');
+    }
+    if (!Number.isFinite(startAt) || !Number.isFinite(endAt)) throw new Error('A swell needs finite times.');
+    const parameter = this.bus.gain;
+    const now = this.context.currentTime;
+    const start = Math.max(now, startAt);
+    parameter.cancelScheduledValues(now);
+    parameter.setValueAtTime(from, now);
+    parameter.setValueAtTime(from, start);
+    parameter.linearRampToValueAtTime(to, Math.max(start, endAt));
+    this.level = to;
+  }
   public stop(): void {
     const source = this.source;
     if (source) {

@@ -24,8 +24,13 @@ export interface LevelSpec {
   readonly difficulty: number;
   /** What this level is for inside its area. `finale` is the tenth. */
   readonly role: LevelRole;
-  /** 1–10: where the level sits in its area. */
+  /** 1–`areaSize`: where the level sits in its area. */
   readonly areaStep: number;
+  /**
+   * The area's last level: a reprise of the area's own patterns, presented as its finale.
+   * Derived from `PROGRESSION.areaSize`, never from a level number (`isAreaFinale`).
+   */
+  readonly finale: boolean;
   readonly vignette: string;
   /**
    * How many times the vignette rotation has come round before this level. Acts with
@@ -86,6 +91,8 @@ export const SUBDIVIDED_TIERS: Readonly<Record<Grid, readonly (readonly Pattern[
 
 /** A second random stream for the second stage, so its draws never move the first's. */
 const SUBDIVISION_SEED = 0x51ed;
+/** A third, for the finale's reprise, so composing it moves no draw of either stage. */
+const REPRISE_SEED = 0xf1a1e;
 
 export function difficulty(level: number): number {
   if (!Number.isInteger(level) || level < 1) throw new Error('Levels start at 1.');
@@ -97,6 +104,18 @@ export function areaOf(level: number): { readonly area: Area; readonly index: nu
   const area = AREAS[index % AREAS.length]!;
   const lap = Math.floor(index / AREAS.length);
   return { area, index, name: lap === 0 ? area.name : `${area.name} ${['II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'][lap - 1] ?? lap + 1}` };
+}
+
+/** Whether a level is the last of its area: every `areaSize`-th level, whatever that is. */
+export function isAreaFinale(level: number): boolean {
+  if (!Number.isInteger(level) || level < 1) throw new Error('Levels start at 1.');
+  return level % PROGRESSION.areaSize === 0;
+}
+
+/** The first and last level of the area a level sits in; the last is its finale. */
+export function areaLevels(level: number): { readonly first: number; readonly finale: number } {
+  const index = areaOf(level).index;
+  return { first: index * PROGRESSION.areaSize + 1, finale: (index + 1) * PROGRESSION.areaSize };
 }
 
 /** Deterministic per level, so a level plays the same on every attempt and can be learned. */
@@ -259,13 +278,92 @@ export function tierTasks(level: number): readonly LevelTask[] {
     const pool = PATTERN_TIERS[tier]!.filter(pattern => pattern !== previous);
     const pattern = pool[Math.floor(random() * pool.length)]!;
     previous = pattern;
-    // One bar to open the level and find the pulse, four bars for the breather, and
-    // nothing between any other pair of tasks.
-    const leadBeats = i === 0 ? RHYTHM.leadInBeats
+    // One bar to open the level and find the pulse — a finale's longer opening carries its
+    // title card and the music's build — four bars for the breather, and nothing between
+    // any other pair of tasks.
+    const leadBeats = i === 0 ? openingBeats(level)
       : i === breather ? P.breatherBars * RHYTHM.beatsPerBar : 0;
     tasks.push({ pattern, tier, leadBeats, grid: null, bpm: Math.round(P.baseBpm + (peakBpm - P.baseBpm) * progress) });
   }
   return tasks;
+}
+
+/** Whole beats before a level's first demonstration: one bar, or a finale's opening. */
+export function openingBeats(level: number): number {
+  return isAreaFinale(level) ? PROGRESSION.finale.openingBars * RHYTHM.beatsPerBar : RHYTHM.leadInBeats;
+}
+
+/** A level's tasks from both stages of the curve, before any finale reprise. */
+function curveTasks(level: number): readonly LevelTask[] {
+  return subdivide(level, difficulty(level), tierTasks(level), choreographedShape(level).subdivision);
+}
+
+/**
+ * What the area has played before its finale: every distinct pattern its earlier levels
+ * use, each with the tier or grid it was used on. The vocabulary a reprise may draw from.
+ */
+export function areaRepertoire(level: number): readonly LevelTask[] {
+  const { first } = areaLevels(level);
+  const seen = new Set<Pattern>();
+  const out: LevelTask[] = [];
+  for (let earlier = first; earlier < level; earlier++) {
+    for (const task of curveTasks(earlier)) {
+      if (seen.has(task.pattern)) continue;
+      seen.add(task.pattern);
+      out.push(task);
+    }
+  }
+  return out;
+}
+
+/**
+ * The finale's tasks: the curve's shape for its step — count, tempo ramp, lead-ins and
+ * which tasks sit on a finer grid — with every pattern replaced by one the area has
+ * already played. A tier task takes the highest tier of the repertoire at or below its
+ * own; a subdivided one a pattern of the same grid, or of the other grid if the area has
+ * played that one and it fits the task's tempo, or else a tier pattern. Within the level
+ * it prefers patterns it has not used yet, so the reprise walks through the area rather
+ * than repeating its favourite, and never repeats the task before it.
+ *
+ * An area with nothing before its finale (an `areaSize` of one) has nothing to reprise,
+ * and plays the curve.
+ */
+function repriseTasks(level: number, curve: readonly LevelTask[]): readonly LevelTask[] {
+  const repertoire = areaRepertoire(level);
+  const onTier = repertoire.filter(task => task.grid === null);
+  if (onTier.length === 0) return curve;
+  const random = seeded(level + REPRISE_SEED);
+  const used = new Set<Pattern>();
+  const out: LevelTask[] = [];
+  const pick = (pool: readonly LevelTask[]): LevelTask | null => {
+    const previous = out.at(-1)?.pattern;
+    const fresh = pool.filter(task => task.pattern !== previous && !used.has(task.pattern));
+    const allowed = fresh.length > 0 ? fresh : pool.filter(task => task.pattern !== previous);
+    const choice = allowed.length > 0 ? allowed[Math.floor(random() * allowed.length)]! : null;
+    if (choice) used.add(choice.pattern);
+    return choice;
+  };
+  for (const task of curve) {
+    let chosen: LevelTask | null = null;
+    if (task.grid !== null) {
+      const other: Grid = task.grid === 'triplet' ? 'sixteenth' : 'triplet';
+      const same = repertoire.filter(candidate => candidate.grid === task.grid);
+      const swapped = gridFits(other, task.bpm) ? repertoire.filter(candidate => candidate.grid === other) : [];
+      chosen = pick(same.length > 0 ? same : swapped);
+    }
+    if (chosen === null) {
+      const below = onTier.filter(candidate => candidate.tier <= task.tier);
+      const tier = below.length > 0 ? Math.max(...below.map(candidate => candidate.tier)) : Math.min(...onTier.map(candidate => candidate.tier));
+      chosen = pick(onTier.filter(candidate => candidate.tier === tier)) ?? pick(onTier);
+    }
+    // `pick` returns null only for a pool of one pattern that is also the previous task's;
+    // repeating it is then the only honest choice left.
+    const source = chosen ?? onTier[0]!;
+    // A subdivided task keeps the curve's tier slot, as `subdivide` leaves it: the tier of a
+    // grid pattern is where it sits in the ramp, not a property of the pattern.
+    out.push({ ...task, pattern: source.pattern, tier: source.grid === null ? source.tier : task.tier, grid: source.grid });
+  }
+  return out;
 }
 
 export function levelSpec(level: number): LevelSpec {
@@ -277,10 +375,12 @@ export function levelSpec(level: number): LevelSpec {
   const clearAccuracy = Math.round(P.clearMin + P.clearRange * d);
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
+  const finale = isAreaFinale(level);
+  const curve = subdivide(level, d, tierTasks(level), shape.subdivision);
   return Object.freeze({
-    level, difficulty: d, role: row.role, areaStep: step, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
+    level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
     lap: Math.floor((level - 1) / VIGNETTES.length), areaName: name, area,
-    tasks: Object.freeze(subdivide(level, d, tierTasks(level), shape.subdivision)),
+    tasks: Object.freeze(finale ? repriseTasks(level, curve) : curve),
     peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });

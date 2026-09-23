@@ -1,7 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, levelSpec,
+  AREAS, PATTERN_TIERS, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, isAreaFinale, levelSpec,
+  openingBeats,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
 } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
@@ -114,7 +115,8 @@ describe('level progression', () => {
     expect(levelSpec(37).tasks.map(t => t.pattern.id)).not.toEqual(levelSpec(38).tasks.map(t => t.pattern.id));
   });
   it('matches the recorded road, task for task, so any change to it is a deliberate one', () => {
-    // The choreography reassigned the road once, on purpose; this pins what it produced.
+    // The choreography reassigned the road once, on purpose, and the area finales moved
+    // their own rows (10, 20, … 120) and no others; this pins what both produced.
     // Regenerate only for a deliberate change to the curve, and say which levels moved.
     const road = JSON.parse(readFileSync(new URL('./fixtures/levels-choreography.json', import.meta.url), 'utf8')) as Record<string, string[]>;
     for (let level = 1; level <= 120; level++) {
@@ -191,7 +193,9 @@ describe('level progression', () => {
     for (let level = 1; level <= 300; level++) {
       const leads = levelSpec(level).tasks.map(t => t.leadBeats);
       const rest = breatherTask(leads.length);
-      expect(leads, `level ${level}`).toEqual(leads.map((_, i) => (i === 0 ? RHYTHM.leadInBeats : i === rest ? bar : 0)));
+      expect(leads, `level ${level}`).toEqual(leads.map((_, i) => (i === 0 ? openingBeats(level) : i === rest ? bar : 0)));
+      // The longer opening is a finale's, and only a finale's: its title card hangs there.
+      expect(openingBeats(level)).toBe(isAreaFinale(level) ? PROGRESSION.finale.openingBars * RHYTHM.beatsPerBar : RHYTHM.leadInBeats);
     }
     // The first rest arrives on an endurance level: it is the one that is long for its place.
     let first = 1;
@@ -365,6 +369,12 @@ describe('the finer grids', () => {
       const tiers = tierTasks(level);
       const spec = levelSpec(level);
       expect(spec.tasks).toHaveLength(tiers.length);
+      // A finale's patterns are the area's reprise (tests/finale.test.ts); its tempo ramp
+      // and lead-ins are still the tiers' own.
+      if (spec.finale) {
+        spec.tasks.forEach((task, i) => expect([task.bpm, task.leadBeats]).toEqual([tiers[i]!.bpm, tiers[i]!.leadBeats]));
+        continue;
+      }
       spec.tasks.forEach((task, i) => {
         const was = tiers[i]!;
         if (task.grid === null) expect(task).toEqual(was);

@@ -42,6 +42,9 @@ export const GAMEPLAY_EVENTS = [
   'subdivision_intro_completed',
   'scrapbook_opened',
   'collectible_unlocked',
+  'area_finale_started',
+  'area_finale_completed',
+  'area_finale_failed',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -89,6 +92,16 @@ export type LevelParams = {
   readonly retry_count: number;
   /** 1 when this attempt spent a heart. */
   readonly heart_cost: Flag;
+};
+
+/** What every area finale event carries. */
+export type FinaleParams = {
+  readonly level: number;
+  /** 1-based: the area this finale closes. */
+  readonly area: number;
+  /** `FinaleTreatment.id`: 'grass', 'pavement', 'sand', 'snow', 'dusk' or 'default'. */
+  readonly treatment: string;
+  readonly mode: AttemptMode;
 };
 
 export type LevelResultParams = LevelParams & {
@@ -198,6 +211,14 @@ export interface AnalyticsPayloads {
     /** Keepsakes owned once this one is counted. */
     readonly owned: number;
   };
+  /**
+   * An area's last level (`game/finale.ts`), beside — never instead of — its level events,
+   * so the finale funnel is one filter away and every level report stays complete. The
+   * treatment is the finale's dressing: one value per area, from a closed set.
+   */
+  readonly area_finale_started: FinaleParams & { readonly retry_count: number; readonly heart_cost: Flag };
+  readonly area_finale_completed: FinaleParams & { readonly stars: number; readonly accuracy: number };
+  readonly area_finale_failed: FinaleParams & { readonly accuracy: number };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
 }

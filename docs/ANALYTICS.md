@@ -256,6 +256,9 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `subdivision_intro_completed` | The introduction hands over to the level. Once per showing | `grid`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `scrapbook_opened` | The Scrapbook opens (`docs/SCRAPBOOK.md`) | `source` (`menu` \| `map`), `owned`, `total` |
 | `collectible_unlocked` | A finished level earns its keepsake: three stars where it had fewer. Once per keepsake per session; never for keepsakes a save already owned | `vignette` (25 act ids), `collectible` (keepsake id), `level`, `first` (the device's first, with the longer note), `owned` |
+| `area_finale_started` | An area finale's attempt begins (`docs/FINALES.md`), beside its `level_started`. Once per attempt: Resume and restart continue it | `level`, `area`, `treatment` (`grass` \| `pavement` \| `sand` \| `snow` \| `dusk` \| `default`), `mode`, `retry_count`, `heart_cost` |
+| `area_finale_completed` | The finale cleared, beside its `level_completed`, from the same single close | `level`, `area`, `treatment`, `mode`, `stars`, `accuracy` |
+| `area_finale_failed` | The finale scored under its clear bar, beside its `level_failed` | `level`, `area`, `treatment`, `mode`, `accuracy` |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 
@@ -289,6 +292,11 @@ the lowest-accuracy task of that pass, earliest on a tie.
   process. Nothing new is stored, so there is no new storage key for Auto Backup to carry
   and nothing for a save code to leak.
 
+- **A finale reports twice as much, never twice as often.** Its `area_finale_*` events
+  ride beside the level's own, from the same `beginLevel` and the same close, so a finale
+  funnel is a filter on one event name while every level report stays complete. An
+  abandoned finale sends `level_abandoned` and no finale result.
+
 `level_started` − (`level_completed` + `level_failed` + `level_abandoned`) is the number of
 attempts cut off by the app being killed mid-level — there is no reliable moment to report
 those, and none is attempted.
@@ -312,7 +320,7 @@ that caused a crash off the report meant to explain it. PlayScene already writes
 Custom event parameters are collected without any console work, but **GA4 only shows them
 in standard reports and Explorations once they are registered** as custom definitions
 (Admin → Custom definitions), and registration is not retroactive. Register dimensions for
-the parameters used to group — `level`, `area`, `role`, `vignette`, `collectible`, `mode`, `grid`, `pattern_tier`, `task_index`,
+the parameters used to group — `level`, `area`, `role`, `vignette`, `collectible`, `treatment`, `mode`, `grid`, `pattern_tier`, `task_index`,
 `weakest_task`, `source`, `step`, `stars`, `previous_stars` — and metrics for the ones
 averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `weakest_accuracy`,
 `restarts`, `error_ms`. GA4 caps custom definitions per property (at the time of writing,

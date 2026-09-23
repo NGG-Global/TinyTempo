@@ -247,3 +247,37 @@ export function drawTapMark(g: Phaser.GameObjects.Graphics, x: number, y: number
   g.lineStyle(r * 0.2, colour, alpha * 0.6);
   g.beginPath(); g.arc(x, cy, r * 1.05, -2.42, -0.72); g.strokePath();
 }
+
+/**
+ * A swallow-tailed flag on a pole: the finale's mark on the map and in the dock's trail.
+ * `(x, y)` is the pole's foot and `height` its length; the flag flies from the top toward
+ * +x. `wave` bows its free edge, so an animated caller can ripple it.
+ */
+export function drawFinaleFlag(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  height: number,
+  colour: number,
+  pole: number,
+  alpha = 1,
+  wave = 0,
+): void {
+  const f = faces(colour);
+  const top = y - height;
+  const w = height * 0.62, h = height * 0.4;
+  const stroke = Math.max(1.5, height * 0.05);
+  g.lineStyle(stroke * 1.8, shade(pole, -0.5), alpha).lineBetween(x, y, x, top - stroke);
+  g.lineStyle(stroke, pole, alpha).lineBetween(x, y, x, top - stroke);
+  g.fillStyle(shade(pole, 0.25), alpha).fillCircle(x, top - stroke, stroke * 1.2);
+  const bow = wave * h * 0.18;
+  const flag = [
+    { x, y: top }, { x: x + w * 0.5, y: top + bow }, { x: x + w, y: top - bow * 0.5 },
+    { x: x + w * 0.72, y: top + h / 2 },
+    { x: x + w, y: top + h - bow * 0.5 }, { x: x + w * 0.5, y: top + h + bow }, { x, y: top + h },
+  ];
+  g.fillStyle(f.edge, alpha).fillPoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y + stroke * 0.8)), true);
+  g.fillStyle(f.face, alpha).fillPoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
+  g.fillStyle(f.rim, 0.45 * alpha).fillRect(x + stroke, top + stroke * 0.4, w * 0.45, Math.max(1, h * 0.14));
+  g.lineStyle(Math.max(1, stroke * 0.55), shade(colour, -0.55), alpha).strokePoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
+}

@@ -44,6 +44,22 @@ multiplied out land a hair over four beats and round the phrase up to two bars. 
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
 
+**Every area ends in a finale, and a finale is a presentation, not a new test.**
+`isAreaFinale` (`level % PROGRESSION.areaSize === 0`) is the only place a finale's level is
+decided — `LevelSpec.finale` is it — and `tests/finaleAreaSize.test.ts` re-runs the whole
+derivation at an area of four. A finale keeps the choreography's `finale` row for length and
+tempo, and replaces each pattern with one its area's earlier levels already used
+(`areaRepertoire`, the reprise in `levels.ts`, its own seeded stream): no tier above the
+curve's, no grid the area has not played, so the top of an area is never where something
+new arrives. Its opening is `PROGRESSION.finale.openingBars` long, through the breather's
+`leadBeats`. Clear bar, stars, hearts and unlocks are every level's. The dressing is data:
+`FINALE_TREATMENTS` in `game/finale.ts`, drawn by one `FinaleStage` (`ui/finaleStage.ts`) —
+pennants over the act, a title card that is off the stage half a beat before the first
+demonstration, the loop swelling from `musicFloor` onto that downbeat, and an "Area
+complete" ribbon over the plaque — so a new area's finale is a new entry, never a PlayScene
+edit. The map flags every finale in its window and the dock's trail ends in one. See
+`docs/FINALES.md`.
+
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
 `PROGRESSION.starGate`): 12, 25, 39, 53, then 14 more each time, a bank rather than a
@@ -492,6 +508,7 @@ src/
     musicBed.ts        Shell, level or silent: which job the one loop is doing
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
+    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
@@ -530,6 +547,7 @@ src/
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
+    finale.ts          Area finales: the area, the next one, the treatment, the map's marks
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -568,6 +586,8 @@ src/
     star.ts            The star glyph
     keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
+    finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
+    finalePose.ts      Their poses as pure f(t)
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser

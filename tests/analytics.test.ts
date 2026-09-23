@@ -48,6 +48,9 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   subdivision_intro_completed: ['grid', 'level', 'tries', 'accuracy', 'passed'],
   scrapbook_opened: ['source', 'owned', 'total'],
   collectible_unlocked: ['vignette', 'collectible', 'level', 'first', 'owned'],
+  area_finale_started: ['level', 'area', 'treatment', 'mode', 'retry_count', 'heart_cost'],
+  area_finale_completed: ['level', 'area', 'treatment', 'mode', 'stars', 'accuracy'],
+  area_finale_failed: ['level', 'area', 'treatment', 'mode', 'accuracy'],
   practice_started: ['level'],
   practice_completed: ['level', 'accuracy', 'duration_ms'],
 };

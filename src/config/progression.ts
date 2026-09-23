@@ -104,6 +104,25 @@ export const PROGRESSION = {
     ],
   },
   /**
+   * Area finales: the last level of every area, `areaSize` levels apart, and never a
+   * number written down anywhere else (`isAreaFinale` in `game/levels.ts`).
+   *
+   * A finale is a presentation moment, not a new test. Its length and tempo are the
+   * choreography's `finale` row — the top of its area — but its patterns are a **reprise**:
+   * every task draws from the patterns the area's earlier levels already used, at the same
+   * tier or the nearest one below it, and a subdivided task only on a grid the area has
+   * already played. So a finale can never be where a player meets a pattern, a tier or a
+   * grid for the first time. Its clear bar, stars and heart cost are every level's.
+   *
+   * `openingBars` is the finale's opening lead-in in place of the usual one bar: the title
+   * card hangs there and the music swells from `musicFloor` of its level to full, so the
+   * first demonstration downbeat is where the build lands. Nothing is judged in it.
+   */
+  finale: {
+    openingBars: 2,
+    musicFloor: 0.4,
+  },
+  /**
    * The star gates: what a new area asks for before its first level will start.
    *
    * Every area after the first is closed until the player's *total* stars — every star

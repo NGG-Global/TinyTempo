@@ -22,7 +22,7 @@ ten-level area decides which dimensions lead**. The code is `choreographedShape`
 | 7 | `combination` | 0 | +2 | +0.25 | ×1 | Dimensions start to combine |
 | 8 | `combination` | 0 | +4 | +0.5 | ×1 | … a little more |
 | 9 | `challenge` | +1 | +6 | +1 | ×1.25 | Everything up |
-| 10 | `finale` | +1 | +8 | +1 | ×1.25 | The area's hardest level |
+| 10 | `finale` | +1 | +8 | +1 | ×1.25 | The area's top length and tempo, as a reprise of its own patterns (`docs/FINALES.md`) |
 
 The offsets are added to the **continuous** value each dimension is rounded from — tasks
 `3 + 5d`, BPM of headroom `30·d^1.5`, the fractional tier `5·d^0.8` — so a shift of half a
@@ -30,9 +30,11 @@ tier moves the level only once the curve has brought it within half a tier of th
 one. Small shifts fade in; nothing jumps because a row said so. The offsets roughly
 cancel across an area, so an area's average follows the curve.
 
-`LevelSpec.role` and `LevelSpec.areaStep` carry the result. They are the hook for an
-area-finale presentation later (`role === 'finale'`), and `role` rides on every level
-analytics event (`docs/ANALYTICS.md`).
+`LevelSpec.role` and `LevelSpec.areaStep` carry the result, and `role` rides on every level
+analytics event (`docs/ANALYTICS.md`). The tenth step is also an area finale
+(`LevelSpec.finale`, from `PROGRESSION.areaSize`): it keeps this row's length and tempo, and
+replaces each pattern with one its area already played, so the top of the area is never
+where something new arrives. See `docs/FINALES.md`.
 
 ## The rules that keep it safe
 
@@ -128,7 +130,11 @@ before finer grids existed; that is now false by design, so it is replaced by:
 - `tests/fixtures/levels-choreography.json` — every task of levels 1–120 plus each level's
   role, as this derivation produces them. Same strength as before: any change to any task
   of any of those levels fails. Regenerate it only for a deliberate change to the road.
+  The area finales moved exactly their own rows of it — 10, 20, … 120 — and no others:
+  their patterns became the area's reprise and their opening grew to two bars.
 - `level-thresholds.json` — the saved-stars guarantee above.
 - A property test that, for every level 1–300, the tasks `subdivide` leaves alone equal
   `tierTasks(level)` exactly, and the ones it swaps keep their tempo, tier and lead-in —
   the "its own seeded stream" property the old fixture proved indirectly, now stated.
+  Finales are the one exception: their patterns are the reprise, and the test holds them to
+  the curve's tempo ramp and lead-ins instead (`tests/finale.test.ts` checks the rest).

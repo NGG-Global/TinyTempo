@@ -1,6 +1,7 @@
 import {
-  track, type AnalyticsEvent, type AnalyticsPayloads, type AttemptMode, type Flag, type GridName, type LevelParams,
+  track, type AnalyticsEvent, type AnalyticsPayloads, type AttemptMode, type FinaleParams, type Flag, type GridName, type LevelParams,
 } from '../monetization/analytics';
+import { finaleTreatment } from './finale';
 import { isCleared } from './health';
 import type { LevelSpec } from './levels';
 import type { LevelOutcome, Progress } from './progress';
@@ -97,6 +98,11 @@ export function taskParams(
   };
 }
 
+/** What an area finale's events share, from the level's own parameters. */
+export function finaleParams(spec: LevelSpec, params: LevelParams): FinaleParams {
+  return { level: spec.level, area: params.area, treatment: finaleTreatment(spec.level).id, mode: params.mode };
+}
+
 /** The task that cost the most: lowest accuracy, earliest on a tie. 1-based; zero when none finished. */
 export function weakestTask(results: readonly (number | undefined)[]): { readonly task: number; readonly accuracy: number } {
   let task = 0;
@@ -177,6 +183,12 @@ export class LevelRun {
       };
       if (outcome.cleared) this.ledger.emit('level_completed', { ...result, stars: outcome.stars });
       else this.ledger.emit('level_failed', result);
+      // Once per finished finale attempt, from the same single close as the result above.
+      if (this.spec.finale) {
+        const finale = finaleParams(this.spec, this.params);
+        if (outcome.cleared) this.ledger.emit('area_finale_completed', { ...finale, stars: outcome.stars, accuracy: result.accuracy });
+        else this.ledger.emit('area_finale_failed', { ...finale, accuracy: result.accuracy });
+      }
       const after = outcome.progress;
       // An improvement is a replay beating its own stars. A first clear is a completion,
       // already counted above, and would otherwise read as "improved from nothing".
@@ -338,6 +350,9 @@ export class PlayAnalytics {
       const run = new LevelRun(this, start.attemptId, start.spec, start.progress, params);
       this.open.set(start.attemptId, run);
       this.emit('level_started', params);
+      if (start.spec.finale) {
+        this.emit('area_finale_started', { ...finaleParams(start.spec, params), retry_count: params.retry_count, heart_cost: params.heart_cost });
+      }
       if (retries > 0) this.emit('level_retried', params);
       if (params.mode === 'replay') this.emit('level_replayed', params);
       return run;
