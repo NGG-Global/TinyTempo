@@ -119,7 +119,7 @@ describe('what earns a keepsake', () => {
     // Every other level at three stars, this one at two: not owned.
     const best: Record<number, number> = { ...road(60, 3).best, 7: on(7, 2) };
     expect(ownsKeepsake({ unlocked: 61, best }, keepsakeAt(7)!)).toBe(false);
-    expect(ownedKeepsakes({ unlocked: 61, best })).toHaveLength(31);
+    expect(ownedKeepsakes({ unlocked: 61, best })).toHaveLength(KEEPSAKES.length - 1);
   });
 
   it('reports the moment a finished level earns its keepsake, and never again after', () => {
@@ -137,8 +137,9 @@ describe('what earns a keepsake', () => {
   });
 
   it('never reports a keepsake for a level that has none', () => {
-    const outcome = recordResult(road(25, 3), 26, 100);
-    expect(keepsakeEarned(road(25, 3), outcome.progress, 26)).toBeNull();
+    // Level 51 is the hammer's third visit, which has no keepsake of its own.
+    const outcome = recordResult(road(50, 3), 51, 100);
+    expect(keepsakeEarned(road(50, 3), outcome.progress, 51)).toBeNull();
   });
 });
 
