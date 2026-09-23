@@ -30,6 +30,23 @@ export const FIREBASE_LIMITS = {
  */
 export const RESERVED_PREFIXES = ['firebase_', 'google_', 'ga_'] as const;
 
+/**
+ * Event names the SDK logs for itself and refuses from an app. Not the whole of Google's
+ * list word for word — it is re-checked against the docs in `docs/ANALYTICS.md` — but the
+ * ones a game is likeliest to reach for: `error`, `session_start`, `app_update`. A name
+ * here that Google does not in fact reserve costs nothing; a reserved one missing here is
+ * an event that never arrives.
+ */
+export const RESERVED_EVENT_NAMES: ReadonlySet<string> = new Set([
+  'ad_activeview', 'ad_click', 'ad_exposure', 'ad_impression', 'ad_query', 'ad_reward', 'adunit_exposure',
+  'app_background', 'app_clear_data', 'app_exception', 'app_remove', 'app_store_refund',
+  'app_store_subscription_cancel', 'app_store_subscription_convert', 'app_store_subscription_renew',
+  'app_uninstall', 'app_update', 'app_upgrade', 'dynamic_link_app_open', 'dynamic_link_app_update',
+  'dynamic_link_first_open', 'error', 'first_open', 'first_visit', 'in_app_purchase',
+  'notification_dismiss', 'notification_foreground', 'notification_open', 'notification_receive',
+  'os_update', 'screen_view', 'session_start', 'session_start_with_rollout', 'user_engagement',
+]);
+
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]*$/;
 
 /** Whether Firebase will keep an event or parameter of this name. */
@@ -40,7 +57,7 @@ export function validName(name: string, limit: number): boolean {
 }
 
 export function validEventName(name: string): boolean {
-  return validName(name, FIREBASE_LIMITS.eventName);
+  return validName(name, FIREBASE_LIMITS.eventName) && !RESERVED_EVENT_NAMES.has(name.toLowerCase());
 }
 
 export type ShapedValue = string | number;

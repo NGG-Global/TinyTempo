@@ -17,6 +17,19 @@ import { shapeParams, validEventName } from './eventShape';
  */
 
 /**
+ * Whether an event may be handed to the SDK at all.
+ *
+ * Denied consent already turns the SDK's collection off, but that is the SDK's promise and
+ * this is ours: an event that is never passed across the bridge cannot be collected by any
+ * later change in how the plugin treats a disabled state. It closes *before* the SDK is
+ * told and opens only *after* the SDK has accepted a grant, so there is no window either
+ * way in which the two disagree toward collecting.
+ */
+let collecting = false;
+/** Which consent call is the latest, so a slow grant cannot land after a newer denial. */
+let consentCall = 0;
+
+/**
  * Sets the analytics-storage consent and the collection switch, then returns the sink.
  * `granted` is the player's stored answer, not a build constant — the build only decides
  * where that answer starts.
@@ -24,9 +37,10 @@ import { shapeParams, validEventName } from './eventShape';
 export async function createFirebaseSink(granted: boolean): Promise<AnalyticsSink> {
   await setFirebaseConsent(granted);
   return (event, payload): void => {
+    if (!collecting) return;
     // A name Firebase would discard is a mistake in this repository, not at runtime:
-    // the ten names are a closed set and `tests/analytics.test.ts` checks every one of
-    // them. Checking again here costs nothing and keeps the eleventh from going quiet.
+    // the names are a closed set and `tests/analytics.test.ts` checks every one of them.
+    // Checking again here costs nothing and keeps the next one from going quiet.
     if (!validEventName(event)) return;
     void FirebaseAnalytics.logEvent({ name: event, params: shapeParams(payload) })
       .catch(() => { /* a dropped event is not worth a frame */ });
@@ -35,6 +49,8 @@ export async function createFirebaseSink(granted: boolean): Promise<AnalyticsSin
 
 /** Consent at boot, and every time the player changes it in Settings. */
 export async function setFirebaseConsent(granted: boolean): Promise<void> {
+  const call = ++consentCall;
+  if (!granted) collecting = false;
   // Consent first, then collection. The other order opens a window, however short, in
   // which the SDK is collecting under a consent state nobody has set yet.
   await FirebaseAnalytics.setConsent({
@@ -42,4 +58,5 @@ export async function setFirebaseConsent(granted: boolean): Promise<void> {
     status: granted ? ConsentStatus.Granted : ConsentStatus.Denied,
   });
   await FirebaseAnalytics.setEnabled({ enabled: granted });
+  if (call === consentCall) collecting = granted;
 }

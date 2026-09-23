@@ -144,6 +144,19 @@ export function drawMap(g: Phaser.GameObjects.Graphics, x: number, y: number, r:
   ]).points, true);
 }
 
+/** An open scrapbook: two pages off a spine, the right one holding a mounted square. */
+export function drawBook(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const w = r * 0.8, h = r * 1.05, dip = r * 0.16;
+  g.fillStyle(colour, alpha);
+  g.fillTriangle(x, y - h / 2 + dip, x - w, y - h / 2, x - w, y + h / 2);
+  g.fillTriangle(x, y - h / 2 + dip, x - w, y + h / 2, x, y + h / 2 + dip);
+  g.fillStyle(colour, alpha * 0.72);
+  g.fillTriangle(x, y - h / 2 + dip, x + w, y - h / 2, x + w, y + h / 2);
+  g.fillTriangle(x, y - h / 2 + dip, x + w, y + h / 2, x, y + h / 2 + dip);
+  // A mounted square on the right-hand page: the thing a scrapbook is for.
+  g.fillStyle(0xfff4dc, alpha).fillRect(x + w * 0.28, y - h * 0.18, w * 0.46, w * 0.46);
+}
+
 /** A chevron pointing right: "this opens its own screen". */
 export function drawChevron(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
   g.lineStyle(Math.max(2.4, r * 0.34), colour, alpha);
@@ -233,4 +246,38 @@ export function drawTapMark(g: Phaser.GameObjects.Graphics, x: number, y: number
   g.beginPath(); g.arc(x, cy, r * 0.7, -2.55, -0.59); g.strokePath();
   g.lineStyle(r * 0.2, colour, alpha * 0.6);
   g.beginPath(); g.arc(x, cy, r * 1.05, -2.42, -0.72); g.strokePath();
+}
+
+/**
+ * A swallow-tailed flag on a pole: the finale's mark on the map and in the dock's trail.
+ * `(x, y)` is the pole's foot and `height` its length; the flag flies from the top toward
+ * +x. `wave` bows its free edge, so an animated caller can ripple it.
+ */
+export function drawFinaleFlag(
+  g: Phaser.GameObjects.Graphics,
+  x: number,
+  y: number,
+  height: number,
+  colour: number,
+  pole: number,
+  alpha = 1,
+  wave = 0,
+): void {
+  const f = faces(colour);
+  const top = y - height;
+  const w = height * 0.62, h = height * 0.4;
+  const stroke = Math.max(1.5, height * 0.05);
+  g.lineStyle(stroke * 1.8, shade(pole, -0.5), alpha).lineBetween(x, y, x, top - stroke);
+  g.lineStyle(stroke, pole, alpha).lineBetween(x, y, x, top - stroke);
+  g.fillStyle(shade(pole, 0.25), alpha).fillCircle(x, top - stroke, stroke * 1.2);
+  const bow = wave * h * 0.18;
+  const flag = [
+    { x, y: top }, { x: x + w * 0.5, y: top + bow }, { x: x + w, y: top - bow * 0.5 },
+    { x: x + w * 0.72, y: top + h / 2 },
+    { x: x + w, y: top + h - bow * 0.5 }, { x: x + w * 0.5, y: top + h + bow }, { x, y: top + h },
+  ];
+  g.fillStyle(f.edge, alpha).fillPoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y + stroke * 0.8)), true);
+  g.fillStyle(f.face, alpha).fillPoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
+  g.fillStyle(f.rim, 0.45 * alpha).fillRect(x + stroke, top + stroke * 0.4, w * 0.45, Math.max(1, h * 0.14));
+  g.lineStyle(Math.max(1, stroke * 0.55), shade(colour, -0.55), alpha).strokePoints(flag.map(p => new Phaser.Math.Vector2(p.x, p.y)), true);
 }

@@ -1,6 +1,6 @@
 import { DIAGNOSTICS } from '@/config/diagnostics';
 import { breadcrumb, captureGlobalErrors, installErrorSink, setErrorContext } from '@/core/errors';
-import { installAnalytics } from '@/monetization/analytics';
+import { installAnalytics, type AnalyticsEvent } from '@/monetization/analytics';
 
 /**
  * Installs error capture, and attaches Sentry to it when a DSN was built in.
@@ -66,13 +66,20 @@ declare function myUndefinedFunction(): void;
  * crash during a purchase is exactly the crash worth reading, so they ride along as
  * breadcrumbs. The existing sink is kept rather than replaced: this wraps whatever
  * is installed, so a real analytics provider later loses nothing.
+ *
+ * Every event rides along except `task_completed`. The trail is a ring of 24 and a level
+ * fires up to eight of those, so one level would push the purchase that caused a crash
+ * off the trail; PlayScene already leaves its own breadcrumb at each level's start and
+ * finish, which is the gameplay a report needs.
  */
 function bridgeCommerceBreadcrumbs(): void {
   const previous = installAnalytics((event, payload) => {
-    breadcrumb(event, payload);
+    if (!OFF_THE_TRAIL.has(event)) breadcrumb(event, payload);
     previous(event, payload);
   });
 }
+
+const OFF_THE_TRAIL: ReadonlySet<AnalyticsEvent> = new Set<AnalyticsEvent>(['task_completed']);
 
 async function attachSentry(): Promise<void> {
   try {

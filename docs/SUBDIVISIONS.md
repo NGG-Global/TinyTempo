@@ -47,7 +47,12 @@ the tiers chose is still chosen; some are then replaced. Had the finer patterns 
 added as tiers 5 and 6 instead, `⌊tierCount · d^0.8⌋` would have shifted for every level
 and reassigned the whole road, the same way inserting a vignette into the registry does.
 
-`tests/fixtures/levels-before-subdivision.json` records every task of levels 1–120 as
+*Superseded:* the difficulty choreography (`docs/DIFFICULTY.md`) later reassigned the road
+on purpose, so the fixture described here was replaced. The property it proved is now a
+direct test — every task `subdivide` leaves alone equals `tierTasks(level)` — and the
+threshold still reads the plain curve. What follows is kept for the reasoning.
+
+`tests/fixtures/levels-before-subdivision.json` recorded every task of levels 1–120 as
 the derivation produced them before this stage existed. `tests/levels.test.ts` checks
 that every level below `tripletsFrom` still matches it exactly, and that above it the
 tasks that did not swap still do. Regenerate the fixture only for a deliberate change to
@@ -95,3 +100,59 @@ pass, the trombone's slide travel) retrigger mid-motion on a sixteenth pair, whi
 as a fast double rather than a fault but has not been polished for it; and the block on a
 nine-hit phrase packs its sockets at `columnRoom`'s tightest pitch, as it already did for
 tier 4.
+
+## The first meeting
+
+Until this, a finer grid arrived unannounced: a task two-thirds of the way into a level
+simply asked for three taps inside a beat. Now the first level that uses each grid
+introduces it, once, in the level itself (`game/subdivisionIntro.ts`, wired in
+`PlayScene.beginIntro`).
+
+**Where.** `firstEligibleLevel(grid)` reads the curve's own threshold (level 42 for
+triplets, 59 for sixteenths today); `firstLevelWithGrid(grid)` is the first level whose
+tasks actually use it (43 and 59), since eligibility only opens a chance. The trigger is
+`introGrid(spec, seen)`: the level uses the grid, and the player has not met its
+introduction. That one rule covers a new player, who meets it on level 43, and one who
+was already past it when this shipped, who meets it the next time a level they start —
+frontier or replay — uses the grid, never at launch. Where a level uses both and neither
+has been met, the one the level reaches first is introduced and the other waits for the
+next level, so no level opens with two lessons.
+
+**What.** One task, in front of the level's first, on the level's own act, turn block,
+judge and music:
+
+| Bar | What happens | On screen |
+| --- | --- | --- |
+| 1 | The level's count-in, at 0.75× its opening tempo (90 BPM) | **New rhythm** / *3 inside the beat* (sixteenths: *4 inside the beat*) |
+| 2 | The act demonstrates one simple phrase: quarters, with the new group once on beat three | the same two lines |
+| 3 | The player answers, judged by the level's controller; the guiding ring shows each next beat | nothing: the words go on the downbeat |
+| 4 | The act's coda and the slide, as between any two tasks | **Got it**, or **Once more** |
+
+Below 50% the player gets one more go at once — the example again with no count-in, then
+the answer — and after it the level begins whatever happened ("Let's go"). The music
+returns to the level's tempo on the downbeat its first task starts. Everything from the
+level's opening downbeat to that one is whole bars, for every act's coda hold, so the loop
+never slips against the grid the level then runs on (`tests/subdivisionIntro.test.ts`).
+
+**Forgiving, not different.** The introduction never counts: it adds nothing to the
+level's accuracy, stars, sequence or `task_completed` events, a missed beat is not called
+a miss, and an extra tap only shakes the rows. What it does *not* do is widen a window —
+it runs on the ordinary Perfect and Good, at a tempo where the phrase's tightest pair is
+167 ms (sixteenths) or 222 ms (triplets) apart. Forgiving here means slower, simpler and
+unscored. A test plays the same subdivided task on a controller that has just run an
+introduction and on a fresh one, and requires identical scores.
+
+**Once.** The flags are `triplet` and `sixteenth` in the teach object beside
+`seenDemonstration` and `seenReplayTip` (`game/progress.ts`), written when the first try has
+been judged — a player who backs out during the count-in sees it again. The teach object is
+now written from one list of known flags, so setting any flag keeps the others. A save from
+before the introductions reads as "not met", which is what makes the graceful case work.
+Neither flag travels in a save code or touches saved progress, and the level specs are a
+function of the level number alone: a seen flag changes no level.
+
+**Checked in a browser.** Levels 42, 43, 59 and 70 were driven in headless Chromium with
+the debug replay panel: the triplet introduction with a retry, the sixteenth one passing
+first time, no introduction once seen, and a pre-introduction save meeting it on level 70.
+That environment renders at ~12 fps, so the harness raised `RHYTHM.stallMs` on the page;
+the game's own guard is unchanged. It has not been played on a device.
+

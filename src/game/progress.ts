@@ -1,4 +1,4 @@
-import { levelSpec, starsFor } from './levels';
+import { levelSpec, starsFor, type Grid } from './levels';
 
 export interface Progress {
   /** Highest level the player may start; everything below it has been cleared. */
@@ -137,7 +137,44 @@ export function markReplayTipSeen(storage: Storage | null = safeStorage()): bool
   return writeTeach(storage, { replayTip: true });
 }
 
-interface Teach { readonly seen?: unknown; readonly replayTip?: unknown }
+/**
+ * Has the player been introduced to this finer grid? Once each, ever, on this device.
+ *
+ * Absent means no — which is exactly what a save written before the introductions
+ * existed says, so a player already past the first triplet level meets the introduction
+ * the next time a level they start uses one, rather than being told nothing.
+ */
+export function seenSubdivision(grid: Grid, storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage)[grid] === true;
+}
+
+export function seenSubdivisions(storage: Storage | null = safeStorage()): Readonly<Record<Grid, boolean>> {
+  const teach = readTeach(storage);
+  return { triplet: teach.triplet === true, sixteenth: teach.sixteenth === true };
+}
+
+/** False means nothing was written, and the introduction will simply play once more. */
+export function markSubdivisionSeen(grid: Grid, storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { [grid]: true });
+}
+
+/**
+ * Has the player been told what a keepsake is — by the first reveal's longer note, or by
+ * opening the Scrapbook? Only the telling is stored: which keepsakes they own is derived
+ * from their stars (`game/scrapbook.ts`) and never written anywhere.
+ */
+export function seenScrapbook(storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage).scrapbook === true;
+}
+
+/** False means nothing was written, and the longer note will simply be shown once more. */
+export function markScrapbookSeen(storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { scrapbook: true });
+}
+
+/** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
+const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook'] as const;
+type Teach = { readonly [K in typeof TEACH_FLAGS[number]]?: unknown };
 
 function readTeach(storage: Storage | null): Teach {
   try {
@@ -153,9 +190,7 @@ function writeTeach(storage: Storage | null, patch: Teach): boolean {
   try {
     const current = readTeach(storage);
     const next: Record<string, true> = {};
-    if (current.seen === true) next.seen = true;
-    if (current.replayTip === true) next.replayTip = true;
-    for (const [key, value] of Object.entries(patch)) if (value === true) next[key] = true;
+    for (const flag of TEACH_FLAGS) if (current[flag] === true || patch[flag] === true) next[flag] = true;
     storage?.setItem(TEACH_KEY, JSON.stringify(next));
     return storage !== null;
   } catch { return false; }

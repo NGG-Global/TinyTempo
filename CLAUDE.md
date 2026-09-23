@@ -20,13 +20,45 @@ same curve** (`PROGRESSION.subdivision`, `SUBDIVIDED_TIERS`, `subdivide` in `lev
 From level 43 a level may swap up to half of its tasks, never the first, for a one-bar
 triplet phrase, from level 59 for a sixteenth one, and only where the task's tempo leaves
 `minSpacingMs` between taps — which is what keeps sixteenths off tasks above 136 BPM. The
-swap draws from **its own seeded stream** after the tiers have chosen, so no level below 43
-changed; `tests/fixtures/levels-before-subdivision.json` is the fingerprint that proves it,
-and a change that moves any of those levels is the registry trap again. Subdivided phrases
+swap draws from **its own seeded stream** after the tiers have chosen, so it never moves a
+task it leaves alone (checked against `tierTasks`), and the threshold reads the plain curve.
+
+**Difficulty is choreographed inside each area.** The curve is the baseline; a level's step in
+its area (`PROGRESSION.choreography`, `LevelSpec.role`/`areaStep`) shifts the continuous task,
+tempo and tier values before rounding — opener, two pattern levels, tempo, endurance,
+recovery, two combinations, challenge, finale — ramped in over the first 20 levels, capped at
+what the curve gives one area ahead, inside every ceiling. **The clear bar and star thresholds
+are never choreographed**: stars are recomputed from best accuracy on every read, so moving a
+threshold moves saved star totals and can close a gate behind a player
+(`tests/fixtures/level-thresholds.json` holds them). `tests/fixtures/levels-choreography.json`
+pins levels 1–120; a change that moves any of them is the registry trap again. See
+`docs/DIFFICULTY.md`. **Each finer grid is introduced once, in the level that first uses it**
+(`game/subdivisionIntro.ts`): one unscored task in front of the level's first, at 0.75× on the
+act, block and judge the level uses — "New rhythm / 3 inside the beat", one example, one
+answer, one retry below 50% — on ordinary windows, never wider. `introGrid` triggers on a level
+that uses an unseen grid, so a save from before the feature meets it on the next such level,
+never at launch; the `triplet`/`sixteenth` teach flags live beside `seenDemonstration`. See
+`docs/SUBDIVISIONS.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
 nearest-target cell. See `docs/SUBDIVISIONS.md`.
+
+**Every area ends in a finale, and a finale is a presentation, not a new test.**
+`isAreaFinale` (`level % PROGRESSION.areaSize === 0`) is the only place a finale's level is
+decided — `LevelSpec.finale` is it — and `tests/finaleAreaSize.test.ts` re-runs the whole
+derivation at an area of four. A finale keeps the choreography's `finale` row for length and
+tempo, and replaces each pattern with one its area's earlier levels already used
+(`areaRepertoire`, the reprise in `levels.ts`, its own seeded stream): no tier above the
+curve's, no grid the area has not played, so the top of an area is never where something
+new arrives. Its opening is `PROGRESSION.finale.openingBars` long, through the breather's
+`leadBeats`. Clear bar, stars, hearts and unlocks are every level's. The dressing is data:
+`FINALE_TREATMENTS` in `game/finale.ts`, drawn by one `FinaleStage` (`ui/finaleStage.ts`) —
+pennants over the act, a title card that is off the stage half a beat before the first
+demonstration, the loop swelling from `musicFloor` onto that downbeat, and an "Area
+complete" ribbon over the plaque — so a new area's finale is a new entry, never a PlayScene
+edit. The map flags every finale in its window and the dock's trail ends in one. See
+`docs/FINALES.md`.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -161,7 +193,13 @@ report of the purchase that caused it. **Firebase enforces its limits by discard
 `tests/analytics.test.ts` checks every shipped event against them; a name Firebase
 dislikes is not an error, it is an event that never arrives. Consent is a stored setting
 with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` puts it, and
-it deliberately does not travel in a save code. See `docs/ANALYTICS.md`.
+it deliberately does not travel in a save code; the adapter also refuses to hand an event
+to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
+through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
+attempt on PlayScene's heart attempt id, so Resume and the restart puck continue a run
+instead of starting a second one, `level_completed`/`level_failed` fire once from
+`recordOutcome`, and a finished id is never reopened. Its session state (retries, the gate
+dedupe) is in memory and stores nothing. See `docs/ANALYTICS.md`.
 
 Crash reporting is `core/errors.ts` (capture, no vendor) behind `diagnostics/` (the
 Sentry adapter), the same split `monetization/` uses — see `docs/DIAGNOSTICS.md`.
@@ -314,6 +352,18 @@ named — *Too early* for taps in the hammer's turn, *That was your turn* for a 
 went by — rather than scored. Nothing in it waits for a tap: the loop's whole lesson is
 that it does not. See `docs/TUTORIAL.md`.
 
+**Three stars on a designated level earns a keepsake, and ownership is never stored.**
+`game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
+that act plays for the `lap`-th time, and it is owned exactly when that level has three stars
+— so old saves, save codes, merges and Auto Backup carry the collection without knowing it
+exists, and nothing can be owned twice. **The list is append-only**: an entry's `id`,
+`vignette` and `lap` are pinned by `tests/fixtures/keepsakes.json`, because changing one moves
+a keepsake players hold. Each has a drawing in `ui/keepsakes.ts` whose identifying detail sits
+in `pen.detail`, which is what keeps it out of the silhouette. `ScrapbookScene` is reached from
+the book puck at the title screen's top left (the right-hand corner is the sign's rope at full
+swing); the result screen raises a card under the plaque a second into the summary, after the
+medals. The only stored bit is the `scrapbook` teach flag. See `docs/SCRAPBOOK.md`.
+
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
@@ -458,6 +508,7 @@ src/
     musicBed.ts        Shell, level or silent: which job the one loop is doing
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
+    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
@@ -484,7 +535,7 @@ src/
     boot.ts            Installs capture, then attaches the vendor when a DSN exists
     sentry.ts          The Sentry adapter; the only file that knows the vendor
   game/
-    levels.ts          Derives a level spec from the curve
+    levels.ts          Derives a level spec from the curve and its step in the area
     RoundController.ts Phase machine for one task
     TaskSequence.ts    Task ordering within a level
     scoring.ts         Pure weighted accuracy
@@ -493,6 +544,10 @@ src/
     supportReport.ts   The details a support email carries, as pure text
     settings.ts        Saved audio offset and mute
     beatTrack.ts       What the two rows show, and the handover, as pure functions
+    playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
+    subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
+    scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
+    finale.ts          Area finales: the area, the next one, the treatment, the map's marks
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -516,6 +571,7 @@ src/
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
     TransferScene.ts   The save code: show it, copy it, restore from one
     SupportScene.ts    The address, and the details worth sending with it
+    ScrapbookScene.ts  The keepsakes, a page per act, found or in silhouette
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -528,7 +584,10 @@ src/
     path.ts            Catmull-Rom smoothing and dash spacing
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
+    keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
+    finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
+    finalePose.ts      Their poses as pure f(t)
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser

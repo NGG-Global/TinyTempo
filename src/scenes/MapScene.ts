@@ -8,12 +8,14 @@ import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { areaOf, levelSpec, mapLastLevel, mapLevelState, type Area } from '@/game/levels';
+import { areaTrail, finaleMapMark, finaleTreatment, nextFinale } from '@/game/finale';
 import {
   canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
+import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { MaterialKey } from '@/textures/materials';
 import { mix, shade, starColour } from '@/ui/colour';
@@ -21,7 +23,7 @@ import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount,
 import { FxKey } from '@/ui/feedback';
 import { dashes, smoothPath, type Point } from '@/ui/path';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawChevron, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
@@ -87,6 +89,12 @@ const MAP = {
   barrier: { post: 14, height: 62, reach: 18, bar: 15, sign: { width: 150, height: 48 }, liftSec: 0.9, barFadeSec: 0.35 },
   /** The tally's star on the bench, and the beads row it shares. */
   tally: { star: 13 },
+  /**
+   * An area finale's stop: a flag on a pole planted beside the puck, and a brass ring
+   * around it. Every finale in the window carries both, locked and previewed ones faded,
+   * so the destination is visible a dozen levels before the frontier reaches it.
+   */
+  finale: { flag: 76, ring: 7, lockedAlpha: 0.7, previewAlpha: 0.4 },
 } as const;
 
 
@@ -143,6 +151,8 @@ export class MapScene extends BaseScene {
   private dock!: Phaser.GameObjects.Graphics;
   private dockSurface!: Phaser.GameObjects.TileSprite;
   private dockTitle!: Phaser.GameObjects.Text;
+  /** Beside the trail: how far the area's finale is from the frontier. */
+  private dockHint!: Phaser.GameObjects.Text;
   private gateLabel!: Phaser.GameObjects.Text;
   private restScrim!: Phaser.GameObjects.Graphics;
   private restPlate!: Phaser.GameObjects.Graphics;
@@ -262,6 +272,9 @@ export class MapScene extends BaseScene {
     this.muted = isMuted(this);
     this.progress = loadProgress();
     this.health = loadHealth();
+    // Against the saved stars, not the shown count: a flight in progress is presentation,
+    // and the gate either holds the frontier or does not.
+    playAnalytics.gateOnMap(this.progress);
     this.restShown = false;
     this.restDailyOpen = false;
     this.restTipFresh = !seenReplayTip();
@@ -316,6 +329,7 @@ export class MapScene extends BaseScene {
     this.dock = this.add.graphics().setScrollFactor(0).setDepth(10);
     this.dockSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.5).setScrollFactor(0).setDepth(10);
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
+    this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
     this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 26, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
     this.tally = this.add.graphics().setScrollFactor(0).setDepth(11);
@@ -873,6 +887,32 @@ export class MapScene extends BaseScene {
         : STYLE.current.outline;
     const t = outline === STYLE.current.outline ? STYLE.current : { ...STYLE.current, outline };
     drawDisc(g, node.x, node.y - lift, p.r, this.uiScale, { fill: p.fill, depth: p.depth }, t);
+    const mark = finaleMapMark(this.first + i, this.progress.unlocked);
+    if (mark) {
+      // The finale's brass ring rides with the puck, so the frontier's hop carries it.
+      const s = this.uiScale;
+      const alpha = this.finaleAlpha(p.state);
+      g.lineStyle(STYLE.current.outline * s * 0.9 + 2 * s, shade(BRASS, -0.55), alpha).strokeCircle(node.x, node.y - lift, p.r + MAP.finale.ring * s);
+      g.lineStyle(STYLE.current.outline * s * 0.9, BRASS, alpha).strokeCircle(node.x, node.y - lift, p.r + MAP.finale.ring * s);
+    }
+  }
+
+  private finaleAlpha(state: 'frontier' | 'cleared' | 'locked' | 'preview'): number {
+    return state === 'preview' ? MAP.finale.previewAlpha : state === 'locked' ? MAP.finale.lockedAlpha : 1;
+  }
+
+  /** The flag planted beside a finale's puck, in the treatment's first colour. */
+  private drawFinaleMark(g: Phaser.GameObjects.Graphics, i: number, s: number): void {
+    const level = this.first + i;
+    const mark = finaleMapMark(level, this.progress.unlocked);
+    if (!mark) return;
+    const node = this.nodes[i]!;
+    const p = this.puckOf(i);
+    const colour = finaleTreatment(level).pennants[0]!;
+    const foot = { x: node.x + p.r + (MAP.finale.ring + 12) * s, y: node.y + p.r * 0.3 };
+    drawFinaleFlag(g, foot.x, foot.y, MAP.finale.flag * s, colour, SHELL.rope, this.finaleAlpha(p.state), 0.6);
+    // A finished area flies a brass star on its flag.
+    if (mark.complete) drawStar(g, foot.x + MAP.finale.flag * s * 0.27, foot.y - MAP.finale.flag * s * 0.8, MAP.finale.flag * s * 0.1, BRASS);
   }
 
   /** Raised pucks with cast shadows, a star plate under each cleared one and a padlock under each locked one. */
@@ -887,6 +927,8 @@ export class MapScene extends BaseScene {
       const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1).setAlpha(p.state === 'preview' ? 0.58 : 1);
       resize(text, p.size, p.number, STYLE.current, p.state === 'cleared' || p.state === 'frontier');
       const plateY = node.y + p.r + (p.depth + 24) * s;
+      // Planted, not carried: it stands in the ground even beside the hopping frontier.
+      this.drawFinaleMark(g, i, s);
       if (p.state === 'frontier') {
         this.frontierIndex = i;
         continue;
@@ -1224,8 +1266,8 @@ export class MapScene extends BaseScene {
     const bx = this.blockRect.x, by = this.blockRect.y + sink;
     // Held at a gate, the block stops being the next level's and becomes the errand:
     // how many stars the area wants, and a way back down the road to find them.
-    this.dockTitle.setText(held === null ? definition.title
-      : `${held.short} more ${held.short === 1 ? 'star' : 'stars'} for ${areaOf(held.level).name}`);
+    this.dockTitle.setText(held !== null ? `${held.short} more ${held.short === 1 ? 'star' : 'stars'} for ${areaOf(held.level).name}`
+      : spec.finale ? `Finale: ${definition.title}` : definition.title);
     // Caption size on cream: the same undressed Fredoka the locked numbers use, so the
     // outline does not close the counters on a 30-unit word.
     resize(this.dockTitle, 30 * s, PALETTE.ink, STYLE.current, false);
@@ -1245,18 +1287,31 @@ export class MapScene extends BaseScene {
       drawChevron(g, cx, cy + r * 0.52 + 9 * s * press * 0.8, r * 0.16, shade(BRASS, -0.62));
     }
     this.dockRect.setTo(this.blockRect.x - 8 * s, this.blockRect.y - 8 * s, this.blockRect.width + 16 * s, this.blockRect.height + 16 * s);
-    // Ten beads for the ten stops in the current area.
+    // One bead per stop in the current area, the last a flag: the finale is on the bench
+    // from the area's first level, so the player always knows where the area is heading.
     const beadY = this.blockRect.bottom + 12 * s + 26 * s;
-    const at = (level - 1) % PROGRESSION.areaSize;
-    for (let i = 0; i < PROGRESSION.areaSize; i++) {
+    const trail = areaTrail(level);
+    let trailEnd = this.blockRect.x;
+    trail.forEach((bead, i) => {
       const x = this.blockRect.x + 12 * s + i * 28 * s;
-      const colour = i === at ? PALETTE.coral : i < at ? PALETTE.ink : shade(SHELL.bench, -0.25);
+      const colour = bead.state === 'current' ? PALETTE.coral : bead.state === 'done' ? PALETTE.ink : shade(SHELL.bench, -0.25);
+      if (bead.finale) {
+        const flag = 30 * s;
+        drawFinaleFlag(g, x - 4 * s, beadY + flag * 0.45, flag, bead.state === 'ahead' ? BRASS : colour, SHELL.rope);
+        trailEnd = x + flag * 0.6;
+        return;
+      }
       const f = faces(colour);
-      const rr = (i === at ? 7 : 6) * s;
+      const rr = (bead.state === 'current' ? 7 : 6) * s;
       g.fillStyle(f.edge, 1).fillCircle(x, beadY + 2.5 * s, rr);
       g.fillStyle(f.face, 1).fillCircle(x, beadY, rr);
       g.fillStyle(f.rim, 0.8).fillCircle(x - rr * 0.3, beadY - rr * 0.35, rr * 0.3);
-    }
+      trailEnd = x + rr;
+    });
+    const { away } = nextFinale(level);
+    this.dockHint.setText(away === 0 ? 'Area finale' : `Finale in ${away}`);
+    resize(this.dockHint, 18 * s, PALETTE.muted, STYLE.current, false);
+    this.dockHint.setPosition(trailEnd + 12 * s, beadY);
     this.drawTally(s, performance.now() / 1000);
   }
 

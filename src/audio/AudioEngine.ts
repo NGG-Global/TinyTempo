@@ -156,6 +156,14 @@ export class AudioEngine implements SoundSink {
     const buffer = this.sounds?.[kind];
     if (buffer) this.playBuffer(time, buffer, 0.5);
   }
+  /**
+   * A presentation sound the level's own voices do not cover — the finale's roll and
+   * fanfare. Through the same bus as every voice, so mute, `cancel()` and a restart stop it
+   * like anything else; never used for anything the judge listens to.
+   */
+  public playStinger(time: number, buffer: AudioBuffer, gain = 0.6): void {
+    this.playBuffer(time, buffer, gain);
+  }
   private playBuffer(time: number, buffer: AudioBuffer, gain: number, silentBy?: number): void {
     if (this.disposed) return;
     const source = this.context.createBufferSource();
