@@ -259,6 +259,27 @@ export class TutorialVisit {
   }
 }
 
+/** One showing of a subdivision introduction. It finishes once; leaving part-way is not a finish. */
+export class SubdivisionIntroVisit {
+  private closed = false;
+
+  public constructor(
+    private readonly ledger: PlayAnalytics,
+    private readonly grid: 'triplet' | 'sixteenth',
+    private readonly level: number,
+  ) {}
+
+  public complete(tries: number, accuracy: number, passed: boolean): void {
+    guard(undefined, () => {
+      if (this.closed) return;
+      this.closed = true;
+      this.ledger.emit('subdivision_intro_completed', {
+        grid: this.grid, level: this.level, tries, accuracy: Math.round(accuracy), passed: flag(passed),
+      });
+    });
+  }
+}
+
 /** A practice run. No practice mode exists yet; this is its reporting, ready for it. */
 export class PracticeRun {
   private readonly startedAt: number;
@@ -354,6 +375,14 @@ export class PlayAnalytics {
     return guard<TutorialVisit | null>(null, () => {
       const visit = new TutorialVisit(this, flag(repeat));
       this.emit('tutorial_started', { source, repeat: flag(repeat) });
+      return visit;
+    });
+  }
+
+  public beginSubdivisionIntro(grid: 'triplet' | 'sixteenth', level: number, mode: AttemptMode): SubdivisionIntroVisit | null {
+    return guard<SubdivisionIntroVisit | null>(null, () => {
+      const visit = new SubdivisionIntroVisit(this, grid, level);
+      this.emit('subdivision_intro_shown', { grid, level, mode });
       return visit;
     });
   }

@@ -194,9 +194,10 @@ of it.
 
 ## Gameplay and progression events
 
-Fifteen events, fired from `src/game/playAnalytics.ts`, which PlayScene, TutorialScene and
+Seventeen events, fired from `src/game/playAnalytics.ts`, which PlayScene, TutorialScene and
 MapScene call. The ledger is pure — no Phaser, no vendor — so each guarantee here is a unit
-test rather than a hope.
+test rather than a hope. On a level that opens with a subdivision introduction,
+`level_started` and `duration_ms` include it; its try is never a `task_completed`.
 
 ### What they answer
 
@@ -251,6 +252,8 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
 | `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
 | `tutorial_skipped` | *Skip* | `step` (`watch` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
+| `subdivision_intro_shown` | A finer grid's introduction begins (`docs/SUBDIVISIONS.md`). Shown again if the player leaves before a try is judged | `grid` (`triplet` \| `sixteenth`), `level`, `mode` |
+| `subdivision_intro_completed` | The introduction hands over to the level. Once per showing | `grid`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 

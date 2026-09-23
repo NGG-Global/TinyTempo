@@ -32,7 +32,13 @@ are never choreographed**: stars are recomputed from best accuracy on every read
 threshold moves saved star totals and can close a gate behind a player
 (`tests/fixtures/level-thresholds.json` holds them). `tests/fixtures/levels-choreography.json`
 pins levels 1–120; a change that moves any of them is the registry trap again. See
-`docs/DIFFICULTY.md`. Subdivided phrases
+`docs/DIFFICULTY.md`. **Each finer grid is introduced once, in the level that first uses it**
+(`game/subdivisionIntro.ts`): one unscored task in front of the level's first, at 0.75× on the
+act, block and judge the level uses — "New rhythm / 3 inside the beat", one example, one
+answer, one retry below 50% — on ordinary windows, never wider. `introGrid` triggers on a level
+that uses an unseen grid, so a save from before the feature meets it on the next such level,
+never at launch; the `triplet`/`sixteenth` teach flags live beside `seenDemonstration`. See
+`docs/SUBDIVISIONS.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
@@ -510,6 +516,7 @@ src/
     settings.ts        Saved audio offset and mute
     beatTrack.ts       What the two rows show, and the handover, as pure functions
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
+    subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce

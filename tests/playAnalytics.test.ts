@@ -305,6 +305,23 @@ describe('the tutorial', () => {
   });
 });
 
+describe('a finer grid’s introduction', () => {
+  it('reports that it was shown, and how it went, once', () => {
+    const visit = ledger.beginSubdivisionIntro('sixteenth', 59, 'frontier')!;
+    visit.complete(2, 38.4, false);
+    visit.complete(1, 90, true);
+    expect(sent).toEqual([
+      { event: 'subdivision_intro_shown', payload: { grid: 'sixteenth', level: 59, mode: 'frontier' } },
+      { event: 'subdivision_intro_completed', payload: { grid: 'sixteenth', level: 59, tries: 2, accuracy: 38, passed: 0 } },
+    ]);
+  });
+
+  it('shows without completing when the player leaves part-way', () => {
+    ledger.beginSubdivisionIntro('triplet', 70, 'replay');
+    expect(names()).toEqual(['subdivision_intro_shown']);
+  });
+});
+
 describe('practice, before practice exists', () => {
   it('reports a start and one completion', () => {
     const run = ledger.beginPractice(43)!;
@@ -353,6 +370,7 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.gateOnMap(road(10, 1));
     playThrough(5, road(10, 1), levelSpec(5).starAccuracy[2]!);
     ledger.beginPractice(2)!.complete(60);
+    ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     expect(new Set(names())).toEqual(new Set(GAMEPLAY_EVENTS));
     for (const { event, payload } of sent) {
       expect(validEventName(event), event).toBe(true);

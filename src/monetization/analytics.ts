@@ -38,6 +38,8 @@ export const GAMEPLAY_EVENTS = [
   'star_improved',
   'star_gate_reached',
   'star_gate_opened',
+  'subdivision_intro_shown',
+  'subdivision_intro_completed',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -165,6 +167,17 @@ export interface AnalyticsPayloads {
     readonly level: number;
     readonly gate_required: number;
     readonly gate_have: number;
+  };
+  /** The first meeting with a finer grid began, on this level (`game/subdivisionIntro.ts`). */
+  readonly subdivision_intro_shown: { readonly grid: 'triplet' | 'sixteenth'; readonly level: number; readonly mode: AttemptMode };
+  readonly subdivision_intro_completed: {
+    readonly grid: 'triplet' | 'sixteenth';
+    readonly level: number;
+    /** 1, or 2 when the first answer was weak enough to get one more go. */
+    readonly tries: number;
+    /** The better answer's accuracy, rounded. It never counts toward the level. */
+    readonly accuracy: number;
+    readonly passed: Flag;
   };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };

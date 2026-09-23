@@ -20,15 +20,20 @@ import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, markFor, trackGeometry, turnCount, turnCountPose, type Handover, type Mark } from '@/game/beatTrack';
-import { levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
+import { levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
+import type { Pattern } from '@/rhythm/patterns';
 import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress, seenDemonstration, seenReplayTip, type LevelOutcome } from '@/game/progress';
+import {
+  guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, markSubdivisionSeen, recordResult, saveProgress,
+  seenDemonstration, seenReplayTip, seenSubdivisions, type LevelOutcome, type Progress,
+} from '@/game/progress';
+import { introCopy, introGrid, SUBDIVISION_INTRO, SubdivisionIntroRun } from '@/game/subdivisionIntro';
 import type { EarnedStars } from '@/game/stars';
-import { playAnalytics, type LevelRun } from '@/game/playAnalytics';
+import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit } from '@/game/playAnalytics';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -172,6 +177,15 @@ export class PlayScene extends BaseScene {
     phase: Phase;
     swapped: boolean;
   } | null = null;
+  /**
+   * A finer grid's first meeting, while it runs (`game/subdivisionIntro.ts`). It is a
+   * task in every way the controller, the act and the block can see — its own plan, its
+   * own coda, the same transition — and in no way the level's: its result goes to `run`,
+   * never to `results`, the sequence's accuracy or the level's analytics.
+   */
+  private intro: { readonly run: SubdivisionIntroRun; readonly visit: SubdivisionIntroVisit | null; readonly bpm: number } | null = null;
+  /** The introduction's second line, under the headline: "3 inside the beat". */
+  private introCaption!: Phaser.GameObjects.Text;
   /** Judgements that scored in the early window while the example was still on screen. */
   private heldJudgements: Judgement[] = [];
   /** The three pucks — map, restart, mute — drawn as one baked graphic. */
@@ -222,8 +236,11 @@ export class PlayScene extends BaseScene {
   private summaryAt = -Infinity;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
-  /** The one task a miss is not reported on: the first of the level that still teaches. */
-  private get unfailable(): boolean { return this.guided && this.taskIndex === 0; }
+  /**
+   * The tasks a miss is not reported on: the first of the level that still teaches, and a
+   * finer grid's introduction, which is there to be heard and tried, not failed.
+   */
+  private get unfailable(): boolean { return this.intro !== null || (this.guided && this.taskIndex === 0); }
   private debug!: Phaser.GameObjects.Text;
   private controlSize = 96;
   private uiScale = 1;
@@ -282,6 +299,7 @@ export class PlayScene extends BaseScene {
     this.attemptId = null;
     this.outcome = null;
     this.levelRun = null;
+    this.intro = null;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -294,6 +312,7 @@ export class PlayScene extends BaseScene {
     this.fx = new Feedback(this, 5);
     this.starFx = new Feedback(this, 12);
     this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
+    this.introCaption = display(this, '', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
     this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreValue = display(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
@@ -366,6 +385,10 @@ export class PlayScene extends BaseScene {
     this.headlineSize = (this.controller?.active ? 48 : 88) * s;
     resize(this.headline, this.headlineSize, this.headlineColour);
     this.headline.setPosition(safe.centerX, this.headlineY).setLineSpacing(-12 * s);
+    // Hangs from its top edge under the headline's actual bottom, placed per frame in
+    // `update`: the headline is 48 units while a try plays and 88 between tries.
+    this.introCaption.setPosition(safe.centerX, this.headlineY + this.headlineSize * 1.08);
+    resize(this.introCaption, 30 * s, SHELL.cream);
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
     const gap = Math.max(88 * s, this.controlSize + 4 * s);
     this.muteAt = { x: safe.right - 56 * s, y: top + 66 * s };
@@ -637,6 +660,10 @@ export class PlayScene extends BaseScene {
     this.replayOffset = null;
     this.transition = null;
     this.teach = null;
+    // An introduction cut short by a pause or a restart plays again from its count-in:
+    // it is only marked seen once a try has been judged.
+    this.intro = null;
+    this.setIntroCaption('');
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -726,7 +753,9 @@ export class PlayScene extends BaseScene {
       this.heartRefunded = false;
       this.guided = guidedLevel(loadProgress()) === this.spec.level;
       this.sequence = new TaskSequence(this.task.bpm, origin, 1);
+      const grid = introGrid(this.spec, seenSubdivisions());
       if (this.guided && !seenDemonstration()) this.beginTeach(origin);
+      else if (grid !== null) this.beginIntro(grid, origin, before);
       else this.beginTask(origin);
     } catch (error) {
       if (this.disposed || request !== this.startRequest) return;
@@ -805,12 +834,82 @@ export class PlayScene extends BaseScene {
     // rather than blinking back to empty a bar early.
     if (now >= teach.taskAt) this.teach = null;
   }
+  /**
+   * A finer grid's introduction, in front of the level's first task. The music slows to
+   * the teaching tempo on the level's own opening downbeat and goes back to the level's on
+   * the downbeat its first task starts, and everything between is whole bars — a count-in,
+   * the demonstration and the answer, and the coda's hold — so the loop never slips
+   * against the grid the level then runs on.
+   */
+  private beginIntro(grid: Grid, origin: number, progress: Progress): void {
+    const bpm = this.task.bpm * SUBDIVISION_INTRO.tempo;
+    this.intro = {
+      run: new SubdivisionIntroRun(grid),
+      visit: playAnalytics.beginSubdivisionIntro(grid, this.spec.level, attemptMode(progress, this.spec.level)),
+      bpm,
+    };
+    this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
+    this.beginIntroTry(origin);
+  }
+
+  /** One try: the level's count-in bar the first time, straight into the example on the retry. */
+  private beginIntroTry(startAt: number): void {
+    const intro = this.intro!;
+    intro.run.begin();
+    this.sequence = new TaskSequence(intro.bpm, startAt, 1);
+    this.beginPlan(intro.run.pattern, intro.bpm, startAt, intro.run.retrying ? 0 : RHYTHM.leadInBeats);
+    // After the plan starts: starting it runs `showPhase('prepare')`, which clears the headline.
+    const copy = introCopy(intro.run.grid, intro.run.retrying);
+    this.changeHeadline(copy.title);
+    this.setIntroCaption(copy.caption);
+  }
+
+  private setIntroCaption(text: string): void {
+    if (!this.introCaption || this.introCaption.text === text) return;
+    this.introCaption.setText(text).setAlpha(text === '' ? 0 : this.headline.alpha);
+  }
+
+  /**
+   * An introduction try was judged. It ends the way a task ends — the act's coda, the
+   * slide, the next downbeat — so the level that follows cannot tell it happened, and its
+   * accuracy goes to the introduction alone.
+   */
+  private showIntroResult(result: RoundResult): void {
+    const intro = this.intro!;
+    const next = intro.run.complete(result.accuracy);
+    const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
+    const strong = result.accuracy >= this.definition.successAccuracy;
+    const partial = this.definition.partial;
+    const outcome: FinishOutcome = strong ? 'success' : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
+    this.vignette.finish(strong, ending.contact, result.accuracy);
+    this.audio!.playFinish(ending.contact, outcome, ending.next);
+    this.finishUnlock = ending.contact + this.definition.endingSec;
+    this.transition = { ...ending, swapped: false };
+    if (next === 'done') {
+      // Seen once a try has been judged: the player has heard the example and answered it.
+      markSubdivisionSeen(intro.run.grid);
+      intro.visit?.complete(intro.run.tries, intro.run.best, intro.run.passed);
+      this.changeHeadline(intro.run.passed ? 'Got it' : 'Let’s go');
+      this.setIntroCaption('');
+    } else {
+      const copy = introCopy(intro.run.grid, true);
+      this.changeHeadline(copy.title);
+      this.setIntroCaption(copy.caption);
+    }
+    this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
+    this.setAction('');
+  }
+
   private beginTask(startAt: number): void {
+    this.beginPlan(this.task.pattern, this.task.bpm, startAt, this.task.leadBeats);
+  }
+
+  private beginPlan(pattern: Pattern, bpm: number, startAt: number, leadBeats: number): void {
     this.attempts++;
     this.demoCount = 0;
     this.finishUnlock = Infinity;
     this.accuracy.setText('');
-    this.outcomes = this.task.pattern.hits.map(() => 'pending');
+    this.outcomes = pattern.hits.map(() => 'pending');
     this.heldJudgements = [];
     this.struckIndex = -1;
     this.struckAt = this.extraAt = this.verdictAt = this.flawlessAt = -Infinity;
@@ -820,12 +919,12 @@ export class PlayScene extends BaseScene {
     this.turnCall.setAlpha(0);
     this.flawless.setAlpha(0);
     this.controller!.start(
-      this.task.pattern, this.task.bpm, this.audio!.context.currentTime, performance.now(),
+      pattern, bpm, this.audio!.context.currentTime, performance.now(),
       // The trombone's note is always the plan. On a route that delays sound by more than
       // a tap's own judgement — Bluetooth, typically — every act's is: a voice started by
       // the tap would be heard on the next subdivision. Decided per task, since the route
       // can change mid-level and the judge is already reading the same clock.
-      startAt, this.task.leadBeats, this.definition.gridAction === true || this.audio!.clock.tapVoiceLate,
+      startAt, leadBeats, this.definition.gridAction === true || this.audio!.clock.tapVoiceLate,
     );
     this.vignette.reset(this.controller!.plan!);
     if (this.replayOffset !== null) {
@@ -909,12 +1008,20 @@ export class PlayScene extends BaseScene {
       // this tick arrived on the audible one, an output latency behind it.
       if (!canPlaceNextTask(this.audio.context.currentTime, transition.next)) { this.interrupt(); return; }
       transition.swapped = true;
-      this.taskIndex++;
-      // The music speeds up on the same downbeat the next count-in starts, so the grid and
-      // the stems change tempo together. Every task's plan is whole beats, so `next` is on a beat.
-      this.audio.music.setRate(this.task.bpm / MUSIC.sourceBpm, transition.next);
-      this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
-      this.beginTask(transition.next);
+      const intro = this.intro;
+      if (intro && intro.run.step === 'try') {
+        // One more go at the introduction, on the same grid and at the same tempo.
+        this.beginIntroTry(transition.next);
+      } else {
+        // Out of an introduction the level begins at its first task; otherwise, the next.
+        if (intro) this.intro = null;
+        else this.taskIndex++;
+        // The music speeds up on the same downbeat the next count-in starts, so the grid and
+        // the stems change tempo together. Every task's plan is whole beats, so `next` is on a beat.
+        this.audio.music.setRate(this.task.bpm / MUSIC.sourceBpm, transition.next);
+        this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
+        this.beginTask(transition.next);
+      }
     }
     if (transition && this.now() >= transition.next) this.transition = null;
     this.replayTick();
@@ -987,6 +1094,10 @@ export class PlayScene extends BaseScene {
     const headlineSize = (playing ? 48 : 88) * this.uiScale;
     if (headlineSize !== this.headlineSize) { this.headlineSize = headlineSize; resize(this.headline, headlineSize, this.headlineColour); }
     this.headline.setAlpha(entry.alpha * endReveal).setY(this.headlineY + entry.rise * 16 * this.uiScale);
+    if (this.introCaption.text !== '') {
+      // From the font size rather than the Text's height, which carries the outline's padding.
+      this.introCaption.setAlpha(entry.alpha * endReveal).setY(this.headline.y + this.headlineSize * 1.08);
+    }
     if (this.summaryShown) this.animateStars(now);
     else this.accuracy.setAlpha(1);
     this.drawBeatTrack(now);
@@ -1068,13 +1179,17 @@ export class PlayScene extends BaseScene {
     this.vignette.onPhase(phase, this.now());
     // A lead-in longer than the level's opening bar is the breather.
     const resting = this.task.leadBeats > RHYTHM.leadInBeats;
+    // An introduction keeps its two lines up through the count-in and the example, which is
+    // what they describe, and lets go of them on the player's downbeat like every word here.
+    const introducing = this.intro !== null;
     if (phase === 'prepare') {
-      this.changeHeadline(resting ? 'Breathe' : '', SHELL.cream);
+      if (!introducing) this.changeHeadline(resting ? 'Breathe' : '', SHELL.cream);
       this.setAction('');
     }
-    if (phase === 'demonstrate') this.changeHeadline('');
+    if (phase === 'demonstrate' && !introducing) this.changeHeadline('');
     if (phase === 'respond') {
       this.changeHeadline('');
+      this.setIntroCaption('');
       this.setAction('');
       this.demoCount = 0;
       this.struckIndex = -1;
@@ -1098,6 +1213,9 @@ export class PlayScene extends BaseScene {
     this.presentJudgement(result);
   }
   private presentJudgement(result: Judgement): void {
+    // In an introduction an extra tap shakes the rows and nothing else: no scrape, no Miss.
+    // The rattle already says "that one was not a beat", which is all a first try needs.
+    if (this.intro && result.kind === 'extra') { this.extraAt = this.now(); return; }
     this.vignette.onAccuracy(result, this.now());
     // The action sound is scheduled before the tap is graded, so a reaction to the
     // grade needs its own voice. Sound sets that declare neither accent stay silent.
@@ -1317,7 +1435,9 @@ export class PlayScene extends BaseScene {
    * more than one at a time.
    */
   private ghostFor(plan: RoundPlan | null, marks: readonly Mark[], turn: Handover, now: number): Ghost | null {
-    if (!this.guided || !plan || turn.yours <= 0.2) return null;
+    // The guided level and an introduction both show where the next beat is: in a new
+    // rhythm the "where" is exactly what the player has not got yet.
+    if ((!this.guided && !this.intro) || !plan || turn.yours <= 0.2) return null;
     // The next beat still ahead, not merely the next unanswered socket. A socket stays
     // unanswered until the judge expires it — and on the unfailable first task it is
     // never marked at all, which left the ring parked on a beat that had already gone.
@@ -1329,6 +1449,7 @@ export class PlayScene extends BaseScene {
   }
 
   private showResult(result: RoundResult): void {
+    if (this.intro) { this.showIntroResult(result); return; }
     const strong = result.accuracy >= this.definition.successAccuracy;
     this.sequence!.complete(result.accuracy);
     // Every beat Perfect: the one moment a task earns its own celebration. It reads the
@@ -1426,7 +1547,7 @@ export class PlayScene extends BaseScene {
     for (let i = 0; i < count; i++) {
       const x = safe.centerX + (i - (count - 1) / 2) * gap;
       const done = i < this.taskIndex || this.summaryShown;
-      const current = i === this.taskIndex && !this.summaryShown;
+      const current = i === this.taskIndex && !this.summaryShown && !this.intro;
       const r = (current ? 5.5 : 4.5) * s;
       g.fillStyle(f.edge, done || current ? 1 : 0.25).fillCircle(x, y + 1.5 * s, r);
       g.fillStyle(done ? f.face : current ? f.lit : SHELL.puck, done || current ? 1 : 0.6).fillCircle(x, y, r);
@@ -1708,6 +1829,7 @@ export class PlayScene extends BaseScene {
 
   private showPause(): void {
     this.vignette.pause();
+    this.setIntroCaption('');
     this.changeHeadline('Paused');
     this.setAction('Resume');
   }
