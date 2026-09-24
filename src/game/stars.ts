@@ -1,6 +1,7 @@
 import { PROGRESSION } from '../config/progression';
 import { levelSpec, starsFor } from './levels';
 import type { Progress } from './progress';
+import { starsRequiredFor } from './starGates';
 
 /**
  * The star collection, and the gates it opens.
@@ -36,13 +37,13 @@ export function firstLevelOfArea(area: number): number {
   return Math.max(0, area) * PROGRESSION.areaSize + 1;
 }
 
-/** Stars an area asks for before its first level will start. The first area is free. */
+/**
+ * Stars an area asks for before its first level will start. The first area is free.
+ * The number comes from `PROGRESSION.starGate` via `starsRequiredFor` — one formula,
+ * so a preview of other knobs cannot drift from the gate the map actually uses.
+ */
 export function starsRequired(area: number): number {
-  if (!Number.isInteger(area) || area <= 0) return 0;
-  const { firstArea, growth, maxPerArea } = PROGRESSION.starGate;
-  let total = 0;
-  for (let behind = 0; behind < area; behind++) total += Math.min(maxPerArea, firstArea + growth * behind);
-  return total;
+  return starsRequiredFor(area, PROGRESSION.starGate);
 }
 
 export function areaOpen(area: number, stars: number): boolean {

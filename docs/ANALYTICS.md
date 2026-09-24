@@ -209,7 +209,7 @@ test rather than a hope. On a level that opens with a subdivision introduction,
 | Do triplets and sixteenths spike difficulty? | `task_completed.accuracy` by `grid`, holding `level` or `bpm` steady; `level_failed.grid` |
 | How often are old levels replayed? | `level_replayed`, or `level_started` with `mode = replay` |
 | How often does a star rating improve? | `star_improved`, with `previous_stars` → `stars` |
-| How often does a star gate block a player, and by how much? | `star_gate_reached` with `gate_short`; `star_gate_opened` for the ones got through |
+| How often does a star gate block a player, and by how much? | `star_gate_reached` with `gate_short` and `unlocked`; `star_gate_opened` for the ones got through, with `replays`, `improvements` and `stars_gained` when this session saw the gate close |
 | How many complete or skip the tutorial? | `tutorial_started` → `tutorial_completed` / `tutorial_skipped`, by `source` |
 | Which task inside a failed level is hardest? | `level_failed.weakest_task`, and `task_completed.accuracy` by `task_index` |
 
@@ -247,8 +247,8 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `level_abandoned` | The player leaves an unfinished attempt (the map puck, or the scene going away mid-level) | Level parameters, `task_index` (the task left during), `duration_ms`, `restarts` |
 | `task_completed` | A task is judged to its end. Once per task per pass | `level`, `area`, `mode`, `task_index`, `task_count`, `bpm`, `pattern_tier`, `grid`, `accuracy`, `perfect`, `good`, `miss`, `extra`, `flawless`, `error_ms` |
 | `star_improved` | A cleared **replay** earns more stars than the level held. A first clear is not an improvement | `level`, `area`, `stars`, `previous_stars`, `accuracy`, `gate_have` |
-| `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short` |
-| `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have` |
+| `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session — the first time that gate is met | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short`, `unlocked` (highest level the save may start) |
+| `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have`, `unlocked`. When this session already sent `star_gate_reached` for that gate: `replays`, `improvements`, `stars_gained` — the ledger's own events in between, not a stored session |
 | `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
 | `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
 | `tutorial_skipped` | *Skip* | `step` (`watch` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
@@ -294,9 +294,11 @@ the lowest-accuracy task of that pass, earliest on a tie.
   a second visit. PlayScene's `build()` now clears the attempt id, outcome and run, which
   is also what stops a stale Resume id from a level the player walked away from reaching
   the ledger. The ledger itself is module state and outlives every scene.
-- **Session scope.** `retry_count` and the gate dedupe live in memory and reset with the
-  process. Nothing new is stored, so there is no new storage key for Auto Backup to carry
-  and nothing for a save code to leak.
+- **Session scope.** `retry_count`, the gate dedupe and the three counters between a
+  closed gate and its opening live in memory and reset with the process. Nothing new is
+  stored, so there is no new storage key for Auto Backup to carry and nothing for a save
+  code to leak. The counters are the ledger's own `level_replayed` and `star_improved`
+  events, not a second record of the session.
 
 - **A finale reports twice as much, never twice as often.** Its `area_finale_*` events
   ride beside the level's own, from the same `beginLevel` and the same close, so a finale
@@ -328,7 +330,7 @@ in standard reports and Explorations once they are registered** as custom defini
 (Admin → Custom definitions), and registration is not retroactive. Register dimensions for
 the parameters used to group — `level`, `area`, `role`, `vignette`, `collectible`, `treatment`, `objective`, `slot`, `mode`, `grid`, `pattern_tier`, `task_index`,
 `weakest_task`, `source`, `step`, `stars`, `previous_stars` — and metrics for the ones
-averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `weakest_accuracy`,
+averaged — `accuracy`, `duration_ms`, `retry_count`, `gate_short`, `gate_have`, `replays`, `stars_gained`, `weakest_accuracy`,
 `restarts`, `error_ms`. GA4 caps custom definitions per property (at the time of writing,
 50 event-scoped dimensions and 50 metrics on a standard property); check the current limit
 before registering everything. The BigQuery export, if it is linked, carries every

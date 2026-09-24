@@ -247,7 +247,9 @@ describe('star gates', () => {
   it('reports the gate holding the frontier, how many it asks and how far short the player is', () => {
     // Ten levels at one star: ten stars against the second area's twelve.
     ledger.gateOnMap(road(10, 1));
-    expect(only('star_gate_reached')).toEqual([{ area: 2, level: 11, gate_required: 12, gate_have: 10, gate_short: 2 }]);
+    expect(only('star_gate_reached')).toEqual([{
+      area: 2, level: 11, gate_required: 12, gate_have: 10, gate_short: 2, unlocked: 11,
+    }]);
   });
 
   it('says so once per gate per session, however often the map is entered', () => {
@@ -270,7 +272,30 @@ describe('star gates', () => {
     expect(only('star_gate_opened')).toEqual([]);
     const after = recordResult(progress, 5, levelSpec(5).starAccuracy[1]!).progress;
     playThrough(6, after, levelSpec(6).starAccuracy[1]!);
-    expect(only('star_gate_opened')).toEqual([{ area: 2, level: 11, gate_required: 12, gate_have: 12 }]);
+    // The gate was not reported closed in this session, so the open does not invent a
+    // count of what happened before the ledger was watching.
+    expect(only('star_gate_opened')).toEqual([{ area: 2, level: 11, gate_required: 12, gate_have: 12, unlocked: 11 }]);
+  });
+
+  it('counts the replays and star gains between the first sight of a gate and its opening', () => {
+    const progress = road(10, 1);
+    ledger.gateOnMap(progress);
+    // A replay that does not raise its stars still happened while the gate was closed.
+    playThrough(3, progress, levelSpec(3).starAccuracy[0]!);
+    const gained = playThrough(2, progress, levelSpec(2).starAccuracy[1]!);
+    expect(only('star_gate_opened')).toEqual([]);
+    playThrough(4, gained.outcome.progress, levelSpec(4).starAccuracy[1]!);
+    expect(only('star_gate_opened')).toEqual([{
+      area: 2, level: 11, gate_required: 12, gate_have: 12, unlocked: 11,
+      replays: 3, improvements: 2, stars_gained: 2,
+    }]);
+  });
+
+  it('records the highest unlocked level when a restored save is held past the area line', () => {
+    const best: Record<number, number> = {};
+    for (let level = 1; level <= 30; level++) best[level] = levelSpec(level).starAccuracy[0]!;
+    ledger.gateOnMap({ unlocked: 31, best });
+    expect(only('star_gate_reached')[0]).toMatchObject({ area: 4, level: 31, unlocked: 31, gate_short: 9 });
   });
 
   it('does not report a gate far up the road that was never holding anyone', () => {

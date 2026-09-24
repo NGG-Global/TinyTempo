@@ -189,12 +189,24 @@ export interface AnalyticsPayloads {
     readonly gate_required: number;
     readonly gate_have: number;
     readonly gate_short: number;
+    /** Highest level the save may start (`Progress.unlocked`). */
+    readonly unlocked: number;
   };
   readonly star_gate_opened: {
     readonly area: number;
     readonly level: number;
     readonly gate_required: number;
     readonly gate_have: number;
+    /** Highest level the save may start once the gate has lifted. */
+    readonly unlocked: number;
+    /**
+     * What this session's ledger saw between the first `star_gate_reached` for this gate
+     * and the open. Absent when the gate was not reported closed in this session, so a
+     * zero is never mistaken for "we were not looking".
+     */
+    readonly replays?: number;
+    readonly improvements?: number;
+    readonly stars_gained?: number;
   };
   /** The first meeting with a finer grid began, on this level (`game/subdivisionIntro.ts`). */
   readonly subdivision_intro_shown: { readonly grid: 'triplet' | 'sixteenth'; readonly level: number; readonly mode: AttemptMode };

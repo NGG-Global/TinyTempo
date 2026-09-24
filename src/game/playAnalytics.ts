@@ -194,6 +194,7 @@ export class LevelRun {
       // An improvement is a replay beating its own stars. A first clear is a completion,
       // already counted above, and would otherwise read as "improved from nothing".
       if (outcome.cleared && this.params.previous_stars > 0 && outcome.stars > this.params.previous_stars) {
+        const gained = outcome.stars - this.params.previous_stars;
         this.ledger.emit('star_improved', {
           level: this.spec.level,
           area: this.params.area,
@@ -202,6 +203,7 @@ export class LevelRun {
           accuracy: Math.round(accuracy),
           gate_have: totalStars(after),
         });
+        this.ledger.noteImprovement(gained);
       }
       // A gate opens for a player only when it was holding them: the frontier stood in
       // front of it before this run and does not now. Areas opened far ahead of the
@@ -209,12 +211,15 @@ export class LevelRun {
       const held = gateFor(this.before, this.before.unlocked);
       const still = gateFor(after, after.unlocked);
       if (held !== null && (still === null || still.area !== held.area)) {
-        this.ledger.emit('star_gate_opened', {
+        const activity = this.ledger.takeGateActivity(held.area + 1);
+        const opened = {
           area: held.area + 1,
           level: held.level,
           gate_required: held.required,
           gate_have: totalStars(after),
-        });
+          unlocked: after.unlocked,
+        };
+        this.ledger.emit('star_gate_opened', activity === null ? opened : { ...opened, ...activity });
       }
     });
   }
@@ -321,6 +326,12 @@ export class PlayAnalytics {
   private readonly closed: string[] = [];
   private readonly failStreak = new Map<number, number>();
   private readonly gatesReported = new Set<number>();
+  /**
+   * The one closed gate this session has reported, and what the ledger has seen since.
+   * Three counters, dropped when the gate opens. Nothing is written down: a kill between
+   * the two events simply has no "between", and the open then omits the counts.
+   */
+  private gateWatch: { area: number; replays: number; improvements: number; starsGained: number } | null = null;
   private readonly keepsakesReported = new Set<string>();
 
   public constructor(
@@ -355,7 +366,10 @@ export class PlayAnalytics {
         this.emit('area_finale_started', { ...finaleParams(start.spec, params), retry_count: params.retry_count, heart_cost: params.heart_cost });
       }
       if (retries > 0) this.emit('level_retried', params);
-      if (params.mode === 'replay') this.emit('level_replayed', params);
+      if (params.mode === 'replay') {
+        this.emit('level_replayed', params);
+        this.noteReplay();
+      }
       return run;
     });
   }
@@ -405,14 +419,41 @@ export class PlayAnalytics {
       const gate = gateFor(progress, progress.unlocked);
       if (gate === null || this.gatesReported.has(gate.area)) return;
       this.gatesReported.add(gate.area);
+      // First sight of this gate starts the counters. A later call returns above, so
+      // coming back to the map does not wipe what happened in between.
+      this.gateWatch = { area: gate.area + 1, replays: 0, improvements: 0, starsGained: 0 };
       this.emit('star_gate_reached', {
         area: gate.area + 1,
         level: gate.level,
         gate_required: gate.required,
         gate_have: gate.have,
         gate_short: gate.short,
+        unlocked: progress.unlocked,
       });
     });
+  }
+
+  /** A replay began while a reported gate was still closed. */
+  public noteReplay(): void {
+    if (this.gateWatch) this.gateWatch.replays++;
+  }
+
+  /** A replay raised a level's stars while a reported gate was still closed. */
+  public noteImprovement(gained: number): void {
+    if (!this.gateWatch || !Number.isFinite(gained) || gained <= 0) return;
+    this.gateWatch.improvements++;
+    this.gateWatch.starsGained += gained;
+  }
+
+  /**
+   * The counts for `area` (1-based), if this session reported it closed, then forgotten.
+   * A different area's watch is left alone: opening gate 2 must not wipe a later one.
+   */
+  public takeGateActivity(area: number): { replays: number; improvements: number; stars_gained: number } | null {
+    const watch = this.gateWatch;
+    if (!watch || watch.area !== area) return null;
+    this.gateWatch = null;
+    return { replays: watch.replays, improvements: watch.improvements, stars_gained: watch.starsGained };
   }
 
   public beginTutorial(source: TutorialSource, repeat: boolean): TutorialVisit | null {
