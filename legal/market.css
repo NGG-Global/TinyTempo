@@ -559,6 +559,21 @@ main {
   text-transform: uppercase;
 }
 
+/* The Better Launch listing badge: their artwork at its own size, under the numbers. */
+.launch-badge {
+  margin: 1.6rem 0 0;
+}
+
+.launch-badge a {
+  display: inline-block;
+  border-radius: 0.6rem;
+}
+
+.launch-badge img {
+  width: 200px;
+  height: 56px;
+}
+
 /* ----------------------------------------------------------- hero device */
 
 .phone-wrap {
