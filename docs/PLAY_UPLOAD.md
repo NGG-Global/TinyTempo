@@ -187,20 +187,25 @@ mid-frame. Everything below needs hardware and none of it has been done.
 
 ## Phase 5 — The forms that get apps rejected
 
-28. 👤 **Re-publish the GitHub Pages legal site.** The pages have changed since they were
-    last published — publisher name, the analytics section, the backup and save-code
-    sections — so the live URL does not currently match the app you would submit. **This
-    is not routine this time.**
+28. 👤 **Re-publish the GitHub Pages legal site.** The pages were rewritten on
+    24 September 2026 to match the app: Google Play Billing directly (no billing
+    provider), Play Games sign-in and achievements, gameplay analytics as well as the
+    commerce events, the real heart rules, and the on-device keys the backup actually
+    holds. The live URL does not match until this is published.
 29. 👤 **Data Safety.** Declare what the SDKs collect, not what your code does:
     - AdMob — device and advertising identifiers
     - Google Play Billing — the purchase itself. Play is the processor; the app stores no
       purchase history of its own beyond an opaque digest that stops a refill being
       granted twice
     - Sentry — crash logs and diagnostics
-    - Firebase Analytics — the ten commerce events, plus device, app and app-instance
-      information, with the Settings switch named as the user control
-    - Game saves leave the device only through Android's own backup, to the player's own
-      Google account
+    - Firebase Analytics — commerce events and gameplay events (levels, stars, gates,
+      tutorial, finales, Scrapbook, objectives), plus device, app and app-instance
+      information, with the Settings switch named as the user control. Leaderboard
+      events are not sent while Daily Tempo is off
+    - Play Games — player id and display name when signed in, and achievement unlocks.
+      No cloud save
+    - Game saves leave the device through Android's own backup, to the player's own
+      Google account, and through a save code the player chooses to copy
 30. 👤 **Target audience.** The cartoon workshop look will read as child-appealing to a
     reviewer. Your published policy says the game is **not** directed at under-13s — keep
     the Console answer consistent with it, or change both together. Answering "children"
@@ -234,21 +239,28 @@ mid-frame. Everything below needs hardware and none of it has been done.
 So you do not spend time re-doing it:
 
 - Crash reporting, confirmed against the live project — an event the game produced reached
-  the dashboard and alerted. Only the sourcemap upload is unexercised (step 20).
-- Analytics, wired to Firebase behind a consent switch, with every shipped event checked
-  against Firebase's own limits.
+  the dashboard and alerted. The sourcemap upload has run (step 20); a symbolicated trace
+  from a release build on a device has not.
+- Analytics, wired to Firebase behind a consent switch, covering commerce and gameplay,
+  with every shipped event checked against Firebase's own limits. DebugView has not been
+  watched on a device (step 19).
+- Play Games Services v2: optional sign-in, five achievements derived from the save, and
+  a Daily Tempo leaderboard that stays dark while that mode is off. Saved Games is still
+  the plan in `docs/PLAY_GAMES.md`, not a feature.
 - Cloud save, two ways: Android Auto Backup declared explicitly, and a checksummed save
-  code the player can carry.
+  code the player can carry. Neither is an account.
 - An in-app support route, with the details a reply would otherwise have to ask for — and
   the address on the boot-failure panel, for the player who cannot reach Settings.
-- Legal pages written, naming Dor Vadai, covering ads, purchases, crash reports,
-  analytics, backup and the save code. **They need re-publishing (step 28).**
+- Legal pages naming Dor Vadai and describing ads, Play Billing, Play Games, crash
+  reports, commerce and gameplay analytics, backup and the save code. **They need
+  re-publishing (step 28).**
 - The package name settled as `com.tinytempo.app`, before the first upload made it
-  permanent.
+  permanent. `package.json` is the only version number.
 
 ## The shortest honest summary
 
-Two things block an upload no matter what else happens: **the repo cannot sign or bundle
-a release** (steps 9–12), and **the legal pages must be re-published** (step 28). The
-AdMob test IDs are gone (step 6). Everything else is either an account you can open today
-or a form you fill in once.
+`npm run android:bundle` can produce a signed AAB (steps 10–12). What still blocks an
+upload is an **upload keystore that only you should create** (step 9), **re-publishing
+the legal pages** (step 28), and the Play Console forms. The AdMob test IDs are gone
+(step 6). Everything else is either an account you can open today or a form you fill in
+once.

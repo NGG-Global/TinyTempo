@@ -24,10 +24,11 @@ Both files are needed and neither replaces the other. Android reads the first on
 releases and the second from 31 onwards, and a device running 31+ with only the old file
 falls back to a default that is not what these rules say.
 
-**The rules are file-level, and localStorage is one file.** All seven keys the game
-writes — progress, settings, tutorial, hearts, the refill ledger, the daily ledger and the
-premium cache — live inside one opaque LevelDB store, so "back up progress but not the
-premium cache" cannot be expressed. Everything goes or nothing does.
+**The rules are file-level, and localStorage is one file.** Every key the game writes
+lives inside one opaque LevelDB store: progress, settings, the tutorial, the teach flags,
+hearts, the refill ledger, the daily heart, the premium cache, daily objectives, and the
+Daily Tempo best (nothing writes it while that mode is off). "Back up progress but not
+the premium cache" cannot be expressed. Everything goes or nothing does.
 
 That is why the premium cache is bounded rather than excluded. `readPremiumCache` now
 carries a `checkedAt` and refuses a cache with no timestamp, a future one, or one older

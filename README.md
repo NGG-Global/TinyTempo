@@ -211,7 +211,9 @@ paths the Play Console listing should use:
 
 The legal pages state the current product as it is in code: on-device progress,
 optional AdMob rewarded ads, optional Google Play heart refill and Premium
-bought and held through Google Play itself, no Tiny Tempo account. Contact on the pages is
+bought through Google Play Billing itself, optional Play Games sign-in and
+achievements, crash reports, and usage analytics behind a Settings switch. There
+is no Tiny Tempo account. Contact on the pages is
 `dor1612@gmail.com`. Preview locally with any static server, for example
 `python3 -m http.server --directory legal 4174`.
 

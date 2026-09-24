@@ -41,7 +41,7 @@
             Android app (package name <code>com.tinytempo.app</code>), including
             optional ads and in-app purchases.
           </p>
-          <p class="meta">Effective date: 16 September 2026 · Last updated: 18 September 2026</p>
+          <p class="meta">Effective date: 16 September 2026 · Last updated: 24 September 2026</p>
         </div>
 
         <article class="document">
@@ -92,9 +92,16 @@
           <p>
             Tiny Tempo is a single-player rhythm game: you watch a short
             phrase, then tap it back across a road of levels. Progress, mute,
-            audio calibration and hearts are stored on your device. We do not
-            provide online multiplayer, user-generated public content, or a
-            Tiny Tempo account.
+            haptics, audio calibration, hearts and the day’s objectives are
+            stored on your device. We do not provide online multiplayer,
+            user-generated public content, or a Tiny Tempo account.
+          </p>
+          <p>
+            On Android you may also be signed into Google Play Games. That is
+            optional. Declining it does not stop the game. While signed in, the
+            app can ask Google to unlock achievements for clearing area finales.
+            There is no leaderboard in the current app, and Play Games does not
+            store your progress.
           </p>
           <p>
             Features, vignettes, difficulty and availability may change as we
@@ -119,23 +126,28 @@
 
           <h2 id="hearts">5. Hearts, ads and Premium</h2>
           <p>
-            Some levels spend a <strong>heart</strong> when you start a scored
-            attempt. Early levels and levels you have already mastered at three
-            stars do not spend a heart. Hearts refill over time on the device.
+            You start with five hearts. One returns every 20 minutes, up to
+            five. Levels 1 to 5 never spend a heart. A level you have already
+            cleared never spends one either. Starting a scored attempt on a
+            later level you have not cleared yet spends one heart. Finishing
+            that attempt with three stars gives the heart back.
           </p>
           <p>When hearts are empty, you may:</p>
           <ul>
             <li>wait for a heart to return;</li>
+            <li>claim one free heart, once each local day, while the bar is empty;</li>
             <li>watch an optional <strong>rewarded video ad</strong> (Google AdMob) for a heart, if an ad is available and any required consent has been given;</li>
-            <li>buy a <strong>heart refill</strong> through Google Play; or</li>
-            <li>buy <strong>Premium</strong>, a one-time unlock for unlimited hearts.</li>
+            <li>buy a <strong>heart refill</strong> through Google Play, which fills the bar; or</li>
+            <li>buy <strong>Premium</strong>, a one-time unlock for unlimited hearts. Premium does not spend hearts.</li>
           </ul>
           <p>
             Hearts, refills and Premium are virtual items. They have no cash
             value, are not redeemable for money, and exist only inside Tiny
             Tempo. A heart refill is consumable and is not restored. Premium
             can be restored with Restore Purchases in Settings on a device
-            signed into the Google account that bought it.
+            signed into the Google account that bought it. A backup of the app
+            does not keep Premium forever: the on-device cache expires, and the
+            store is what grants it again.
           </p>
           <p>
             Ads are provided by Google and its partners. We do not control
@@ -152,7 +164,7 @@
             charged to the Google account on the device.
           </p>
           <p>
-            We use RevenueCat to recognise entitlements. A purchase that is
+            The app talks to Google Play Billing directly. A purchase that is
             cancelled, pending, or that Google does not complete will not grant
             the item. If a network drop happens after Google charges you,
             Restore Purchases (for Premium) or contacting us with the order
@@ -198,7 +210,7 @@
           </p>
           <p>
             Third-party components keep their own licences. That includes the
-            Phaser engine, Capacitor, Google and RevenueCat software, and the
+            Phaser engine, Capacitor, Google software, and the
             bundled Fredoka and Nunito fonts under the SIL Open Font License.
             Open-source notices do not grant extra rights to our game content.
           </p>
