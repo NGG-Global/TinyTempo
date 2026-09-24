@@ -105,12 +105,12 @@ describe('saw presentation curves', () => {
   it('cycles by registry order alone', () => {
     // Registry order is the rotation (`ROTATION` in the registry): reordering or inserting an
     // entry silently reassigns every level's vignette. Cucumber, banana and paper were each
-    // appended so the earlier levels kept theirs; barber, popcorn and toothbrush were appended
-    // and wait for level 51, so every level a keepsake is earned on kept its act too.
+    // appended so the earlier levels kept theirs; barber, popcorn and toothbrush wait for
+    // level 51, and the paintbrush for level 107, so every keepsake level kept its act.
     expect(VIGNETTES.map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
       'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler', 'fisherman', 'scratch', 'trombone',
-      'clap', 'snare', 'bongos', 'slushy', 'apple', 'barber', 'popcorn', 'toothbrush',
+      'clap', 'snare', 'bongos', 'slushy', 'apple', 'barber', 'popcorn', 'toothbrush', 'paintbrush',
     ]);
     expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 26, 34, 50].map(level => levelSpec(level).vignette))
       .toEqual(['hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper', 'hammer', 'paper', 'apple']);

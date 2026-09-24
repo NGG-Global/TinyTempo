@@ -60,6 +60,10 @@ import { POPCORN_REVEAL_SEC } from './popcornMotion';
 import { ToothbrushVignette, BRUSH_INK } from './ToothbrushVignette';
 import { createBrushSounds } from '@/audio/brushSounds';
 import { BRUSH_REVEAL_SEC } from './brushMotion';
+import { PaintbrushVignette } from './PaintbrushVignette';
+import { createCanvasSounds } from '@/audio/canvasSounds';
+import { CANVAS_REVEAL_SEC } from './canvasMotion';
+import { CANVAS_LOOKS } from './canvasLooks';
 import type { RotationEra } from './rotation';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
@@ -250,13 +254,23 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     endingSec: BRUSH_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
     create: (scene, lap) => new ToothbrushVignette(scene, lap), sounds: createBrushSounds,
   },
+  // Act 29, appended at request. It joins the rotation at level 107 (`ROTATION`), past every keepsake.
+  {
+    id: 'paintbrush', title: 'Paintbrush', intro: 'Stroke by\nstroke.', ink: HOME_INK,
+    success: ['Signed and\ndone.', 'Every stroke where it belongs.'],
+    rough: ['A little\nmuddy.', 'The canvas can take another go.'],
+    endingSec: CANVAS_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new PaintbrushVignette(scene, lap), sounds: createCanvasSounds,
+    looks: CANVAS_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
  * How the rotation has grown, oldest first (`vignettes/rotation.ts`). Levels 1–50 play the
  * first twenty-five acts twice, exactly as they did before the barber, popcorn and
- * toothbrush arrived — every keepsake is earned on one of those levels, so none of them can
- * move — and from level 51 the rotation carries every act, opening on the new ones.
+ * toothbrush arrived — every keepsake earned on those levels stays put — and from level 51
+ * the rotation carries the first twenty-eight. The paintbrush joins at level 107, past
+ * every keepsake, opening on the act it adds.
  *
  * **Appending an act means adding an era here**, at a level past every keepsake players
  * could hold: the tests fail on a registry the last era does not cover.
@@ -264,4 +278,5 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
 export const ROTATION: readonly RotationEra[] = [
   { fromLevel: 1, acts: 25 },
   { fromLevel: 51, acts: 28 },
+  { fromLevel: 107, acts: 29 },
 ];

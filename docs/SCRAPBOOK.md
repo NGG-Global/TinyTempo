@@ -43,7 +43,7 @@ code of their own:
 - **Save codes and Auto Backup carry the collection** because they carry the accuracies.
 - **Merges only add.** `mergeProgress` keeps the better accuracy per level, so a merged save
   owns exactly the union of what the two sides owned.
-- **The totals are deterministic.** 56 today, from the list alone.
+- **The totals are deterministic.** 58 today, from the list alone.
 
 What it depends on is the star thresholds, which `tests/fixtures/level-thresholds.json`
 already pins because saved stars depend on them too.
@@ -151,6 +151,8 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 | 79 | Barber | Ginger lock | `barber-ginger-lock` |
 | 80 | Popcorn | Cinema tub | `popcorn-cinema-tub` |
 | 81 | Toothbrush | Strawberry paste | `toothbrush-berry-paste` |
+| 107 | Paintbrush | Studio brush | `paintbrush-studio` |
+| 136 | Paintbrush | Little sail | `paintbrush-sail` |
 
 ## Analytics
 
@@ -158,7 +160,7 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 (`vignette`, `collectible`, `level`, `first`, `owned`) when a finished level earns a
 keepsake — at most once per keepsake per session, and never for keepsakes an existing save
 owned on arrival, since nothing was unlocked then. Both ids are stable and low-cardinality:
-28 acts, 56 keepsakes. See `docs/ANALYTICS.md`.
+29 acts, 58 keepsakes. See `docs/ANALYTICS.md`.
 
 ## Checked, and not
 
