@@ -57,8 +57,15 @@ new arrives. Its opening is `PROGRESSION.finale.openingBars` long, through the b
 pennants over the act that move up under the headline for the result, a title card that is
 off the stage half a beat before the first demonstration, the loop swelling from
 `musicFloor` onto that downbeat, and an "Area complete" ribbon across the plaque's top
-edge — so a new area's finale is a new entry, never a PlayScene edit. The map flags every finale in its window and the dock's trail ends in one. See
-`docs/FINALES.md`.
+edge — so a new area's finale is a new entry, never a PlayScene edit. On the map every
+finale in the window is a **stage**, not a flagged stop: a plaza the road widens into,
+bunting in the treatment's pennants, a crown of three star seats over a larger puck, and a
+plate naming the act (`definitionForLap`), locked and previewed ones faded with a padlock
+badge (`finaleStopLook`, `ui/roadLayout.ts`). **A finale takes more road than a stop** —
+`ROAD.finaleRoom`, because every area's gate stands half a step under its first level,
+directly over the previous finale — so node y is no longer linear in the level: a seam is
+`seamBelow` the stop above it, and the road's x at a y is `pathXAt`, never a division by the
+step. The dock's trail ends in a flag. See `docs/FINALES.md`.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -70,7 +77,9 @@ brass everywhere it is shown** — plaque, road plate, tally and flight — and 
 road plate is hollow (`drawStarSeat`), because on the dark Dusk plate brass and a faded seat
 sit at the same luminance and only full-against-hollow keeps the count legible. A cleared level is never
 held, only the uncleared frontier at a closed area's first stop. The map draws a barrier at
-each closed area's foot, the collection on the bench, and flies a finished level's new stars
+each closed area's foot with a cream plate hanging from it at the road — the only place a
+gate's count is written, so it can never sit under the header — the collection on the
+bench, and flies a finished level's new stars
 from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everything that
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
@@ -453,7 +462,11 @@ the terrain of the strip above can never land on a prop standing across the seam
 And within the ground layer strips are painted bottom to top, so anything that overhangs a
 seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and hangs
 down onto paint already laid; claiming by centre instead drew a row of half-alpha terrain
-motifs twice, at every seam.
+motifs twice, at every seam. **The top of the window is a crest, not a cut**: the near slope
+is under the road and the far ridge and sky are painted over it down to the crest line
+(`drawCrest`, `CREST` in `ui/roadLayout.ts`), because a clip would be a mask; the road runs on
+past the line, a prop that would poke over it is not planted, and the signpost appears only
+when the window reaches the road's own end.
 
 **`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
 work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
@@ -659,7 +672,8 @@ src/
     gear.ts, icons.ts  Drawn control glyphs; no symbol fonts
     light.ts           The one key light: cast shadows and lit/shade/rim faces
     panel.ts           Slabs and pucks with thickness, dressed per treatment
-    path.ts            Catmull-Rom smoothing and dash spacing
+    path.ts            Catmull-Rom smoothing, dash spacing, x at a y on a climbing road
+    roadLayout.ts      The map's stops, seams, finale room and stage, gate plate and crest; pure
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
     keepsakes.ts       Each keepsake drawn, and its silhouette

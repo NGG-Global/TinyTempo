@@ -80,11 +80,40 @@ only tells it *when* — the opening's downbeat, the clear. It never decides *wh
 
 ## On the map
 
-Every finale in the map's window carries a flag on a pole beside its puck and a brass ring
-around it, in every state — locked and previewed finales faded — so the destination is
-visible from a dozen levels away. A finished area flies a brass star on its flag. The dock's
-row of beads ends in a flag for the area's finale, with "Finale in 3" (or "Area finale")
-beside it, and when the frontier is the finale the block reads "Finale: Trombone".
+Every finale in the map's window is drawn as a stage rather than a stop, in every state, so
+the destination reads as the end of the area from a dozen levels away:
+
+- **A plaza.** The road widens into a disc 130 units across the radius, in the road's own
+  surface, edge and markings, with a dashed ring inside it.
+- **Bunting** on two wood posts either side of the plaza, in the treatment's
+  `pennants` (lanterns where the treatment's motif is lanterns). A post near the frame's
+  edge moves in, so the line is shorter on that side rather than off the screen.
+- **A crown of three star seats** over the puck, the middle one larger and highest. An
+  earned seat is prize brass and an empty one hollow, read from the level's best; while a
+  star flight is on they show what the level had before, and the new stars leave from them.
+- **A larger puck** (67 against an ordinary stop's 46) inside two brass rings. Its hit area
+  is the larger disc.
+- **A wood plate** under the plaza: "Finale" over the act's title from `definitionForLap`,
+  so a variant's name is the one shown.
+
+The state comes from `finaleStopLook` (`src/ui/roadLayout.ts`), fed the state the puck is
+drawn in: the frontier is coral and lit, a cleared finale an ink puck with its seats
+filled, and a locked or previewed one has its bunting and plate faded toward the ground,
+its rings at half strength and a padlock badge on the puck. The side flag it replaces is
+gone; the dock's row of beads still ends in a flag for the area's finale, with "Finale in 3"
+(or "Area finale") beside it, and when the frontier is the finale the block reads
+"Finale: Trombone".
+
+**A finale takes more road than a stop.** Every area after the first has a star gate half a
+step under its first level, which is directly above the previous area's finale, and at the
+ordinary step the barrier stood in the middle of the bunting. `ROAD.finaleRoom` adds 140
+units above a finale and 50 below it, inside the finale's own area: the seam an area's
+ground and gate change on is measured from the stop above it (`seamBelow`), so the room
+never moves a gate or a terrain boundary off its level. Node y is therefore no longer
+linear in the level, and the road's x at a y is a search on the road itself (`pathXAt`)
+rather than a division. `tests/roadLayout.test.ts` checks the stage against the stop below
+it and the gate above it on every finale in a range of windows, on phone and tablet
+frames.
 
 ## Giving an area its own finale
 
@@ -113,7 +142,8 @@ level's own events, from the same run and the same single close (`docs/ANALYTICS
 
 Levels 10 and 50 were driven in headless Chromium: the title card during the opening, the
 pennants and lanterns, the payoff over the plaque with a keepsake card below it on 20:9 and
-16:9 frames, and the map's flags, rings and dock trail at two frontiers. The payoff was
+16:9 frames, and the map's stages and dock trail at several frontiers — locked, previewed,
+frontier and cleared, at 393 × 851, 360 × 640 and a 768 × 1024 tablet. The payoff was
 attached to a real result screen rather than earned, because that environment renders at
 about 12 fps and its replayed taps cannot clear the level. The swell and the roll were
 confirmed scheduled, not listened to. Not yet seen or heard on a device or a tablet.

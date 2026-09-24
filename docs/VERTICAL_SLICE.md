@@ -154,9 +154,18 @@ The road is a Catmull-Rom spline through the level nodes (`ui/path.ts`), sampled
 times per span. Stroking the nodes directly folded the road at every level; the spline
 cuts the sharpest turn to under a third of that. It is drawn as a dropped shadow, a
 casing, the surface and a top sheen, with markings dashed at an even pitch along the
-curve rather than per node. A span that crosses an area boundary is split at its
-midpoint, which is exactly where the ground changes, so surface and terrain change on the
-same line instead of a node apart.
+curve rather than per node. A span that crosses an area boundary is split on the seam
+half a step under the area's first stop, which is exactly where the ground changes, so
+surface and terrain change on the same line instead of a node apart. (That was the span's
+midpoint until an area finale took extra road for its stage; `docs/FINALES.md`.)
+
+At the top of the window the road goes over a hill rather than stopping: the near slope is
+painted under it and the far ridge and the top area's sky over it, down to a crest line a
+fixed distance under the header (`CREST` in `ui/roadLayout.ts`), with a wood signpost
+there — "More road opens as you play" — whenever the window reaches the road's own end.
+The road itself runs on past the crest, so the horizon is what ends it. The hill's tones
+are the top area's sky through `faces()`, and a prop that would poke over the ridge is not
+planted, since the horizon would cut it off flat.
 
 Depth in the terrain is atmospheric rather than perspective: each band hazes toward its
 own sky colour at its far end, boundaries cross-fade over nine bands, and a quiet motif
