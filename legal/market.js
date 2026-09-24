@@ -122,11 +122,13 @@
     new IntersectionObserver((entries, self) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
-        plaque.classList.remove('is-waiting');
         plaqueAt = now();
+        // Posed before it is shown, so the settled plaque never flashes for a frame.
+        drawPlaque(plaqueAt);
+        plaque.classList.remove('is-waiting');
         self.disconnect();
       }
-    }, { threshold: 0.45 }).observe(plaque);
+    }, { rootMargin: '0px 0px -15% 0px', threshold: 0.2 }).observe(plaque);
   }
 
   // ------------------------------------------------------------ one frame loop

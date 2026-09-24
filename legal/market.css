@@ -1905,6 +1905,16 @@ html.js .reveal.in {
   transition-delay: var(--stagger, 0ms);
 }
 
+/* A printed page has no scroll to reveal anything on. */
+@media print {
+  html.js .reveal,
+  .plaque.is-waiting,
+  .plaque.is-waiting .star {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 /* ------------------------------------------------------------ responsive */
 
 @media (max-width: 1080px) {
