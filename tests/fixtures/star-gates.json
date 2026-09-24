@@ -1,0 +1,190 @@
+{
+  "knobs": {
+    "firstArea": 12,
+    "growth": 1,
+    "maxPerArea": 14
+  },
+  "report": "area  level  required  added  behind  share  capped\n   1      1         0      0       0     0%  no\n   2     11        12     12      30    40%  no\n   3     21        25     13      60    42%  no\n   4     31        39     14      90    43%  no\n   5     41        53     14     120    44%  yes\n   6     51        67     14     150    45%  yes\n   7     61        81     14     180    45%  yes\n   8     71        95     14     210    45%  yes\n   9     81       109     14     240    45%  yes\n  10     91       123     14     270    46%  yes\n  11    101       137     14     300    46%  yes\n  12    111       151     14     330    46%  yes\n  13    121       165     14     360    46%  yes\n  14    131       179     14     390    46%  yes\n  15    141       193     14     420    46%  yes\n  16    151       207     14     450    46%  yes\n  17    161       221     14     480    46%  yes\n  18    171       235     14     510    46%  yes\n  19    181       249     14     540    46%  yes\n  20    191       263     14     570    46%  yes",
+  "areas": [
+    {
+      "area": 1,
+      "level": 1,
+      "required": 0,
+      "added": 0,
+      "behindStars": 0,
+      "share": 0,
+      "capped": false
+    },
+    {
+      "area": 2,
+      "level": 11,
+      "required": 12,
+      "added": 12,
+      "behindStars": 30,
+      "share": 40,
+      "capped": false
+    },
+    {
+      "area": 3,
+      "level": 21,
+      "required": 25,
+      "added": 13,
+      "behindStars": 60,
+      "share": 42,
+      "capped": false
+    },
+    {
+      "area": 4,
+      "level": 31,
+      "required": 39,
+      "added": 14,
+      "behindStars": 90,
+      "share": 43,
+      "capped": false
+    },
+    {
+      "area": 5,
+      "level": 41,
+      "required": 53,
+      "added": 14,
+      "behindStars": 120,
+      "share": 44,
+      "capped": true
+    },
+    {
+      "area": 6,
+      "level": 51,
+      "required": 67,
+      "added": 14,
+      "behindStars": 150,
+      "share": 45,
+      "capped": true
+    },
+    {
+      "area": 7,
+      "level": 61,
+      "required": 81,
+      "added": 14,
+      "behindStars": 180,
+      "share": 45,
+      "capped": true
+    },
+    {
+      "area": 8,
+      "level": 71,
+      "required": 95,
+      "added": 14,
+      "behindStars": 210,
+      "share": 45,
+      "capped": true
+    },
+    {
+      "area": 9,
+      "level": 81,
+      "required": 109,
+      "added": 14,
+      "behindStars": 240,
+      "share": 45,
+      "capped": true
+    },
+    {
+      "area": 10,
+      "level": 91,
+      "required": 123,
+      "added": 14,
+      "behindStars": 270,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 11,
+      "level": 101,
+      "required": 137,
+      "added": 14,
+      "behindStars": 300,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 12,
+      "level": 111,
+      "required": 151,
+      "added": 14,
+      "behindStars": 330,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 13,
+      "level": 121,
+      "required": 165,
+      "added": 14,
+      "behindStars": 360,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 14,
+      "level": 131,
+      "required": 179,
+      "added": 14,
+      "behindStars": 390,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 15,
+      "level": 141,
+      "required": 193,
+      "added": 14,
+      "behindStars": 420,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 16,
+      "level": 151,
+      "required": 207,
+      "added": 14,
+      "behindStars": 450,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 17,
+      "level": 161,
+      "required": 221,
+      "added": 14,
+      "behindStars": 480,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 18,
+      "level": 171,
+      "required": 235,
+      "added": 14,
+      "behindStars": 510,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 19,
+      "level": 181,
+      "required": 249,
+      "added": 14,
+      "behindStars": 540,
+      "share": 46,
+      "capped": true
+    },
+    {
+      "area": 20,
+      "level": 191,
+      "required": 263,
+      "added": 14,
+      "behindStars": 570,
+      "share": 46,
+      "capped": true
+    }
+  ]
+}

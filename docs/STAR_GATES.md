@@ -44,6 +44,13 @@ Three properties were chosen and are pinned by `tests/stars.test.ts`:
   three-stars, and asking for 2 of their 30 spare stars teaches the mechanic without
   stopping anyone.
 
+The curve is generated and checked by `gateCurve` / `validateGateCurve` in
+`src/game/starGates.ts`. Production always passes `PROGRESSION.starGate`; other knobs are
+only a preview, and the checks refuse a preview that stops climbing, breaks the cap, or
+asks for more stars than the levels behind the gate can hold. `tests/fixtures/star-gates.json`
+is the requirements for areas 1–20 as that helper prints them. Changing the knobs moves
+the fixture on purpose. It does not move them by itself.
+
 Two rules keep it from ever being a wall. A **cleared level is never held**, whatever
 area it is in: replaying what was earned is the very thing the gate asks for, and a
 replay never costs a heart, so a save code from before the gates existed keeps every
