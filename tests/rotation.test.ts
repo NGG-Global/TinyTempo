@@ -40,6 +40,9 @@ describe('the rotation', () => {
     expect(levelSpec(54).lap).toBe(2);
     expect(levelSpec(78)).toMatchObject({ vignette: 'apple', lap: 2 });
     expect(levelSpec(79)).toMatchObject({ vignette: 'barber', lap: 1 });
+    // The third era starts past every keepsake and opens on the act it adds.
+    expect(levelSpec(106).vignette).not.toBe('paintbrush');
+    expect(levelSpec(107)).toMatchObject({ vignette: 'paintbrush', lap: 0 });
   });
 
   it('reads the same backwards as forwards, for every act and lap', () => {

@@ -13,7 +13,6 @@ const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'j
 describe('toothbrush act', () => {
   it('is the twenty-eighth act, and first plays level 53', () => {
     expect(VIGNETTES[27]?.id).toBe('toothbrush');
-    expect(VIGNETTES).toHaveLength(28);
     expect(levelSpec(53).vignette).toBe('toothbrush');
     expect(actLevel('toothbrush', 1)).toBe(81);
     const definition = VIGNETTES[27]!;

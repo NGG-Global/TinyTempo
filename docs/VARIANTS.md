@@ -8,9 +8,10 @@ keeps the act it had.
 
 `levelSpec` exposes `lap`, the number of earlier levels its act played. Levels 1 to 25
 are lap 0 and 26 to 50 lap 1 for the first twenty-five acts; from level 51 the rotation
-carries all twenty-eight (`ROTATION` in `src/vignettes/registry.ts`, `docs/BARBER_POPCORN_TOOTHBRUSH.md`),
+carries the first twenty-eight (`ROTATION` in `src/vignettes/registry.ts`),
 so the first twenty-five return for lap 2 on 54 to 78, and the barber, popcorn and
-toothbrush play lap 0 on 51 to 53. A level's act and lap are `levelSpec`'s; the level of
+toothbrush play lap 0 on 51 to 53. From level 107 the rotation carries the paintbrush too
+(`docs/PAINTBRUSH.md`). A level's act and lap are `levelSpec`'s; the level of
 an act's lap is `actLevel`, and the level numbers below are read from it.
 `PlayScene` passes it to `VignetteDefinition.create(scene, lap)`; every act indexes
 its list modulo the list's length, through `lookAt` where the list is a data module.
@@ -26,8 +27,9 @@ but within the set the lap selected.
 | Scissors & paper (level 9, 34, 62, 90…) | Star, heart, angel | Butterfly, fir tree, tulip | Crown, bell, mushroom | Gingerbread man, maple leaf, rocket | Star set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
 | Light switch (level 12, 37, 65, 93…) | Sage salon | Morning kitchen | Green study | Rose bedroom | Salon again | `src/vignettes/lightLooks.ts` |
 | Doorbell (level 13, 38, 66, 94…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | Teal again | `src/vignettes/doorLooks.ts` |
-| Slushy (level 24, 49, 77, 105, 133…) | Berry | Blue raspberry | Lime | Orange | Grape | `src/vignettes/slushyLooks.ts` |
+| Slushy (level 24, 49, 77, 105, 131…) | Berry | Blue raspberry | Lime | Orange | Grape | `src/vignettes/slushyLooks.ts` |
 | Apple (level 25, 50, 78, 106…) | Red apple | Pear | Peach | Strawberry-iced donut | Apple again | `src/vignettes/appleLooks.ts` |
+| Paintbrush (107, 136, 165, 194…) | Sunset | Sailboat | Tabby | Flower | Sunset again | `src/vignettes/canvasLooks.ts` |
 
 The other twenty-one each have three looks. Lap 3 is lap 0 again. Words stay the act's:
 a golden tomato is still a tomato, a harbour window is still a window.
@@ -52,9 +54,9 @@ a golden tomato is still a tomato, a harbour window is still a window.
 | Clapping hands (21, 46, 74…) | Green sleeves | Plum sleeves | Navy sleeves | `clapLooks.ts` |
 | Snare drum (22, 47, 75…) | Red lacquer | Blue lacquer | Bare maple | `snareLooks.ts` |
 | Bongos (23, 48, 76…) | Terracotta | Walnut | Painted | `bongoLooks.ts` |
-| Barber (51, 79, 107…) | Chestnut mop, navy cape, mint shop | Ginger curls, burgundy cape, blue shop | Jet black, forest cape, cream shop | `barberLooks.ts` |
-| Popcorn (52, 80, 108…) | Buttered, blue glazed bowl | Cinema tub, red and white | Caramel corn, wooden bowl | `popcornLooks.ts` |
-| Toothbrush (53, 81, 109…) | Teal brush, mint paste, chrome mirror | Pink brush, strawberry paste, wooden mirror | Orange brush, blue gel, green mirror | `brushLooks.ts` |
+| Barber (51, 79, 133…) | Chestnut mop, navy cape, mint shop | Ginger curls, burgundy cape, blue shop | Jet black, forest cape, cream shop | `barberLooks.ts` |
+| Popcorn (52, 80, 134…) | Buttered, blue glazed bowl | Cinema tub, red and white | Caramel corn, wooden bowl | `popcornLooks.ts` |
+| Toothbrush (53, 81, 135…) | Teal brush, mint paste, chrome mirror | Pink brush, strawberry paste, wooden mirror | Orange brush, blue gel, green mirror | `brushLooks.ts` |
 
 ## What a look may change
 

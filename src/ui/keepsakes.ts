@@ -5,6 +5,7 @@ import { BANANA_LOOKS } from '../vignettes/bananaLooks';
 import { BELL_LOOKS } from '../vignettes/bellLooks';
 import { BONGO_LOOKS } from '../vignettes/bongoLooks';
 import { BRUSH_LOOKS } from '../vignettes/brushLooks';
+import { CANVAS_LOOKS } from '../vignettes/canvasLooks';
 import { BUBBLE_LOOKS } from '../vignettes/bubbleLooks';
 import { BUG_LOOKS } from '../vignettes/bugLooks';
 import { CLAP_LOOKS } from '../vignettes/clapLooks';
@@ -658,6 +659,27 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       p.fill(look.paste).poly([[-24, -6], [16, -8], [16, 8], [-24, 6]], false);
       for (const x of [-35, -31]) p.line([[x, -12], [x, 12]], 1.6, shade(0xfbf7f8, -0.3));
       glint(p, -12, -10, 4);
+    });
+  },
+  'paintbrush-studio': p => {
+    const look = CANVAS_LOOKS[0]!;
+    p.fill(look.handle).bar(-36, 28, 16, -24, 10);
+    p.fill(look.ferrule).bar(12, -20, 24, -32, 12);
+    p.detail(() => {
+      p.fill(look.bristle).bar(18, -26, 36, -40, 8);
+      p.line([[-28, 18], [-4, -6]], 2, shade(look.handle, 0.35));
+    });
+  },
+  'paintbrush-sail': p => {
+    const look = CANVAS_LOOKS[1]!;
+    const sea = look.strokes[3]!;
+    const hull = look.strokes[5]!;
+    const sail = look.strokes[7]!;
+    p.fill(sea.colour).poly([[-40, 10], [40, 6], [36, 22], [-36, 24]]);
+    p.fill(hull.colour).poly([[-22, 8], [24, 6], [16, 22], [-16, 22]]);
+    p.detail(() => {
+      p.fill(sail.colour).poly([[-2, 4], [-2, -34], [22, -6]]);
+      p.line([[-2, 6], [-2, -36]], 2.4, look.strokes[6]!.ink);
     });
   },
 };

@@ -87,7 +87,9 @@ it has landed. See `docs/STAR_GATES.md`.
 Twenty-eight vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
-did, and from level 51 all twenty-eight, opening on the acts that era added. Reordering
+did, from level 51 the first twenty-eight, and from level 107 all twenty-nine,
+each era opening on the acts it added. The paintbrush is act 29: one stroke a
+beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
 or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
 level's vignette, and **appending one now also needs an era**, starting past every
 keepsake level: a keepsake is earned on the level where its act plays a lap, and an
