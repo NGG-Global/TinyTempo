@@ -7,7 +7,7 @@ import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
-import { areaOf, levelSpec, mapLastLevel, mapLevelState, type Area } from '@/game/levels';
+import { areaOf, levelSpec, mapLevelState, type Area } from '@/game/levels';
 import { areaTrail, finaleMapMark, finaleTreatment, nextFinale } from '@/game/finale';
 import {
   canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
@@ -18,10 +18,16 @@ import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { MaterialKey } from '@/textures/materials';
-import { mix, shade, starColour } from '@/ui/colour';
+import { mix, relativeLuminance, shade, starColour } from '@/ui/colour';
+import { fillContour, traceContour } from '@/ui/illustration';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { FxKey } from '@/ui/feedback';
-import { dashes, smoothPath, type Point } from '@/ui/path';
+import { dashes, pathIndexAt, pathXAt, smoothPath, type Point } from '@/ui/path';
+import {
+  beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE,
+  gatePlateTop, mapWindow, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
+} from '@/ui/roadLayout';
+import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
 import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
@@ -40,18 +46,13 @@ import { definitionForLap } from '@/vignettes/Vignette';
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
 const MAP = {
-  step: 202, nodeRadius: 46, wobble: 0.27, topPad: 420, bottomPad: 660,
+  /** Spacing, padding, the window and a finale's room live in `ui/roadLayout.ts`, where they are tested. */
+  step: ROAD.step, nodeRadius: 46, wobble: 0.27,
   roadWidth: 58, tapSlop: 14, friction: 5,
   /** Spline samples per level span. Enough that the curve reads smooth at any width. */
   smoothing: 14,
   /** Bands used for the haze ramp up each area and for the blend across a boundary. */
   hazeBands: 12, blendBands: 9, blendHeight: 120,
-  /**
-   * The map renders a window, not the whole road. It used to build one Phaser Text per
-   * level from level 1, so a deep — or corrupt — frontier allocated thousands of them
-   * on every entry and re-laid them out on every resize.
-   */
-  window: 48, history: 20,
   /**
    * The world is baked into strips of this many levels, and a strip the camera cannot
    * see is not drawn at all.
@@ -84,19 +85,20 @@ const MAP = {
   hopSec: 1.6,
   sign: { width: 340, height: 92, top: 20, ropeInset: 40 },
   /**
-   * The star gate: a barrier across the road at the foot of a closed area, with the
-   * count it wants on a sign under the bar. The bar pivots on the left post and lifts
-   * when the collection reaches the requirement.
+   * The star gate's motion: a barrier across the road at the foot of a closed area (its
+   * geometry is `GATE`), with the count it wants on a cream plate under the bar. The bar
+   * pivots on the left post and lifts when the collection reaches the requirement.
    */
-  barrier: { post: 14, height: 62, reach: 18, bar: 15, sign: { width: 150, height: 48 }, liftSec: 0.9, barFadeSec: 0.35 },
+  barrier: { liftSec: 0.9, barFadeSec: 0.35 },
   /** The tally's star on the bench, and the beads row it shares. */
   tally: { star: 13 },
   /**
-   * An area finale's stop: a flag on a pole planted beside the puck, and a brass ring
-   * around it. Every finale in the window carries both, locked and previewed ones faded,
-   * so the destination is visible a dozen levels before the frontier reaches it.
+   * An area finale's stop is a stage (`FINALE_STOP`): a plaza, bunting, a crown of star
+   * seats over a larger puck and a plate naming the act. Every finale in the window has
+   * one, locked and previewed ones faded toward the ground, so the destination is visible
+   * a dozen levels before the frontier reaches it. `fade` is how far toward the ground.
    */
-  finale: { flag: 76, ring: 7, lockedAlpha: 0.7, previewAlpha: 0.4 },
+  finale: { fade: 0.55, number: 40 },
 } as const;
 
 
@@ -135,6 +137,8 @@ export class MapScene extends BaseScene {
   private progress!: Progress;
   private health!: Health;
   private shown = 0;
+  /** The window reaches the road's own end, so the crest carries its signpost. */
+  private atEnd = true;
   /** Lowest level rendered. Node i is level `first + i`. */
   private first = 1;
   private firstBand = 0;
@@ -155,7 +159,15 @@ export class MapScene extends BaseScene {
   private dockTitle!: Phaser.GameObjects.Text;
   /** Beside the trail: how far the area's finale is from the frontier. */
   private dockHint!: Phaser.GameObjects.Text;
-  private gateLabel!: Phaser.GameObjects.Text;
+  /** The crest at the top of the window: the near slope under the road, and the horizon and signpost over it. */
+  private crestSlope!: Phaser.GameObjects.Graphics;
+  private crestHorizon!: Phaser.GameObjects.Graphics;
+  private crestCopy!: Phaser.GameObjects.Text;
+  private crestTop = 0;
+  /** Each finale stage's box in the window, so no prop is planted on one. */
+  private stages: { left: number; right: number; top: number; bottom: number }[] = [];
+  /** Per finale in the window, by node index: "Finale" over the act's title on its plate. */
+  private finaleTexts = new Map<number, { eyebrow: Phaser.GameObjects.Text; title: Phaser.GameObjects.Text }>();
   private restScrim!: Phaser.GameObjects.Graphics;
   private restPlate!: Phaser.GameObjects.Graphics;
   private restSurface!: Phaser.GameObjects.TileSprite;
@@ -200,8 +212,12 @@ export class MapScene extends BaseScene {
   private lockedIndex = -1;
   /** Every star on the road, as the map read it on entry. */
   private stars = 0;
-  /** Per band: the have/need sign under a closed gate's bar. Culled with the area titles. */
+  /**
+   * Per band: the count on the cream plate under a closed gate's bar, and beside it the
+   * `/ need` of the gate being worked toward. Culled with the area titles.
+   */
   private gateTexts: Phaser.GameObjects.Text[] = [];
+  private gateGoals: Phaser.GameObjects.Text[] = [];
   private tally!: Phaser.GameObjects.Graphics;
   private tallyCount!: Phaser.GameObjects.Text;
   private tallyGoal!: Phaser.GameObjects.Text;
@@ -304,9 +320,10 @@ export class MapScene extends BaseScene {
     this.landedAt = -Infinity;
     this.gateLiftAt = -Infinity;
     this.liveGate = firstClosedArea(this.tallyShown);
-    const top = mapLastLevel(this.progress.unlocked);
-    this.first = Math.max(1, Math.min(this.focus - MAP.history, top - MAP.window + 1));
-    this.shown = Math.min(top, this.first + MAP.window - 1) - this.first + 1;
+    const view = mapWindow(this.progress.unlocked, this.focus);
+    this.first = view.first;
+    this.shown = view.shown;
+    this.atEnd = view.atEnd;
     // Bands are addressed absolutely, because the window rarely starts on a band edge.
     this.firstBand = Math.floor((this.first - 1) / PROGRESSION.areaSize);
     this.bakeKey = '';
@@ -342,8 +359,22 @@ export class MapScene extends BaseScene {
     this.objectivesCard = new ObjectivesCard(this, 30);
     this.objectives = loadObjectives(Date.now(), objectiveContext(this.progress));
     this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
-    this.gateLabel = display(this, '', { size: 28, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4);
-    this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 26, colour: SHELL.cream }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
+    this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 28, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
+    this.gateGoals = Array.from({ length: areas }, () => body(this, '', { size: 22, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
+    // Between every strip's detail (1) and the frontier (3): the horizon has to cover the
+    // road's tail past the crest, and a finale at the top of the window stands under it.
+    this.crestSlope = this.add.graphics().setDepth(0.5);
+    this.crestHorizon = this.add.graphics().setDepth(1.5);
+    this.crestCopy = display(this, 'More road opens\nas you play', { size: 28, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(1.6).setVisible(false);
+    this.finaleTexts = new Map();
+    for (let i = 0; i < this.shown; i++) {
+      const level = this.first + i;
+      if (!finaleMapMark(level, this.progress.unlocked)) continue;
+      this.finaleTexts.set(i, {
+        eyebrow: label(this, 'Finale', { size: 17, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(2),
+        title: display(this, definitionForLap(VIGNETTES.find(v => v.id === levelSpec(level).vignette)!, levelSpec(level).lap).title, { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(2),
+      });
+    }
     this.tally = this.add.graphics().setScrollFactor(0).setDepth(11);
     this.tallyCount = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
     this.tallyGoal = body(this, '', { size: 22, colour: PALETTE.muted }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
@@ -410,7 +441,7 @@ export class MapScene extends BaseScene {
     this.hudHeight = safe.top + 144 * s;
     this.footerTop = safe.bottom - 210 * s;
     this.objectivesCard.layout(safe, full, s);
-    this.worldHeight = (MAP.topPad + MAP.bottomPad + (this.shown - 1) * MAP.step) * s + this.hudHeight;
+    this.worldHeight = worldHeight(this.first, this.shown, s, this.hudHeight);
     // Everything the bake reads, and nothing else. The height of the frame is not in it,
     // which is the point: `layout()` runs on every resize, and on Android the commonest
     // resize by far is Chrome collapsing its URL bar — one event per frame of the
@@ -448,14 +479,20 @@ export class MapScene extends BaseScene {
     const key = [s, this.worldHeight, full.x, full.width, safe.left, safe.right, safe.centerX, safe.width, this.first, this.shown].join('|');
     if (!force && key === this.bakeKey) return;
     this.bakeKey = key;
-    // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe frame.
-    this.nodes = Array.from({ length: this.shown }, (_, i) => ({
-      x: safe.centerX + Math.sin((this.first + i) * 0.9) * safe.width * MAP.wobble,
-      y: this.worldHeight - (MAP.bottomPad + i * MAP.step) * s,
-    }));
-    // The road runs one span past the last node so it leaves the frame rather than stopping.
-    const beyond: Point = { x: safe.centerX + Math.sin((this.first + this.shown) * 0.9) * safe.width * MAP.wobble, y: (this.nodes[this.shown - 1]?.y ?? 0) - MAP.step * s };
-    this.road = smoothPath([...this.nodes, beyond], MAP.smoothing);
+    // Level 1 sits at the bottom; the road climbs. x wanders left and right inside the safe
+    // frame, and y is a step per level with a finale's room either side of it.
+    const wander = (level: number): number => safe.centerX + Math.sin(level * 0.9) * safe.width * MAP.wobble;
+    this.nodes = nodeYs(this.first, this.shown, s, this.hudHeight).map((y, i) => ({ x: wander(this.first + i), y }));
+    // The road runs on through where the next stop would stand and past the crest, so the
+    // horizon ends it rather than a square cut in the middle of an area.
+    const beyond: Point = { x: wander(this.first + this.shown), y: beyondY(s, this.hudHeight) };
+    const overrun: Point = { x: wander(this.first + this.shown + 1), y: beyond.y - CREST.overrun * s };
+    this.road = smoothPath([...this.nodes, beyond, overrun], MAP.smoothing);
+    this.crestTop = crestY(s, this.hudHeight);
+    this.stages = [];
+    this.nodes.forEach((node, i) => {
+      if (finaleMapMark(this.first + i, this.progress.unlocked)) this.stages.push(finaleStageBounds(node.x, node.y, s, safe.left, safe.right));
+    });
     // Strips are level-aligned and abut exactly, so the bake is partitioned rather than
     // clipped: every node, prop and road span belongs whole to one strip, and only the
     // terrain — the one thing that fills rather than sits — is cut at the seam.
@@ -473,7 +510,7 @@ export class MapScene extends BaseScene {
       this.drawPlaques(g, s, strip);
       this.drawNodes(g, s, strip);
     }
-    this.drawGate(s);
+    this.drawCrest(s);
     this.drawStarGates(s);
   }
 
@@ -505,11 +542,20 @@ export class MapScene extends BaseScene {
       const on = title.y > top && title.y < bottom;
       if (title.visible !== on) title.setVisible(on);
     }
-    for (const sign of this.gateTexts) {
+    for (const sign of [...this.gateTexts, ...this.gateGoals]) {
       // A sign with no text is a gate that is open or off the window; it stays hidden.
       const on = sign.text !== '' && sign.y > top && sign.y < bottom;
       if (sign.visible !== on) sign.setVisible(on);
     }
+    for (const { eyebrow, title } of this.finaleTexts.values()) {
+      const on = title.y > top && title.y < bottom;
+      if (title.visible !== on) { title.setVisible(on); eyebrow.setVisible(on); }
+    }
+    // Everything the crest draws is above its line or just under it on the slope.
+    const crest = this.crestTop < bottom;
+    if (this.crestHorizon.visible !== crest) { this.crestHorizon.setVisible(crest); this.crestSlope.setVisible(crest); }
+    const copy = crest && this.atEnd;
+    if (this.crestCopy.visible !== copy) this.crestCopy.setVisible(copy);
   }
 
   /**
@@ -533,11 +579,13 @@ export class MapScene extends BaseScene {
     return { area, level: firstLevelOfArea(area), required, have: this.tallyShown, short: required - this.tallyShown };
   }
 
-  /** World y of the road's boundary at the foot of an area, or null when it is off the window. */
+  /**
+   * World y of the road's boundary at the foot of an area — the seam under its first stop —
+   * or null when it is off the window.
+   */
   private boundaryY(area: number): number | null {
     const i = firstLevelOfArea(area) - this.first;
-    if (i <= 0 || i >= this.shown) return i === 0 && this.shown > 0 ? this.nodes[0]!.y + MAP.step * this.uiScale / 2 : null;
-    return (this.nodes[i - 1]!.y + this.nodes[i]!.y) / 2;
+    return i >= 0 && i < this.shown ? seamBelow(this.nodes[i]!.y, this.uiScale) : null;
   }
 
   /**
@@ -577,10 +625,11 @@ export class MapScene extends BaseScene {
       const band = this.band(k);
       const area = band.area;
       const first = this.nodes[band.from]!;
-      const last = this.nodes[band.to]!;
       const isLast = band.atTop;
-      const top = isLast ? 0 : last.y - MAP.step * s / 2;
-      const bottom = band.atBottom ? this.worldHeight : first.y + MAP.step * s / 2;
+      // Both ends are seams, each measured from the stop above it, so a finale's extra room
+      // falls inside its own area and neighbouring bands still meet on one line.
+      const top = isLast ? 0 : seamBelow(this.nodes[band.to + 1]!.y, s);
+      const bottom = band.atBottom ? this.worldHeight : seamBelow(first.y, s);
       const height = bottom - top;
       fill(area.ground, 1, top, height);
       // Atmospheric recession: the far end of a band hazes toward its own sky colour.
@@ -609,7 +658,7 @@ export class MapScene extends BaseScene {
     for (let k = 0; k < this.areaTitles.length; k++) {
       const band = this.band(k);
       const first = this.nodes[band.from]!;
-      const bottom = band.atBottom ? this.worldHeight : first.y + MAP.step * s / 2;
+      const bottom = band.atBottom ? this.worldHeight : seamBelow(first.y, s);
       // A plaque belongs to one strip, not to every strip its band crosses: claimed by
       // its top, half-open, as `MAP.overhang` sets out.
       const claim = bottom - (72 + MAP.overhang.plaque) * s;
@@ -661,16 +710,12 @@ export class MapScene extends BaseScene {
   }
 
   /**
-   * Road x at a world y. Node y is linear in the level index and the spline samples it
-   * uniformly, so the index inverts directly — a scan here would be quadratic against
-   * the terrain cells that call it.
+   * Road x at a world y. A binary search on the road itself: node y is no longer linear in
+   * the level index once a finale takes its room, and a scan here would be quadratic
+   * against the terrain cells that call it.
    */
   private roadXAt(y: number): number {
-    if (this.road.length === 0) return this.viewport.safe.centerX;
-    const s = this.uiScale;
-    const level = (this.worldHeight - MAP.bottomPad * s - y) / (MAP.step * s);
-    const index = Math.round(level * MAP.smoothing);
-    return (this.road[Math.max(0, Math.min(this.road.length - 1, index))] ?? this.road[0]!).x;
+    return this.road.length === 0 ? this.viewport.safe.centerX : pathXAt(this.road, y);
   }
 
   /** A painted wooden sign for the area name, on whichever side of the road has room for it. */
@@ -722,17 +767,18 @@ export class MapScene extends BaseScene {
     // below 1, so a doubled segment at a seam would read as a dark tick under the road.
     const shadowTo = strip.to >= this.shown ? this.road.length : strip.to * MAP.smoothing + 1;
     stroke(this.road.slice(strip.from * MAP.smoothing, shadowTo), width + 10 * s, 0x1a1410, shadow.alpha, shadow.dy * s);
-    // One stretch per level. A span that crosses an area boundary is split at its
-    // midpoint, which is exactly where the ground changes, so surface and terrain
-    // change on the same line instead of a node apart.
+    // One stretch per level, the last running on over the crest to the road's end. A span
+    // that crosses an area boundary is split on the seam, which is exactly where the ground
+    // changes, so surface and terrain change on the same line instead of a node apart.
     const slices: [readonly Point[], number][] = [];
     for (let i = strip.from; i < strip.to; i++) {
       const from = Math.max(0, i * MAP.smoothing - 1);
-      const to = i * MAP.smoothing + MAP.smoothing + 1;
+      const to = i === this.shown - 1 ? this.road.length : i * MAP.smoothing + MAP.smoothing + 1;
       const here = areaOf(this.first + i).area.road;
-      const next = areaOf(this.first + i + 1).area.road;
+      // The next area past the window starts over the hill, out of sight.
+      const next = i === this.shown - 1 ? here : areaOf(this.first + i + 1).area.road;
       if (here === next) { slices.push([this.road.slice(from, to), here]); continue; }
-      const mid = i * MAP.smoothing + Math.floor(MAP.smoothing / 2);
+      const mid = pathIndexAt(this.road, seamBelow(this.nodes[i + 1]!.y, s), i * MAP.smoothing, (i + 1) * MAP.smoothing);
       slices.push([this.road.slice(from, mid + 1), here], [this.road.slice(mid, to), next]);
     }
     // The outline goes down first for every slice, then the surfaces: drawn per slice, a
@@ -778,7 +824,13 @@ export class MapScene extends BaseScene {
         const x = edge - side * (52 + n * 40) * s;
         if (Math.abs(x - roadX) < MAP.roadWidth * s * 1.6) continue;
         const variant = MapScene.noise(level * 23 + (side > 0 ? 5 : 19)) < 0.5 ? 0 : 1;
-        this.prop(g, kind, variant, x, y + (n - 0.5) * 46 * s, (0.74 + n * 0.62) * s, area);
+        const foot = y + (n - 0.5) * 46 * s, k = (0.74 + n * 0.62) * s;
+        // Nothing stands on a finale's stage, and nothing pokes over the crest: the horizon
+        // is painted over everything above the ridge, and would cut a tree off flat.
+        const box = { left: x - 40 * k, right: x + 40 * k, top: foot - 132 * k, bottom: foot + 10 * k };
+        if (box.top < this.crestTop + CREST.swell * s * 2) continue;
+        if (this.stages.some(st => box.left < st.right && box.right > st.left && box.top < st.bottom && box.bottom > st.top)) continue;
+        this.prop(g, kind, variant, x, foot, k, area);
       }
     }
   }
@@ -870,25 +922,38 @@ export class MapScene extends BaseScene {
     }
   }
 
-  /** The four puck states share one geometry; only the frontier is left out of the bake. */
+  /**
+   * The four puck states share one geometry; only the frontier is left out of the bake. A
+   * finale's puck is one larger size in every state, so the stop reads as the area's end
+   * before its state does.
+   */
   private puckOf(i: number): { r: number; depth: number; fill: number; number: number; size: number; state: 'frontier' | 'cleared' | 'locked' | 'preview' } {
     const level = this.first + i;
     const { area } = areaOf(level);
     const s = this.uiScale;
     const state = mapLevelState(level, this.progress.unlocked);
+    const finale = finaleMapMark(level, this.progress.unlocked) !== null;
+    const big = (r: number, size: number): { r: number; size: number } => finale
+      ? { r: FINALE_STOP.puck * s, size: MAP.finale.number * s * (size >= 30 * s ? 1 : 0.86) }
+      : { r, size };
     // A frontier behind a closed star gate is drawn as a locked stop: the barrier
     // standing in the road below it is what says why.
-    if (state === 'frontier' && this.heldBy(level) === null) return { r: MAP.nodeRadius * 1.1 * s, depth: 10, fill: PALETTE.coral, number: SHELL.cream, size: 34 * s, state };
-    if (state === 'cleared') return { r: MAP.nodeRadius * s, depth: 8, fill: area.ink, number: area.paper, size: 30 * s, state };
+    if (state === 'frontier' && this.heldBy(level) === null) return { ...big(MAP.nodeRadius * 1.1 * s, 34 * s), depth: 10, fill: PALETTE.coral, number: SHELL.cream, state };
+    if (state === 'cleared') return { ...big(MAP.nodeRadius * s, 30 * s), depth: 8, fill: area.ink, number: area.paper, state };
     if (state === 'preview') {
       return {
-        r: MAP.nodeRadius * 0.72 * s, depth: 3,
+        ...big(MAP.nodeRadius * 0.72 * s, 22 * s), depth: 3,
         fill: mix(area.paper, area.ground, 0.62),
         number: mix(area.ink, area.ground, 0.38),
-        size: 22 * s, state,
+        state,
       };
     }
-    return { r: MAP.nodeRadius * 0.84 * s, depth: 5, fill: mix(area.paper, area.ground, 0.42), number: mix(area.ink, area.ground, 0.12), size: 26 * s, state: 'locked' };
+    return { ...big(MAP.nodeRadius * 0.84 * s, 26 * s), depth: 5, fill: mix(area.paper, area.ground, 0.42), number: mix(area.ink, area.ground, 0.12), state: 'locked' };
+  }
+
+  /** How a finale's stop is drawn, from the state its puck is drawn in, or null for an ordinary stop. */
+  private finaleLook(i: number): FinaleStopLook | null {
+    return finaleMapMark(this.first + i, this.progress.unlocked) ? finaleStopLook(this.puckOf(i).state) : null;
   }
 
   /** One puck, drawn where it stands or lifted by a hop. */
@@ -900,32 +965,112 @@ export class MapScene extends BaseScene {
         : STYLE.current.outline;
     const t = outline === STYLE.current.outline ? STYLE.current : { ...STYLE.current, outline };
     drawDisc(g, node.x, node.y - lift, p.r, this.uiScale, { fill: p.fill, depth: p.depth }, t);
-    const mark = finaleMapMark(this.first + i, this.progress.unlocked);
-    if (mark) {
-      // The finale's brass ring rides with the puck, so the frontier's hop carries it.
-      const s = this.uiScale;
-      const alpha = this.finaleAlpha(p.state);
-      g.lineStyle(STYLE.current.outline * s * 0.9 + 2 * s, shade(BRASS, -0.55), alpha).strokeCircle(node.x, node.y - lift, p.r + MAP.finale.ring * s);
-      g.lineStyle(STYLE.current.outline * s * 0.9, BRASS, alpha).strokeCircle(node.x, node.y - lift, p.r + MAP.finale.ring * s);
+    const look = this.finaleLook(i);
+    if (!look) return;
+    // Two brass rings ride with the puck, so the frontier's hop carries them.
+    const s = this.uiScale;
+    const y = node.y - lift;
+    for (const [k, gap] of FINALE_STOP.rings.entries()) {
+      const width = (k === 0 ? 4 : 6.5) * s;
+      g.lineStyle(width + 3 * s, shade(BRASS, -0.55), look.ringAlpha).strokeCircle(node.x, y, p.r + gap * s);
+      g.lineStyle(width, BRASS, look.ringAlpha).strokeCircle(node.x, y, p.r + gap * s);
+    }
+    if (look.padlock) {
+      // A badge on the rim rather than a padlock under the puck: the plate is the act's name.
+      const bx = node.x + p.r * 0.74, by = y + p.r * 0.66, br = 19 * s;
+      g.fillStyle(shade(SHELL.cream, -0.3), 1).fillCircle(bx, by + 2.5 * s, br);
+      g.fillStyle(SHELL.cream, 1).fillCircle(bx, by, br);
+      g.lineStyle(STYLE.current.outline * s * 0.45, shade(SHELL.cream, -0.62), 1).strokeCircle(bx, by, br);
+      drawPadlock(g, bx, by - 5 * s, 17 * s, mix(PALETTE.ink, SHELL.cream, 0.2), SHELL.cream);
     }
   }
 
-  private finaleAlpha(state: 'frontier' | 'cleared' | 'locked' | 'preview'): number {
-    return state === 'preview' ? MAP.finale.previewAlpha : state === 'locked' ? MAP.finale.lockedAlpha : 1;
-  }
-
-  /** The flag planted beside a finale's puck, in the treatment's first colour. */
-  private drawFinaleMark(g: Phaser.GameObjects.Graphics, i: number, s: number): void {
+  /**
+   * A finale's stage, planted under its puck: the plaza the road widens into, bunting on two
+   * posts, a crown of three star seats and the plate naming the act. Locked and previewed
+   * stages are faded toward the ground; the puck and its rings are `drawLevelPuck`'s.
+   */
+  private drawFinaleStage(g: Phaser.GameObjects.Graphics, i: number, s: number): void {
+    const look = this.finaleLook(i);
+    if (!look) return;
     const level = this.first + i;
-    const mark = finaleMapMark(level, this.progress.unlocked);
-    if (!mark) return;
     const node = this.nodes[i]!;
-    const p = this.puckOf(i);
-    const colour = finaleTreatment(level).pennants[0]!;
-    const foot = { x: node.x + p.r + (MAP.finale.ring + 12) * s, y: node.y + p.r * 0.3 };
-    drawFinaleFlag(g, foot.x, foot.y, MAP.finale.flag * s, colour, SHELL.rope, this.finaleAlpha(p.state), 0.6);
-    // A finished area flies a brass star on its flag.
-    if (mark.complete) drawStar(g, foot.x + MAP.finale.flag * s * 0.27, foot.y - MAP.finale.flag * s * 0.8, MAP.finale.flag * s * 0.1, BRASS);
+    const { area } = areaOf(level);
+    const { safe } = this.viewport;
+    const fade = (colour: number): number => look.lit ? colour : mix(colour, area.ground, MAP.finale.fade);
+    // The plaza: the road's own surface, edge and markings, as a disc.
+    const R = FINALE_STOP.plaza * s;
+    const road = faces(area.road);
+    const shadow = castShadow(6);
+    g.fillStyle(0x1a1410, shadow.alpha).fillCircle(node.x + shadow.dx * s, node.y + shadow.dy * s, R + 5 * s);
+    g.fillStyle(shade(area.road, -0.6), 1).fillCircle(node.x, node.y, R + 3 * s + STYLE.current.outline * s * 0.55);
+    g.fillStyle(road.edge, 1).fillCircle(node.x, node.y, R + 3 * s);
+    g.fillStyle(road.face, 1).fillCircle(node.x, node.y, R);
+    g.fillStyle(road.rim, 0.28).fillEllipse(node.x, node.y - R * 0.52, R * 1.3, R * 0.5, 24);
+    const ring = Array.from({ length: 49 }, (_, k) => {
+      const a = k / 48 * Math.PI * 2;
+      return { x: node.x + Math.cos(a) * (R - 22 * s), y: node.y + Math.sin(a) * (R - 22 * s) };
+    });
+    for (const [from, to] of dashes(ring, 22 * s, 20 * s)) g.lineStyle(4 * s, 0xffffff, 0.42).lineBetween(from.x, from.y, to.x, to.y);
+    // The crown: an earned seat is prize brass, an empty one hollow, read from the level's
+    // best — or, while a flight is on, from what the level had before it.
+    const inFlight = this.earned !== null && !this.flightSettled && level === this.earned.level;
+    const stars = inFlight ? this.earned!.before : levelStars(this.progress, level);
+    const hollow = crownHollow(road.face);
+    crownSeats(node.x, node.y, s).forEach((seat, k) => {
+      if (k < stars) drawStar(g, seat.x, seat.y, seat.r, STAR_PRIZE);
+      else drawStarSeat(g, seat.x, seat.y, seat.r, road.face, hollow);
+    });
+    // Bunting on two wood posts, in the treatment's colours.
+    const posts = buntingPosts(node.x, node.y, s, safe.left, safe.right);
+    const B = FINALE_STOP.bunting;
+    const wood = faces(fade(SHELL.wood));
+    for (const px of [posts.left, posts.right]) {
+      const w = 11 * s;
+      g.fillStyle(0x1a1410, shadow.alpha).fillEllipse(px + shadow.dx * s, posts.foot + 3 * s, w * 2.4, w * 0.9);
+      g.fillStyle(wood.shade, 1).fillRoundedRect(px - w / 2, posts.top + 3 * s, w, posts.foot - posts.top, w * 0.3);
+      g.fillStyle(wood.face, 1).fillRoundedRect(px - w / 2, posts.top, w, posts.foot - posts.top, w * 0.3);
+      g.lineStyle(STYLE.current.outline * s * 0.45, shade(fade(SHELL.wood), -0.6), 1).strokeRoundedRect(px - w / 2, posts.top, w, posts.foot - posts.top, w * 0.3);
+    }
+    const sag = B.sag * s;
+    g.lineStyle(Math.max(1.5, 2.6 * s), fade(shade(SHELL.rope, -0.1)), 1).beginPath().moveTo(posts.left, posts.top);
+    for (const p of buntingPoints(posts.left, posts.right, posts.top, sag, 20)) g.lineTo(p.x, p.y);
+    g.lineTo(posts.right, posts.top).strokePath();
+    const treatment = finaleTreatment(level);
+    const count = Math.max(5, Math.round((posts.right - posts.left) / (B.every * s)));
+    buntingPoints(posts.left, posts.right, posts.top, sag, count).forEach((p, k) => {
+      const colour = fade(treatment.pennants[k % treatment.pennants.length]!);
+      const f = faces(colour);
+      const cos = Math.cos(p.slope), sin = Math.sin(p.slope);
+      if (treatment.motif === 'lanterns') {
+        const cx = p.x - sin * 11 * s, cy = p.y + cos * 11 * s, r = 8.5 * s;
+        g.lineStyle(Math.max(1, 1.6 * s), fade(shade(SHELL.rope, -0.3)), 1).lineBetween(p.x, p.y, cx, cy - r);
+        g.fillStyle(f.edge, 1).fillEllipse(cx, cy + 1.5 * s, r * 2, r * 2.3, 14);
+        g.fillStyle(f.face, 1).fillEllipse(cx, cy, r * 2, r * 2.3, 14);
+        g.fillStyle(0xfff1c8, look.lit ? 0.55 : 0.2).fillEllipse(cx - r * 0.2, cy - r * 0.15, r * 0.9, r * 1.2, 10);
+        return;
+      }
+      const half = B.width * s / 2, length = B.length * s;
+      const at = (lx: number, ly: number) => ({ x: p.x + lx * cos - ly * sin, y: p.y + lx * sin + ly * cos });
+      const a = at(-half, 0), b = at(half, 0), c = at(0, length);
+      g.fillStyle(f.edge, 1).fillTriangle(a.x, a.y + 1.5 * s, b.x, b.y + 1.5 * s, c.x, c.y + 1.5 * s);
+      g.fillStyle(f.face, 1).fillTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
+      g.lineStyle(STYLE.current.outline * s * 0.28, shade(colour, -0.55), 1).strokeTriangle(a.x, a.y, b.x, b.y, c.x, c.y);
+    });
+    // The plate: "Finale" over the act's own title, so a variant's name is right.
+    const plate = finalePlate(node.x, node.y, s);
+    const fill = fade(SHELL.wood);
+    drawPanel(g, new Phaser.Geom.Rectangle(plate.x, plate.y, plate.width, plate.height), s, { fill, depth: 8 });
+    const texts = this.finaleTexts.get(i);
+    if (texts) {
+      const dark = relativeLuminance(fill) > 0.25;
+      resize(texts.eyebrow, 17 * s, dark ? shade(PALETTE.ink, -0.22) : SHELL.cream, STYLE.current, false);
+      texts.eyebrow.setPosition(node.x, plate.y + 21 * s).setAlpha(look.lit ? 1 : 0.85);
+      resize(texts.title, 30 * s, SHELL.cream);
+      const room = plate.width - 28 * s;
+      if (texts.title.width > room) resize(texts.title, 30 * s * room / texts.title.width, SHELL.cream);
+      texts.title.setPosition(node.x, plate.y + plate.height * 0.6).setAlpha(look.lit ? 1 : 0.85);
+    }
   }
 
   /** Raised pucks with cast shadows, a star plate under each cleared one and a padlock under each locked one. */
@@ -940,13 +1085,15 @@ export class MapScene extends BaseScene {
       const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1).setAlpha(p.state === 'preview' ? 0.58 : 1);
       resize(text, p.size, p.number, STYLE.current, p.state === 'cleared' || p.state === 'frontier');
       const plateY = node.y + p.r + (p.depth + 24) * s;
-      // Planted, not carried: it stands in the ground even beside the hopping frontier.
-      this.drawFinaleMark(g, i, s);
+      // Planted, not carried: the stage stands in the ground even under the hopping frontier.
+      this.drawFinaleStage(g, i, s);
       if (p.state === 'frontier') {
         this.frontierIndex = i;
         continue;
       }
       this.drawLevelPuck(g, i, 0);
+      // A finale's crown carries its stars and its badge the lock.
+      if (this.finaleTexts.has(i)) continue;
       if (p.state === 'cleared') {
         // Until they land, the stars in the air are not on the plate they left.
         const inFlight = this.earned !== null && !this.flightSettled && level === this.earned.level;
@@ -958,35 +1105,67 @@ export class MapScene extends BaseScene {
   }
 
   /**
-   * Destination at the end of the reachable stretch: a lock and a reason to come back,
-   * with greyed preview levels continuing above it so the road does not clip off.
+   * The hill the road goes over at the top of the window, in the top area's own tones.
+   * The near slope is painted under the road; the far ridge and the sky are painted over
+   * it, down to the crest line, which is what ends the road over the horizon instead of
+   * in a square cut — Phaser 4 has no WebGL masks, so it is paint order, not a clip. At
+   * the road's own end a signpost says why the road goes no further; a window that stops
+   * short of the end (back from a replay far below the frontier) has the hill and no sign.
    */
-  private drawGate(s: number): void {
-    const lastReachable = this.progress.unlocked + PROGRESSION.mapLookahead;
-    const i = lastReachable - this.first;
-    let y: number | null = null;
-    if (i >= 0 && i < this.shown - 1) y = (this.nodes[i]!.y + this.nodes[i + 1]!.y) / 2;
-    else if (i === this.shown - 1) y = this.nodes[i]!.y - MAP.step * s / 2;
-    else if (i === -1 && this.shown > 0) y = this.nodes[0]!.y + MAP.step * s / 2;
-    // Drawn last, into whichever strip holds it, so it sits over that strip's own road
-    // and pucks exactly as it did when the world was one buffer.
-    const strip = this.strips.find(candidate => y! >= candidate.top && y! < candidate.bottom);
-    if (y === null || !strip) {
-      this.gateLabel.setVisible(false);
-      return;
+  private drawCrest(s: number): void {
+    const { full, safe } = this.viewport;
+    const { area } = areaOf(this.first + this.shown - 1);
+    const sky = faces(area.sky);
+    const crest = this.crestTop;
+    const near = mix(sky.face, sky.shade, 0.5);
+    const hazed = mix(area.ground, area.sky, 0.32);
+    const steps = 32;
+    const ridge = (base: number, phase: number): number[] => {
+      const points: number[] = [];
+      for (let k = 0; k <= steps; k++) {
+        const x = full.x + full.width * k / steps;
+        points.push(x, ridgeAt(x, full.x, full.width, base, s, phase));
+      }
+      return points;
+    };
+    const band = (points: readonly number[], bottom: (x: number) => number): number[] => {
+      const out = [...points];
+      for (let k = steps; k >= 0; k--) out.push(points[k * 2]!, bottom(points[k * 2]!));
+      return out;
+    };
+    // The near slope, under the road: from the crest down, fading into the ground below.
+    const slope = this.crestSlope.clear();
+    const nearRidge = ridge(crest, 0.4);
+    const blend = 8;
+    for (let b = blend; b >= 1; b--) {
+      const depth = CREST.slope * s * b / blend;
+      slope.fillStyle(mix(hazed, near, 1 - (b - 1) / blend), 1);
+      fillContour(slope, band(nearRidge, x => ridgeAt(x, full.x, full.width, crest, s, 0.4) + depth));
     }
-    const g = strip.detail;
-    const { safe } = this.viewport;
-    const w = Math.min(460 * s, safe.width - 40 * s);
-    const h = 108 * s;
-    const roadX = this.roadXAt(y);
-    const x = Math.max(safe.left + 16 * s, Math.min(safe.right - 16 * s - w, roadX - w / 2));
-    drawPanel(g, new Phaser.Geom.Rectangle(x, y - h / 2, w, h), s, { fill: SHELL.wood, depth: 10, hero: true });
-    const lockX = x + 64 * s;
-    drawPadlock(g, lockX, y - 6 * s, 48 * s, SHELL.cream, shade(PALETTE.ink, -0.25));
-    this.gateLabel.setVisible(true).setText('Complete more\nto unlock');
-    resize(this.gateLabel, 28 * s, SHELL.cream);
-    this.gateLabel.setLineSpacing(-4 * s).setPosition(lockX + 44 * s, y);
+    // Over the road: sky, the far ridge, and a lit lip on the near crest.
+    const g = this.crestHorizon.clear();
+    const farRidge = ridge(crest - CREST.far * s, 2.1);
+    g.fillStyle(area.sky, 1).fillRect(full.x, 0, full.width, crest - CREST.far * s + CREST.swell * s + 2 * s);
+    g.fillStyle(sky.shade, 1);
+    fillContour(g, band(farRidge, x => ridgeAt(x, full.x, full.width, crest, s, 0.4) + 1 * s));
+    g.fillStyle(sky.lit, 0.35);
+    fillContour(g, band(farRidge, x => ridgeAt(x, full.x, full.width, crest - CREST.far * s, s, 2.1) + 5 * s));
+    g.lineStyle(3 * s, sky.rim, 0.55);
+    traceContour(g, nearRidge);
+    g.strokePath();
+    if (!this.atEnd) return;
+    const sign: Signpost = signpostAt(this.roadXAt(crest), crest, safe.left, safe.right, s);
+    const post = CREST.sign.post * s;
+    const shadow = castShadow(6);
+    const wood = faces(SHELL.wood);
+    g.fillStyle(0x1a1410, shadow.alpha).fillEllipse(sign.postX + shadow.dx * s, sign.footY + 3 * s, post * 3, post);
+    g.fillStyle(wood.edge, 1).fillRoundedRect(sign.postX - post / 2, sign.y + sign.height - 6 * s, post, sign.footY - sign.y - sign.height + 6 * s, post * 0.3);
+    g.fillStyle(wood.shade, 1).fillRoundedRect(sign.postX - post / 2 + 2 * s, sign.y + sign.height - 6 * s, post - 4 * s, sign.footY - sign.y - sign.height + 4 * s, post * 0.3);
+    drawPanel(g, new Phaser.Geom.Rectangle(sign.x, sign.y, sign.width, sign.height), s, { fill: SHELL.wood, depth: 8, hero: true });
+    resize(this.crestCopy, 28 * s, SHELL.cream);
+    const room = sign.width - 36 * s;
+    if (this.crestCopy.width > room) resize(this.crestCopy, 28 * s * room / this.crestCopy.width, SHELL.cream);
+    this.crestCopy.setLineSpacing(-4 * s).setPosition(sign.x + sign.width / 2, sign.y + sign.height / 2 - 2 * s);
   }
 
   /**
@@ -998,7 +1177,7 @@ export class MapScene extends BaseScene {
   private drawStarGates(s: number): void {
     for (let k = 0; k < this.gateTexts.length; k++) {
       const area = this.firstBand + k;
-      const sign = this.gateTexts[k]!;
+      const sign = this.gateTexts[k]!, goal = this.gateGoals[k]!;
       const live = area === this.liveGate;
       // The live gate stays until its bar has finished lifting, whatever the count says
       // now; every other gate is simply closed or open against the collection.
@@ -1006,50 +1185,66 @@ export class MapScene extends BaseScene {
         : !areaOpen(area, this.stars);
       const y = area >= 1 ? this.boundaryY(area) : null;
       const strip = y === null ? undefined : this.strips.find(candidate => y >= candidate.top && y < candidate.bottom);
-      if (y === null || !strip) { sign.setText('').setVisible(false); continue; }
+      if (y === null || !strip) { sign.setText('').setVisible(false); goal.setText('').setVisible(false); continue; }
       if (!closed) {
         // A gate the player has passed stands open: its posts stay as the area's threshold.
         sign.setText('').setVisible(false);
+        goal.setText('').setVisible(false);
         if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 1, 0, null);
         continue;
       }
-      this.placeGateSign(sign, this.roadXAt(y), y, s, live ? this.tallyShown : null, starsRequired(area));
+      this.placeGateSign(k, this.roadXAt(y), y, s, live ? this.tallyShown : null, starsRequired(area));
       // The live gate's graphics are update()'s; its sign is placed here like the rest.
-      if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 0, 1, sign);
+      if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 0, 1, k);
     }
   }
 
-  /** The sign under a bar: `have / need` on the gate being worked toward, the requirement alone further up the road. */
-  private placeGateSign(sign: Phaser.GameObjects.Text, x: number, y: number, s: number, have: number | null, need: number): void {
-    const B = MAP.barrier;
-    sign.setText(have === null ? String(need) : `${have} / ${need}`);
-    resize(sign, 26 * s, SHELL.cream);
-    // Star at the left of the plate, the count after it, the pair centred on the road.
-    const starR = 12 * s;
-    const total = starR * 2 + 10 * s + sign.width;
-    sign.setPosition(x - total / 2 + starR * 2 + 10 * s, MapScene.gateSignTop(y, s) + B.sign.height * s / 2 + 1 * s).setAlpha(1);
+  /**
+   * The words on the cream plate under a bar: an earned star, then the shown count and
+   * `/ need` on the gate being worked toward, or the requirement alone further up the road.
+   * World objects at the barrier, so the plate is never anywhere but on its own road.
+   */
+  private placeGateSign(k: number, x: number, y: number, s: number, have: number | null, need: number): void {
+    const sign = this.gateTexts[k]!, goal = this.gateGoals[k]!;
+    sign.setText(String(have ?? need));
+    resize(sign, 28 * s, PALETTE.ink, STYLE.current, false);
+    goal.setText(have === null ? '' : `/ ${need}`);
+    resize(goal, 22 * s, PALETTE.muted, STYLE.current, false);
+    const layout = this.gatePlateLayout(k, x, s);
+    const cy = gatePlateTop(y, s) + GATE.plate.height * s / 2;
+    sign.setPosition(layout.count, cy + 1 * s).setAlpha(1);
+    goal.setPosition(layout.goal, cy + 2 * s).setAlpha(1);
   }
 
-  /** Top of the plate under a gate's bar, with the bar down. The sign text and the plate agree through this. */
-  private static gateSignTop(y: number, s: number): number {
-    const B = MAP.barrier;
-    return y - (B.height - B.bar - 12) * s;
+  /** Where the star, the count and the goal sit on a gate's plate, and how wide the plate is. */
+  private gatePlateLayout(k: number, x: number, s: number): { width: number; star: number; count: number; goal: number } {
+    const sign = this.gateTexts[k]!, goal = this.gateGoals[k]!;
+    const starR = 12 * s;
+    const goalWidth = goal.text === '' ? 0 : goal.width + 7 * s;
+    const total = starR * 2 + 9 * s + sign.width + goalWidth;
+    const left = x - total / 2;
+    return {
+      width: Math.max(GATE.plate.width * s, total + 40 * s),
+      star: left + starR,
+      count: left + starR * 2 + 9 * s,
+      goal: left + starR * 2 + 9 * s + sign.width + 7 * s,
+    };
   }
 
   /** Re-word the live gate's sign for the shown count, in place. */
   private refreshLiveSign(): void {
-    const sign = this.gateTexts[this.liveGate - this.firstBand];
-    const y = sign && this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
-    if (!sign || y === null) return;
-    this.placeGateSign(sign, this.roadXAt(y), y, this.uiScale, this.tallyShown, starsRequired(this.liveGate));
+    const k = this.liveGate - this.firstBand;
+    const y = this.gateTexts[k] && this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
+    if (y === null) return;
+    this.placeGateSign(k, this.roadXAt(y), y, this.uiScale, this.tallyShown, starsRequired(this.liveGate));
   }
 
   /**
    * Two posts, a striped bar pivoting on the left one, and a plate hanging under it.
    * `lift` is 0 for a bar across the road and 1 for one swung clear of it.
    */
-  private drawBarrier(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, area: Area, active: boolean, lift: number, bar: number, sign: Phaser.GameObjects.Text | null): void {
-    const B = MAP.barrier;
+  private drawBarrier(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, area: Area, active: boolean, lift: number, bar: number, plate: number | null): void {
+    const B = GATE;
     const half = (MAP.roadWidth / 2 + B.reach) * s;
     const post = B.post * s, height = B.height * s;
     const wood = faces(SHELL.wood);
@@ -1088,25 +1283,27 @@ export class MapScene extends BaseScene {
     for (let i = 0; i < stripes; i += 2) slab(length * i / stripes, length * (i + 1) / stripes, stripeA);
     g.fillStyle(0xffffff, 0.22 * bar).fillPoints([at(2 * s, -thick / 2 + 2 * s), at(length - 2 * s, -thick / 2 + 2 * s), at(length - 2 * s, -thick / 2 + 4.5 * s), at(2 * s, -thick / 2 + 4.5 * s)], true);
     g.fillStyle(faces(BRASS).face, bar).fillCircle(pivot.x, pivot.y, post * 0.28);
-    // The sign hangs under the bar's middle and fades as the bar goes up: it stays put
-    // rather than swinging with the bar, so the count is readable until it is gone.
-    if (sign !== null) {
+    // The plate hangs under the bar's middle and fades as the bar goes up: it stays put
+    // rather than swinging with the bar, so the count is readable until it is gone. Cream
+    // on every area, so the ink count reads the same on Dusk as on Snow; the gate being
+    // worked toward is the brighter of the two creams.
+    if (plate !== null) {
+      const sign = this.gateTexts[plate]!, goal = this.gateGoals[plate]!;
       const alpha = Math.max(0, 1 - Math.min(1, lift * 2));
       sign.setAlpha(alpha);
+      goal.setAlpha(alpha);
       if (alpha > 0) {
-        const w = B.sign.width * s, h = B.sign.height * s;
+        const layout = this.gatePlateLayout(plate, x, s);
+        const w = layout.width, h = B.plate.height * s, r = B.plate.radius * s;
         const barBottom = pivot.y + thick / 2;
-        const top = MapScene.gateSignTop(y, s);
+        const top = gatePlateTop(y, s);
         g.lineStyle(2.5 * s, SHELL.rope, alpha).lineBetween(x - w * 0.3, barBottom, x - w * 0.3, top).lineBetween(x + w * 0.3, barBottom, x + w * 0.3, top);
-        const fill = active ? shade(PALETTE.ink, -0.1) : mix(SHELL.wood, area.road, 0.35);
-        g.fillStyle(0x1a1410, shadow.alpha * alpha).fillRoundedRect(x - w / 2 + shadow.dx * s, top + shadow.dy * s + 5 * s, w, h, 12 * s);
-        g.fillStyle(faces(fill).shade, alpha).fillRoundedRect(x - w / 2, top + 5 * s, w, h, 12 * s);
-        g.fillStyle(fill, alpha).fillRoundedRect(x - w / 2, top, w, h, 12 * s);
-        g.lineStyle(STYLE.current.outline * s * 0.5, shade(fill, -0.6), alpha).strokeRoundedRect(x - w / 2, top, w, h, 12 * s);
-        // The star sits where `placeGateSign` left room for it, ahead of the count.
-        const starR = 12 * s;
-        const total = starR * 2 + 10 * s + sign.width;
-        drawStar(g, x - total / 2 + starR, top + h / 2, starR, STAR_PRIZE, alpha);
+        const fill = active ? SHELL.cream : SHELL.puck;
+        g.fillStyle(0x1a1410, shadow.alpha * alpha).fillRoundedRect(x - w / 2 + shadow.dx * s, top + shadow.dy * s + 5 * s, w, h, r);
+        g.fillStyle(faces(fill).shade, alpha).fillRoundedRect(x - w / 2, top + 4 * s, w, h, r);
+        g.fillStyle(fill, alpha).fillRoundedRect(x - w / 2, top, w, h, r);
+        g.lineStyle(STYLE.current.outline * s * 0.5, shade(fill, -0.62), alpha).strokeRoundedRect(x - w / 2, top, w, h, r);
+        drawStar(g, layout.star, top + h / 2, 12 * s, STAR_PRIZE, alpha);
       }
     }
   }
@@ -1776,7 +1973,8 @@ export class MapScene extends BaseScene {
       const beat = (now % MAP.hopSec);
       const lift = still || beat >= 0.32 ? 0 : Math.sin(Math.PI * beat / 0.32) * 10 * s * ex;
       const { area } = areaOf(this.first + this.frontierIndex);
-      this.drawStars(g, frontier.x, frontier.y - lift + p.r + (p.depth + 24) * s, 0, area, s);
+      // A finale's crown, baked into its stage, is its plate.
+      if (!this.finaleTexts.has(this.frontierIndex)) this.drawStars(g, frontier.x, frontier.y - lift + p.r + (p.depth + 24) * s, 0, area, s);
       this.drawLevelPuck(g, this.frontierIndex, lift);
       this.numbers[this.frontierIndex]!.setY(frontier.y - lift);
       if (!still) {
@@ -1793,7 +1991,8 @@ export class MapScene extends BaseScene {
       const lift = !lifting ? 0 : still ? 1 : spring(age / MAP.barrier.liftSec, 4.2, 1.6);
       // Once up, the bar goes and the posts stay, as every passed gate's do.
       const bar = !lifting ? 1 : still ? 0 : Math.max(0, 1 - (age - MAP.barrier.liftSec) / MAP.barrier.barFadeSec);
-      this.drawBarrier(g, this.roadXAt(liveY), liveY, s, areaOf(firstLevelOfArea(this.liveGate)).area, true, lift, bar, this.gateTexts[this.liveGate - this.firstBand] ?? null);
+      const k = this.liveGate - this.firstBand;
+      this.drawBarrier(g, this.roadXAt(liveY), liveY, s, areaOf(firstLevelOfArea(this.liveGate)).area, true, lift, bar, this.gateTexts[k] ? k : null);
     }
     if (!this.flightSettled) this.drawFlight(s, now);
     if (now - this.landedAt < STAR_FLIGHT.ring) this.drawTally(s, now);
@@ -1876,13 +2075,16 @@ export class MapScene extends BaseScene {
     const node = this.nodes[index];
     const p = node ? this.puckOf(index) : null;
     const plateY = node && p ? node.y + p.r + (p.depth + 24) * s - this.scrollY : this.viewport.full.bottom + 30 * s;
+    // A finale's stars leave the crown they were drawn in.
+    const crown = node && this.finaleTexts.has(index) ? crownSeats(node.x, node.y - this.scrollY, s) : null;
     const to = this.tallyAt;
     const radius = MAP.tally.star * s;
     for (let i = 0; i < count; i++) {
       const pose = starFlightPose(starFlightAge(mapAge, i), STYLE.current.exaggeration);
       if (!pose.started || pose.landed) continue;
       const slot = earned.before + i;
-      const from = { x: node ? node.x + (slot - 1) * 24 * s : this.viewport.safe.centerX, y: plateY };
+      const seat = crown?.[Math.max(0, Math.min(2, slot))];
+      const from = seat ? { x: seat.x, y: seat.y } : { x: node ? node.x + (slot - 1) * 24 * s : this.viewport.safe.centerX, y: plateY };
       for (let k = STAR_FLIGHT.trail; k >= 1; k--) {
         const ghost = starFlightPose(starFlightAge(mapAge, i) - k * STAR_FLIGHT.trailStep, STYLE.current.exaggeration);
         if (!ghost.started) continue;
@@ -1994,8 +2196,9 @@ export class MapScene extends BaseScene {
     }
     if (y < this.hudHeight || y >= this.footerTop) return;
     const worldY = y + this.scrollY;
-    const reach = Math.max(MAP.nodeRadius * this.uiScale, this.controlSize / 2);
-    const index = this.nodes.findIndex(node => Math.hypot(node.x - x, node.y - worldY) <= reach);
+    // A finale's hit area is its larger puck.
+    const reach = (i: number) => Math.max(this.finaleTexts.has(i) ? FINALE_STOP.puck * this.uiScale : MAP.nodeRadius * this.uiScale, this.controlSize / 2);
+    const index = this.nodes.findIndex((node, i) => Math.hypot(node.x - x, node.y - worldY) <= reach(i));
     if (index < 0) return;
     if (this.first + index > this.progress.unlocked || this.heldBy(this.first + index) !== null) {
       if (this.lockedIndex >= 0) this.numbers[this.lockedIndex]!.setScale(1);

@@ -69,3 +69,38 @@ export function pathLength(path: readonly Point[]): number {
   for (let i = 0; i < path.length - 1; i++) total += Math.hypot(path[i + 1]!.x - path[i]!.x, path[i + 1]!.y - path[i]!.y);
   return total;
 }
+
+/**
+ * A climbing path's x at a world y: the first sample at or above `y`, interpolated from
+ * the one below it. For a path whose y only falls from its first point to its last — the
+ * map's road — this is a binary search, clamped to the ends. The map used to invert a y
+ * into a level by dividing by the step; a finale's extra room made the spacing uneven.
+ */
+export function pathXAt(path: readonly Point[], y: number): number {
+  if (path.length === 0) return 0;
+  if (y >= path[0]!.y) return path[0]!.x;
+  if (y <= path[path.length - 1]!.y) return path[path.length - 1]!.x;
+  let low = 0, high = path.length - 1;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (path[mid]!.y > y) low = mid;
+    else high = mid;
+  }
+  const a = path[low]!, b = path[high]!;
+  const t = a.y === b.y ? 0 : (a.y - y) / (a.y - b.y);
+  return a.x + (b.x - a.x) * t;
+}
+
+/** Index of the first sample of a climbing path at or above `y`, searched between `from` and `to`. */
+export function pathIndexAt(path: readonly Point[], y: number, from = 0, to = path.length - 1): number {
+  let low = Math.max(0, from), high = Math.min(path.length - 1, to);
+  if (high < low) return low;
+  if (path[low]!.y <= y) return low;
+  if (path[high]!.y > y) return high;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if (path[mid]!.y > y) low = mid;
+    else high = mid;
+  }
+  return high;
+}

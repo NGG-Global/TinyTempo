@@ -32,9 +32,10 @@ export interface StripBounds {
  * half-alpha shape in it painted twice. Neither shows up until the one scroll position
  * that reveals it, which is why it is pinned here rather than left to the eye.
  *
- * Seams fall on the midpoint between two nodes — the same line the terrain already
- * changes on at an area boundary — and the outermost strips run to the ends of the world
- * so the road leaves the frame rather than stopping at a seam.
+ * A seam falls half an ordinary `step` under the node above it — the same line the terrain
+ * changes on at an area boundary, and the midpoint wherever the spacing is even — and the
+ * outermost strips run to the ends of the world. Both sides of a seam are measured from
+ * that one node, so the strips still tile where a finale's extra room makes a span longer.
  */
 export function stripBounds(count: number, levels: number, worldHeight: number, nodeY: (i: number) => number,
   step: number): StripBounds[] {
@@ -44,7 +45,7 @@ export function stripBounds(count: number, levels: number, worldHeight: number, 
     const to = Math.min(count, from + levels);
     return {
       from, to,
-      top: to >= count ? 0 : nodeY(to - 1) - step / 2,
+      top: to >= count ? 0 : nodeY(to) + step / 2,
       bottom: from === 0 ? worldHeight : nodeY(from) + step / 2,
     };
   });
