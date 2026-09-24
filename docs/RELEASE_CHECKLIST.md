@@ -1,6 +1,6 @@
 # Play Console release readiness
 
-Audited against the repository at `claude/sweet-meitner-9bnhvq`. Two parts: what
+Audited against the repository on 24 September 2026. Two parts: what
 the product is missing, and everything that has to be done before an upload.
 
 **On Play policy specifics.** Everything marked *(verify)* is a Google Play rule
@@ -37,22 +37,28 @@ name the WebView's storage directory, which covers a new phone and a reinstall
 with no player effort. And `TransferScene` shows progress as a checksummed save
 code and accepts one back, which covers cleared data, a lost device and a support
 email. Restoring merges, so it can only ever add. Backup rules are file-level and
-all seven keys share one store, so the premium cache could not be excluded — it
-is bounded instead, and a restored backup can no longer grant Premium forever.
-See `docs/SAVES.md`. What is left needs hardware: take and restore a real backup.
+every key shares one LevelDB store — progress, settings, the tutorial, the teach
+flags, hearts, the refill ledger, the daily heart, the premium cache, daily
+objectives, and the Daily Tempo best (unused while that mode is off) — so the
+premium cache could not be excluded. It is bounded instead, and a restored backup
+can no longer grant Premium forever. See `docs/SAVES.md`. What is left needs
+hardware: take and restore a real backup.
 
-**3. ~~Analytics goes nowhere.~~ Done — needs a Firebase project to switch on.**
-The ten events now reach Google Analytics for Firebase through
-`@capacitor-firebase/analytics`, behind the same two-layer split crash reporting
-uses: `analytics/eventShape.ts` holds Firebase's limits as pure functions, and
-`analytics/firebase.ts` is the only file that knows the vendor. Worth being
-precise about what this bought: Play Console already reported purchases and AdMob
-already reported impressions, so what was invisible was the **top** of the funnel
-— offers shown, and the players who declined. Settings → Privacy now carries a
-**Share usage data** switch, and consent deliberately does not travel in a save
-code. See `docs/ANALYTICS.md`. What is left is operational: create the project,
-drop in `google-services.json`, set the two build flags, and confirm an event in
-DebugView.
+**3. ~~Analytics goes nowhere.~~ Done — the project exists; DebugView is still unconfirmed.**
+Commerce events and the gameplay events in `game/playAnalytics.ts` (levels,
+stars, gates, the tutorial, finales, the Scrapbook, objectives) reach Google
+Analytics for Firebase through `@capacitor-firebase/analytics`, behind the same
+split crash reporting uses: `analytics/eventShape.ts` holds Firebase's limits as
+pure functions, and `analytics/firebase.ts` is the only file that knows the
+vendor. Play Games leaderboard events are on the same bus and are not sent while
+`DAILY_TEMPO_AVAILABLE` is false. Worth being precise about what the commerce
+events bought: Play Console already reported purchases and AdMob already reported
+impressions, so what was invisible was the **top** of the funnel — offers shown,
+and the players who declined. Settings → Privacy carries a **Share usage data**
+switch, and consent deliberately does not travel in a save code. See
+`docs/ANALYTICS.md`. The Firebase project and `google-services.json` are in place
+for `com.tinytempo.app`. What is left is operational: restrict the API key,
+confirm an event in DebugView, and decide EEA consent.
 
 **4. ~~No in-app support route.~~ Done.** Settings → Help is an address plus the
 seven lines a reply would otherwise have to ask for — build, device, level,
@@ -67,8 +73,9 @@ project rather than an NGG product, whatever the repository host suggests.
 
 ### Real gaps that are not launch blockers
 
-**5. One music track.** `docs/MUSIC.md` describes a single premixed 60-bar loop
-at 120 BPM, and the game is endless. A player in a twenty-minute session hears it
+**5. One gameplay loop.** The title screen has its own track (`audio/ThemeMusic.ts`).
+Everywhere else, `docs/MUSIC.md` describes a single premixed 60-bar loop at 120
+BPM, and the game is endless. A player in a twenty-minute session hears that loop
 roughly twenty times. For a rhythm game this is the largest retention risk on the
 list; the seven WAV stems are already in `bgm/`, so a second arrangement is
 cheaper than it looks.
@@ -77,15 +84,20 @@ cheaper than it looks.
 the scene that draws it. `android:supportsRtl="true"` is set but nothing is
 authored RTL. Hebrew is an obvious first candidate given where this is written.
 
-**7. No Play Games Services.** No achievements, no leaderboards, and no Saved
-Games. Saved Games was the obvious answer to gap 2 and is no longer needed for
-it; achievements and leaderboards are still worth having for their own sake, and
-would want a sign-in the game does not otherwise ask for.
+**7. ~~No Play Games Services.~~ Sign-in and achievements are in; Saved Games is still a plan.**
+Play Games Services v2 authenticates on Android and is never required to play.
+Five achievements unlock from clearing levels 10–50 and are derived from the
+save, so an old save is owed them on the first signed-in launch. One leaderboard
+id exists for a Daily Tempo that does not: `DAILY_TEMPO_AVAILABLE` is false, so
+nothing is submitted and no button shows. Saved Games is deliberately not
+written — see the plan in `docs/PLAY_GAMES.md`. The player id crosses the bridge
+and reaches no log, crash report or analytics event.
 
 **8. No rate prompt, no share, no "what's new".** Nothing asks a happy player to
 review, which is what drives early ranking.
 
-**9. Audio is one mute switch.** No separate music and effects levels. Common
+**9. Audio is one mute switch.** Haptics and the tap-offset calibration are
+separate controls. There are still no separate music and effects levels. Common
 request, and the `AudioEngine` already separates the two buses.
 
 **10. Accessibility stops at reduced motion.** `core/motionPreference.ts` is
@@ -105,9 +117,10 @@ under and the project's former name. The legal pages now name Dor Vadai as
 publisher and data controller, which has to match the Play developer account
 exactly.
 
-Still open: `package.json` says `0.1.0`, Android says `versionName "1.0"`, and the
-settings footer reads from `package.json` — so the app tells the player one version
-and the store another.
+The version half is closed. `package.json` is the only version (`0.1.0` today):
+`versionName` is that string and `versionCode` is derived from it (100). The
+settings footer, the support subject and the Sentry release tag read the same
+string. Raise it before the first upload if the store listing should say 1.0.0.
 
 ---
 
@@ -320,12 +333,16 @@ these is a blocker — but none has been run on a device.
       AdMob collects device and advertising identifiers; Google Play processes the
       purchases and the app keeps no purchase history of its own; **Sentry now receives crash
       reports** — declare these under Crash logs and Diagnostics. **Firebase
-      Analytics now receives ten commerce events** plus the device, app and
-      app-instance information Firebase collects itself — declare these under App
-      activity and Diagnostics, and note the Settings switch as the user control. The game's own
+      Analytics now receives the commerce events and the gameplay events** (levels,
+      stars, gates, tutorial, finales, Scrapbook, objectives) plus the device, app
+      and app-instance information Firebase collects itself — declare these under
+      App activity and Diagnostics, and note the Settings switch as the user
+      control. Leaderboard events are not sent while Daily Tempo is off. **Play
+      Games** receives the player id and display name when the player is signed
+      in, and achievement unlocks; it does not receive a cloud save. The game's own
       save data leaves the device only through Android's own backup, to the
-      player's Google account, which is worth stating accurately. The privacy
-      policy now says so, and describes the save code.
+      player's Google account, and through a save code the player chooses to copy.
+      The privacy policy says so.
 - [ ] **Content rating questionnaire.** Disclose ads and in-app purchases.
 - [ ] **Target audience and content.** The cartoon workshop look will read as
       child-appealing to a reviewer. If you select a child audience you enter the
@@ -337,8 +354,9 @@ these is a blocker — but none has been run on a device.
 - [ ] **Account deletion** — the game has no accounts, so this likely does not
       apply *(verify how the requirement is phrased now.)*
 - [ ] Privacy policy URL: `https://tinytempo.games/privacy/` is
-      live and covers advertising, purchases, retention, children, a section 6 on
-      what a crash report contains, and a section 7 on analytics. Point Play,
+      live and covers advertising, purchases through Google Play Billing (no
+      separate billing provider), Play Games, retention, children, crash reports,
+      and analytics for both commerce and gameplay. Point Play,
       AdMob and Settings at this URL, not the old GitHub Pages copy.
 - [ ] **Confirm the developer name matches the legal pages.** Both name *Dor Vadai*
       as publisher and data controller, which is the name on the Play account. Play
@@ -378,7 +396,9 @@ these is a blocker — but none has been run on a device.
       (gap 2).
 - [x] ~~Settle the application ID~~ — `com.tinytempo.app`, renamed before first
       publish because it is permanent afterwards (gap 12).
-- [ ] Align `versionName`, `versionCode` and `package.json`.
+- [x] ~~Align `versionName`, `versionCode` and `package.json`.~~ Done —
+      `package.json` is the only source. It is `0.1.0` today (`versionCode` 100);
+      bump it before the first upload if the listing should say 1.0.0.
 
 ### I. After launch
 

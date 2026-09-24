@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#eee8d8" />
-    <meta name="description" content="Privacy Policy for Tiny Tempo, explaining on-device game data, advertising, and in-app purchases." />
+    <meta name="description" content="Privacy Policy for Tiny Tempo: on-device game data, rewarded ads, Google Play purchases, Play Games, crash reports and usage analytics." />
     <title>Privacy Policy — Tiny Tempo</title>
     <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="../apple-touch-icon.png" />
@@ -40,7 +40,7 @@
             This policy describes how Dor Vadai (“we”, “us”) handles information
             in the Tiny Tempo Android app (package name <code>com.tinytempo.app</code>).
           </p>
-          <p class="meta">Effective date: 16 September 2026 · Last updated: 18 September 2026</p>
+          <p class="meta">Effective date: 16 September 2026 · Last updated: 24 September 2026</p>
         </div>
 
         <article class="document">
@@ -50,6 +50,7 @@
             <li><a href="#on-device">Information stored on your device</a></li>
             <li><a href="#ads">Advertising</a></li>
             <li><a href="#purchases">Purchases</a></li>
+            <li><a href="#play-games">Google Play Games</a></li>
             <li><a href="#crash">Crash and error reports</a></li>
             <li><a href="#analytics">Analytics</a></li>
             <li><a href="#use">How information is used</a></li>
@@ -65,9 +66,9 @@
           <h2 id="who">1. Who we are</h2>
           <p>
             Tiny Tempo is a portrait rhythm game published by Dor Vadai. We do not
-            operate a Tiny Tempo account system or a first-party game server. Gameplay,
-            progress and settings live on your device. Advertising and purchases are
-            handled by the partners named below.
+            operate a Tiny Tempo account system or a first-party game server.             Gameplay,
+            progress and settings live on your device. Advertising, purchases and
+            optional Play Games features are handled by the partners named below.
           </p>
           <p>
             Contact: <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>.
@@ -77,15 +78,14 @@
           <h2 id="summary">2. Summary</h2>
           <ul>
             <li>We do not ask you to create an account or give us your name or email in the app.</li>
-            <li>Level progress, audio calibration, mute, hearts and a Premium flag are saved locally on the device, and are included in Android’s backup to your own Google account.</li>
+            <li>Level progress, settings, hearts, a short-lived Premium cache, the tutorial, a few one-time prompts and the day’s objectives are saved on the device, and are included in Android’s backup to your own Google account.</li>
             <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
-            <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google and RevenueCat. We never see your full payment card details.</li>
+            <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google Play Billing. We never see your full payment card details. There is no separate billing company in between.</li>
+            <li>On Android the app can sign you into Google Play Games. That is optional: the game plays the same if you decline. While you are signed in, Google holds your Play Games player id and display name, and we ask Google to unlock achievements you have earned. We do not copy that id into analytics or crash reports.</li>
             <li>If the app hits an error, a crash report is sent to
-            <a href="https://sentry.io/">Sentry</a> so we can fix it; it contains the
-            technical fault and what you were doing in the game, not who you are.
-            A small number of commerce events — offers shown, purchases, rewarded
-            ads — go to Google Analytics for Firebase so we can see how the store is
-            doing. They carry no name, no progress and no user id.</li>
+            <a href="https://sentry.io/">Sentry</a> so we can fix it. It contains the
+            technical fault and what you were doing in the game, not who you are.</li>
+            <li>With the <strong>Share usage data</strong> switch on, the app sends commerce and gameplay events to Google Analytics for Firebase: offers, purchases, rewarded ads, and how levels, stars and objectives went. They carry no name, no save code and no Play Games player id.</li>
             <li>We do not sell your personal information.</li>
           </ul>
 
@@ -103,18 +103,27 @@
           </p>
           <h3>Settings</h3>
           <p>
-            Mute, and the audio-output calibration offset measured in Settings
-            (used only to judge taps, not to identify you).
+            Mute, the haptics switch, the audio-output calibration offset
+            measured in Settings (used only to judge taps, not to identify you),
+            and whether you have turned on <strong>Share usage data</strong>.
           </p>
           <h3>Hearts and Premium</h3>
           <p>
-            Current hearts, refill timing, recent heart-refill transaction ids
-            (so a purchase is not filled twice), and whether Premium is active
-            on this device. Premium also comes from the store entitlement when
-            billing is available.
+            Current hearts, refill timing, an opaque id for each heart refill
+            already granted (so a purchase is not filled twice), the local day
+            a free heart was last claimed, and a cache of whether Premium was
+            last confirmed on this device. That cache is not the licence: it
+            expires after 30 days, and Premium itself is whatever Google Play
+            says you own.
           </p>
-          <h3>Tutorial</h3>
-          <p>Whether you have finished the how-to-play lesson.</p>
+          <h3>Tutorial, prompts and objectives</h3>
+          <p>
+            Whether you have finished the how-to-play lesson; a few one-time
+            prompts (the first demonstration, the first time hearts run out, a
+            finer rhythm grid, the Scrapbook); and the day’s three objectives,
+            how far each has come, and the stamps for days you finished all
+            three. Objectives are not a currency and cannot be bought.
+          </p>
           <h3>Android backup</h3>
           <p>
             On Android, the game data above is included in the system’s
@@ -130,9 +139,9 @@
             to restore from. The code is generated on the device and contains
             only your levels, best accuracies, calibration offset, the sound and
             haptics switches, and whether the tutorial is done. It does not
-            contain hearts, purchases or anything that identifies you, it is not
-            sent anywhere, and it leaves the device only if you choose to copy or
-            share it.
+            contain hearts, purchases, the analytics switch, objectives, or
+            anything that identifies you. It is not sent anywhere, and it leaves
+            the device only if you choose to copy or share it.
           </p>
           <p>
             This on-device data is not a profile we host. Uninstalling Tiny Tempo,
@@ -178,24 +187,47 @@
             <li><strong>Premium</strong> — a one-time unlock for unlimited hearts. Restore Purchases in Settings restores Premium, not consumed refills.</li>
           </ul>
           <p>
-            Payment is handled by Google. We use
-            <a href="https://www.revenuecat.com/">RevenueCat</a> to confirm
-            entitlements and purchase receipts. RevenueCat may process an
-            anonymous app user identifier, product identifiers, transaction
-            identifiers, and entitlement state. See
-            <a href="https://www.revenuecat.com/privacy">RevenueCat’s Privacy Policy</a>.
-            Google’s handling of Play purchases is described in
+            Payment is handled by Google Play Billing, called directly from the
+            app. There is no separate billing provider. Google’s handling of
+            Play purchases is described in
             <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>
             and <a href="https://play.google.com/about/play-terms/">Google Play Terms</a>.
           </p>
           <p>
             We do not receive your full billing address or payment card number.
-            Google may share a limited purchase record (for example that a
-            product was bought, and a transaction id) so the app can grant
-            hearts or Premium.
+            Google tells the app that a product was bought, and gives it a
+            transaction id, so the app can grant hearts or Premium. The app
+            keeps those transaction ids only long enough to avoid granting the
+            same refill twice. It does not keep a purchase history of its own.
           </p>
 
-          <h2 id="crash">6. Crash and error reports</h2>
+          <h2 id="play-games">6. Google Play Games</h2>
+          <p>
+            On Android, Tiny Tempo can use
+            <a href="https://developers.google.com/games/services">Google Play Games</a>.
+            You do not need it to play. A device without Play Games, a declined
+            sign-in and a missing network are all the same result: you stay
+            signed out, and progress, hearts and purchases on the device are
+            unchanged.
+          </p>
+          <p>
+            If Play Games signs you in, Google processes your Play Games player
+            id and the display name on that account. The app uses them only to
+            ask Google to unlock achievements you have already earned by
+            clearing area finales (levels 10, 20, 30, 40 and 50), and — only if
+            a Daily Tempo mode is later turned on — to submit a score to one
+            leaderboard. That mode is not in the app today, so no score is
+            submitted and no leaderboard button is shown.
+          </p>
+          <p>
+            The player id is not written into a crash report, an analytics
+            event, or a log. We do not operate Saved Games: Play Games does not
+            hold a copy of your progress. Google’s handling of Play Games is
+            described in
+            <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>.
+          </p>
+
+          <h2 id="crash">7. Crash and error reports</h2>
           <p>
             When something in Tiny Tempo fails — a screen that will not draw, a
             purchase that errors, a level that cannot save — the app sends a
@@ -235,28 +267,43 @@
             if this section ever grows beyond diagnostics.
           </p>
 
-          <h2 id="analytics">7. Analytics</h2>
+          <h2 id="analytics">8. Analytics</h2>
           <p>
-            The app reports a small number of commerce events to
-            <a href="https://firebase.google.com/">Google Analytics for Firebase</a>,
-            so we can see how often an offer is shown and how often it is taken. Without
-            it we can see purchases, because the store reports those, but not the players
-            who declined — which is the part that tells us whether a price or a placement
-            is wrong.
+            With <strong>Share usage data</strong> on, the app reports events to
+            <a href="https://firebase.google.com/">Google Analytics for Firebase</a>.
+            Two groups are sent:
           </p>
-          <p>Ten events are sent. Each carries only the fields named here:</p>
           <ul>
-            <li>Running out of hearts, with the level number.</li>
-            <li>A rewarded-ad offer being shown, started, completed or failing, with where
-            it was shown and, on a failure, why.</li>
-            <li>A purchase offer being shown, started, completed, cancelled or failing,
-            with which product and, on a failure, why.</li>
+            <li>
+              <strong>Commerce.</strong> Running out of hearts; a rewarded ad being
+              offered, started, completed or failing; a purchase being offered,
+              started, completed, cancelled or failing. These carry the level
+              number, where the offer was shown, which product, and, on a failure,
+              why. The store already reports completed purchases and AdMob already
+              reports ads that played; these events are how we see the offers that
+              were declined.
+            </li>
+            <li>
+              <strong>Gameplay.</strong> The tutorial, level attempts and their
+              results, individual tasks, star changes, star gates, introductions
+              to a finer rhythm, the Scrapbook and keepsakes, area finales, and
+              daily objectives. A level event carries numbers and labels from a
+              fixed list: which level, its area, its role in that area, how many
+              tasks, its tempo, the rhythm grid, accuracy, stars, how long it
+              took, and whether it was a new level or a replay. It does not carry
+              a recording of your taps.
+            </li>
           </ul>
           <p>
-            No event carries a name, an email address, a save code, your progress, or
-            anything you typed. We do not set a user id or any user property, so events
-            are not tied to an identity we hold. Firebase itself collects device and app
-            information and an app-instance identifier, as described in
+            A Daily Tempo leaderboard is not offered. The events that would
+            report a score submission are in the app and are not sent while that
+            mode is off.
+          </p>
+          <p>
+            No event carries a name, an email address, a save code, a Play Games
+            player id, or anything you typed. We do not set a user id or any user
+            property. Firebase itself collects device and app information and an
+            app-instance identifier, as described in
             <a href="https://firebase.google.com/support/privacy">Firebase’s own privacy
             documentation</a>.
           </p>
@@ -271,57 +318,66 @@
             not treat it as if it were.
           </p>
 
-          <h2 id="use">8. How information is used</h2>
+          <h2 id="use">9. How information is used</h2>
           <ul>
             <li>On-device data: to run the game, remember progress, mute and calibration, hearts, and Premium on that device.</li>
             <li>Advertising data (by Google and partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
-            <li>Purchase data (by Google and RevenueCat): to complete a purchase, grant or restore Premium, prevent a refill from being granted twice, and handle support requests you send us.</li>
+            <li>Purchase data (by Google): to complete a purchase, grant or restore Premium, prevent a refill from being granted twice, and handle support requests you send us.</li>
+            <li>Play Games data (by Google): to sign you in if you allow it, and to record achievements you have earned.</li>
             <li>Email you send us: to answer you. We do not use it for marketing lists.
-            Settings → Help can attach a short block of details — app version, device,
-            level reached, whether Premium is held, and your save code — and it shows you
-            that block in full before you send anything. Nothing is sent unless you send
-            it, and you can delete any of it from the message first.</li>
+            Settings → Help can prepare a message with the app version, whether you are
+            in the Android app or a browser, a short device description, the level and
+            area you have reached, how many levels you have cleared, whether Premium is
+            held, your hearts, how the audio clock is tracking, whether crash reports
+            and usage data are on, and your save code. The app shows that block in full
+            before you send anything. Nothing is sent unless you send it, and you can
+            delete any of it from the message first.</li>
           </ul>
           <p>
             <strong>Crash reports (by us, through Sentry):</strong> to find and
             fix a fault, tell one fault from another, and see whether a fix worked.
           </p>
           <p>
-            <strong>Commerce events (through Google Analytics for Firebase):</strong> to
-            see how many players are shown an offer and how many take it, so the price and
-            the placement can be judged on something other than guesswork. Not to build a
+            <strong>Usage events (through Google Analytics for Firebase):</strong> to
+            see how many players are shown an offer and how many take it, and where in
+            the game people stop, retry or replay, so the price, the placement and the
+            difficulty can be judged on something other than guesswork. Not to build a
             profile of you, and not for advertising targeting.
           </p>
 
-          <h2 id="sharing">9. Sharing</h2>
+          <h2 id="sharing">10. Sharing</h2>
           <p>We share information only as follows:</p>
           <ul>
             <li><strong>Advertising:</strong> Google AdMob and its partners, when a rewarded ad is requested or shown.</li>
-            <li><strong>Payments:</strong> Google Play and RevenueCat, when you buy or restore.</li>
-            <li><strong>Crash reporting:</strong> Sentry, when the app hits an error, as described in section 6.</li>
-            <li><strong>Analytics:</strong> Google, through Google Analytics for Firebase, when one of the ten commerce events in section 7 occurs.</li>
+            <li><strong>Payments:</strong> Google Play, when you buy or restore.</li>
+            <li><strong>Play Games:</strong> Google, when you are signed in, for the player id, display name and achievement unlocks described in section 6.</li>
+            <li><strong>Crash reporting:</strong> Sentry, when the app hits an error, as described in section 7.</li>
+            <li><strong>Analytics:</strong> Google, through Google Analytics for Firebase, for the events in section 8, and only while Share usage data is on.</li>
             <li><strong>Legal:</strong> if we are required to disclose information by law, regulation, or a valid legal process, or to protect the app, our users, or our rights.</li>
             <li><strong>Change of publisher:</strong> if Tiny Tempo is sold or transferred to another publisher, on-device data is not a hosted customer database that could change hands, but this policy and the app listing may transfer with it.</li>
           </ul>
           <p>We do not sell personal information, and we do not share it for cross-context behavioural advertising for our own purposes beyond the AdMob rewarded-ad integration described here.</p>
 
-          <h2 id="retention">10. Retention</h2>
+          <h2 id="retention">11. Retention</h2>
           <p>
             Local game data remains until you reset it, clear app storage, or
-            uninstall. Purchase records are kept by Google and RevenueCat for as
-            long as they need to operate billing, prevent fraud, and meet legal
-            obligations. Analytics events are kept by Google for the retention
-            period set on the Firebase project. Emails you send us are kept only as
-            long as needed to handle the request.
+            uninstall. Purchase records are kept by Google for as long as it
+            needs to operate billing, prevent fraud, and meet legal obligations.
+            Play Games keeps your player profile and achievements under your
+            Google account. Analytics events are kept by Google for the retention
+            period set on the Firebase project. Crash reports are kept by Sentry
+            for the retention period set on that project. Emails you send us are
+            kept only as long as needed to handle the request.
           </p>
 
-          <h2 id="rights">11. Your choices and rights</h2>
+          <h2 id="rights">12. Your choices and rights</h2>
           <ul>
             <li>Play without watching ads: wait for hearts, buy a refill, or buy Premium.</li>
             <li>Advertising preferences: use the in-ad or consent form choices where shown, and Android’s ad settings.</li>
             <li>Analytics: the <strong>Share usage data</strong> switch in Settings, under Privacy, turns commerce-event collection on and off at any time. Turning it off stops collection on that device.</li>
             <li>Progress: Reset in Settings clears saved level progress on that device.</li>
             <li>Purchases: manage Google Play purchases in your Google account. Restore Purchases restores Premium only.</li>
+            <li>Play Games: you can decline sign-in and still play. Achievements and any future leaderboard stay with your Google account; Android’s Play Games settings are where that account is managed.</li>
           </ul>
           <p>
             Depending on where you live (including the EEA, UK, and similar
@@ -330,9 +386,9 @@
             object to certain processing, to withdraw consent, or to lodge a
             complaint with a supervisory authority. Because we do not run a
             Tiny Tempo user account, much of the game data exists only on your
-            device. For advertising or purchase data held by Google or
-            RevenueCat, those providers’ tools and policies apply; we will help
-            where we can if you email us.
+            device. For advertising, purchase or Play Games data held by Google,
+            Google’s tools and policies apply; we will help where we can if you
+            email us.
           </p>
           <p>
             If you are a California resident, we do not sell or share personal
@@ -342,7 +398,7 @@
             the consent form.
           </p>
 
-          <h2 id="children">12. Children</h2>
+          <h2 id="children">13. Children</h2>
           <p>
             Tiny Tempo is a general-audience game. It is <strong>not directed at
             children under 13</strong> (or the equivalent minimum age in your
@@ -353,10 +409,10 @@
             and we will take appropriate steps.
           </p>
 
-          <h2 id="security">13. Security and international transfers</h2>
+          <h2 id="security">14. Security and international transfers</h2>
           <p>
             On-device data is only as protected as the device and any backup
-            you enable. Traffic to Google and RevenueCat uses their HTTPS APIs.
+            you enable. Traffic to Google and Sentry uses their HTTPS APIs.
             Those companies may process data in the United States and other
             countries. Where required, they are responsible for their own
             transfer safeguards (for example Standard Contractual Clauses).
@@ -367,7 +423,7 @@
             progress on our servers.
           </p>
 
-          <h2 id="changes">14. Changes</h2>
+          <h2 id="changes">15. Changes</h2>
           <p>
             We may update this policy, for example if we add a service, change
             partners, or the law changes. The “Last updated” date at the top
@@ -377,7 +433,7 @@
             listing or in the app).
           </p>
 
-          <h2 id="contact">15. Contact</h2>
+          <h2 id="contact">16. Contact</h2>
           <p>
             Dor Vadai — privacy questions:<br />
             <a href="mailto:dor1612@gmail.com">dor1612@gmail.com</a>

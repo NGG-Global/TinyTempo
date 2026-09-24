@@ -367,7 +367,17 @@ function repriseTasks(level: number, curve: readonly LevelTask[]): readonly Leve
   return out;
 }
 
+/**
+ * A level's spec is a pure function of its number, and the map, the star seats and a
+ * day's objectives all ask for the same ones again. Deriving a finale walks every earlier
+ * level in its area, so an uncached walk — a year of daily draws, in the objectives
+ * tests — rebuilt those levels until CI's five-second limit.
+ */
+const levelSpecs = new Map<number, LevelSpec>();
+
 export function levelSpec(level: number): LevelSpec {
+  const cached = levelSpecs.get(level);
+  if (cached) return cached;
   const d = difficulty(level);
   const P = PROGRESSION;
   const shape = choreographedShape(level);
@@ -379,13 +389,15 @@ export function levelSpec(level: number): LevelSpec {
   const finale = isAreaFinale(level);
   const curve = subdivide(level, d, tierTasks(level), shape.subdivision);
   const act = placementAt(ROTATION, level);
-  return Object.freeze({
+  const spec = Object.freeze({
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
     tasks: Object.freeze(finale ? repriseTasks(level, curve) : curve),
     peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });
+  levelSpecs.set(level, spec);
+  return spec;
 }
 
 /**
