@@ -29,7 +29,7 @@ function setup() {
   const context = {
     currentTime: 10, state: 'running',
     decodeAudioData: vi.fn(async () => fakeBuffer(FILE_FRAMES)),
-    createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels),
+    createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels, Infinity),
     createGain: () => ({
       gain: {
         value: 1, cancelScheduledValues: vi.fn(), setValueAtTime: vi.fn(),
@@ -110,4 +110,47 @@ describe('the shell / level / silent music bed', () => {
     expect(system.activeSources).toBe(1);
     expect(nodes[1]!.stop).not.toHaveBeenCalled();
   });
+});
+
+it('prepares B on the shell before a level, and does not restart it between shell screens', async () => {
+  const { system, host, nodes } = setup();
+  await setMusicBed(host, 'shell', { arrangement: 'a', fadeSec: 0 });
+  await setMusicBed(host, 'shell', { arrangement: 'b', fadeSec: 0 });
+  expect(system.arrangementId).toBe('b');
+  expect(system.playbackRate).toBe(system.baseRate);
+  expect(nodes[0]!.buffer).toBeNull();
+  await setMusicBed(host, 'shell', { arrangement: 'b', fadeSec: 0 });
+  expect(nodes).toHaveLength(2);
+  await setMusicBed(host, 'level', { arrangement: 'b', fadeSec: 0 });
+  expect(system.activeSources).toBe(0); // PlayScene owns the future count-in.
+  expect(system.start(12)).toBe(12);
+  expect(system.arrangementId).toBe('b');
+});
+
+it('a pending shell fade cannot unload a level which claims ownership', async () => {
+  vi.useFakeTimers();
+  const { system, host } = setup();
+  await setMusicBed(host, 'shell', { arrangement: 'a', fadeSec: 0 });
+  const oldShell = setMusicBed(host, 'shell', { arrangement: 'b' });
+  const level = setMusicBed(host, 'level', { arrangement: 'a', fadeSec: 0 });
+  await vi.advanceTimersByTimeAsync(500);
+  await level;
+  system.start(12);
+  await oldShell;
+  expect(system.arrangementId).toBe('a');
+  expect(system.activeSources).toBe(1);
+  expect(currentMusicBed()).toBe('level');
+});
+
+it('leaving for the title while B loads cannot start gameplay behind the title', async () => {
+  const { system, host, context } = setup();
+  let finish!: (buffer: ReturnType<typeof fakeBuffer>) => void;
+  context.decodeAudioData.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const shell = setMusicBed(host, 'shell', { arrangement: 'b', fadeSec: 0 });
+  await vi.waitFor(() => expect(context.decodeAudioData).toHaveBeenCalledOnce());
+  await setMusicBed(host, 'silent');
+  finish(fakeBuffer(FILE_FRAMES));
+  await shell;
+  expect(system.activeSources).toBe(0);
+  expect(currentMusicBed()).toBe('silent');
 });

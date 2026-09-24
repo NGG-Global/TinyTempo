@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MusicSystem, detectLeadIn, normalizeLoop, validateLoopBuffer } from '../src/audio/MusicSystem';
-import { MUSIC, loopSeconds, pickupSeconds } from '../src/config/music';
+import { MUSIC, GAMEPLAY_ARRANGEMENTS, loopSeconds, pickupSeconds } from '../src/config/music';
 
 // A 100 Hz "sample rate" keeps the fake buffers tiny while exercising real frame arithmetic.
 const RATE = 100;
@@ -23,7 +23,7 @@ function setup(empty = false) {
   const context = {
     currentTime: 10, state: 'running',
     decodeAudioData: vi.fn(async () => fakeBuffer(empty ? 0 : FILE_FRAMES)),
-    createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels),
+    createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels, Infinity),
     createGain: () => {
       const node = { gain: { value: 1, cancelScheduledValues: vi.fn(), setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() }, connect: vi.fn(), disconnect: vi.fn() };
       gains.push(node); return node;
@@ -43,7 +43,7 @@ describe('the premixed music loop', () => {
     expect(system.load()).toBe(first);
     await first;
     // One request and one decode: the seven-stem load cost seven of each and ~307 MiB of PCM.
-    expect(fetcher).toHaveBeenCalledExactlyOnceWith(MUSIC.url, expect.anything());
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(GAMEPLAY_ARRANGEMENTS.a.url, expect.anything());
     expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
     expect(system.start(12)).toBeCloseTo(12 + pickupSeconds(MUSIC.sourceBpm, MUSIC.pickupBeats), 9);
     expect(system.leadInSeconds).toBeCloseTo(LEAD / RATE, 9);
@@ -168,4 +168,150 @@ describe('the premixed music loop', () => {
     expect(() => validateLoopBuffer(null)).toThrow(/empty or invalid/);
     expect(() => validateLoopBuffer({ length: 0, sampleRate: 48000 } as AudioBuffer)).toThrow(/empty or invalid/);
   });
+});
+
+describe('arrangement ownership and recovery', () => {
+  it('drops the old source buffer before fetching another arrangement and never caches both', async () => {
+    const { system, nodes, fetcher } = setup();
+    await system.load('a'); system.start(12);
+    fetcher.mockImplementationOnce(async () => {
+      expect(system.ready).toBe(false);
+      expect(system.activeSources).toBe(0);
+      expect(nodes[0]!.buffer).toBeNull();
+      expect(nodes[0]!.disconnect).toHaveBeenCalledOnce();
+      return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) };
+    });
+    await system.load('b'); system.start(13);
+    expect(system.arrangementId).toBe('b');
+    expect(system.activeSources).toBe(1);
+    await system.load('a');
+    expect(nodes[1]!.buffer).toBeNull();
+    expect(fetcher).toHaveBeenCalledTimes(3); // A is fetched anew, not held beside B.
+    system.dispose();
+  });
+  it.each(['a', 'b'] as const)('normalizes %s on its own bar grid and maps every task BPM identically', async id => {
+    const { system, context, nodes } = setup();
+    await system.load(id);
+    expect(system.duration).toBeCloseTo(Math.round(loopSeconds(GAMEPLAY_ARRANGEMENTS[id]) * RATE) / RATE, 9);
+    expect(system.start(12)).toBe(12);
+    expect(nodes[0]!.playbackRate.value).toBe(120 / GAMEPLAY_ARRANGEMENTS[id].sourceBpm);
+    for (const bpm of [120, 126, 138, 150]) {
+      system.setBpm(bpm, 20);
+      expect(system.playbackRate * system.sourceBpm).toBeCloseTo(bpm, 12);
+    }
+    system.setGain(0);
+    expect(system.activeSources).toBe(1);
+    system.stop(); context.state = 'suspended';
+    expect(() => system.start(15)).toThrow(/Unlock/);
+    context.state = 'running'; system.start(16);
+    expect(system.playbackRate).toBe(system.baseRate);
+    expect(system.downbeatTime).toBe(16);
+    expect(nodes[0]!.buffer).toBeNull();
+    system.dispose();
+  });
+  it('falls back from unavailable B to A and keeps that selection through shell/level calls', async () => {
+    const { system, fetcher } = setup();
+    fetcher.mockRejectedValueOnce(new Error('B missing'));
+    await system.load('b');
+    expect(system.requestedArrangement).toBe('b');
+    expect(system.arrangementId).toBe('a');
+    expect(system.duration).toBe(120);
+    expect(system.baseRate).toBe(1);
+    await system.load('b');
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(system.start(12)).toBe(12);
+    system.dispose();
+  });
+  it('also falls back when the B decode or normalization is invalid', async () => {
+    const { system, context } = setup();
+    context.decodeAudioData.mockResolvedValueOnce(fakeBuffer(5));
+    await system.load('b');
+    expect(system.arrangementId).toBe('a');
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(2);
+    system.dispose();
+  });
+  it('supplies a short silent bar if B and A both fail, leaving a valid playable clock', async () => {
+    const { system, fetcher } = setup();
+    fetcher.mockRejectedValue(new Error('offline'));
+    await system.load('b');
+    expect(system.silentFallback).toBe(true);
+    expect(system.duration).toBe(2);
+    expect(system.start(12)).toBe(12);
+    system.setBpm(150, 14);
+    expect(system.playbackRate).toBe(1.25);
+    system.dispose();
+  });
+  it('serializes a changed selection behind an uncancellable decode and discards stale results', async () => {
+    const { system, context } = setup();
+    let finish!: (buffer: ReturnType<typeof fakeBuffer>) => void;
+    context.decodeAudioData.mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+    const first = system.load('a');
+    await vi.waitFor(() => expect(context.decodeAudioData).toHaveBeenCalledTimes(1));
+    const next = system.load('b');
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
+    expect(system.ready).toBe(false);
+    finish(fakeBuffer(FILE_FRAMES));
+    await Promise.all([first, next]);
+    expect(system.arrangementId).toBe('b');
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(2);
+    system.dispose();
+  });
+  it('bounds a stalled B fetch and aborts it before the A fallback', async () => {
+    vi.useFakeTimers();
+    try {
+      const { system, fetcher } = setup();
+      fetcher.mockImplementationOnce(() => new Promise(() => {}));
+      const pending = system.load('b');
+      await vi.advanceTimersByTimeAsync(MUSIC.loadTimeoutMs + 100);
+      await pending;
+      expect(system.arrangementId).toBe('a');
+      system.dispose();
+    } finally { vi.useRealTimers(); }
+  });
+  it('never starts a second decode when B times out in the native decoder', async () => {
+    vi.useFakeTimers();
+    try {
+      const { system, context } = setup();
+      context.decodeAudioData.mockImplementationOnce(() => new Promise(() => {}));
+      const pending = system.load('b');
+      await vi.advanceTimersByTimeAsync(MUSIC.loadTimeoutMs * 2 + 100);
+      await pending;
+      expect(system.silentFallback).toBe(true);
+      expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
+      system.dispose();
+    } finally { vi.useRealTimers(); }
+  });
+});
+
+it('keeps task plans and judgement windows identical for A and B', async () => {
+  const { createRoundPlan } = await import('../src/rhythm/RhythmScheduler');
+  const { parsePattern } = await import('../src/rhythm/patterns');
+  const { createJudge, judgeTap, windowsFor } = await import('../src/rhythm/judge');
+  const plans = [], results = [];
+  for (const id of ['a', 'b'] as const) {
+    const { system } = setup();
+    await system.load(id);
+    const origin = system.start(12);
+    system.setBpm(138, origin);
+    const plan = createRoundPlan(1, parsePattern('same', 'X X X X'), 138, origin, 4);
+    const judge = createJudge(plan.targets, windowsFor(plan.targets));
+    plans.push(plan);
+    results.push(plan.targets.map((target, index) => judgeTap(judge, target + [0, 0.04, 0.08, 0.14][index]!)));
+    expect(system.arrangementId).toBe(id); // BPM/task changes never select music.
+    system.dispose();
+  }
+  expect(plans[1]).toEqual(plans[0]);
+  expect(results[1]).toEqual(results[0]);
+});
+
+it('repairs only B’s last 3 ms codec seam without changing its length or interior', () => {
+  const rate = 1000, frames = Math.round(loopSeconds(GAMEPLAY_ARRANGEMENTS.b) * rate);
+  const source = fakeBuffer(frames + 200, rate);
+  source.getChannelData(0).fill(0.2);
+  source.getChannelData(0)[frames + 99] = -0.1;
+  const loop = normalizeLoop({ createBuffer: (c: number, n: number, r: number) => fakeBuffer(n, r, c, Infinity) } as unknown as AudioContext,
+    source as unknown as AudioBuffer, 100, GAMEPLAY_ARRANGEMENTS.b);
+  expect(loop.length).toBe(frames);
+  expect(loop.getChannelData(0)[frames - 1]).toBeCloseTo(loop.getChannelData(0)[0]!, 6);
+  expect(loop.getChannelData(0)[frames - 4]).toBeCloseTo(0.2);
 });

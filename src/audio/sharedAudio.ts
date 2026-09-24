@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { AudioEngine } from './AudioEngine';
 import { clampCalibration, loadSettings, saveSettings } from '../game/settings';
 import { setMusicBed } from './musicBed';
+import { loadProgress } from '../game/progress';
+import { arrangementForLevel } from '../game/musicSelection';
 
 const KEY = 'audio';
 
@@ -60,7 +62,7 @@ export function applyCalibration(engine: AudioEngine | null, calibrationMs: numb
 export function ensureShellMusic(scene: Phaser.Scene): void {
   const audio = currentAudio(scene);
   if (!audio || audio.context.state !== 'running') return;
-  void setMusicBed(audio, 'shell');
+  void setMusicBed(audio, 'shell', { arrangement: arrangementForLevel(loadProgress().unlocked) });
 }
 
 /** Tap offset, and the curtain into a level. `fadeSec` 0 is an immediate cut. */
