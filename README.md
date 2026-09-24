@@ -219,12 +219,30 @@ The homepage carries the game's own treatment rather than a second one: the
 palette is `src/config/theme.ts`, objects take one key light from the upper left
 with a block shadow for their edge, and `market.css` keeps that in tokens
 (`--lift-*`, and a surface set a band re-points so a card dropped into the dark
-band picks up the right ink). Three things on it are tied to the code and will
-go stale if the game moves without them:
+band picks up the right ink). **Its motion is the game's, not an impression of
+it**: every moving thing on the page is either recorded from the build or ported
+from the code that draws it, and nothing loops on a period of its own — the beat
+is 0.5 s and the bar 2 s, as at 120 BPM. Four things on it are tied to the code
+and will go stale if the game moves without them:
 
-- **The acts gallery is the registry.** Twenty tiles in `VIGNETTES` order, each
-  drawn in CSS on its act's own palette. A new act means a new tile and a new
-  count in the heading and the ticker.
+- **The clips are the game.** The handset in the hero and every tile in the acts
+  gallery are recorded from the dev build by `scripts/capture-acts.mjs`: it opens
+  each act's first level, lets the debug auto-player answer the task, and records
+  one whole task at 30 fps on a virtual clock — the demonstration, the answer, the
+  coda and the table slide — ending on the next task's downbeat, so each loop is
+  seamless. It writes `legal/acts/<id>.webm`, `.mp4` and a `.jpg` poster (what a
+  visitor with reduced motion sees). A new act means a new entry in the script's
+  list, a new tile, and a new count in the heading and the ticker; a changed act
+  means re-running the script for it (`node scripts/capture-acts.mjs <id>`). It
+  needs `ffmpeg` on PATH and Playwright (`npm i --no-save playwright`); nothing in
+  the build runs it.
+- **The playable stage is a port.** `legal/stage.js` draws level 1's hammer and
+  nail over the turn block on a canvas, and judges taps, from the same numbers as
+  `HammerNailVignette`, `hammerMotion.ts`, `ui/turnBlock.ts`, `game/beatTrack.ts`,
+  `rhythm/judge.ts` and `audio/hammerSounds.ts`; its header names each source.
+  The title sign's drop and settle, its tempo beads and the result plaque's medals
+  in `market.js` are `MenuScene` and `ui/starReveal.ts` the same way. A change to
+  one of those files wants the same change there.
 - **The numbers are the config.** ±55 ms and ±130 ms are `RHYTHM`, 120→150 BPM
   and ten levels to an area are `PROGRESSION`, and the grid card names the
   levels `PROGRESSION.subdivision` reaches.

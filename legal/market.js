@@ -1,269 +1,199 @@
 (() => {
   /*
-   * The reveal styles only apply under html.js, so a blocked or failed script
-   * leaves every section visible rather than blank.
+   * The reveal styles only apply under html.js, so a blocked or failed script leaves
+   * every section visible rather than blank.
    */
   document.documentElement.classList.add('js');
 
-  const BPM = 120;
-  const BEAT = 60 / BPM;
-  const BAR = 4 * BEAT;
-  const PATTERN = [0, 1, 3];
-  const PERFECT = 0.055;
-  const GOOD = 0.13;
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const still = () => reduce.matches;
 
-  const stage = document.querySelector('[data-stage]');
-  const hint = document.querySelector('[data-hint]');
-  const gradeEl = document.querySelector('[data-grade]');
-  const baton = document.querySelector('[data-baton]');
-  const socketsWatch = [...document.querySelectorAll('[data-sockets="watch"] .socket')];
-  const socketsPlay = [...document.querySelectorAll('[data-sockets="play"] .socket')];
-  const counts = {
-    p: document.querySelector('[data-count="perfect"]'),
-    g: document.querySelector('[data-count="good"]'),
-    m: document.querySelector('[data-count="miss"]'),
-  };
-  const soundBtn = document.querySelector('[data-sound]');
-  const soundWord = soundBtn?.querySelector('.sound-word') ?? soundBtn;
+  /*
+   * The motion is the game's, not a stylesheet's: the curves below are `ui/spring.ts` and
+   * `vignettes/motion.ts`, and every pose is a function of time rather than an eased
+   * transition, the way the game samples its own from the clock.
+   */
+  const clamp01 = v => Math.max(0, Math.min(1, v));
+  const easeOut = v => 1 - (1 - clamp01(v)) ** 3;
+  const backFactors = new Map();
+  function backFactor(amount) {
+    if (amount <= 0) return 0;
+    if (backFactors.has(amount)) return backFactors.get(amount);
+    let s = 10 * (1 + amount);
+    for (let i = 0; i < 12; i++) s -= (4 * s ** 3 - 27 * amount * (s + 1) ** 2) / (12 * s ** 2 - 54 * amount * (s + 1));
+    backFactors.set(amount, s);
+    return s;
+  }
+  const overshoot = (t, amount = 0.25) => { const p = clamp01(t), s = backFactor(amount); return 1 + (s + 1) * (p - 1) ** 3 + s * (p - 1) ** 2; };
+  const settle = (age, frequency, decay) => (!Number.isFinite(age) || age < 0 ? 0 : Math.sin(age * frequency) * Math.exp(-age * decay));
+  const spring = (t, damping = 4.5, cycles = 2.2) => (t <= 0 ? 0 : t >= 1 ? 1 : 1 - Math.exp(-damping * t) * Math.cos(cycles * Math.PI * t));
+  const squash = (age, duration, amount) => (age < 0 || age >= duration ? 0 : Math.sin(age / duration * Math.PI) * amount);
+  const stagger = (index, count, spread) => (count <= 1 ? 0 : spread * Math.max(0, Math.min(count - 1, index)) / (count - 1));
+  const arrive = (age, duration) => { const p = clamp01(age / duration); return { rise: 1 - overshoot(p, 0.12), alpha: easeOut(Math.min(1, p * 1.6)) }; };
+  const EXAGGERATION = 1.35;
+  const now = () => performance.now() / 1000;
+
+  // ------------------------------------------------------------ the title sign
+
+  /*
+   * `MenuScene.update`: the sign drops in on its ropes and swings itself quiet, and at rest
+   * drifts a little. Four beads under the title light one at a time on the game's own
+   * 120 BPM, the lit one swelling on its beat.
+   */
+  const sign = document.querySelector('[data-sign]');
+  const beads = [...document.querySelectorAll('[data-beads] .bead')];
+  const enteredAt = now();
+  function drawSign(t) {
+    if (!sign) return;
+    const age = t - enteredAt;
+    if (still()) {
+      sign.style.transform = '';
+      sign.style.opacity = '';
+      beads.forEach((bead, i) => { bead.classList.toggle('lit', i === 0); bead.style.transform = ''; });
+      return;
+    }
+    const entry = arrive(age - 0.1, 0.9);
+    const swing = settle(age - 0.3, 5.2, 1.6) * 0.06 * EXAGGERATION + Math.sin(t * 0.7) * 0.012 * EXAGGERATION;
+    sign.style.transform = `translateY(${(-entry.rise * 160).toFixed(2)}px) rotate(${swing.toFixed(4)}rad)`;
+    sign.style.opacity = entry.alpha.toFixed(3);
+    const beat = Math.floor(t * 2) % 4;
+    const phase = (t * 2) % 1;
+    beads.forEach((bead, i) => {
+      const lit = i === beat;
+      bead.classList.toggle('lit', lit);
+      bead.style.transform = lit ? `scale(${(1 + (1 - phase) ** 2 * 0.7 * EXAGGERATION).toFixed(3)})` : '';
+    });
+  }
+
+  // ------------------------------------------------------------ the result plaque
+
+  /*
+   * `starReveal.ts`: the plaque swings down on its ropes and settles, and each medal drops
+   * into its seat, squashes, and knocks the plaque as it lands. It plays once, the first
+   * time the plaque comes into view, and is simply there under reduced motion.
+   */
+  const plaque = document.querySelector('[data-plaque]');
+  const medals = [...document.querySelectorAll('[data-plaque] .star')];
+  let plaqueAt = null;
+  const STAR = { delay: 0.14, spread: 0.5, impact: 0.2, drop: 1.65, spin: 0.48 };
+  function starPose(age) {
+    if (age <= 0) return null;
+    const fall = clamp01(age / 0.26);
+    const drop = (1 - easeOut(fall)) * -STAR.drop + settle(age - STAR.impact, 26, 11) * 0.12;
+    const amount = squash(age - STAR.impact, 0.16, 0.16 * EXAGGERATION);
+    const size = overshoot(clamp01(age / 0.42), 0.16 * EXAGGERATION);
+    return {
+      alpha: easeOut(clamp01(age / 0.07)), drop,
+      scaleX: size * (1 + amount), scaleY: size * (1 - amount * 0.82),
+      spin: (1 - spring(clamp01(age / 0.5), 5.2, 1.7)) * -STAR.spin,
+    };
+  }
+  const starAge = (age, k) => age - STAR.delay - stagger(k, 3, STAR.spread);
+  function drawPlaque(t) {
+    if (!plaque || plaqueAt === null) return;
+    const age = t - plaqueAt;
+    if (age > 4) {
+      // Settled: hand the plaque and its medals back to the stylesheet and stop.
+      plaqueAt = null;
+      plaque.style.transform = plaque.style.opacity = '';
+      medals.forEach(medal => { medal.style.transform = medal.style.opacity = ''; });
+      return;
+    }
+    const fall = clamp01(age / 0.7);
+    let drop = (1 - overshoot(fall, 0.1)) * -0.42;
+    const tilt = -0.055 * (1 - fall) + settle(age - 0.7 * 0.55, 9.5, 3.4) * 0.055 * 0.8;
+    for (let k = 0; k < 3; k++) {
+      const since = starAge(age, k) - STAR.impact;
+      if (since >= 0) drop += Math.max(0, settle(since, 22, 9)) * 0.05 * EXAGGERATION;
+    }
+    plaque.style.transform = `translateY(${(drop * plaque.offsetHeight).toFixed(2)}px) rotate(${tilt.toFixed(4)}rad)`;
+    plaque.style.opacity = easeOut(clamp01(age / (0.7 * 0.35))).toFixed(3);
+    medals.forEach((medal, k) => {
+      const pose = starPose(starAge(age, k));
+      const radius = medal.offsetWidth / 2;
+      medal.style.opacity = pose ? pose.alpha.toFixed(3) : '0';
+      medal.style.transform = pose
+        ? `translateY(${(pose.drop * radius).toFixed(2)}px) rotate(${pose.spin.toFixed(4)}rad) scale(${pose.scaleX.toFixed(3)}, ${pose.scaleY.toFixed(3)})`
+        : 'scale(0)';
+    });
+  }
+  if (plaque && 'IntersectionObserver' in window && !still()) {
+    plaque.classList.add('is-waiting');
+    new IntersectionObserver((entries, self) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        plaqueAt = now();
+        // Posed before it is shown, so the settled plaque never flashes for a frame.
+        drawPlaque(plaqueAt);
+        plaque.classList.remove('is-waiting');
+        self.disconnect();
+      }
+    }, { rootMargin: '0px 0px -15% 0px', threshold: 0.2 }).observe(plaque);
+  }
+
+  // ------------------------------------------------------------ one frame loop
+
+  function frame() {
+    const t = now();
+    drawSign(t);
+    drawPlaque(t);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  // ------------------------------------------------------------ recorded clips
+
+  /*
+   * The handset and the act tiles are clips recorded from the game (scripts/capture-acts.mjs).
+   * They play only while on screen, and not at all under reduced motion, which shows each
+   * one's poster: the act mid-action, still.
+   */
+  const clips = [...document.querySelectorAll('video[data-loop]')];
+  const onScreen = new Set();
+  function play(video) {
+    if (still() || document.hidden) return;
+    video.muted = true;
+    const attempt = video.play();
+    if (attempt && typeof attempt.catch === 'function') attempt.catch(() => {});
+  }
+  if ('IntersectionObserver' in window) {
+    const watcher = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        const video = entry.target;
+        if (entry.isIntersecting) { onScreen.add(video); play(video); }
+        else { onScreen.delete(video); video.pause(); }
+      }
+    }, { threshold: 0.35 });
+    clips.forEach(video => watcher.observe(video));
+  }
+  document.addEventListener('visibilitychange', () => {
+    for (const video of onScreen) {
+      if (document.hidden) video.pause();
+      else play(video);
+    }
+  });
+  reduce.addEventListener?.('change', () => {
+    for (const video of clips) {
+      if (still()) { video.pause(); video.currentTime = 0; } else if (onScreen.has(video)) play(video);
+    }
+  });
+
+  // ------------------------------------------------------------ page furniture
+
   const header = document.querySelector('.site-header');
-
-  let audioCtx = null;
-  let muted = false;
-  let origin = 0;
-  let lastCycle = -1;
-  let pending = new Set(PATTERN);
-  let demoed = new Set();
-  let score = { perfect: 0, good: 0, miss: 0 };
-  let armed = false;
-  let engaged = false;
-  let visible = false;
-  let tappedThisPlay = false;
-
-  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-  function audio() {
-    if (muted) return null;
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    if (!audioCtx) audioCtx = new AC();
-    if (audioCtx.state === 'suspended') void audioCtx.resume();
-    return audioCtx;
-  }
-
-  function blip(kind, demo) {
-    const ac = audio();
-    if (!ac) return;
-    const t = ac.currentTime;
-    const osc = ac.createOscillator();
-    const gain = ac.createGain();
-    osc.type = demo ? 'sine' : 'triangle';
-    osc.frequency.value = kind === 'perfect' ? 880 : kind === 'good' ? 523 : kind === 'demo' ? 392 : 196;
-    const peak = demo ? 0.05 : 0.11;
-    gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(peak, t + 0.012);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + (demo ? 0.08 : 0.13));
-    osc.connect(gain).connect(ac.destination);
-    osc.start(t);
-    osc.stop(t + 0.16);
-  }
-
-  function flashGrade(label, className) {
-    if (!gradeEl) return;
-    gradeEl.textContent = label;
-    gradeEl.className = `grade pop ${className}`;
-    gradeEl.addEventListener('animationend', () => gradeEl.classList.remove('pop'), { once: true });
-  }
-
-  function paintCounts() {
-    if (counts.p) counts.p.textContent = String(score.perfect);
-    if (counts.g) counts.g.textContent = String(score.good);
-    if (counts.m) counts.m.textContent = String(score.miss);
-  }
-
-  function resetSockets(row) {
-    for (const socket of row) {
-      socket.classList.remove('is-hit', 'is-now', 'is-perfect', 'is-good', 'is-miss');
-    }
-  }
-
-  function mark(row, beat, kind) {
-    const socket = row[Math.round(beat)];
-    if (!socket) return;
-    socket.classList.add('is-hit', `is-${kind}`);
-  }
-
-  function nearest(local, available) {
-    let best = null;
-    let bestErr = Infinity;
-    for (const beat of available) {
-      const err = Math.abs(local - beat);
-      const wrap = Math.abs(local - (beat + 4));
-      const dist = Math.min(err, wrap);
-      if (dist < bestErr) {
-        bestErr = dist;
-        best = beat;
-      }
-    }
-    return best === null ? null : { beat: best, seconds: bestErr * BEAT };
-  }
-
-  function judge(local) {
-    const hit = nearest(local, pending);
-    if (!hit || hit.seconds > GOOD) {
-      score.miss += 1;
-      flashGrade('Miss', 'miss');
-      blip('miss');
-      paintCounts();
-      return;
-    }
-    pending.delete(hit.beat);
-    const kind = hit.seconds <= PERFECT ? 'perfect' : 'good';
-    score[kind] += 1;
-    mark(socketsPlay, hit.beat, kind);
-    flashGrade(kind === 'perfect' ? 'Perfect' : 'Good', kind);
-    blip(kind);
-    paintCounts();
-  }
-
-  function expireMisses() {
-    for (const beat of pending) {
-      score.miss += 1;
-      mark(socketsPlay, beat, 'miss');
-    }
-    if (pending.size) paintCounts();
-    pending = new Set(PATTERN);
-  }
-
-  function cycleAt(nowMs) {
-    return Math.floor((nowMs / 1000 - origin) / (BAR * 2));
-  }
-
-  function loop(nowMs) {
-    if (!armed) {
-      requestAnimationFrame(loop);
-      return;
-    }
-    if (!visible) {
-      requestAnimationFrame(loop);
-      return;
-    }
-    const elapsed = nowMs / 1000 - origin;
-    const cycle = Math.floor(elapsed / (BAR * 2));
-    const inCycle = elapsed - cycle * BAR * 2;
-    const playing = inCycle >= BAR;
-    const local = ((playing ? inCycle - BAR : inCycle) / BEAT);
-
-    if (cycle !== lastCycle && lastCycle >= 0 && engaged && tappedThisPlay) expireMisses();
-    if (cycle !== lastCycle) {
-      lastCycle = cycle;
-      resetSockets(socketsWatch);
-      resetSockets(socketsPlay);
-      pending = new Set(PATTERN);
-      demoed = new Set();
-      tappedThisPlay = false;
-    }
-
-    stage?.classList.toggle('is-play', playing);
-    stage?.classList.toggle('is-watch', !playing);
-    if (hint) {
-      hint.textContent = engaged
-        ? (playing ? 'Your turn — tap anywhere' : 'Watch the pattern')
-        : 'Tap the stage when you are ready';
-    }
-
-    const beatIndex = Math.min(3, Math.floor(local));
-    for (const [i, socket] of socketsWatch.entries()) socket.classList.toggle('is-now', !playing && i === beatIndex);
-    for (const [i, socket] of socketsPlay.entries()) socket.classList.toggle('is-now', playing && i === beatIndex);
-
-    if (!playing) {
-      for (const beat of PATTERN) {
-        if (local >= beat) {
-          mark(socketsWatch, beat, 'hit');
-          if (engaged && !demoed.has(beat)) {
-            demoed.add(beat);
-            blip('demo', true);
-          }
-        }
-      }
-    }
-
-    if (baton && stage) {
-      const row = playing ? socketsPlay : socketsWatch;
-      const socket = row[beatIndex];
-      if (socket) {
-        const stageBox = stage.getBoundingClientRect();
-        const box = socket.getBoundingClientRect();
-        baton.style.transform = `translate(${box.left - stageBox.left + box.width / 2 - 7}px, ${box.top - stageBox.top - 10}px)`;
-      }
-    }
-
-    requestAnimationFrame(loop);
-  }
-
-  function startClock() {
-    if (armed) return;
-    armed = true;
-    origin = performance.now() / 1000;
-    lastCycle = -1;
-    pending = new Set(PATTERN);
-    requestAnimationFrame(loop);
-  }
-
-  stage?.addEventListener('pointerdown', (event) => {
-    event.preventDefault();
-    engaged = true;
-    visible = true;
-    startClock();
-    const elapsed = performance.now() / 1000 - origin;
-    const inCycle = elapsed % (BAR * 2);
-    if (inCycle < BAR) {
-      blip('demo', true);
-      return;
-    }
-    const local = (inCycle - BAR) / BEAT;
-    tappedThisPlay = true;
-    judge(local);
-  });
-
-  soundBtn?.addEventListener('pointerdown', (event) => event.stopPropagation());
-  soundBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    muted = !muted;
-    if (soundWord) soundWord.textContent = muted ? 'Sound off' : 'Sound on';
-    soundBtn.setAttribute('aria-pressed', muted ? 'true' : 'false');
-    if (!muted) audio();
-  });
-
-  stage?.addEventListener('keydown', (event) => {
-    if (event.key !== ' ' && event.key !== 'Enter') return;
-    event.preventDefault();
-    stage.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }));
-  });
-
-  const io = new IntersectionObserver((entries) => {
-    for (const entry of entries) {
-      visible = entry.isIntersecting;
-      if (visible) {
-        startClock();
-        lastCycle = cycleAt(performance.now());
-      }
-    }
-  }, { threshold: 0.35 });
-  if (stage) io.observe(stage);
-
   window.addEventListener('scroll', () => {
     header?.classList.toggle('is-stuck', window.scrollY > 8);
   }, { passive: true });
 
   const revealables = [...document.querySelectorAll('.reveal')];
-  if (reduce || !('IntersectionObserver' in window)) {
+  if (still() || !('IntersectionObserver' in window)) {
     for (const el of revealables) el.classList.add('in');
   } else {
     const revealer = new IntersectionObserver((entries, self) => {
       for (const entry of entries) {
         if (!entry.isIntersecting) continue;
         const group = [...(entry.target.parentElement?.children ?? [])];
-        entry.target.style.setProperty('--stagger', `${Math.min(group.indexOf(entry.target), 7) * 70}ms`);
+        entry.target.style.setProperty('--stagger', `${Math.min(group.indexOf(entry.target) % 4, 3) * 70}ms`);
         entry.target.classList.add('in');
         self.unobserve(entry.target);
       }
@@ -271,7 +201,7 @@
     for (const el of revealables) revealer.observe(el);
   }
 
-  if (!reduce) {
+  if (!still()) {
     const root = document.documentElement;
     const pulse = () => {
       root.dataset.beat = String(Math.floor((performance.now() / 500) % 4));

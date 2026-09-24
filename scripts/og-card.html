@@ -32,12 +32,11 @@
           var(--paper);
       }
       .card .sign { width: 430px; margin-bottom: 1.6rem; animation: none; transform: none; }
-      .card .phone { width: 300px; animation: none; transform: rotate(-3deg); }
+      .card .phone { width: 252px; transform: rotate(-3deg); }
       .card .lede { font-size: 2.1rem; max-width: 18ch; margin-bottom: 1rem; }
       .card .stat-strip { margin-top: 1.4rem; }
       .card .badge { position: absolute; left: 4rem; top: 2.4rem; margin: 0; }
       .card .col { position: relative; padding-top: 4.5rem; }
-      .card .bead, .card .hammer, .card .glow, .card .chips i, .card .mini-face i, .card .mini-baton { animation: none; }
       .card .socket-note { margin-top: 0.4rem; color: var(--muted); font-weight: 800; font-size: 0.95rem; }
     </style>
   </head>
@@ -48,14 +47,13 @@
         <div class="sign">
           <div class="ropes"><span></span><span></span></div>
           <div class="board">
-            <p class="kicker">120 BPM</p>
             <h1>Tiny<br />Tempo</h1>
-            <div class="beads"><span class="bead"></span><span class="bead"></span><span class="bead"></span><span class="bead"></span></div>
+            <div class="beads"><span class="bead lit"></span><span class="bead"></span><span class="bead"></span><span class="bead"></span></div>
           </div>
         </div>
         <p class="lede">Watch a tiny everyday rhythm. Tap it back.</p>
         <ul class="stat-strip">
-          <li><b>20</b><span>acts</span></li>
+          <li><b>28</b><span>acts</span></li>
           <li><b>±55<i>ms</i></b><span>perfect</span></li>
           <li><b>120<i>→</i>150</b><span>BPM</span></li>
           <li><b>1</b><span>thumb</span></li>
@@ -64,25 +62,8 @@
       <div class="phone-wrap">
         <div class="phone">
           <span class="phone-shadow"></span>
-          <div class="screen">
-            <div class="hud">
-              <span class="hud-area">Area 1 · Level 3</span>
-              <span class="hud-pips"><i class="done"></i><i class="done"></i><i></i><i></i></span>
-            </div>
-            <span class="glow"></span>
-            <span class="bench"></span>
-            <span class="stand"></span>
-            <span class="hammer">
-              <span class="hammer-handle"></span>
-              <span class="hammer-grip"></span>
-              <span class="hammer-head"></span>
-            </span>
-            <div class="mini-turn">
-              <div class="mini-shelf"><i></i><i></i><i></i><i></i></div>
-              <div class="mini-face"><i></i><i></i><i></i><i></i></div>
-              <span class="mini-baton"></span>
-            </div>
-          </div>
+          <!-- The screen's background is the hero clip's poster, a frame of the game itself. -->
+          <div class="screen"></div>
         </div>
       </div>
     </div>
