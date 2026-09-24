@@ -39,14 +39,14 @@ import {
 import { collectionCount, keepsakeEarned, ownedKeepsakes, type Keepsake } from '@/game/scrapbook';
 import { drawKeepsake } from '@/ui/keepsakes';
 import { introCopy, introGrid, SUBDIVISION_INTRO, SubdivisionIntroRun } from '@/game/subdivisionIntro';
-import type { EarnedStars } from '@/game/stars';
+import { totalStars, type EarnedStars } from '@/game/stars';
 import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit } from '@/game/playAnalytics';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
 import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
-import { mix, shade, starColour } from '@/ui/colour';
+import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback } from '@/ui/feedback';
@@ -54,7 +54,12 @@ import { flawlessPose, socketGlint } from '@/ui/flourish';
 import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
-import { drawStarMark, prizeColour, STAR_PRIZE } from '@/ui/star';
+import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
+import {
+  chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, trayRect, type ResultPlan,
+} from '@/ui/resultLayout';
+import { nextGateChip, nextStarCopy, offersReplay, replayCopy, thresholdLabels, type GateChip } from '@/game/resultCopy';
+import { dashes } from '@/ui/path';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { FinaleStage } from '@/ui/finaleStage';
@@ -100,40 +105,13 @@ function teachPhase(plan: RoundPlan, now: number): Phase {
 }
 
 /**
- * The result plaque, in design units at scale 1. It hangs from two ropes above the
- * vignette and the medals straddle its top edge, half on the board and half off it, so
- * the brass reads as struck into the plaque rather than laid out on a shelf.
+ * When the rows under the plaque arrive, in seconds from the summary. The next star waits for
+ * the last medal to land (about 0.85 s in), so the stars keep their own moment; the finale's
+ * card follows its ribbon.
  */
-const PLATE = {
-  width: 624,
-  ropeLength: 130,
-  /** From the plaque's top edge down to the centre of a medal. */
-  medalY: 22,
-  medalRadius: 62,
-  medalGap: 202,
-  /** Local offsets from the plaque's top edge. */
-  scoreY: 162,
-  noteY: 228,
-  keptY: 282,
-  height: 268,
-  keptHeight: 328,
-  keptWidth: 300,
-} as const;
-
-/**
- * A keepsake's reveal on the result screen, in design units and seconds from the summary.
- * It waits for the last medal to land — about 0.85 s in — so the stars keep their own
- * moment, and it rises in the space between the plaque and the block, where it never
- * covers the score or intercepts the tap that moves on.
- */
-const KEEPSAKE_CARD = {
-  delay: 1.0,
-  rise: 0.5,
-  width: 540,
-  height: 168,
-  /** The first keepsake's card carries a second line saying what keepsakes are. */
-  firstHeight: 212,
-  art: 124,
+const RESULT_REVEAL = {
+  stripDelay: 0.9,
+  finaleLag: 0.25,
 } as const;
 
 /**
@@ -231,8 +209,30 @@ export class PlayScene extends BaseScene {
   private keepsakeName!: Phaser.GameObjects.Text;
   private keepsakeNote!: Phaser.GameObjects.Text;
   private keepsakeRect = new Phaser.Geom.Rectangle();
+  /** How the result stacks on this frame: the plaque, the rows under it, the replay block. */
+  private resultPlan: ResultPlan | null = null;
+  /** The chips under the seats, the next-star strip and the finale's card, all the plaque's. */
+  private chipLabels: Phaser.GameObjects.Text[] = [];
+  private chipEarned: (boolean | null)[] = [null, null, null];
+  private nextStarPlate!: Phaser.GameObjects.Graphics;
+  private finalePlate!: Phaser.GameObjects.Graphics;
+  private nextStar!: Phaser.GameObjects.Text;
+  private finaleCount!: Phaser.GameObjects.Text;
+  private finaleCountLabel!: Phaser.GameObjects.Text;
+  private gateLabel!: Phaser.GameObjects.Text;
+  private gateChip: GateChip | null = null;
+  /** Stars this pass earned, read once when the summary opens. */
+  private summaryStars: 0 | 1 | 2 | 3 = 0;
+  /** A clear short of three stars: the wood block over Continue that plays the level again. */
+  private replayOffered = false;
+  private replayRoot!: Phaser.GameObjects.Container;
+  private replayPlate!: Phaser.GameObjects.Graphics;
+  private replaySurface!: Phaser.GameObjects.TileSprite;
+  private replayLabel!: Phaser.GameObjects.Text;
+  private replayRect = new Phaser.Geom.Rectangle();
+  private replayPressedAt = -Infinity;
+  private replayPressDirty = false;
   /** The top of the action block, which the card must stay above; kept for re-placing it. */
-  private keepsakeFloor = 0;
   /** Once the card has settled it is drawn once more and left alone, until a layout moves it. */
   private keepsakeSettled = false;
   private keepsakeStruck = false;
@@ -417,6 +417,25 @@ export class PlayScene extends BaseScene {
     this.keepsakeLabel = label(this, 'New keepsake', { size: 20, colour: PALETTE.coral }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.keepsakeName = display(this, '', { size: 34, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.keepsakeNote = body(this, '', { size: 21, colour: PALETTE.muted }).setOrigin(0, 0).setDepth(11).setVisible(false);
+    // The plaque's own words and the rows under it. Assigned on every entry, never appended to.
+    this.chipLabels = [0, 1, 2].map(() => label(this, '', { size: PLATE.chip.text, colour: PALETTE.ink, align: 'center' })
+      .setOrigin(0.5).setDepth(11).setVisible(false));
+    this.chipEarned = [null, null, null];
+    this.nextStarPlate = this.add.graphics().setDepth(9).setVisible(false);
+    this.finalePlate = this.add.graphics().setDepth(9).setVisible(false);
+    this.nextStar = body(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.finaleCount = display(this, '', { size: 48, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.finaleCountLabel = label(this, 'Stars', { size: 20, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.gateLabel = label(this, '', { size: 20, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.gateChip = null;
+    this.replayRoot = this.add.container(0, 0).setDepth(10).setVisible(false);
+    this.replayPlate = this.add.graphics();
+    this.replaySurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.35);
+    this.replayLabel = display(this, '', { size: 34, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
+    this.replayRoot.add([this.replayPlate, this.replaySurface, this.replayLabel]);
+    this.replayOffered = false;
+    this.summaryStars = 0;
+    this.resultPlan = null;
     this.flawlessAt = -Infinity;
     this.flawlessSwept = 0;
     this.goStruck = false;
@@ -507,28 +526,7 @@ export class PlayScene extends BaseScene {
     this.accuracy.setWordWrapWidth(Math.min(560 * s, safe.width - 64 * s), false);
     this.accuracy.setLineSpacing(-4 * s);
     this.placeWaitCopy();
-    // The plaque hangs from just under the headline. It is clamped off the action block
-    // rather than centred, because on a tall handset the block stays by the thumb and the
-    // space that opens up belongs to the vignette, not to the result.
-    const plaqueH = (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * s;
-    const rig = PLATE.ropeLength * s + plaqueH;
-    const bandTop = safe.top + 300 * s;
-    const bandBottom = this.actionRect.y - 44 * s;
-    // Hangs just under the headline on a 16:9 frame, and takes a fifth of whatever a taller
-    // handset adds — enough that the plaque does not float at the top of a long screen,
-    // little enough that the space left under it still belongs to the act.
-    const free = Math.max(0, bandBottom - bandTop - rig);
-    this.plaqueAt = { x: safe.centerX, y: Math.max(safe.top + 220 * s, bandTop + free * 0.22) };
-    this.keepsakeFloor = bandBottom + 44 * s;
-    // The finale hangs its title card where the plaque will hang, its ribbon across the
-    // plaque's ropes, and its pennants under the pucks' row.
-    this.finale?.layout({
-      s, left: safe.left, right: safe.right, centerX: safe.centerX, ceiling: safe.top,
-      lineY: safe.top + 128 * s,
-      cardY: this.plaqueAt.y + (PLATE.ropeLength + PLATE.height / 2) * s,
-      ribbonY: this.plaqueAt.y + 18 * s,
-    });
-    this.placeKeepsakeCard();
+    this.placeResult();
     this.drawStars();
     this.drawTaskMarks();
   }
@@ -759,6 +757,8 @@ export class PlayScene extends BaseScene {
     this.taskIndex = 0;
     this.results = [];
     this.summaryShown = false;
+    this.replayOffered = false;
+    this.summaryStars = 0;
     this.levelCleared = false;
     this.outcome = null;
     this.saveFailed = false;
@@ -1057,6 +1057,13 @@ export class PlayScene extends BaseScene {
     }
     if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }
     if (near(this.mapAt)) { this.pressPuck('map'); this.leaveForMap(); return; }
+    // The wood block over Continue plays the same level again, by the restart puck's path.
+    if (this.summaryShown && this.replayOffered && Phaser.Geom.Rectangle.Contains(this.replayRect, tap.x, tap.y)) {
+      this.replayPressedAt = performance.now() / 1000;
+      this.replayPressDirty = true;
+      void this.startRound();
+      return;
+    }
     if (this.offeringHeart() && Phaser.Geom.Rectangle.Contains(this.refillRect, tap.x, tap.y)) {
       this.refillPressedAt = performance.now() / 1000;
       this.actionPressDirty = true;
@@ -1232,11 +1239,17 @@ export class PlayScene extends BaseScene {
       this.drawPremium(Math.max(0, premiumPress));
       this.actionPressDirty = actionPress > 0.001 || refillPress > 0.001 || premiumPress > 0.001;
     }
+    const replayPress = pressAmount(wall, this.replayPressedAt);
+    if (replayPress > 0.001 || this.replayPressDirty) {
+      this.drawReplay(Math.max(0, replayPress));
+      this.replayPressDirty = replayPress > 0.001;
+    }
     if (this.offeringHeart()) this.premiumSheen.update(wall, !monetization().premium());
     if (this.actionCaption !== '') {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(wall - this.actionShownAt, 0.5);
       this.actionRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
       this.refillRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
+      this.replayRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
     } else {
       this.actionRoot.setY(0).setAlpha(1);
       this.refillRoot.setY(0).setAlpha(1);
@@ -1667,8 +1680,6 @@ export class PlayScene extends BaseScene {
     // The longer note is shown once, here; after it, every later card is the short one.
     if (this.keepsake && this.keepsakeFirst) markScrapbookSeen();
     this.keepsakeStruck = false;
-    // Placed again now that the card knows whether it carries the first keepsake's longer note.
-    this.placeKeepsakeCard();
     this.starsLanded = 0;
     this.replay = null;
     const accuracy = meanAccuracy(this.results);
@@ -1679,6 +1690,7 @@ export class PlayScene extends BaseScene {
     this.changeHeadline(this.saveFailed ? 'Couldn’t save' : this.finaleCleared ? this.spec.areaName : outcome.cleared ? 'Cleared' : 'Again?');
     if (this.finaleCleared) {
       const at = this.summaryAt + FINALE_PAYOFF.ribbonDelay;
+      this.finale!.settleLine(this.summaryAt);
       this.finale!.showComplete(at);
       // Scheduled at the heard time the ribbon unrolls, which on the context clock is the
       // same number: a sound placed at T is heard when `now()` reads T.
@@ -1687,25 +1699,122 @@ export class PlayScene extends BaseScene {
     this.scoreValue.setText(`${Math.round(accuracy)}%`);
     this.accuracy.setText('');
     this.kept.setVisible(this.heartRefunded);
+    this.summaryStars = starsFor(accuracy, this.spec);
+    this.replayOffered = offersReplay(outcome.cleared, this.summaryStars);
+    const labels = thresholdLabels(this.spec);
+    this.chipLabels.forEach((chip, k) => chip.setText(labels[k]!));
+    this.chipEarned = [null, null, null];
+    this.nextStar.setText(nextStarCopy(this.summaryStars, this.spec.starAccuracy) ?? '');
+    this.replayLabel.setText(replayCopy(this.spec.level));
+    if (this.finaleCleared) {
+      const stars = totalStars(outcome.progress);
+      this.finaleCount.setText(String(stars));
+      this.gateChip = nextGateChip(this.spec.level, stars);
+      this.gateLabel.setText(this.gateChip.text.toUpperCase());
+    } else this.gateChip = null;
     this.setAction(outcome.cleared ? 'Continue' : 'Try again');
+    // Placed now that the rows under the plaque are known, then drawn.
+    this.placeResult();
     this.drawStars();
     this.drawTaskMarks();
   }
   /** Quiet progress, not another score counter: a row of beads, the done ones filled. Uses completed tasks, never frame time. */
-  /** Where the card goes: centred in the gap under the plaque, shrunk if that gap is short. */
-  private placeKeepsakeCard(): void {
-    const s = this.uiScale;
-    // Read live: the plaque grows when a heart is refunded, which is exactly what a first
-    // three-star clear — the usual keepsake moment — does after the last layout ran.
-    const plaqueBottom = this.plaqueAt.y + (PLATE.ropeLength + (this.heartRefunded ? PLATE.keptHeight : PLATE.height)) * s;
-    const blockTop = this.keepsakeFloor;
-    const height = (this.keepsakeFirst ? KEEPSAKE_CARD.firstHeight : KEEPSAKE_CARD.height) * s;
-    const room = blockTop - plaqueBottom - 36 * s;
-    const k = Math.max(0.6, Math.min(1, room / height));
-    const w = Math.min(KEEPSAKE_CARD.width * s, this.viewport.safe.width - 40 * s) * k, h = height * k;
-    const cy = plaqueBottom + Math.max(18 * s, (blockTop - plaqueBottom) / 2);
-    this.keepsakeRect.setTo(this.viewport.safe.centerX - w / 2, cy - h / 2, w, h);
+  /**
+   * Where the result goes on this frame: the plaque, the rows under it and the replay block
+   * over Continue (`planResult`). Runs on every layout and again when the summary opens,
+   * because what hangs under the plaque — a finale's card, the next star, a keepsake — is
+   * only known then, and the plaque makes room for the rows rather than the rows for it.
+   */
+  private placeResult(): void {
+    const s = this.uiScale, { safe } = this.viewport;
+    const summary = this.summaryShown;
+    const cardW = this.resultRowWidth();
+    const replayH = Math.max(88 * s, this.controlSize);
+    const frame = {
+      s, width: safe.width - 40 * s, top: safe.top + 190 * s, preferredTop: safe.top + 300 * s,
+      blockTop: this.actionRect.y, replayHeight: replayH,
+    };
+    const plan = planResult(frame, {
+      refund: summary && this.heartRefunded,
+      finale: summary && this.finaleCleared,
+      strip: summary && nextStarCopy(this.summaryStars, this.spec.starAccuracy) !== null,
+      keepsake: summary && this.keepsake ? this.measureKeepsakeCard(cardW) : 0,
+      replay: summary && this.replayOffered,
+    });
+    this.resultPlan = plan;
+    this.plaqueAt = { x: safe.centerX, y: plan.anchorY };
+    const card = plan.rows.find(row => row.kind === 'keepsake');
+    if (card) this.keepsakeRect.setTo(safe.centerX - cardW / 2, card.y, cardW, card.height);
     this.keepsakeSettled = false;
+    const replayW = Math.min(RESULT_ROWS.replayWidth * s, safe.width - 40 * s);
+    if (plan.replayY === null) this.replayRect.setTo(0, 0, 0, 0);
+    else this.replayRect.setTo(safe.centerX - replayW / 2, plan.replayY, replayW, replayH);
+    // The finale's title card hangs where the bare plaque would, and its ribbon across the
+    // plaque's top edge, wherever the rows under it have put that.
+    const bare = planResult(frame, { refund: false, finale: false, strip: false, keepsake: 0, replay: false });
+    this.finale?.layout({
+      s, left: safe.left, right: safe.right, centerX: safe.centerX, ceiling: safe.top,
+      lineY: safe.top + 128 * s,
+      // On the result the headline is the area's name at full size; the line hangs under it.
+      resultLineY: safe.top + 196 * s,
+      cardY: bare.anchorY + bare.rope + bare.plaqueHeight / 2,
+      ribbonY: plan.anchorY + plan.rope,
+    });
+    this.dressResult();
+    this.drawReplay(0);
+  }
+
+  /** The rows under the plaque share its width, so the result reads as one column. */
+  private resultRowWidth(): number {
+    return Math.min(PLATE.width * this.uiScale, this.viewport.safe.width - 40 * this.uiScale);
+  }
+
+  /**
+   * Sets the keepsake card's words and returns the height they need. The card was a fixed
+   * height, and the first keepsake's note ran to a fourth line at a 393-point width and was
+   * cut off by the card's own bottom edge.
+   */
+  private measureKeepsakeCard(width: number): number {
+    const s = this.uiScale, keepsake = this.keepsake!;
+    const count = collectionCount(this.outcome?.progress ?? loadProgress());
+    resize(this.keepsakeLabel, 20 * s, PALETTE.coral, STYLE.current, false);
+    this.keepsakeName.setText(keepsake.name);
+    resize(this.keepsakeName, 34 * s, PALETTE.ink, STYLE.current, false);
+    // The first says what just happened and where it went; after that, only the tally.
+    this.keepsakeNote.setText(this.keepsakeFirst
+      ? `Three stars on a level earn its keepsake. Yours are in the Scrapbook on the title screen.`
+      : `In your Scrapbook · ${count.owned}/${count.total}`);
+    resize(this.keepsakeNote, 21 * s, PALETTE.muted, STYLE.current, false);
+    this.keepsakeNote.setWordWrapWidth(Math.max(80 * s, width - (28 + KEEPSAKE_CARD.art + 48) * s), false);
+    return keepsakeCardHeight(KEEPSAKE_CARD.noteTop * s + this.keepsakeNote.height, s);
+  }
+
+  /** The result's type sizes, set on a layout and never per frame: a resize re-rasterises. */
+  private dressResult(): void {
+    const s = this.uiScale, k = this.resultPlan?.k ?? 1;
+    resize(this.scoreValue, PLATE.scoreSize * s * k, PALETTE.ink);
+    resize(this.scoreNote, PLATE.noteSize * s * k, PALETTE.muted, STYLE.current, false);
+    resize(this.kept, 22 * s * k, shade(BRASS, -0.62), STYLE.current, false);
+    for (const chip of this.chipLabels) resize(chip, PLATE.chip.text * s * k, PALETTE.ink, STYLE.current, false);
+    this.chipEarned = [null, null, null];
+    resize(this.nextStar, 30 * s, PALETTE.ink, STYLE.current, false);
+    resize(this.finaleCount, 48 * s, PALETTE.ink);
+    resize(this.finaleCountLabel, 20 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.gateLabel, 20 * s, this.gateChip?.ink ?? PALETTE.ink, STYLE.current, false);
+    resize(this.replayLabel, 34 * s, SHELL.cream);
+  }
+
+  /** Wood, not coral: Continue stays the one action the colour points to. */
+  private drawReplay(press: number): void {
+    const shown = this.summaryShown && this.replayOffered;
+    this.replayRoot.setVisible(shown);
+    const g = this.replayPlate.clear();
+    if (!shown) return;
+    const s = this.uiScale, r = this.replayRect;
+    drawPanel(g, r, s, { fill: SHELL.wood, depth: 12, press });
+    const sink = 12 * s * press * 0.8;
+    placeSurface(this.replaySurface, r, s, sink);
+    this.replayLabel.setPosition(r.centerX, r.centerY + sink);
   }
 
   /** The card is a Graphics *and* three Texts, the same lesson the plaque taught: hide them together. */
@@ -1732,35 +1841,24 @@ export class PlayScene extends BaseScene {
     const s = this.uiScale;
     const pose = still ? { rise: 0, alpha: 1 } : arrive(age, KEEPSAKE_CARD.rise);
     const r = new Phaser.Geom.Rectangle(this.keepsakeRect.x, this.keepsakeRect.y + pose.rise * 40 * s, this.keepsakeRect.width, this.keepsakeRect.height);
-    const k = r.width / (KEEPSAKE_CARD.width * s);
     const g = this.keepsakeCard.clear().setVisible(true).setAlpha(pose.alpha);
     drawPanel(g, r, s, { fill: SHELL.cream, depth: 8, radius: 18, hero: true });
     // The keepsake on its own small mount, stamped down as the card arrives.
-    const artSize = KEEPSAKE_CARD.art * s * k;
-    const ax = r.x + 28 * s * k + artSize / 2, ay = r.y + Math.min(r.height / 2, 96 * s * k);
+    const artSize = KEEPSAKE_CARD.art * s;
+    const ax = r.x + 28 * s + artSize / 2, ay = r.y + Math.min(r.height / 2, 96 * s);
     const stamp = still ? 1 : squash(age - 0.25, 0.22, 0.45) * 0.12 + 1;
-    g.fillStyle(SHELL.bench, 1).fillRoundedRect(ax - artSize / 2, ay - artSize / 2, artSize, artSize, 10 * s * k);
+    g.fillStyle(SHELL.bench, 1).fillRoundedRect(ax - artSize / 2, ay - artSize / 2, artSize, artSize, 10 * s);
     drawKeepsake(g, keepsake.id, ax, ay, artSize * 0.86 * stamp, false, SHELL.bench);
     if (!this.keepsakeStruck && age >= 0.25) {
       this.keepsakeStruck = true;
       if (!still) this.fx.burst('sparks', ax, ay, [SHELL.sun, 0xffe7a0, PALETTE.coral], 10);
       vibrate('tap');
     }
-    const tx = ax + artSize / 2 + 24 * s * k;
-    const textW = r.right - 24 * s * k - tx;
-    resize(this.keepsakeLabel, 20 * s * k, PALETTE.coral, STYLE.current, false);
-    this.keepsakeLabel.setPosition(tx, r.y + 38 * s * k).setAlpha(pose.alpha).setVisible(true);
-    this.keepsakeName.setText(keepsake.name);
-    resize(this.keepsakeName, 34 * s * k, PALETTE.ink, STYLE.current, false);
-    this.keepsakeName.setPosition(tx, r.y + 78 * s * k).setAlpha(pose.alpha).setVisible(true);
-    const count = collectionCount(this.outcome?.progress ?? loadProgress());
-    // The first says what just happened and where it went; after that, only the tally.
-    this.keepsakeNote.setText(this.keepsakeFirst
-      ? `Three stars on a level earn its keepsake. Yours are in the Scrapbook on the title screen.`
-      : `In your Scrapbook · ${count.owned}/${count.total}`);
-    resize(this.keepsakeNote, 21 * s * k, PALETTE.muted, STYLE.current, false);
-    this.keepsakeNote.setWordWrapWidth(Math.max(80 * s, textW), false);
-    this.keepsakeNote.setPosition(tx, r.y + 106 * s * k).setAlpha(pose.alpha).setVisible(true);
+    // The words were set and measured when the card was placed; the card is as tall as they are.
+    const tx = ax + artSize / 2 + 24 * s;
+    this.keepsakeLabel.setPosition(tx, r.y + 38 * s).setAlpha(pose.alpha).setVisible(true);
+    this.keepsakeName.setPosition(tx, r.y + 78 * s).setAlpha(pose.alpha).setVisible(true);
+    this.keepsakeNote.setPosition(tx, r.y + KEEPSAKE_CARD.noteTop * s).setAlpha(pose.alpha).setVisible(true);
   }
 
   private drawTaskMarks(): void {
@@ -1779,10 +1877,13 @@ export class PlayScene extends BaseScene {
       if (done || current) g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, y - r * 0.35, r * 0.28);
     }
   }
+  /** The plaque's own scale: the scene's, and the planner's on a short or narrow frame. */
+  private get plateScale(): number { return this.uiScale * (this.resultPlan?.k ?? 1); }
+
   /** Medal `k` in the plaque's own space, measured from the ceiling anchor. */
   private medalLocal(k: number): { x: number; y: number } {
-    const s = this.uiScale;
-    return { x: (k - 1) * PLATE.medalGap * s, y: (PLATE.ropeLength + PLATE.medalY) * s };
+    const s = this.plateScale, seat = medalSeat(k as 0 | 1 | 2);
+    return { x: seat.x * s, y: (this.resultPlan?.rope ?? 0) + seat.y * s };
   }
 
   /** The same point in world space, once the plaque has swung and taken its knocks. */
@@ -1798,12 +1899,16 @@ export class PlayScene extends BaseScene {
   }
 
   /**
-   * The result plaque. It was a small cream plate parked on the beat track with three
-   * 20-unit stars in a row on it, which read as a caption rather than as the end of the
-   * level. It now hangs from the ceiling on two ropes, drops into place, and the medals —
-   * two and a half times the size, straddling its top edge — knock it down a little as
-   * each one stamps. Nothing here decides anything: `starsFor` has already scored the
-   * level and `starReveal.ts` supplies every pose as `f(t)`.
+   * The result plaque. It hangs from the ceiling on two ropes on its outer thirds, drops into
+   * place, and takes a knock from each medal as it stamps. The medals seat in a recessed tray
+   * near its top — the middle one larger and raised — each over a chip naming the accuracy
+   * that earns it, so a missed star says what it would have taken; under the tray, the score.
+   * They used to straddle the plaque's top edge, where the outer two crossed the ropes.
+   *
+   * Nothing here decides anything: `starsFor` has scored the level, `planResult` has placed
+   * it and `starReveal.ts` supplies every pose as `f(t)`. **Everything the result is made
+   * of is hidden here and nowhere else** — the chips, the rows under the plaque and the
+   * replay block are as much the plaque as its score is.
    */
   private drawStars(): void {
     this.stars.clear().setPosition(0, 0).setRotation(0);
@@ -1811,18 +1916,25 @@ export class PlayScene extends BaseScene {
     this.kept.setVisible(shown && this.heartRefunded);
     this.scoreValue.setVisible(shown);
     this.scoreNote.setVisible(shown);
-    if (!shown) return;
-    const s = this.uiScale;
+    for (const chip of this.chipLabels) chip.setVisible(shown);
+    this.replayRoot.setVisible(shown && this.replayOffered);
+    if (!shown || !this.resultPlan) {
+      for (const plate of [this.nextStarPlate, this.finalePlate]) plate.clear().setVisible(false);
+      for (const text of [this.nextStar, this.finaleCount, this.finaleCountLabel, this.gateLabel]) text.setVisible(false);
+      return;
+    }
+    const plan = this.resultPlan;
+    const s = this.plateScale;
     const still = this.reducedMotion;
     const age = this.now() - this.summaryAt;
-    const earned = starsFor(meanAccuracy(this.results), this.spec);
+    const earned = this.summaryStars;
     const exaggeration = STYLE.current.exaggeration;
     const pose = plaquePose(age, still);
     const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration);
-    const plaqueH = (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * s;
+    const plaqueH = plan.plaqueHeight;
     const drop = (pose.drop + jolt) * plaqueH;
-    const width = Math.min(PLATE.width * s, this.viewport.safe.width - 40 * s);
-    const top = PLATE.ropeLength * s;
+    const width = PLATE.width * s;
+    const top = plan.rope;
     const g = this.stars;
     g.setPosition(this.plaqueAt.x, this.plaqueAt.y + drop).setRotation(pose.tilt).setAlpha(pose.alpha);
 
@@ -1843,46 +1955,124 @@ export class PlayScene extends BaseScene {
       }
     }
 
-    drawRopes(g, s, top, [-width / 2 + 62 * s, width / 2 - 62 * s], 7);
+    drawRopes(g, s, top, [-PLATE.ropeX * s, PLATE.ropeX * s], PLATE.ropeEye);
     drawPanel(g, new Rect(-width / 2, top, width, plaqueH), s, {
       fill: SHELL.cream, depth: 12, radius: 40, hero: true,
     });
+    // The tray: a bench-coloured hollow, its top edge in shadow and its lower lip catching the light.
+    const tray = trayRect(), tr = PLATE.tray.radius * s, lip = PLATE.tray.shadow * s;
+    const tx = tray.x * s, ty = top + tray.y * s, tw = tray.width * s, th = tray.height * s;
+    g.fillStyle(shade(SHELL.bench, -0.18), 1).fillRoundedRect(tx, ty, tw, th, tr);
+    g.fillStyle(SHELL.bench, 1).fillRoundedRect(tx, ty + lip, tw, th - lip, { tl: tr * 0.85, tr: tr * 0.85, bl: tr, br: tr });
+    g.fillStyle(0xffffff, 0.4).fillRoundedRect(tx + tr, ty + th - 5 * s, tw - tr * 2, 3 * s, 1.5 * s);
 
     const empty = starColour(false, this.definition.ink, SHELL.cream);
-    const radius = PLATE.medalRadius * s;
     for (let k = 0; k < 3; k++) {
-      const at = this.medalLocal(k);
-      drawStarMark(g, { x: at.x, y: at.y, radius, color: empty, pose: starPose(8, false, exaggeration) });
-      if (k >= earned) continue;
-      const local = starAge(age, k, still);
-      if (local <= 0) continue;
-      const medal = starPose(local, true, exaggeration);
-      drawStarMark(g, {
-        x: at.x, y: at.y, radius, color: prizeColour(empty, medal.fill), pose: medal,
-        impactAge: starImpactAge(local, true), chorus: still ? 0 : chorusGlow(age, earned),
-      });
+      const seat = medalSeat(k as 0 | 1 | 2);
+      const at = { x: seat.x * s, y: top + seat.y * s }, radius = seat.radius * s;
+      // An empty seat is a hollow, never a duller star: brass reads against hollow at any tone.
+      drawStarSeat(g, at.x, at.y, radius, SHELL.bench, PALETTE.muted);
+      let landed = false;
+      if (k < earned) {
+        const local = starAge(age, k, still);
+        if (local > 0) {
+          const medal = starPose(local, true, exaggeration);
+          landed = medal.landed;
+          drawStarMark(g, {
+            x: at.x, y: at.y, radius, color: prizeColour(empty, medal.fill), pose: medal,
+            impactAge: starImpactAge(local, true), chorus: still ? 0 : chorusGlow(age, earned),
+          });
+        }
+      }
+      this.drawChip(k as 0 | 1 | 2, s, top, landed, pose.tilt, drop, pose.alpha);
     }
 
-    resize(this.scoreValue, 104 * s, PALETTE.ink);
-    resize(this.scoreNote, 22 * s, PALETTE.muted, STYLE.current, false);
     this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
     this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
-    if (!this.heartRefunded) return;
-    // A refunded heart is brass on brass: a small struck plate, not a coral caption.
-    const keptW = PLATE.keptWidth * s, keptH = 60 * s, keptY = top + PLATE.keptY * s;
-    drawPanel(g, new Rect(-keptW / 2, keptY - keptH / 2, keptW, keptH), s, { fill: BRASS, depth: 5, radius: 18 });
-    drawHeart(g, -keptW / 2 + 42 * s, keptY, 17 * s, PALETTE.coral);
-    resize(this.kept, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
-    this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
+    if (this.heartRefunded) {
+      // A refunded heart is brass on brass: a small struck plate, not a coral caption.
+      const keptW = PLATE.keptWidth * s, keptH = PLATE.keptTall * s, keptY = top + PLATE.keptY * s;
+      drawPanel(g, new Rect(-keptW / 2, keptY - keptH / 2, keptW, keptH), s, { fill: BRASS, depth: 5, radius: 18 });
+      drawHeart(g, -keptW / 2 + 42 * s, keptY, 17 * s, PALETTE.coral);
+      this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
+    }
+    this.drawResultRows(age, still);
   }
+
+  /**
+   * The chip under seat `k`: ink with cream once its star has landed, a dashed outline
+   * round the threshold until then. Hung from the plaque like the score, so it swings with it.
+   */
+  private drawChip(k: 0 | 1 | 2, s: number, top: number, earned: boolean, tilt: number, drop: number, alpha: number): void {
+    const g = this.stars, chip = chipSeat(k);
+    const w = chip.width * s, h = chip.height * s, cx = chip.x * s, cy = top + chip.y * s, r = h / 2;
+    if (earned) g.fillStyle(PALETTE.ink, 1).fillRoundedRect(cx - w / 2, cy - h / 2, w, h, r);
+    else {
+      const outline: { x: number; y: number }[] = [];
+      for (let i = 0; i <= 12; i++) { const a = -Math.PI / 2 + i * Math.PI / 12; outline.push({ x: cx + w / 2 - r + Math.cos(a) * r, y: cy + Math.sin(a) * r }); }
+      for (let i = 0; i <= 12; i++) { const a = Math.PI / 2 + i * Math.PI / 12; outline.push({ x: cx - w / 2 + r + Math.cos(a) * r, y: cy + Math.sin(a) * r }); }
+      outline.push(outline[0]!);
+      g.lineStyle(Math.max(1.5, 2.4 * s), PALETTE.muted, 1);
+      for (const [a, b] of dashes(outline, 7 * s, 5 * s)) g.lineBetween(a.x, a.y, b.x, b.y);
+    }
+    const text = this.chipLabels[k]!;
+    if (this.chipEarned[k] !== earned) {
+      this.chipEarned[k] = earned;
+      text.setColor(hex(earned ? SHELL.cream : PALETTE.ink));
+    }
+    this.hangText(text, cx, cy, tilt, drop, alpha);
+  }
+
+  /**
+   * The rows under the plaque, in the planner's order. Each arrives once the medals have had
+   * their moment — the next star as the last one lands, the finale's card with its ribbon —
+   * and none of them swings: they stand on the frame, not on the ropes.
+   */
+  private drawResultRows(age: number, still: boolean): void {
+    const plan = this.resultPlan!, s = this.uiScale;
+    const w = this.resultRowWidth(), x = this.viewport.safe.centerX - w / 2;
+    const arrival = (delay: number) => (still ? { rise: 0, alpha: 1 } : age < delay ? { rise: 1, alpha: 0 } : arrive(age - delay, 0.4));
+    const strip = plan.rows.find(row => row.kind === 'strip');
+    const g = this.nextStarPlate.clear().setVisible(strip !== undefined);
+    if (strip) {
+      const pose = arrival(RESULT_REVEAL.stripDelay);
+      const y = strip.y + pose.rise * 24 * s, r = 20 * s, lip = 6 * s;
+      g.setAlpha(pose.alpha);
+      // A recess in the bench, like the tray: shadow along its top edge.
+      g.fillStyle(shade(SHELL.bench, -0.16), 1).fillRoundedRect(x, y, w, strip.height, r);
+      g.fillStyle(SHELL.bench, 1).fillRoundedRect(x, y + lip, w, strip.height - lip, { tl: r * 0.85, tr: r * 0.85, bl: r, br: r });
+      const cy = y + (strip.height + lip) / 2;
+      drawStarSeat(g, x + 54 * s, cy, 24 * s, SHELL.bench, PALETTE.muted);
+      this.nextStar.setPosition(x + 96 * s, cy).setAlpha(pose.alpha).setVisible(true);
+    } else this.nextStar.setVisible(false);
+
+    const card = plan.rows.find(row => row.kind === 'finale');
+    const f = this.finalePlate.clear().setVisible(card !== undefined && this.gateChip !== null);
+    const chip = this.gateChip;
+    if (card && chip) {
+      const pose = arrival(FINALE_PAYOFF.ribbonDelay + RESULT_REVEAL.finaleLag);
+      const y = card.y + pose.rise * 24 * s, cy = y + card.height / 2;
+      f.setAlpha(pose.alpha);
+      drawPanel(f, new Rect(x, y, w, card.height), s, { fill: SHELL.puck, depth: 8, radius: 22 });
+      drawStar(f, x + 50 * s, cy, 24 * s, STAR_PRIZE);
+      this.finaleCount.setPosition(x + 88 * s, cy).setAlpha(pose.alpha).setVisible(true);
+      this.finaleCountLabel.setPosition(x + 88 * s + this.finaleCount.width + 12 * s, cy + 3 * s).setAlpha(pose.alpha).setVisible(true);
+      // The next area's gate, in that area's own colours.
+      const chipW = this.gateLabel.width + 44 * s, chipH = 52 * s, chipX = x + w - 24 * s - chipW;
+      f.fillStyle(chip.ground, 1).fillRoundedRect(chipX, cy - chipH / 2, chipW, chipH, chipH / 2);
+      f.lineStyle(2 * s, shade(chip.ground, -0.35), 1).strokeRoundedRect(chipX, cy - chipH / 2, chipW, chipH, chipH / 2);
+      this.gateLabel.setPosition(chipX + chipW / 2, cy).setAlpha(pose.alpha).setVisible(true);
+    } else for (const text of [this.finaleCount, this.finaleCountLabel, this.gateLabel]) text.setVisible(false);
+  }
+
   /** Medals stamp left to right; an earned one throws confetti and sparks as it lands. */
   private animateStars(now: number): void {
-    const earned = starsFor(meanAccuracy(this.results), this.spec);
+    const earned = this.summaryStars;
     const still = this.reducedMotion;
     const summaryAge = now - this.summaryAt;
     const pose = plaquePose(summaryAge, still);
     const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration)))
-      * (this.heartRefunded ? PLATE.keptHeight : PLATE.height) * this.uiScale;
+      * (this.resultPlan?.plaqueHeight ?? 0);
     for (let k = 0; k < 3; k++) {
       const age = starAge(summaryAge, k, still);
       const medal = starPose(age, k < earned, STYLE.current.exaggeration);
@@ -1898,7 +2088,7 @@ export class PlayScene extends BaseScene {
       vibrate('stamp');
       // A clean sweep throws one more burst, over the whole plaque rather than one medal.
       if (k === 2 && earned >= 3) {
-        const crest = this.hangAt(0, PLATE.ropeLength * this.uiScale, pose.tilt, drop);
+        const crest = this.hangAt(0, this.resultPlan?.rope ?? 0, pose.tilt, drop);
         this.starFx.burst('confetti', crest.x, crest.y, [PALETTE.coral, SHELL.sun, SHELL.cream, STAR_PRIZE], 26);
       }
     }

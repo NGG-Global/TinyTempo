@@ -25,7 +25,7 @@ finales.
 
 *Clearing*, not reaching: level 10 opens when level 9 is cleared, but the achievement is for
 finishing the finale itself, so the unlock popup lands on the same result screen as the
-"Area complete" ribbon.
+"Area complete" ribbon across the plaque.
 
 ## Earned is derived; unlocking is re-sent
 

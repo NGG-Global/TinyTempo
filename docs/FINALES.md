@@ -65,13 +65,18 @@ only tells it *when* — the opening's downbeat, the clear. It never decides *wh
   placement, like every cue. After a finer grid's introduction the loop is already at full
   level, so there is no swell — ducking it there would read as a fault.
 - **The payoff.** On a clear the headline names the area; a second after the summary — once
-  the third medal has landed — a ribbon unrolls across the plaque's ropes: "Area complete ·
-  Next stop: Pavement", with confetti from both ends and a brass fanfare. A keepsake card
-  earned by the same clear waits 0.7 s longer than usual so each has its moment. A failed
+  the third medal has landed — a ribbon unrolls across the plaque's top edge: "Area
+  complete", with confetti from both ends and a brass fanfare. The pennant line moves up
+  under the headline as the summary opens (`lineShift`), since the area's name at full size
+  would otherwise have the line running through it. Under the plaque a card shows the
+  collection and the next area's gate in that area's colours — "Pavement is open", or
+  "Pavement opens at 12" — which is what the ribbon's old "Next stop" line said less
+  usefully. A keepsake card earned by the same clear waits 0.7 s longer than usual so each
+  has its moment. A failed
   finale is an ordinary "Again?"; a clear whose save failed says "Couldn't save" and shows
   no payoff, since the next launch would not find the area complete.
-- **Reduced motion.** Pennants hang still, the card and ribbon appear and disappear, and
-  no confetti is thrown.
+- **Reduced motion.** Pennants hang still and take their place on the result at once, the
+  card and ribbon appear and disappear, and no confetti is thrown.
 
 ## On the map
 

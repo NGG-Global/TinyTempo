@@ -57,8 +57,9 @@ on the title screen's book puck, and it travels nowhere.
 
 When a finished level takes its keepsake's level from under three stars to three
 (`keepsakeEarned`, from the save before and after the result), the result screen raises a
-card into the space between the plaque and the action block, one second into the summary —
-after the last medal has landed. It shows the keepsake stamped onto a small mount, "New
+card under the plaque (under a finale's card when there is one), one second into the
+summary — after the last medal has landed. The card is as tall as its note, measured once
+it is set, so the first keepsake's longer note is never cut off by the card's edge. It shows the keepsake stamped onto a small mount, "New
 keepsake" and its name, and one line: the collection's tally, or, the first time on this
 device, what keepsakes are and where the Scrapbook is. It intercepts nothing; the tap that
 moves on works from the first frame. It is not shown if the progress save failed, since the

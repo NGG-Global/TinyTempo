@@ -13,7 +13,7 @@ import { recordResult, type Progress } from '../src/game/progress';
 import { keepsakeAt } from '../src/game/scrapbook';
 import { starsRequired } from '../src/game/stars';
 import { contrastRatio } from '../src/ui/colour';
-import { FINALE_POSE, buntingPoints, pennantSwing, ribbonPose, titleCardPose } from '../src/ui/finalePose';
+import { FINALE_POSE, buntingPoints, lineShift, pennantSwing, ribbonPose, titleCardPose } from '../src/ui/finalePose';
 import { ROLL_CLEARANCE_SEC, synthesizeFinale } from '../src/audio/finaleSounds';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -221,7 +221,6 @@ describe('the treatments', () => {
 
   it('say what the card and the ribbon say', () => {
     expect(FINALE_COPY.strapline('Snow')).toBe('The best of Snow, one more time');
-    expect(FINALE_COPY.next('Grass II')).toBe('Next stop: Grass II');
   });
 });
 
@@ -237,6 +236,17 @@ describe('the poses', () => {
     // A window shorter than both motions still enters and leaves inside it.
     expect(titleCardPose(0.5, 0.6).alpha).toBeLessThan(1);
     expect(titleCardPose(1, span, true)).toEqual({ offset: 0, tilt: 0, alpha: 1 });
+  });
+
+  it('move the pennant line only once the result calls for it, and settle it there', () => {
+    expect(lineShift(Infinity)).toBe(0);
+    expect(lineShift(-0.1)).toBe(0);
+    expect(lineShift(0)).toBe(0);
+    expect(lineShift(FINALE_POSE.lineMove / 2)).toBeGreaterThan(0.5);
+    expect(lineShift(FINALE_POSE.lineMove)).toBe(1);
+    expect(lineShift(100)).toBe(1);
+    expect(lineShift(0.01, true)).toBe(1);
+    expect(lineShift(Infinity, true)).toBe(0);
   });
 
   it('keep the ribbon away until it is called for, then unroll it whole', () => {
