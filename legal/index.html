@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#eee8d8" />
-    <meta name="description" content="Tiny Tempo is a portrait rhythm game for people who live on the beat. Watch a tiny everyday rhythm — a hammer, a squeegee, a doorbell — then tap it back. Twenty acts, a ±55 ms window, one thumb." />
+    <meta name="description" content="Tiny Tempo is a portrait rhythm game for people who live on the beat. Watch a tiny everyday rhythm — a hammer, a squeegee, a doorbell — then tap it back. Twenty-eight acts, a ±55 ms window, one thumb." />
     <title>Tiny Tempo — a rhythm game for the beat-obsessed</title>
     <link rel="canonical" href="https://ngg-global.github.io/TinyTempo/" />
     <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
@@ -12,11 +12,11 @@
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://ngg-global.github.io/TinyTempo/" />
     <meta property="og:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
-    <meta property="og:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty acts, a ±55 ms window, one thumb." />
+    <meta property="og:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty-eight acts, a ±55 ms window, one thumb." />
     <meta property="og:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Tiny Tempo — a rhythm game for the beat-obsessed" />
-    <meta name="twitter:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty acts, a ±55 ms window, one thumb." />
+    <meta name="twitter:description" content="Watch a tiny everyday rhythm. Tap it back. Twenty-eight acts, a ±55 ms window, one thumb." />
     <meta name="twitter:image" content="https://ngg-global.github.io/TinyTempo/og.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -61,23 +61,15 @@
     <main>
       <section class="hero">
         <div class="hero-light" aria-hidden="true"></div>
-        <div class="floaters" aria-hidden="true">
-          <span class="floater note"></span>
-          <span class="floater spark"></span>
-          <span class="floater note"></span>
-          <span class="floater spark"></span>
-          <span class="floater spark"></span>
-        </div>
 
         <div class="hero-copy">
           <p class="badge"><span class="badge-dot" aria-hidden="true"></span>Coming to Google&nbsp;Play</p>
 
-          <div class="sign">
+          <div class="sign" data-sign>
             <div class="ropes" aria-hidden="true"><span></span><span></span></div>
             <div class="board">
-              <p class="kicker">120 BPM</p>
               <h1>Tiny<br />Tempo</h1>
-              <div class="beads" aria-hidden="true">
+              <div class="beads" aria-hidden="true" data-beads>
                 <span class="bead"></span><span class="bead"></span><span class="bead"></span><span class="bead"></span>
               </div>
             </div>
@@ -86,7 +78,7 @@
           <p class="lede">A rhythm game for people who live on the beat.</p>
           <p class="sub">
             A hammer. A squeegee. A doorbell. Each one plays you a bar, and then it is
-            your turn. One thumb, twenty acts, and a road that keeps going.
+            your turn. One thumb, twenty-eight acts, and a road that keeps going.
           </p>
 
           <div class="hero-actions">
@@ -95,7 +87,7 @@
           </div>
 
           <ul class="stat-strip">
-            <li><b>20</b><span>acts</span></li>
+            <li><b>28</b><span>acts</span></li>
             <li><b>±55<i>ms</i></b><span>perfect</span></li>
             <li><b>120<i>→</i>150</b><span>BPM</span></li>
             <li><b>1</b><span>thumb</span></li>
@@ -106,24 +98,8 @@
           <div class="phone" aria-hidden="true">
             <span class="phone-shadow"></span>
             <div class="screen">
-              <div class="hud">
-                <span class="hud-area">Area 1 · Level 3</span>
-                <span class="hud-pips"><i class="done"></i><i class="done"></i><i></i><i></i></span>
-              </div>
-              <span class="glow"></span>
-              <span class="bench"></span>
-              <span class="stand"></span>
-              <span class="hammer">
-                <span class="hammer-handle"></span>
-                <span class="hammer-grip"></span>
-                <span class="hammer-head"></span>
-              </span>
-              <span class="chips"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span>
-              <div class="mini-turn">
-                <div class="mini-shelf"><i></i><i></i><i></i><i></i></div>
-                <div class="mini-face"><i></i><i></i><i></i><i></i></div>
-                <span class="mini-baton"></span>
-              </div>
+              <video class="screen-video" data-loop muted loop playsinline preload="auto"
+                poster="./acts/screen.jpg"><source src="./acts/screen.webm" type="video/webm" /><source src="./acts/screen.mp4" type="video/mp4" /></video>
             </div>
           </div>
         </div>
@@ -141,36 +117,24 @@
 
         <div class="play-card">
           <div
-            class="play-stage is-watch"
+            class="play-stage"
             data-stage
             role="button"
             tabindex="0"
-            aria-label="Rhythm stage. Watch the pattern, then tap anywhere to copy it."
+            aria-label="Rhythm stage. Watch the hammer play a bar, then tap anywhere here, or press Space, to copy it."
           >
-            <span class="baton" data-baton aria-hidden="true"></span>
-            <div class="turn-row row-watch">
-              <span class="turn-label watch">Watch</span>
-              <div class="sockets" data-sockets="watch">
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-              </div>
-            </div>
-            <div class="turn-row row-play">
-              <span class="turn-label you">Your turn</span>
-              <div class="sockets" data-sockets="play">
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-                <div class="socket"><span class="pip"></span></div>
-              </div>
-            </div>
-            <div class="grade" data-grade></div>
+            <canvas aria-hidden="true"></canvas>
           </div>
 
-          <div class="play-hud">
-            <p class="hint" data-hint>Tap the stage when you are ready</p>
+          <div class="play-side">
+            <div class="coach">
+              <p class="coach-title" data-hint-title>Listen</p>
+              <p class="hint" data-hint>Four counts, then the hammer plays.</p>
+            </div>
+            <ol class="rows-key">
+              <li><span class="key-slot theirs" aria-hidden="true"></span><span><b>Top row</b> is the hammer’s. Each beat it plays lights a bead.</span></li>
+              <li><span class="key-slot yours" aria-hidden="true"></span><span><b>Bottom row</b> is yours. When the token lands there, tap the same beats.</span></li>
+            </ol>
             <div class="hud-right">
               <div class="counts" aria-live="polite">
                 <span class="p">Perfect <b data-count="perfect">0</b></span>
@@ -186,17 +150,17 @@
 
         <div class="features">
           <article class="feature reveal">
-            <div class="viz"><span class="eye" aria-hidden="true"></span></div>
+            <div class="viz"><span class="mini-shelf" aria-hidden="true"><i class="slot"></i><i></i><i></i><i></i></span></div>
             <h3>Watch first</h3>
             <p>Every task opens with the act playing its own bar. Nothing is written down.</p>
           </article>
           <article class="feature reveal">
-            <div class="viz"><span class="thumb" aria-hidden="true"></span></div>
+            <div class="viz"><span class="mini-baton" aria-hidden="true"></span></div>
             <h3>One tap</h3>
             <p>Tap anywhere. There is no second button and nothing to aim at.</p>
           </article>
           <article class="feature reveal">
-            <div class="viz"><span class="rings" aria-hidden="true"><i></i><i></i><i></i></span></div>
+            <div class="viz"><span class="mini-socket" aria-hidden="true"><i></i></span></div>
             <h3>Judged on time</h3>
             <p>Perfect inside ±55 ms, Good inside ±130 ms, measured against what you hear.</p>
           </article>
@@ -210,108 +174,133 @@
 
       <div class="ticker" aria-hidden="true">
         <div class="ticker-track">
-          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span>
-          <span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span>
-          <span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
-          <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
-          <span>Fisherman</span><span>DJ scratch</span><span>Trombone</span>
-          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span>
-          <span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span>
-          <span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span>
-          <span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span>
-          <span>Fisherman</span><span>DJ scratch</span><span>Trombone</span>
+          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span><span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span><span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span><span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span><span>Fisherman</span><span>DJ scratch</span><span>Trombone</span><span>Clapping hands</span><span>Snare drum</span><span>Bongos</span><span>Slushy</span><span>Apple</span><span>Barber</span><span>Popcorn</span><span>Toothbrush</span>
+          <span>Hammer &amp; nail</span><span>Window cleaning</span><span>Bug &amp; shoe</span><span>Saw &amp; timber</span><span>Knife &amp; tomato</span><span>Bicep curl</span><span>Knife &amp; cucumber</span><span>Knife &amp; banana</span><span>Scissors &amp; paper</span><span>Egg cracking</span><span>Bubble wrap</span><span>Light switch</span><span>Doorbell</span><span>Paint roller</span><span>Hotel bell</span><span>Balloon pump</span><span>Stapler</span><span>Fisherman</span><span>DJ scratch</span><span>Trombone</span><span>Clapping hands</span><span>Snare drum</span><span>Bongos</span><span>Slushy</span><span>Apple</span><span>Barber</span><span>Popcorn</span><span>Toothbrush</span>
         </div>
       </div>
 
       <section class="section" id="acts">
         <div class="section-head">
-          <p class="kicker">Twenty acts</p>
+          <p class="kicker">Twenty-eight acts</p>
           <h2>Everyday scenes. Hidden charts.</h2>
           <p class="whisper">
             One act per level, in order, then round again — the same scene at a tempo
-            that has moved on.
+            that has moved on. Every clip is the game itself, recorded on the act’s first
+            level: the demonstration, a clean answer, and the table sliding on to the next.
           </p>
         </div>
         <div class="acts">
           <article class="act reveal">
-            <div class="mini mini-hammer" aria-hidden="true"><i class="sun"></i><i class="floor"></i><i class="stand"></i><i class="ham"></i><i class="spark"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/hammer.jpg" aria-hidden="true"><source src="./acts/hammer.webm" type="video/webm" /><source src="./acts/hammer.mp4" type="video/mp4" /></video></div>
             <h3><b>01</b>Hammer &amp; nail</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-window" aria-hidden="true"><i class="sill"></i><i class="pane"></i><i class="bar"></i><i class="foam"></i><i class="squeegee"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/window.jpg" aria-hidden="true"><source src="./acts/window.webm" type="video/webm" /><source src="./acts/window.mp4" type="video/mp4" /></video></div>
             <h3><b>02</b>Window cleaning</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-bug" aria-hidden="true"><i class="tile"></i><i class="bug"></i><i class="shoe"></i><i class="sole"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/bug.jpg" aria-hidden="true"><source src="./acts/bug.webm" type="video/webm" /><source src="./acts/bug.mp4" type="video/mp4" /></video></div>
             <h3><b>03</b>Bug &amp; shoe</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-saw" aria-hidden="true"><i class="horse"></i><i class="plank"></i><i class="blade"></i><i class="grip"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/saw.jpg" aria-hidden="true"><source src="./acts/saw.webm" type="video/webm" /><source src="./acts/saw.mp4" type="video/mp4" /></video></div>
             <h3><b>04</b>Saw &amp; timber</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-tomato" aria-hidden="true"><i class="board"></i><i class="fruit"></i><i class="slice"></i><i class="knife"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/tomato.jpg" aria-hidden="true"><source src="./acts/tomato.webm" type="video/webm" /><source src="./acts/tomato.mp4" type="video/mp4" /></video></div>
             <h3><b>05</b>Knife &amp; tomato</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-curl" aria-hidden="true"><i class="bench"></i><i class="head"></i><i class="torso"></i><i class="arm"></i><i class="bar"></i><i class="plate"></i><i class="plate r"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/curl.jpg" aria-hidden="true"><source src="./acts/curl.webm" type="video/webm" /><source src="./acts/curl.mp4" type="video/mp4" /></video></div>
             <h3><b>06</b>Bicep curl</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-cucumber" aria-hidden="true"><i class="board"></i><i class="cuke"></i><i class="disc"></i><i class="disc b"></i><i class="disc c"></i><i class="knife"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/cucumber.jpg" aria-hidden="true"><source src="./acts/cucumber.webm" type="video/webm" /><source src="./acts/cucumber.mp4" type="video/mp4" /></video></div>
             <h3><b>07</b>Knife &amp; cucumber</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-banana" aria-hidden="true"><i class="board"></i><i class="peel"></i><i class="coin"></i><i class="coin b"></i><i class="knife"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/banana.jpg" aria-hidden="true"><source src="./acts/banana.webm" type="video/webm" /><source src="./acts/banana.mp4" type="video/mp4" /></video></div>
             <h3><b>08</b>Knife &amp; banana</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-paper" aria-hidden="true"><i class="desk"></i><i class="sheet"></i><i class="snips"></i><i class="shears"></i><i class="shears b"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/paper.jpg" aria-hidden="true"><source src="./acts/paper.webm" type="video/webm" /><source src="./acts/paper.mp4" type="video/mp4" /></video></div>
             <h3><b>09</b>Scissors &amp; paper</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-egg" aria-hidden="true"><i class="counter"></i><i class="bowl"></i><i class="yolk"></i><i class="egg"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/egg.jpg" aria-hidden="true"><source src="./acts/egg.webm" type="video/webm" /><source src="./acts/egg.mp4" type="video/mp4" /></video></div>
             <h3><b>10</b>Egg cracking</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-bubble" aria-hidden="true"><i class="sheet"></i><i class="dot a"></i><i class="dot b"></i><i class="dot c"></i><i class="finger"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/bubble.jpg" aria-hidden="true"><source src="./acts/bubble.webm" type="video/webm" /><source src="./acts/bubble.mp4" type="video/mp4" /></video></div>
             <h3><b>11</b>Bubble wrap</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-light" aria-hidden="true"><i class="wall"></i><i class="cord"></i><i class="shade"></i><i class="beam"></i><i class="plate"></i><i class="toggle"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/light.jpg" aria-hidden="true"><source src="./acts/light.webm" type="video/webm" /><source src="./acts/light.mp4" type="video/mp4" /></video></div>
             <h3><b>12</b>Light switch</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-door" aria-hidden="true"><i class="wall"></i><i class="frame"></i><i class="door"></i><i class="knob"></i><i class="btn"></i><i class="ring"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/doorbell.jpg" aria-hidden="true"><source src="./acts/doorbell.webm" type="video/webm" /><source src="./acts/doorbell.mp4" type="video/mp4" /></video></div>
             <h3><b>13</b>Doorbell</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-roller" aria-hidden="true"><i class="wall"></i><i class="paint"></i><i class="roll"></i><i class="handle"></i><i class="tray"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/roller.jpg" aria-hidden="true"><source src="./acts/roller.webm" type="video/webm" /><source src="./acts/roller.mp4" type="video/mp4" /></video></div>
             <h3><b>14</b>Paint roller</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-bell" aria-hidden="true"><i class="desk"></i><i class="dome"></i><i class="base"></i><i class="knob"></i><i class="ding"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/bell.jpg" aria-hidden="true"><source src="./acts/bell.webm" type="video/webm" /><source src="./acts/bell.mp4" type="video/mp4" /></video></div>
             <h3><b>15</b>Hotel bell</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-balloon" aria-hidden="true"><i class="floor"></i><i class="ball"></i><i class="knot"></i><i class="hose"></i><i class="pump"></i><i class="plunger"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/balloon.jpg" aria-hidden="true"><source src="./acts/balloon.webm" type="video/webm" /><source src="./acts/balloon.mp4" type="video/mp4" /></video></div>
             <h3><b>16</b>Balloon pump</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-stapler" aria-hidden="true"><i class="desk"></i><i class="paper"></i><i class="base"></i><i class="arm"></i><i class="staple"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/stapler.jpg" aria-hidden="true"><source src="./acts/stapler.webm" type="video/webm" /><source src="./acts/stapler.mp4" type="video/mp4" /></video></div>
             <h3><b>17</b>Stapler</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-fish" aria-hidden="true"><i class="sky"></i><i class="water"></i><i class="man"></i><i class="hat"></i><i class="rod"></i><i class="line"></i><i class="fish"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/fisherman.jpg" aria-hidden="true"><source src="./acts/fisherman.webm" type="video/webm" /><source src="./acts/fisherman.mp4" type="video/mp4" /></video></div>
             <h3><b>18</b>Fisherman</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-scratch" aria-hidden="true"><i class="deck"></i><i class="disc"></i><i class="label"></i><i class="arm"></i><i class="fader"></i><i class="cap"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/scratch.jpg" aria-hidden="true"><source src="./acts/scratch.webm" type="video/webm" /><source src="./acts/scratch.mp4" type="video/mp4" /></video></div>
             <h3><b>19</b>DJ scratch</h3>
           </article>
           <article class="act reveal">
-            <div class="mini mini-trombone" aria-hidden="true"><i class="sky"></i><i class="moon"></i><i class="parapet"></i><i class="player"></i><i class="horn"></i><i class="bell"></i><i class="slide"></i></div>
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/trombone.jpg" aria-hidden="true"><source src="./acts/trombone.webm" type="video/webm" /><source src="./acts/trombone.mp4" type="video/mp4" /></video></div>
             <h3><b>20</b>Trombone</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/clap.jpg" aria-hidden="true"><source src="./acts/clap.webm" type="video/webm" /><source src="./acts/clap.mp4" type="video/mp4" /></video></div>
+            <h3><b>21</b>Clapping hands</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/snare.jpg" aria-hidden="true"><source src="./acts/snare.webm" type="video/webm" /><source src="./acts/snare.mp4" type="video/mp4" /></video></div>
+            <h3><b>22</b>Snare drum</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/bongos.jpg" aria-hidden="true"><source src="./acts/bongos.webm" type="video/webm" /><source src="./acts/bongos.mp4" type="video/mp4" /></video></div>
+            <h3><b>23</b>Bongos</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/slushy.jpg" aria-hidden="true"><source src="./acts/slushy.webm" type="video/webm" /><source src="./acts/slushy.mp4" type="video/mp4" /></video></div>
+            <h3><b>24</b>Slushy</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/apple.jpg" aria-hidden="true"><source src="./acts/apple.webm" type="video/webm" /><source src="./acts/apple.mp4" type="video/mp4" /></video></div>
+            <h3><b>25</b>Apple</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/barber.jpg" aria-hidden="true"><source src="./acts/barber.webm" type="video/webm" /><source src="./acts/barber.mp4" type="video/mp4" /></video></div>
+            <h3><b>26</b>Barber</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/popcorn.jpg" aria-hidden="true"><source src="./acts/popcorn.webm" type="video/webm" /><source src="./acts/popcorn.mp4" type="video/mp4" /></video></div>
+            <h3><b>27</b>Popcorn</h3>
+          </article>
+          <article class="act reveal">
+            <div class="clip"><video data-loop muted loop playsinline preload="none" poster="./acts/toothbrush.jpg" aria-hidden="true"><source src="./acts/toothbrush.webm" type="video/webm" /><source src="./acts/toothbrush.mp4" type="video/mp4" /></video></div>
+            <h3><b>28</b>Toothbrush</h3>
           </article>
         </div>
       </section>
@@ -410,16 +399,16 @@
             <span class="tree t1"></span><span class="tree t2"></span><span class="tree t3"></span><span class="tree t4"></span>
           </div>
           <div class="road-nodes" aria-hidden="true">
-            <span class="rnode done" style="--x:3.1%; --y:70.5%"></span>
-            <span class="rnode done" style="--x:13.5%; --y:53.6%"></span>
-            <span class="rnode done" style="--x:24.0%; --y:40.5%"></span>
-            <span class="rnode now" style="--x:34.9%; --y:44.8%"><em></em></span>
-            <span class="rnode next" style="--x:45.3%; --y:61.6%"></span>
-            <span class="rnode" style="--x:56.2%; --y:62.7%"></span>
-            <span class="rnode lock" style="--x:66.7%; --y:48.8%"></span>
-            <span class="rnode lock" style="--x:77.3%; --y:36.3%"></span>
-            <span class="rnode lock" style="--x:88.3%; --y:39.0%"></span>
-            <span class="rnode far" style="--x:98.9%; --y:52.2%"></span>
+            <span class="rnode done" style="--x:3.1%; --y:70.5%"><b>1</b></span>
+            <span class="rnode done" style="--x:13.5%; --y:53.6%"><b>2</b></span>
+            <span class="rnode done" style="--x:24.0%; --y:40.5%"><b>3</b></span>
+            <span class="rnode now" style="--x:34.9%; --y:44.8%"><b>4</b></span>
+            <span class="rnode lock" style="--x:45.3%; --y:61.6%"><b>5</b></span>
+            <span class="rnode lock" style="--x:56.2%; --y:62.7%"><b>6</b></span>
+            <span class="rnode lock" style="--x:66.7%; --y:48.8%"><b>7</b></span>
+            <span class="rnode lock" style="--x:77.3%; --y:36.3%"><b>8</b></span>
+            <span class="rnode lock" style="--x:88.3%; --y:39.0%"><b>9</b></span>
+            <span class="rnode lock far" style="--x:98.9%; --y:52.2%"><b>10</b></span>
           </div>
           <span class="road-flag area-1" aria-hidden="true">Area 1</span>
           <span class="road-flag area-2" aria-hidden="true">Area 2</span>
@@ -433,7 +422,7 @@
 
       <section class="band band-coral finale">
         <div class="section">
-          <div class="plaque">
+          <div class="plaque" data-plaque>
             <div class="ropes" aria-hidden="true"><span></span><span></span></div>
             <div class="stars" aria-hidden="true"><span class="star"></span><span class="star"></span><span class="star"></span></div>
             <h2>The everyday, on the grid.</h2>
@@ -468,5 +457,6 @@
       </div>
     </footer>
     <script src="./market.js"></script>
+    <script src="./stage.js"></script>
   </body>
 </html>
