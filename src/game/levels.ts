@@ -1,7 +1,8 @@
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
 import { parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
-import { VIGNETTES } from '../vignettes/registry';
+import { ROTATION, VIGNETTES } from '../vignettes/registry';
+import { levelAt, placementAt } from '../vignettes/rotation';
 
 /** A grid finer than the tiers' eighth note. Null for a task on the tiers. */
 export type Grid = 'triplet' | 'sixteenth';
@@ -33,7 +34,7 @@ export interface LevelSpec {
   readonly finale: boolean;
   readonly vignette: string;
   /**
-   * How many times the vignette rotation has come round before this level. Acts with
+   * How many earlier levels this level's act played (`vignettes/rotation.ts`). Acts with
    * more than one look index it, so a second visit to an act does not repeat the first.
    */
   readonly lap: number;
@@ -377,13 +378,25 @@ export function levelSpec(level: number): LevelSpec {
   const { area, name } = areaOf(level);
   const finale = isAreaFinale(level);
   const curve = subdivide(level, d, tierTasks(level), shape.subdivision);
+  const act = placementAt(ROTATION, level);
   return Object.freeze({
-    level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[(level - 1) % VIGNETTES.length]!.id,
-    lap: Math.floor((level - 1) / VIGNETTES.length), areaName: name, area,
+    level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
+    lap: act.lap, areaName: name, area,
     tasks: Object.freeze(finale ? repriseTasks(level, curve) : curve),
     peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });
+}
+
+/**
+ * The level where an act plays for the `lap`-th time: `levelSpec`'s vignette and lap, read
+ * backwards. Never `level + VIGNETTES.length` — the rotation grows in eras, so that sum
+ * stopped naming an act's next level the day the registry outgrew its first era.
+ */
+export function actLevel(vignette: string, lap: number): number {
+  const index = VIGNETTES.findIndex(definition => definition.id === vignette);
+  if (index < 0 || !Number.isInteger(lap) || lap < 0) throw new Error(`No level for ${vignette} lap ${lap}.`);
+  return levelAt(ROTATION, index, lap);
 }
 
 export function starsFor(accuracy: number, spec: LevelSpec): 0 | 1 | 2 | 3 {

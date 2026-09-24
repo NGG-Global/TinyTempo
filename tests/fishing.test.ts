@@ -4,7 +4,7 @@ import {
 } from '../src/vignettes/fishingMotion';
 import { synthesizeFishing } from '../src/audio/fishingSounds';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -13,11 +13,13 @@ describe('fisherman act', () => {
   it('is the eighteenth act and keeps every earlier level', () => {
     expect(VIGNETTES[17]?.id).toBe('fisherman');
     expect(levelSpec(18).vignette).toBe('fisherman');
-    expect(levelSpec(18 + VIGNETTES.length).vignette).toBe('fisherman');
+    // Its second visit is where it has always been: the rotation grew at level 51, after it.
+    expect(actLevel('fisherman', 1)).toBe(43);
+    expect(levelSpec(43).vignette).toBe('fisherman');
     expect([1, 4, 9, 13, 14, 17].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'saw', 'paper', 'doorbell', 'roller', 'stapler']);
-    // The hammer comes round again one level after the rotation's last act, on lap 1.
-    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
-    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
+    // The hammer comes round again after the first twenty-five, on lap 1.
+    expect(levelSpec(26).vignette).toBe('hammer');
+    expect(levelSpec(26).lap).toBe(1);
   });
 
   it('holds its finale for five beats, and every ending settles inside the hold at every tempo', () => {

@@ -51,6 +51,16 @@ import { APPLE_LOOKS } from './appleLooks';
 import { createTreatSounds } from '@/audio/treatSounds';
 import { TREAT_REVEAL_SEC } from './treatMotion';
 import { TREAT_INK } from './treatArt';
+import { BarberVignette, BARBER_INK } from './BarberVignette';
+import { createBarberSounds } from '@/audio/barberSounds';
+import { BARBER_MOTION, BARBER_REVEAL_SEC } from './barberMotion';
+import { PopcornVignette, POPCORN_INK } from './PopcornVignette';
+import { createPopcornSounds } from '@/audio/popcornSounds';
+import { POPCORN_REVEAL_SEC } from './popcornMotion';
+import { ToothbrushVignette, BRUSH_INK } from './ToothbrushVignette';
+import { createBrushSounds } from '@/audio/brushSounds';
+import { BRUSH_REVEAL_SEC } from './brushMotion';
+import type { RotationEra } from './rotation';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -219,4 +229,39 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     // A pear, a peach and a donut follow the apple, and each is called what it is.
     looks: APPLE_LOOKS.map(look => look.copy),
   },
+  // Acts 26 to 28, appended at request. They join the rotation at level 51 (`ROTATION`).
+  {
+    id: 'barber', title: 'Barber', intro: 'Just a\nlittle off.', ink: BARBER_INK,
+    success: ['Looking\nsharp.', 'A cut above.'],
+    partial: { minAccuracy: BARBER_MOTION.partialAccuracy, copy: ['It’ll grow\nback.', 'A little longer on one side.'] },
+    rough: ['Hat\nday.', 'We will say no more about it.'],
+    endingSec: BARBER_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: BARBER_MOTION.successAccuracy,
+    create: (scene, lap) => new BarberVignette(scene, lap), sounds: createBarberSounds,
+  },
+  {
+    id: 'popcorn', title: 'Popcorn', intro: 'Pop to\nthe beat.', ink: POPCORN_INK,
+    success: ['Big\nfinish!', 'One last pop, and not a kernel to spare.'], rough: ['Bit\ntoasty.', 'Something in the pan is smoking.'],
+    endingSec: POPCORN_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new PopcornVignette(scene, lap), sounds: createPopcornSounds,
+  },
+  {
+    id: 'toothbrush', title: 'Toothbrush', intro: 'Brush up\nthat smile.', ink: BRUSH_INK,
+    success: ['Say\ncheese!', 'Every tooth sparkling.'], rough: ['Foaming\nover.', 'A little heavy on the paste.'],
+    endingSec: BRUSH_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new ToothbrushVignette(scene, lap), sounds: createBrushSounds,
+  },
+];
+
+/**
+ * How the rotation has grown, oldest first (`vignettes/rotation.ts`). Levels 1–50 play the
+ * first twenty-five acts twice, exactly as they did before the barber, popcorn and
+ * toothbrush arrived — every keepsake is earned on one of those levels, so none of them can
+ * move — and from level 51 the rotation carries every act, opening on the new ones.
+ *
+ * **Appending an act means adding an era here**, at a level past every keepsake players
+ * could hold: the tests fail on a registry the last era does not cover.
+ */
+export const ROTATION: readonly RotationEra[] = [
+  { fromLevel: 1, acts: 25 },
+  { fromLevel: 51, acts: 28 },
 ];

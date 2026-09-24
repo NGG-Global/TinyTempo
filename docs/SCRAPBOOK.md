@@ -16,10 +16,17 @@ no drop, no roll, no pack and no shop — a keepsake is a fact about a level's s
 ## The rule
 
 Keepsake `lap` of an act is earned by **three stars on the level where that act plays for
-the `lap`-th time**: `registry index + 1 + lap × 25`. The first set is one keepsake per
-act on levels 1–25; the second is one per act, on that act's second appearance, drawn
-in that look's colours — the ladybird pin is earned on level 28, where the shoe chases
-the ladybird, and the brass hammer on level 26.
+the `lap`-th time**: `actLevel(vignette, lap)` in `src/game/levels.ts`, the rotation read
+backwards. The first set is one keepsake per act on levels 1–25; the second is one per
+act, on that act's second appearance, drawn in that look's colours — the ladybird pin is
+earned on level 28, where the shoe chases the ladybird, and the brass hammer on level 26.
+The barber, popcorn and toothbrush joined the rotation at level 51, so their two are on
+51–53 and 79–81 (`docs/BARBER_POPCORN_TOOTHBRUSH.md`).
+
+**A new act can never move a keepsake.** Every level a keepsake is earned on belongs to an
+era of `ROTATION` (`src/vignettes/registry.ts`) that is closed: appending an act adds an
+era starting past the last keepsake level, and `tests/fixtures/keepsakes.json` pins every
+level, so an append that moved one fails the build.
 
 Every slot prints its level whether it is found or not, and touching one says it again in
 words ("Three stars on level 14 finds it"), so a player can always see what earns what.
@@ -36,7 +43,7 @@ code of their own:
 - **Save codes and Auto Backup carry the collection** because they carry the accuracies.
 - **Merges only add.** `mergeProgress` keeps the better accuracy per level, so a merged save
   owns exactly the union of what the two sides owned.
-- **The totals are deterministic.** 50 today, from the list alone.
+- **The totals are deterministic.** 56 today, from the list alone.
 
 What it depends on is the star thresholds, which `tests/fixtures/level-thresholds.json`
 already pins because saved stars depend on them too.
@@ -137,6 +144,12 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 | 46 | Clapping hands | Plum cuffs | `clap-plum-cuffs` |
 | 47 | Snare drum | Blue snare | `snare-blue-shell` |
 | 48 | Bongos | Walnut bongos | `bongos-walnut` |
+| 51 | Barber | Barber’s pole | `barber-pole` |
+| 52 | Popcorn | Bowl of popcorn | `popcorn-butter-bowl` |
+| 53 | Toothbrush | Teal toothbrush | `toothbrush-teal` |
+| 79 | Barber | Ginger lock | `barber-ginger-lock` |
+| 80 | Popcorn | Cinema tub | `popcorn-cinema-tub` |
+| 81 | Toothbrush | Strawberry paste | `toothbrush-berry-paste` |
 
 ## Analytics
 
@@ -144,7 +157,7 @@ entry is appended for it. The Scrapbook shows only acts that have at least one.
 (`vignette`, `collectible`, `level`, `first`, `owned`) when a finished level earns a
 keepsake — at most once per keepsake per session, and never for keepsakes an existing save
 owned on arrival, since nothing was unlocked then. Both ids are stable and low-cardinality:
-25 acts, 50 keepsakes. See `docs/ANALYTICS.md`.
+28 acts, 56 keepsakes. See `docs/ANALYTICS.md`.
 
 ## Checked, and not
 

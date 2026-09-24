@@ -52,12 +52,12 @@ describe('the collection', () => {
   });
 
   it('has a deterministic total and no duplicates of any kind', () => {
-    expect(KEEPSAKES).toHaveLength(50);
+    expect(KEEPSAKES).toHaveLength(56);
     expect(new Set(KEEPSAKES.map(k => k.id)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.level)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => `${k.vignette}:${k.lap}`)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.name)).size).toBe(KEEPSAKES.length);
-    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 50 });
+    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 56 });
   });
 
   it('gives every act at least one keepsake, and the acts with looks a second', () => {
@@ -117,9 +117,10 @@ describe('what earns a keepsake', () => {
 
   it('is the stars and nothing else: never another level, never a total', () => {
     // Every other level at three stars, this one at two: not owned.
-    const best: Record<number, number> = { ...road(60, 3).best, 7: on(7, 2) };
-    expect(ownsKeepsake({ unlocked: 61, best }, keepsakeAt(7)!)).toBe(false);
-    expect(ownedKeepsakes({ unlocked: 61, best })).toHaveLength(KEEPSAKES.length - 1);
+    const last = Math.max(...KEEPSAKES.map(k => k.level));
+    const best: Record<number, number> = { ...road(last, 3).best, 7: on(7, 2) };
+    expect(ownsKeepsake({ unlocked: last + 1, best }, keepsakeAt(7)!)).toBe(false);
+    expect(ownedKeepsakes({ unlocked: last + 1, best })).toHaveLength(KEEPSAKES.length - 1);
   });
 
   it('reports the moment a finished level earns its keepsake, and never again after', () => {
@@ -137,9 +138,10 @@ describe('what earns a keepsake', () => {
   });
 
   it('never reports a keepsake for a level that has none', () => {
-    // Level 51 is the hammer's third visit, which has no keepsake of its own.
-    const outcome = recordResult(road(50, 3), 51, 100);
-    expect(keepsakeEarned(road(50, 3), outcome.progress, 51)).toBeNull();
+    // Level 54 is the hammer's third visit, which has no keepsake of its own.
+    expect(levelSpec(54)).toMatchObject({ vignette: 'hammer', lap: 2 });
+    const outcome = recordResult(road(53, 3), 54, 100);
+    expect(keepsakeEarned(road(53, 3), outcome.progress, 54)).toBeNull();
   });
 });
 

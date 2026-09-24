@@ -4,7 +4,7 @@ import { TURN_OPEN_SEC } from '../src/vignettes/motion';
 import { synthesizePaper } from '../src/audio/paperSounds';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -46,7 +46,7 @@ describe('paper cutting presentation', () => {
     expect(paperShape(1, 1.9)).toBe('butterfly');
     // The first visit to the act keeps the shapes it always had; the second visit is new.
     expect(levelSpec(9).lap).toBe(0);
-    expect(levelSpec(9 + VIGNETTES.length).lap).toBe(1);
+    expect(levelSpec(actLevel('paper', 1)).lap).toBe(1);
   });
 
   it('uses authoritative accuracy for success, half success and failure', () => {
@@ -54,9 +54,10 @@ describe('paper cutting presentation', () => {
     const def = VIGNETTES.find(v => v.id === 'paper')!;
     expect(def.successAccuracy).toBe(PAPER_MOTION.successAccuracy);
     expect(def.partial?.minAccuracy).toBe(PAPER_MOTION.partialAccuracy);
-    // Its introduction stays at level 9; the full registry controls later rotations.
+    // Its introduction stays at level 9, and its second visit at 34.
     expect(levelSpec(9).vignette).toBe('paper');
-    expect(levelSpec(9 + VIGNETTES.length).vignette).toBe('paper');
+    expect(actLevel('paper', 1)).toBe(34);
+    expect(levelSpec(34).vignette).toBe('paper');
   });
 
   it('closes on contact and reopens before the next possible fast tap', () => {

@@ -1,8 +1,10 @@
 import { APPLE_LOOKS } from '../vignettes/appleLooks';
 import { BALLOON_LOOKS } from '../vignettes/balloonLooks';
+import { BARBER_LOOKS } from '../vignettes/barberLooks';
 import { BANANA_LOOKS } from '../vignettes/bananaLooks';
 import { BELL_LOOKS } from '../vignettes/bellLooks';
 import { BONGO_LOOKS } from '../vignettes/bongoLooks';
+import { BRUSH_LOOKS } from '../vignettes/brushLooks';
 import { BUBBLE_LOOKS } from '../vignettes/bubbleLooks';
 import { BUG_LOOKS } from '../vignettes/bugLooks';
 import { CLAP_LOOKS } from '../vignettes/clapLooks';
@@ -14,6 +16,7 @@ import { FISHERMAN_LOOKS } from '../vignettes/fishermanLooks';
 import { HAMMER_LOOKS } from '../vignettes/hammerLooks';
 import { LIGHT_LOOKS } from '../vignettes/lightLooks';
 import { PAPER_CONTOURS, type PaperShape } from '../vignettes/paperMotion';
+import { POPCORN_LOOKS } from '../vignettes/popcornLooks';
 import { ROLLER_LOOKS } from '../vignettes/rollerLooks';
 import { SAW_LOOKS } from '../vignettes/sawLooks';
 import { SCRATCH_LOOKS } from '../vignettes/scratchLooks';
@@ -215,6 +218,11 @@ function fruit(p: KeepsakePen, lap: number): void {
 }
 
 type Drawer = (p: KeepsakePen) => void;
+
+/** Popped pieces heaped over a rim, in the look's colours. */
+function puffs(p: KeepsakePen, colour: number, heap: readonly (readonly [number, number, number])[]): void {
+  for (const [x, y, r] of heap) p.fill(colour).disc(x, y, r);
+}
 
 const DRAWERS: Readonly<Record<string, Drawer>> = {
   'hammer-lucky-nail': p => {
@@ -569,6 +577,87 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
     p.detail(() => {
       p.line([[-32, 4], [-6, 4]], 2, look.stave);
       p.line([[6, 8], [30, 8]], 2, look.stave);
+    });
+  },
+  // Barber, popcorn and toothbrush: levels 51–53, and their second looks on 79–81.
+  'barber-pole': p => {
+    p.fill(0xd3dade).disc(0, -41, 4.5);
+    p.fill(0xd3dade).box(-13, -37, 26, 8, 3);
+    p.fill(0xf8f5ef).box(-10, -29, 20, 58, 3);
+    p.detail(() => {
+      for (const y of [-27, -9, 9]) {
+        p.fill(0xc9453a).poly([[-10, y + 7], [10, y], [10, y + 5], [-10, y + 12]], false);
+        p.fill(0x3b6ea5).poly([[-10, y + 16], [10, y + 9], [10, y + 13], [-10, y + 20]], false);
+      }
+      p.fill(0xffffff, 0.6).box(-7, -27, 3, 54, 1, false);
+    });
+    p.fill(0xd3dade).box(-13, 29, 26, 8, 3);
+    p.fill(0xd3dade).disc(0, 41, 4.5);
+  },
+  'barber-ginger-lock': p => {
+    const look = BARBER_LOOKS[1]!;
+    // A curl of the ginger customer's hair: thick where it is tied, tapering as it winds in.
+    const turn = (k: number): number => -Math.PI * 0.75 + k * Math.PI * 1.7;
+    const spine = (k: number, offset = 0): Point => {
+      const a = turn(k), r = 30 - k * 16 + offset;
+      return [4 + Math.cos(a) * r, 6 + Math.sin(a) * r];
+    };
+    const outside: Point[] = [], inside: Point[] = [];
+    for (let i = 0; i <= 18; i++) {
+      const k = i / 18, w = 11 * (1 - k) + 1.5;
+      outside.push(spine(k, w));
+      inside.unshift(spine(k, -w));
+    }
+    p.fill(look.hair).poly([...outside, ...inside]);
+    p.detail(() => {
+      p.line(Array.from({ length: 12 }, (_, i) => spine(i / 14, 3)), 1.8, look.hairLit);
+      p.line(Array.from({ length: 10 }, (_, i) => spine(i / 14, -4)), 1.4, look.hairInk);
+    });
+    // The bow round the tied end.
+    const [bx, by] = spine(0);
+    p.fill(look.tie).poly([[bx - 16, by - 10], [bx, by], [bx - 14, by + 10]]);
+    p.fill(look.tie).poly([[bx, by], [bx + 10, by - 16], [bx + 14, by - 2]]);
+    p.fill(shade(look.tie, -0.15)).disc(bx, by, 5);
+  },
+  'popcorn-butter-bowl': p => {
+    const look = POPCORN_LOOKS[0]!;
+    puffs(p, look.puff, [[-22, -12, 11], [0, -22, 13], [22, -12, 11], [-11, -2, 10], [12, -4, 10]]);
+    p.fill(look.bowl).poly(arc(0, 0, 40, 36, 0, Math.PI));
+    p.detail(() => {
+      p.fill(look.trim).poly([...arc(0, 0, 38, 11, 0.25, Math.PI - 0.25, 10), ...arc(0, 0, 36, 5, Math.PI - 0.3, 0.3, 10)], false);
+      for (const [x, y] of [[-20, -10], [2, -22], [20, -12]] as const) p.fill(look.hull).oval(x, y + 4, 3, 2, false);
+      glint(p, -24, 14, 5);
+    });
+  },
+  'popcorn-cinema-tub': p => {
+    const look = POPCORN_LOOKS[1]!;
+    puffs(p, look.puff, [[-18, -24, 11], [2, -32, 11], [20, -24, 10], [-6, -18, 10], [12, -16, 10]]);
+    p.fill(look.bowl).poly([[-28, -14], [28, -14], [20, 40], [-20, 40]]);
+    p.detail(() => {
+      for (const x of [-16, 0, 16]) p.fill(look.trim).poly([[x - 5, -14], [x + 5, -14], [x * 0.72 + 4, 40], [x * 0.72 - 4, 40]], false);
+    });
+  },
+  'toothbrush-teal': p => {
+    const look = BRUSH_LOOKS[0]!;
+    p.fill(look.brush).bar(-34, 34, 12, -12, 11);
+    p.fill(look.brush).bar(8, -8, 32, -32, 15);
+    p.detail(() => {
+      p.fill(look.bristle).bar(1, -19, 19, -37, 10);
+      p.fill(look.bristleTip).bar(5, -21, 17, -33, 3, false);
+      p.fill(0xffffff).disc(-5, -32, 6.5);
+      p.fill(look.paste).disc(-5, -32, 2.6, false);
+      p.line([[-26, 22], [0, -4]], 2, shade(look.brush, 0.4));
+    });
+  },
+  'toothbrush-berry-paste': p => {
+    const look = BRUSH_LOOKS[1]!;
+    // A tube of the strawberry paste, crimped at one end and capped in the brush's pink.
+    p.fill(0xfbf7f8).poly([[-38, -12], [-32, -16], [18, -18], [26, -10], [26, 10], [18, 18], [-32, 16], [-38, 12]]);
+    p.fill(look.brush).box(26, -9, 12, 18, 3);
+    p.detail(() => {
+      p.fill(look.paste).poly([[-24, -6], [16, -8], [16, 8], [-24, 6]], false);
+      for (const x of [-35, -31]) p.line([[x, -12], [x, 12]], 1.6, shade(0xfbf7f8, -0.3));
+      glint(p, -12, -10, 4);
     });
   },
 };

@@ -47,4 +47,10 @@
 "trombone-silver-horn":["trombone",1,45],
 "clap-plum-cuffs":["clap",1,46],
 "snare-blue-shell":["snare",1,47],
-"bongos-walnut":["bongos",1,48]}
+"bongos-walnut":["bongos",1,48],
+"barber-pole":["barber",0,51],
+"popcorn-butter-bowl":["popcorn",0,52],
+"toothbrush-teal":["toothbrush",0,53],
+"barber-ginger-lock":["barber",1,79],
+"popcorn-cinema-tub":["popcorn",1,80],
+"toothbrush-berry-paste":["toothbrush",1,81]}

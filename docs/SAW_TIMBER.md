@@ -107,9 +107,10 @@ the offcut hanging by a splintered hinge, swinging, and the copy holds back.
 - `src/scenes/PlayScene.ts`: plays those accents from `showJudgement`, which already owned
   judgement presentation. `RoundController`, `judge.ts`, `TapInput` and `AudioClock` are
   untouched, per the rule in [vertical slice](VERTICAL_SLICE.md).
-- `src/vignettes/registry.ts`: one definition, and nothing else. `levelSpec` picks
-  `VIGNETTES[(level - 1) % VIGNETTES.length]`, so a fourth entry enters the rotation
-  with no change to the level generator.
+- `src/vignettes/registry.ts`: one definition, and nothing else. At the time `levelSpec`
+  picked `VIGNETTES[(level - 1) % VIGNETTES.length]`, so a fourth entry entered the
+  rotation with no change to the level generator. The rotation now grows in eras
+  (`ROTATION`, `src/vignettes/rotation.ts`), so an append also names where it joins.
 
 Grading stays entirely outside the vignette. It receives `Judgement` and inspects only
 `kind` and `index`; the strong/rough boundary is `successAccuracy` on the registry entry,

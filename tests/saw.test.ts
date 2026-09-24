@@ -103,16 +103,19 @@ describe('saw presentation curves', () => {
     expect(dustFall(100)).toBe(dustFall(sawTiming().dustSec));
   });
   it('cycles by registry order alone', () => {
-    // levelSpec picks VIGNETTES[(level - 1) % VIGNETTES.length], so registry order is the
-    // rotation. Reordering or inserting an entry silently reassigns every level's vignette;
-    // cucumber, banana and paper were each appended so the earlier levels kept theirs.
+    // Registry order is the rotation (`ROTATION` in the registry): reordering or inserting an
+    // entry silently reassigns every level's vignette. Cucumber, banana and paper were each
+    // appended so the earlier levels kept theirs; barber, popcorn and toothbrush were appended
+    // and wait for level 51, so every level a keepsake is earned on kept its act too.
     expect(VIGNETTES.map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
       'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler', 'fisherman', 'scratch', 'trombone',
-      'clap', 'snare', 'bongos', 'slushy', 'apple',
+      'clap', 'snare', 'bongos', 'slushy', 'apple', 'barber', 'popcorn', 'toothbrush',
     ]);
-    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 1 + VIGNETTES.length, 9 + VIGNETTES.length].map(level => levelSpec(level).vignette))
-      .toEqual(['hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper', 'hammer', 'paper']);
+    expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 26, 34, 50].map(level => levelSpec(level).vignette))
+      .toEqual(['hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper', 'hammer', 'paper', 'apple']);
+    expect([51, 52, 53, 54, 78, 79].map(level => levelSpec(level).vignette))
+      .toEqual(['barber', 'popcorn', 'toothbrush', 'hammer', 'apple', 'barber']);
   });
   it.each(['action', 'success', 'rough', 'scrape', 'judder'] as const)('synthesizes a bounded deterministic %s buffer', kind => {
     const samples = synthesizeSaw(48000, kind);

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DOOR_LOOKS, doorLook } from '../src/vignettes/doorLooks';
-import { levelSpec } from '../src/game/levels';
-import { VIGNETTES } from '../src/vignettes/registry';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -28,7 +27,7 @@ describe('doorbell doors', () => {
     }
     expect(levelSpec(13).vignette).toBe('doorbell');
     expect(levelSpec(13).lap).toBe(0);
-    expect(levelSpec(13 + VIGNETTES.length).lap).toBe(1);
-    expect(levelSpec(13 + 3 * VIGNETTES.length).lap).toBe(3);
+    expect(levelSpec(actLevel('doorbell', 1)).lap).toBe(1);
+    expect(levelSpec(actLevel('doorbell', 3)).lap).toBe(3);
   });
 });

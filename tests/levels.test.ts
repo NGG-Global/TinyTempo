@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, isAreaFinale, levelSpec,
+  AREAS, PATTERN_TIERS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, isAreaFinale, levelSpec,
   openingBeats,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
 } from '../src/game/levels';
@@ -51,6 +51,7 @@ describe('level progression', () => {
   it('keeps the baseline curve, the clear bar and the vignettes rising or rotating as before', () => {
     // The choreography varies a level around the curve; the curve itself still never falls.
     let previous = levelSpec(1);
+    const played = new Map<string, number>([[previous.vignette, 1]]);
     for (let level = 2; level <= 200; level++) {
       const spec = levelSpec(level);
       const was = plain(level - 1), now = plain(level);
@@ -58,11 +59,15 @@ describe('level progression', () => {
       expect(now.peakBpm).toBeGreaterThanOrEqual(was.peakBpm);
       expect(now.maxTier).toBeGreaterThanOrEqual(was.maxTier);
       expect(spec.clearAccuracy).toBeGreaterThanOrEqual(previous.clearAccuracy);
-      expect(spec.vignette).toBe(VIGNETTES[(level - 1) % VIGNETTES.length]!.id);
+      // The first twenty-five acts twice, exactly as before the rotation grew; then all of
+      // them, opening on the three that were added.
+      const act = level <= 50 ? (level - 1) % 25 : (level - 51 + 25) % VIGNETTES.length;
+      expect(spec.vignette).toBe(VIGNETTES[act]!.id);
       expect(spec.vignette).not.toBe(previous.vignette);
-      // The lap counts completed rotations, so it steps up exactly when the first act returns.
-      expect(spec.lap).toBe(spec.vignette === previous.vignette ? previous.lap : spec.vignette === 'hammer' ? previous.lap + 1 : previous.lap);
-      expect(spec.lap).toBe(Math.floor((level - 1) / VIGNETTES.length));
+      // The lap counts the act's own earlier levels, which is what its looks are indexed by.
+      expect(spec.lap).toBe(played.get(spec.vignette) ?? 0);
+      expect(actLevel(spec.vignette, spec.lap)).toBe(level);
+      played.set(spec.vignette, spec.lap + 1);
       previous = spec;
     }
     // Level 200 is an area finale on the plateau: every ceiling at once, and no further.

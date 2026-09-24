@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { faderCut, meterLevel, scratchFinale, scratchPush, SCRATCH_MOTION, SCRATCH_REVEAL_SEC } from '../src/vignettes/scratchMotion';
 import { synthesizeScratch } from '../src/audio/scratchSounds';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -11,10 +11,12 @@ describe('DJ scratch act', () => {
   it('is the nineteenth act and keeps every earlier level', () => {
     expect(VIGNETTES[18]?.id).toBe('scratch');
     expect(levelSpec(19).vignette).toBe('scratch');
-    expect(levelSpec(19 + VIGNETTES.length).vignette).toBe('scratch');
+    // Its second visit is where it has always been: the rotation grew at level 51, after it.
+    expect(actLevel('scratch', 1)).toBe(44);
+    expect(levelSpec(44).vignette).toBe('scratch');
     expect([1, 9, 17, 18].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'stapler', 'fisherman']);
-    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
-    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
+    expect(levelSpec(26).vignette).toBe('hammer');
+    expect(levelSpec(26).lap).toBe(1);
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {

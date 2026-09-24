@@ -1,8 +1,10 @@
 # Percussion and picnic
 
 Four acts are appended to the registry, introducing snare drum, bongos, slushy
-and apple at levels 22–25. The first 21 levels retain their acts; subsequent
-rotations use all 25 entries. Pattern seeds, tempos and scoring are unchanged.
+and apple at levels 22–25. The first 21 levels retain their acts; levels 26–50
+rotate through all 25 entries. (From level 51 the rotation also carries the barber,
+popcorn and toothbrush; see `docs/BARBER_POPCORN_TOOTHBRUSH.md`.) Pattern seeds, tempos
+and scoring are unchanged.
 
 All four use `HouseholdVignette`: demonstration state is separate from player
 state, the stage returns home before each transition offset, pauses freeze the

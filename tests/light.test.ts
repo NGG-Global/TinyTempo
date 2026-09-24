@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { LIGHT_LOOKS, lightLook } from '../src/vignettes/lightLooks';
-import { levelSpec } from '../src/game/levels';
-import { VIGNETTES } from '../src/vignettes/registry';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -28,7 +27,7 @@ describe('light switch interiors', () => {
     }
     expect(levelSpec(12).vignette).toBe('light');
     expect(levelSpec(12).lap).toBe(0);
-    expect(levelSpec(12 + VIGNETTES.length).lap).toBe(1);
-    expect(levelSpec(12 + 3 * VIGNETTES.length).lap).toBe(3);
+    expect(levelSpec(actLevel('light', 1)).lap).toBe(1);
+    expect(levelSpec(actLevel('light', 3)).lap).toBe(3);
   });
 });
