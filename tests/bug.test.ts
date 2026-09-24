@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BUG_LOOKS, bugLook } from '../src/vignettes/bugLooks';
-import { levelSpec } from '../src/game/levels';
-import { VIGNETTES } from '../src/vignettes/registry';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -24,7 +23,7 @@ describe('bug and shoe looks', () => {
     // Its introduction stays at level 3; the lap only changes on later rotations.
     expect(levelSpec(3).vignette).toBe('bug');
     expect(levelSpec(3).lap).toBe(0);
-    expect(levelSpec(3 + VIGNETTES.length).lap).toBe(1);
-    expect(levelSpec(3 + 2 * VIGNETTES.length).lap).toBe(2);
+    expect(levelSpec(actLevel('bug', 1)).lap).toBe(1);
+    expect(levelSpec(actLevel('bug', 2)).lap).toBe(2);
   });
 });

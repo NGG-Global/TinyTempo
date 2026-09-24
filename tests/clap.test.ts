@@ -6,7 +6,7 @@ import {
 import { synthesizeClap } from '../src/audio/clapSounds';
 import { SAMPLE_URLS } from '../src/audio/samples';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -15,10 +15,12 @@ describe('clapping hands act', () => {
   it('is appended as the twenty-first act and keeps every earlier level', () => {
     expect(VIGNETTES[20]?.id).toBe('clap');
     expect(levelSpec(21).vignette).toBe('clap');
-    expect(levelSpec(21 + VIGNETTES.length).vignette).toBe('clap');
+    // Its second visit is where it has always been: the rotation grew at level 51, after it.
+    expect(actLevel('clap', 1)).toBe(46);
+    expect(levelSpec(46).vignette).toBe('clap');
     expect([1, 9, 19, 20].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'scratch', 'trombone']);
-    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
-    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
+    expect(levelSpec(26).vignette).toBe('hammer');
+    expect(levelSpec(26).lap).toBe(1);
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {

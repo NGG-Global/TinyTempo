@@ -75,29 +75,45 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Twenty-five vignettes rotate strictly by registry order: `levelSpec` picks
-`VIGNETTES[(level - 1) % VIGNETTES.length]`, so reordering or inserting an entry
-in `src/vignettes/registry.ts` silently reassigns every level's vignette. New
-acts are appended so the earlier levels keep theirs.
+Twenty-eight vignettes rotate by registry order, **in eras**: `levelSpec` places a level
+with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
+registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
+did, and from level 51 all twenty-eight, opening on the acts that era added. Reordering
+or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
+level's vignette, and **appending one now also needs an era**, starting past every
+keepsake level: a keepsake is earned on the level where its act plays a lap, and an
+append under the old `VIGNETTES[(level - 1) % VIGNETTES.length]` would have moved every
+keepsake on 26–50. `LevelSpec.lap` is how many earlier levels the act played, and
+`actLevel` is its inverse — never `level + VIGNETTES.length`. See
+`docs/BARBER_POPCORN_TOOTHBRUSH.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
+Barber, popcorn and toothbrush are acts 26–28, on the household lifecycle, first played
+on levels 51–53. Each advances only on judged hits and keeps a share of its subject for a
+clean round's coda: the barber cuts a twelve-lock mop in `BARBER_MOTION.order` and is the
+fourth act with three endings — the cape whisked off, a lopsided cut, a beanie over the
+damage — with a middle voice of its own; popcorn fills its bowl a layer at a time and ends
+on one enormous kernel; the toothbrush brushes sixteen teeth once round, and a clean round
+rinses the foam and sweeps a gleam across them. Their demonstrations snip the air, hop a
+kernel back into the pan and scrub without cleaning. See `docs/BARBER_POPCORN_TOOTHBRUSH.md`.
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
 stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
 
-Every act carries more than one look. `LevelSpec.lap` counts how many times the
-rotation has come round before a level, PlayScene passes it to `create(scene, lap)`,
+Every act carries more than one look. `LevelSpec.lap` counts how many earlier levels
+the act played, PlayScene passes it to `create(scene, lap)`,
 and the act indexes its own list with it. Bug & shoe has three bugs and sneaker
 colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), scissors & paper four sets of three shapes (`PAPER_SHAPE_SETS`),
 the light switch four interiors (`lightLooks.ts`), the doorbell four leaves
 (`doorLooks.ts`), the slushy five flavours (`slushyLooks.ts`), and the apple act an
-apple, a pear, a peach and a donut (`appleLooks.ts`). The other eighteen each have
+apple, a pear, a peach and a donut (`appleLooks.ts`). The other twenty-one each have
 three looks in their own `*Looks.ts`, chosen by `lookAt`: the hammer, the window's
 view, the saw's timber, the tomato, cucumber and banana, the egg, the bubble sheet,
 the roller's wall and gallery (`rollerImage`, leaving `paintImage` on the original
 three), the hotel bell, the balloons, the stapler, the fisherman's mac, the DJ
-booth, the trombone, the clap's sleeves, the snare's lacquer and the bongos.
+booth, the trombone, the clap's sleeves, the snare's lacquer, the bongos, the barber's
+customer, the popcorn's bowl and the toothbrush's mirror.
 Lap 0 is always the original look, so the first twenty-five levels are unchanged.
 Add variety this way, as a new look inside an existing act, rather than as a
 registry entry. **A look that changes
@@ -443,7 +459,8 @@ them.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
-request** — a new entry in the registry reassigns every level.
+request** — a new entry in the registry reassigns levels unless it joins through a new
+era in `ROTATION`, past every keepsake.
 
 ## History
 
@@ -648,7 +665,8 @@ src/
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
     boot.ts            Native-only check on boot and resume
   vignettes/
-    registry.ts        The rotation. Order is the level assignment.
+    registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
+    rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
     Vignette.ts        The contract a vignette implements
     *Vignette.ts       One per act: all geometry, palette and motion
     *Motion.ts         Pure curves, no Phaser import, unit-tested under node

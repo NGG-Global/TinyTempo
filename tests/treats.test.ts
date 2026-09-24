@@ -13,14 +13,14 @@ const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'j
 
 describe('percussion and picnic acts', () => {
   it('adds levels 22–25 after all existing introductory acts', () => {
-    expect(VIGNETTES.slice(21).map(v => v.id)).toEqual(ACTS);
+    expect(VIGNETTES.slice(21, 25).map(v => v.id)).toEqual(ACTS);
     expect([22, 23, 24, 25].map(level => levelSpec(level).vignette)).toEqual(ACTS);
     expect(VIGNETTES.slice(0, 21).map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
       'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler',
       'fisherman', 'scratch', 'trombone', 'clap',
     ]);
-    for (const definition of VIGNETTES.slice(21)) {
+    for (const definition of VIGNETTES.slice(21, 25)) {
       for (const bpm of [120, 136, 150]) {
         const ending = new TaskSequence(bpm, 0).ending(10, definition.endingHoldBeats);
         expect(ending.slide - ending.contact).toBeGreaterThan(TREAT_REVEAL_SEC);

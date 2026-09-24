@@ -5,7 +5,7 @@ import {
 import { synthesizeTrombone } from '../src/audio/tromboneSounds';
 import { SAMPLE_URLS } from '../src/audio/samples';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { PATTERN_TIERS } from '../src/game/levels';
@@ -16,10 +16,12 @@ describe('trombone act', () => {
   it('is the twentieth act and keeps every earlier level', () => {
     expect(VIGNETTES[19]?.id).toBe('trombone');
     expect(levelSpec(20).vignette).toBe('trombone');
-    expect(levelSpec(20 + VIGNETTES.length).vignette).toBe('trombone');
+    // Its second visit is where it has always been: the rotation grew at level 51, after it.
+    expect(actLevel('trombone', 1)).toBe(45);
+    expect(levelSpec(45).vignette).toBe('trombone');
     expect([1, 9, 18, 19].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'fisherman', 'scratch']);
-    expect(levelSpec(1 + VIGNETTES.length).vignette).toBe('hammer');
-    expect(levelSpec(1 + VIGNETTES.length).lap).toBe(1);
+    expect(levelSpec(26).vignette).toBe('hammer');
+    expect(levelSpec(26).lap).toBe(1);
   });
 
   it('holds its finale for five beats, long enough for the two-second recorded endings at every tempo', () => {

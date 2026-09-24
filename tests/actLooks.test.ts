@@ -1,14 +1,17 @@
 import { describe, expect, it, vi } from 'vitest';
 import { BALLOON_LOOKS, balloonLook } from '../src/vignettes/balloonLooks';
 import { BANANA_LOOKS, bananaLook } from '../src/vignettes/bananaLooks';
+import { BARBER_LOOKS, barberLook } from '../src/vignettes/barberLooks';
 import { BELL_LOOKS, bellLook } from '../src/vignettes/bellLooks';
 import { BONGO_LOOKS, bongoLook } from '../src/vignettes/bongoLooks';
+import { BRUSH_LOOKS, brushLook } from '../src/vignettes/brushLooks';
 import { BUBBLE_LOOKS, bubbleLook } from '../src/vignettes/bubbleLooks';
 import { CLAP_LOOKS, clapLook } from '../src/vignettes/clapLooks';
 import { CUCUMBER_LOOKS, cucumberLook } from '../src/vignettes/cucumberLooks';
 import { EGG_LOOKS, eggLook } from '../src/vignettes/eggLooks';
 import { FISHERMAN_LOOKS, fishermanLook } from '../src/vignettes/fishermanLooks';
 import { HAMMER_LOOKS, hammerLook } from '../src/vignettes/hammerLooks';
+import { POPCORN_LOOKS, popcornLook } from '../src/vignettes/popcornLooks';
 import { lookAt } from '../src/vignettes/lookAt';
 import { ROLLER_GALLERIES, ROLLER_LOOKS, rollerImage, rollerLook } from '../src/vignettes/rollerLooks';
 import { SAW_LOOKS, sawLook } from '../src/vignettes/sawLooks';
@@ -19,8 +22,7 @@ import { TOMATO_LOOKS, tomatoLook } from '../src/vignettes/tomatoLooks';
 import { TROMBONE_LOOKS, tromboneLook } from '../src/vignettes/tromboneLooks';
 import { WINDOW_LOOKS, windowLook } from '../src/vignettes/windowLooks';
 import { PAINT_GRID, paintImage } from '../src/vignettes/errandMotion';
-import { levelSpec } from '../src/game/levels';
-import { VIGNETTES } from '../src/vignettes/registry';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -50,7 +52,8 @@ function check<T extends LookList>(name: string, looks: readonly T[], pick: (lap
     }
     expect(levelSpec(level).vignette).toBe(name);
     expect(levelSpec(level).lap).toBe(0);
-    expect(levelSpec(level + VIGNETTES.length).lap).toBe(1);
+    expect(levelSpec(actLevel(name, 1)).vignette).toBe(name);
+    expect(levelSpec(actLevel(name, 1)).lap).toBe(1);
   });
 }
 
@@ -73,6 +76,9 @@ describe('looks for the acts that had one', () => {
   check('clap', CLAP_LOOKS, clapLook, 'green', 21);
   check('snare', SNARE_LOOKS, snareLook, 'red', 22);
   check('bongos', BONGO_LOOKS, bongoLook, 'terracotta', 23);
+  check('barber', BARBER_LOOKS, barberLook, 'chestnut', 51);
+  check('popcorn', POPCORN_LOOKS, popcornLook, 'butter', 52);
+  check('toothbrush', BRUSH_LOOKS, brushLook, 'mint', 53);
 
   it('pins lap 0 to the colours the acts already shipped with', () => {
     expect(hammerLook(0)).toMatchObject({ handle: 0xcf5134, head: 0x243e35, wood: 0xc99460, woodDark: 0x936542 });

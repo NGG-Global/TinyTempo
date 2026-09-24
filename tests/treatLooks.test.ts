@@ -3,7 +3,7 @@ import { APPLE_LOOKS, appleLook } from '../src/vignettes/appleLooks';
 import { SLUSHY_LOOKS, slushyLook } from '../src/vignettes/slushyLooks';
 import { definitionForLap } from '../src/vignettes/Vignette';
 import { VIGNETTES } from '../src/vignettes/registry';
-import { levelSpec } from '../src/game/levels';
+import { actLevel, levelSpec } from '../src/game/levels';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -19,8 +19,9 @@ describe('picnic looks', () => {
     for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(appleLook(bad)).toBe(appleLook(0));
     expect(levelSpec(25).vignette).toBe('apple');
     expect(levelSpec(25).lap).toBe(0);
-    expect(appleLook(levelSpec(25 + VIGNETTES.length).lap).id).toBe('pear');
-    expect(appleLook(levelSpec(25 + 3 * VIGNETTES.length).lap).id).toBe('donut');
+    expect(appleLook(levelSpec(actLevel('apple', 1)).lap).id).toBe('pear');
+    expect(actLevel('apple', 1)).toBe(50);
+    expect(appleLook(levelSpec(actLevel('apple', 3)).lap).id).toBe('donut');
   });
 
   it('keeps the apple exactly as it was on the first lap', () => {
@@ -96,6 +97,7 @@ describe('picnic looks', () => {
       }
     }
     expect(levelSpec(24).vignette).toBe('slushy');
-    expect(slushyLook(levelSpec(24 + VIGNETTES.length).lap).id).toBe('blue');
+    expect(slushyLook(levelSpec(actLevel('slushy', 1)).lap).id).toBe('blue');
+    expect(actLevel('slushy', 1)).toBe(49);
   });
 });

@@ -1,4 +1,5 @@
 import { VIGNETTES } from '../vignettes/registry';
+import { actLevel } from './levels';
 import type { Progress } from './progress';
 import { levelStars } from './stars';
 
@@ -15,7 +16,7 @@ import { levelStars } from './stars';
  * thresholds it depends on are pinned by `tests/fixtures/level-thresholds.json`.
  *
  * **The rule is the level.** Keepsake `lap` of an act is earned by three stars on the level
- * where that act plays for the `lap`-th time: `registry index + 1 + lap × 25`. It is the
+ * where that act plays for the `lap`-th time (`actLevel`, the rotation read backwards). It is the
  * level whose look the keepsake shows — the second bug keepsake is the ladybird because
  * level 28's bug is the ladybird — and it is the one fact the Scrapbook prints under every
  * slot, found or not, so nobody has to guess what earns what. There is no chance in it
@@ -100,13 +101,18 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   { id: 'clap-plum-cuffs', vignette: 'clap', lap: 1, name: 'Plum cuffs' },
   { id: 'snare-blue-shell', vignette: 'snare', lap: 1, name: 'Blue snare' },
   { id: 'bongos-walnut', vignette: 'bongos', lap: 1, name: 'Walnut bongos' },
+  // Barber, popcorn and toothbrush, which join the rotation at level 51: levels 51–53 and 79–81.
+  { id: 'barber-pole', vignette: 'barber', lap: 0, name: 'Barber’s pole' },
+  { id: 'popcorn-butter-bowl', vignette: 'popcorn', lap: 0, name: 'Bowl of popcorn' },
+  { id: 'toothbrush-teal', vignette: 'toothbrush', lap: 0, name: 'Teal toothbrush' },
+  { id: 'barber-ginger-lock', vignette: 'barber', lap: 1, name: 'Ginger lock' },
+  { id: 'popcorn-cinema-tub', vignette: 'popcorn', lap: 1, name: 'Cinema tub' },
+  { id: 'toothbrush-berry-paste', vignette: 'toothbrush', lap: 1, name: 'Strawberry paste' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */
 export function levelOf(vignette: string, lap: number): number {
-  const index = VIGNETTES.findIndex(definition => definition.id === vignette);
-  if (index < 0 || !Number.isInteger(lap) || lap < 0) throw new Error(`No level for ${vignette} lap ${lap}.`);
-  return index + 1 + lap * VIGNETTES.length;
+  return actLevel(vignette, lap);
 }
 
 export const KEEPSAKES: readonly Keepsake[] = Object.freeze(
