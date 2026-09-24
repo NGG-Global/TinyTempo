@@ -7,7 +7,7 @@ import { shade } from './colour';
 import type { Feedback } from './feedback';
 import { faces } from './light';
 import { drawPanel, Rect } from './panel';
-import { buntingPoints, pennantSwing, ribbonPose, titleCardPose } from './finalePose';
+import { buntingPoints, lineShift, pennantSwing, ribbonPose, titleCardPose } from './finalePose';
 import { body, display, label, resize } from './type';
 
 /** Design-unit sizes, scaled by the scene's `s`. */
@@ -20,9 +20,10 @@ const STAGE = Object.freeze({
   lanternDrop: 22,
   cardWidth: 560,
   cardHeight: 250,
-  ribbonWidth: 600,
-  ribbonHeight: 96,
-  ribbonTail: 36,
+  /** One line across the plaque's top edge: the card under the plaque names what is next. */
+  ribbonWidth: 420,
+  ribbonHeight: 66,
+  ribbonTail: 32,
 });
 
 /** Where the stage hangs its three pieces, from the scene's own layout. */
@@ -35,6 +36,8 @@ export interface FinaleFrame {
   readonly ceiling: number;
   /** Where the pennant line is tied at both edges. */
   readonly lineY: number;
+  /** Where it hangs on the result instead, under the headline; the level's `lineY` if absent. */
+  readonly resultLineY?: number;
   /** The title card's centre at rest. */
   readonly cardY: number;
   /** The payoff ribbon's centre. */
@@ -44,7 +47,7 @@ export interface FinaleFrame {
 /**
  * Everything a finale adds to the stage, drawn from one `FinaleTreatment`: the pennants
  * strung over the act for the whole level, the title card that hangs in the opening
- * lead-in, and the "Area complete" ribbon over the result plaque. PlayScene tells it what
+ * lead-in, and the "Area complete" ribbon across the result plaque's top edge. PlayScene tells it what
  * happened and when; it decides nothing about the level. A new area's finale is a new
  * treatment in `game/finale.ts`, and a new motif is one more case in `drawLine`.
  *
@@ -60,12 +63,12 @@ export class FinaleStage {
   private readonly cardStrap: Phaser.GameObjects.Text;
   private readonly ribbon: Phaser.GameObjects.Graphics;
   private readonly ribbonTitle: Phaser.GameObjects.Text;
-  private readonly ribbonNext: Phaser.GameObjects.Text;
   private frame: FinaleFrame | null = null;
   private cardFrom = -Infinity;
   private cardUntil = -Infinity;
   private completeAt = -Infinity;
   private cheerAt = -Infinity;
+  private lineAt = -Infinity;
   private burst = false;
 
   public constructor(scene: Phaser.Scene, finale: AreaFinale, private readonly fx: Feedback) {
@@ -79,8 +82,7 @@ export class FinaleStage {
     this.cardTitle = display(scene, finale.areaName, { size: 84, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(13).setVisible(false);
     this.cardStrap = body(scene, FINALE_COPY.strapline(finale.areaName), { size: 24, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(13).setVisible(false);
     this.ribbon = scene.add.graphics().setDepth(10).setVisible(false);
-    this.ribbonTitle = label(scene, FINALE_COPY.complete, { size: 32, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
-    this.ribbonNext = body(scene, FINALE_COPY.next(finale.nextAreaName), { size: 20, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.ribbonTitle = label(scene, FINALE_COPY.complete, { size: 30, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
   }
 
   public layout(frame: FinaleFrame): void {
@@ -89,8 +91,7 @@ export class FinaleStage {
     resize(this.cardEyebrow, 24 * s, ink, STYLE.current, false);
     resize(this.cardTitle, 84 * s, ink);
     resize(this.cardStrap, 24 * s, ink, STYLE.current, false);
-    resize(this.ribbonTitle, 32 * s, ink, STYLE.current, false);
-    resize(this.ribbonNext, 20 * s, ink, STYLE.current, false);
+    resize(this.ribbonTitle, 30 * s, ink, STYLE.current, false);
     // A long area name ("Pavement VIII") is shrunk to the card rather than run off it.
     const room = this.cardWidth() - 56 * s;
     if (this.cardTitle.width > room) resize(this.cardTitle, 84 * s * room / this.cardTitle.width, ink);
@@ -109,9 +110,14 @@ export class FinaleStage {
     this.burst = false;
   }
 
+  /** The result opens: the pennant line moves up under its headline. */
+  public settleLine(at: number): void {
+    this.lineAt = at;
+  }
+
   /** A fresh attempt: no card, no ribbon, pennants at rest. */
   public reset(): void {
-    this.cardFrom = this.cardUntil = this.completeAt = this.cheerAt = -Infinity;
+    this.cardFrom = this.cardUntil = this.completeAt = this.cheerAt = this.lineAt = -Infinity;
     this.burst = false;
     this.hideCard();
     this.hideRibbon();
@@ -136,13 +142,14 @@ export class FinaleStage {
     const left = f.left - 12 * s, right = f.right + 12 * s;
     const sag = STAGE.sag * s;
     const count = Math.max(5, Math.round((right - left) / (STAGE.pennantEvery * s)));
+    const y = f.lineY + ((f.resultLineY ?? f.lineY) - f.lineY) * lineShift(now - this.lineAt, still);
     // The string itself, as a smooth sag between the two ties.
-    const string = buntingPoints(left, right, f.lineY, sag, 24);
-    g.lineStyle(Math.max(1.5, 3 * s), shade(SHELL.rope, -0.2), 1).beginPath().moveTo(left, f.lineY);
+    const string = buntingPoints(left, right, y, sag, 24);
+    g.lineStyle(Math.max(1.5, 3 * s), shade(SHELL.rope, -0.2), 1).beginPath().moveTo(left, y);
     for (const p of string) g.lineTo(p.x, p.y);
-    g.lineTo(right, f.lineY).strokePath();
+    g.lineTo(right, y).strokePath();
     const cheer = now - this.cheerAt;
-    buntingPoints(left, right, f.lineY, sag, count).forEach((p, i) => {
+    buntingPoints(left, right, y, sag, count).forEach((p, i) => {
       const colour = t.pennants[i % t.pennants.length]!;
       const angle = p.slope + pennantSwing(now, i, cheer, still);
       if (t.motif === 'lanterns') this.drawLantern(g, p.x, p.y, angle, colour, s);
@@ -204,7 +211,7 @@ export class FinaleStage {
   }
 
   private hideRibbon(): void {
-    for (const part of [this.ribbon, this.ribbonTitle, this.ribbonNext]) part.setVisible(false);
+    for (const part of [this.ribbon, this.ribbonTitle]) part.setVisible(false);
     this.ribbon.clear();
   }
 
@@ -217,7 +224,7 @@ export class FinaleStage {
     const x = f.centerX, y = f.ribbonY;
     const g = this.ribbon.clear().setVisible(true).setAlpha(pose.alpha);
     // The tails first, folded behind the band and a shade darker, each with its notch.
-    const tail = STAGE.ribbonTail * s * Math.min(1, pose.unroll), drop = 14 * s;
+    const tail = STAGE.ribbonTail * s * Math.min(1, pose.unroll), drop = 10 * s;
     const back = shade(t.ribbon, -0.28);
     for (const side of [-1, 1] as const) {
       const inner = x + side * (w / 2 - 10 * s), outer = x + side * (w / 2 + tail);
@@ -230,8 +237,7 @@ export class FinaleStage {
     }
     drawPanel(g, new Rect(x - w / 2, y - h / 2, w, h), s, { fill: t.ribbon, depth: 8, radius: 10, hero: true, frame: t.ribbonInk });
     const words = Math.max(0, (pose.unroll - 0.75) / 0.25) * pose.alpha;
-    this.ribbonTitle.setPosition(x, y - 14 * s).setScale(1 + pose.stamp).setAlpha(words).setVisible(true);
-    this.ribbonNext.setPosition(x, y + 24 * s).setAlpha(words).setVisible(true);
+    this.ribbonTitle.setPosition(x, y).setScale(1 + pose.stamp).setAlpha(words).setVisible(true);
     if (!this.burst && pose.unroll >= 0.98) {
       this.burst = true;
       if (!still) {
