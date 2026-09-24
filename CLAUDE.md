@@ -54,10 +54,10 @@ curve's, no grid the area has not played, so the top of an area is never where s
 new arrives. Its opening is `PROGRESSION.finale.openingBars` long, through the breather's
 `leadBeats`. Clear bar, stars, hearts and unlocks are every level's. The dressing is data:
 `FINALE_TREATMENTS` in `game/finale.ts`, drawn by one `FinaleStage` (`ui/finaleStage.ts`) —
-pennants over the act, a title card that is off the stage half a beat before the first
-demonstration, the loop swelling from `musicFloor` onto that downbeat, and an "Area
-complete" ribbon over the plaque — so a new area's finale is a new entry, never a PlayScene
-edit. The map flags every finale in its window and the dock's trail ends in one. See
+pennants over the act that move up under the headline for the result, a title card that is
+off the stage half a beat before the first demonstration, the loop swelling from
+`musicFloor` onto that downbeat, and an "Area complete" ribbon across the plaque's top
+edge — so a new area's finale is a new entry, never a PlayScene edit. The map flags every finale in its window and the dock's trail ends in one. See
 `docs/FINALES.md`.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
@@ -189,11 +189,21 @@ Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Sett
 labelled sections scrolling between a pinned title and a pinned Done, with calibration on
 its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
 knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid-run.
+**The medals seat in a tray inside the plaque, each over a chip naming its threshold**
+(`ui/resultLayout.ts`, `game/resultCopy.ts`, read from `spec.starAccuracy`, never
+written down): the middle one larger and raised, nothing crossing the plaque or a rope
+at rest. Under it, in one order, a cleared finale's card (the collection and the next
+area's gate in that area's colours), then the next star ("Third star at 85%") or a new
+keepsake's card, which is as tall as its words; a clear short of three stars adds a wood
+**Replay level N** block over Continue, by the restart puck's path — coral stays on
+Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
+shrinks the plaque, never below `minScale`.
 **A plaque is a Graphics *and* its Text.** `stars.clear()` empties the drawing and leaves
 every `Text` on it untouched, which left the score and its "On the beat" caption hanging
 over the middle of the act for a whole round after the summary closed. `drawStars` is the
-one place that knows what the plaque is made of, so hiding it is a call to that rather
-than a list of objects at the call site.
+one place that knows what the plaque is made of — its chips, the rows under it and the
+replay block included — so hiding it is a call to that rather than a list of objects at
+the call site.
 Two version traps live there. **Phaser 4 dropped WebGL geometry masks** — `setMask` warns
 and no-ops off the canvas renderer — so a clipped region is a second camera's viewport,
 never a mask. And a control inside a scrolling list fires on the pointer *release*:
@@ -609,6 +619,7 @@ src/
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
+    resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
@@ -657,6 +668,7 @@ src/
     finalePose.ts      Their poses as pure f(t)
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
+    resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces

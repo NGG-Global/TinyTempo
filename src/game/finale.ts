@@ -114,7 +114,6 @@ export const FINALE_COPY = Object.freeze({
   eyebrow: 'Area finale',
   strapline: (areaName: string) => `The best of ${areaName}, one more time`,
   complete: 'Area complete',
-  next: (areaName: string) => `Next stop: ${areaName}`,
 });
 
 /** The finale of the area a level sits in, and how many stops away it is. */

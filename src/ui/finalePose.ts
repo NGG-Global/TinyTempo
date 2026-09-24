@@ -22,7 +22,21 @@ export const FINALE_POSE = Object.freeze({
   cheer: 0.26,
   /** How long the cheer takes to die back to the idle sway. */
   cheerDecay: 1.6,
+  /** The pennant line's move from over the act to under the result's headline. */
+  lineMove: 0.45,
 });
+
+/**
+ * How far the pennant line has moved to its place on the result, 0 → 1. On a cleared
+ * finale the headline grows to the area's name, and the line that hung under the pucks
+ * during the level would run straight through it. Absent until called for, like the ribbon;
+ * there at once under reduced motion.
+ */
+export function lineShift(age: number, still = false): number {
+  if (!Number.isFinite(age) || age < 0) return 0;
+  if (still) return 1;
+  return easeOut(age / FINALE_POSE.lineMove);
+}
 
 export interface CardPose {
   /** Card heights from its resting place; negative is above it. */
