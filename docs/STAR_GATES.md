@@ -61,10 +61,15 @@ capped where the difficulty plateaus: the clear bar tops out at 80% with two sta
 ## What the map shows
 
 - **A barrier at the foot of each closed area** in the window: two brass-capped posts
-  either side of the road and a striped bar across it, with a plate hanging under the
-  bar carrying a brass star and the count. The gate the collection is working toward is
-  coral and says `have / need`; the ones further up the road are in the area's own
-  colours and say only what they want. A gate the player has passed stands open, its two
+  either side of the road and a striped bar across it, with a cream plate hanging from it
+  at the road carrying an earned star and the count in ink. The gate the collection is
+  working toward has a coral bar and says `30 / 53` — the shown count, then the ask in a
+  quieter weight; the ones further up the road have bars in the area's own colours and a
+  slightly deeper cream, and say only what they want. The plate is cream on every area, so
+  the ink count reads the same on Dusk as on Snow. It is a world object on its own
+  barrier and nowhere else: the old "Complete more to unlock" panel at the end of the
+  reachable stretch, which could scroll up under the top-left pucks, is gone, and the
+  crest's signpost says what it said. A gate the player has passed stands open, its two
   posts left on the area line as its threshold.
 - **The frontier behind a closed gate** is drawn as a locked stop and does not hop. The
   bench block stops being the next level's and becomes the errand: `2 more stars for
