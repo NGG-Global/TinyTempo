@@ -106,6 +106,40 @@ there are no longer two words. The headline is kept for outcomes (`Cleared`,
 `Breathe`, which marks the one place in a level where nothing at all is being
 asked. The row's coral line, the baton, the fuse and the lift carry the cue.
 
+## The breather
+
+A level of `PROGRESSION.breatherFromTasks` tasks or more rests for
+`PROGRESSION.breatherBars` bars at its midpoint, and the rest used to be sixteen beats of
+the word `Breathe` and nothing else until the count-in's pips in its last four. A player
+could not tell how long it was or how far into it they were. It now shows its length the
+way the block shows everything else — on the block, from the plan, against the audio clock:
+
+- **`restProgress(plan, now)`** (`game/beatTrack.ts`) is the bar and the last beat heard in
+  it, read off the plan's own lead cues. It is null for any lead-in that is not the
+  breather's length — a level's opening bar, a finale's two-bar opening — and null once the
+  demonstration starts, with the same beat of warning `countIn` has. It keeps `countIn`'s
+  intent: **a rest, not a count to sixteen.** Beats are grouped into four bars and never
+  numbered.
+- **The face carries four bar tiles** of four beat dots instead of its sockets
+  (`BlockState.rest`, `restTiles` in `ui/turnBlock.ts`): played beats ink, beats to come
+  muted rings, the current bar framed in ink and pressed on each beat, finished bars
+  recessed. The shelf is at rest — the hammer slot dimmed, `Rest` in cream on the plank,
+  no beads, no baton. Under reduced motion the tiles fill without the press.
+- **Under the face**, in the count-in's place — free until the demonstration's own bar —
+  `3 bars to go`, `2 bars to go`, `1 bar to go`. Under the headline, `Halfway` in the label
+  face, except on an area finale, whose pennants hang in that band.
+- **The last bar hands over.** The headline becomes `Get ready` and the label `Last bar`, the
+  caption clears, the count-in's pips run above the shelf as they always have, the fourth
+  tile's dots grow to the pips' size and fill in step with them, the example's beads come
+  back onto the shelf and the baton goes back to the hammer slot over the bar's first beat
+  (under reduced motion it is simply there), so the next demonstration is expected.
+
+The task dots at the top mark the midpoint with a short tick between the last task before
+the breather and the breather's own. Nothing here schedules or moves a cue: the rest meter
+is drawn against the plan only. The breather task's block keeps a wider floor
+(`TRACK.restWidth`) from its rest through its response, so four bars of dots stay readable
+on a short pattern and nothing changes size inside the task.
+
 ## The count
 
 The block above says all of this and says it early, and it is still what teaches. But it

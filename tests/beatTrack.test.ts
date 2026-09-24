@@ -1,8 +1,13 @@
-import { describe, expect, it } from 'vitest';
-import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, markFor, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
+import { describe, expect, it, vi } from 'vitest';
+import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
+import { PROGRESSION } from '../src/config/progression';
+import { breatherTask, levelSpec, openingBeats } from '../src/game/levels';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { parsePattern } from '../src/rhythm/patterns';
 import type { Judgement } from '../src/rhythm/judge';
+
+// `levelSpec` reaches the registry, and the acts import Phaser.
+vi.mock('phaser', () => ({ default: {} }));
 
 const hit = (grade: 'Perfect' | 'Good'): Judgement => ({ kind: 'hit', grade, index: 0, deltaMs: 10 });
 
@@ -76,6 +81,85 @@ describe('what the beat track is showing', () => {
     expect(countIn(plan, 11 * beat)).toBe(0);
     expect(countIn(plan, 12 * beat)).toBe(1);
     expect(countIn(plan, 15 * beat)).toBe(4);
+  });
+});
+
+describe('the breather\'s rest', () => {
+  const lead = PROGRESSION.breatherBars * 4;
+  const breather = (bpm = 120, start = 40) => createRoundPlan(1, parsePattern('p', 'X X - X'), bpm, start, lead);
+
+  it('returns null outside a breather', () => {
+    expect(restProgress(null, 0)).toBeNull();
+    // A level's opening bar and a finale's longer opening are lead-ins, not rests.
+    for (const beats of [0, 4, 8]) {
+      const plan = createRoundPlan(1, parsePattern('p', 'X X - X'), 120, 0, beats);
+      for (let t = -1; t < plan.demo; t += 0.05) expect(restProgress(plan, t)).toBeNull();
+    }
+    expect(openingBeats(10)).not.toBe(lead);
+    expect(openingBeats(11)).not.toBe(lead);
+    // Before its beat of warning there is nothing to show.
+    const plan = breather();
+    expect(restProgress(plan, plan.start - 60 / plan.bpm - 0.01)).toBeNull();
+    expect(restProgress(plan, Number.NaN)).toBeNull();
+  });
+
+  it('is bar 0 beat 0 at the first lead cue, and bar 3 beat 3 on the last', () => {
+    for (const bpm of [120, 136, 150]) {
+      const plan = breather(bpm);
+      const cues = plan.cues.filter(cue => cue.kind !== 'action');
+      expect(restProgress(plan, cues[0]!.time)).toMatchObject({ bar: 0, beat: 0, bars: PROGRESSION.breatherBars, at: cues[0]!.time });
+      expect(restProgress(plan, cues.at(-1)!.time)).toMatchObject({ bar: 3, beat: 3, bars: 4 });
+      // The beat of warning: the tiles are up with nothing played.
+      expect(restProgress(plan, cues[0]!.time - 0.5 * 60 / bpm)).toMatchObject({ bar: 0, beat: -1 });
+    }
+  });
+
+  it('returns null once the demonstration starts', () => {
+    const plan = breather();
+    expect(restProgress(plan, plan.demo - 0.001)).not.toBeNull();
+    expect(restProgress(plan, plan.demo)).toBeNull();
+    expect(restProgress(plan, plan.response)).toBeNull();
+  });
+
+  it('is monotonic across the lead-in, a beat at a time, and never numbers the beats', () => {
+    const plan = breather(133);
+    let previous = -2;
+    const seen = new Set<number>();
+    for (let t = plan.start - 60 / plan.bpm; t < plan.demo; t += 0.004) {
+      const rest = restProgress(plan, t)!;
+      const at = rest.bar * 4 + rest.beat;
+      expect(at).toBeGreaterThanOrEqual(previous);
+      expect(at - previous).toBeLessThanOrEqual(1);
+      expect(rest.beat).toBeLessThan(4);
+      previous = at;
+      seen.add(at);
+    }
+    expect(seen.size).toBe(lead + 1);
+    expect(previous).toBe(lead - 1);
+  });
+
+  it('hands over in the last bar: 3, 2, 1 bars to go, then Get ready with no caption', () => {
+    const plan = breather();
+    const beat = 60 / plan.bpm;
+    const at = (bar: number, b = 1) => restProgress(plan, plan.start + (bar * 4 + b) * beat + 0.01)!;
+    expect(restCopy(at(0))).toEqual({ headline: 'Breathe', label: 'Halfway', caption: '3 bars to go' });
+    expect(restCopy(at(1)).caption).toBe('2 bars to go');
+    expect(restCopy(at(2)).caption).toBe('1 bar to go');
+    expect(isLastRestBar(at(2, 3))).toBe(false);
+    expect(isLastRestBar(at(3, 0))).toBe(true);
+    expect(restCopy(at(3))).toEqual({ headline: 'Get ready', label: 'Last bar', caption: '' });
+    // The last bar is exactly where the count-in's pips run, so the two agree.
+    for (let b = 0; b < 4; b++) expect(countIn(plan, plan.start + (12 + b) * beat + 0.01)).toBe(b + 1);
+    expect(countIn(plan, plan.start + 11 * beat + 0.01)).toBe(0);
+  });
+
+  it('matches the breather a long level really carries', () => {
+    for (const level of [34, 60, 90]) {
+      const spec = levelSpec(level);
+      const index = breatherTask(spec.tasks.length);
+      if (index < 0) continue;
+      expect(spec.tasks[index]!.leadBeats).toBe(lead);
+    }
   });
 });
 

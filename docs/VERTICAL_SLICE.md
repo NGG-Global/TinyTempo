@@ -207,7 +207,8 @@ with it, one instance retargeted rather than stacked, so a quick double cannot p
 up. The finished row stays through the ending and goes only when the summary claims the
 band. The count-in shows as four pips on the last four lead ticks, so the opening bar is
 no longer dead air and a sixteen-beat breather reads as a rest rather than a count of
-sixteen. The logic — the mark for a judgement, the row geometry, beats played, count-in —
+sixteen; the breather itself shows four bar tiles on the face (`restProgress`,
+`docs/TURN_CUE.md`). The logic — the mark for a judgement, the row geometry, beats played, count-in —
 is in `src/game/beatTrack.ts`, Phaser-free and unit-tested under node; the scene draws
 what it returns. The judge, the timing windows, the scorer and the phase machine are
 untouched.
