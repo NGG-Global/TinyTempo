@@ -387,7 +387,13 @@ the bar line: nothing waits between them, and nothing waits between one task and
 the next. The only pauses in a level are its opening `RHYTHM.leadInBeats` bar and,
 for a level of `PROGRESSION.breatherFromTasks` tasks or more, one
 `PROGRESSION.breatherBars` breather at its midpoint. Both are the same mechanism —
-`LevelTask.leadBeats`, counted in by `createRoundPlan`. Because no bar separates
+`LevelTask.leadBeats`, counted in by `createRoundPlan`. **The breather shows its length on
+the turn block**: `restProgress(plan, now)` in `game/beatTrack.ts` gives the bar and beat
+from the plan's own lead cues, the face swaps its sockets for four bar tiles of four dots
+(`BlockState.rest`), `3 bars to go` counts down under the face, and the last bar reads
+`Get ready` while the count-in's pips run and the baton goes back to the hammer slot. Beats
+are grouped into bars and never numbered, no cue is added or moved, and the task dots mark
+the midpoint with a tick. See `docs/TURN_CUE.md`. Because no bar separates
 the demonstration from the response, **a vignette's demonstration must not consume
 its subject**: it plays the action in full and leaves the cumulative state alone,
 since there is no longer anywhere to restore it.

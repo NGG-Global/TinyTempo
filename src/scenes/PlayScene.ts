@@ -19,7 +19,7 @@ import type { RoundResult } from '@/game/scoring';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, markFor, trackGeometry, turnCount, turnCountPose, type Handover, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
@@ -65,7 +65,13 @@ import { SceneCurtain } from '@/ui/SceneCurtain';
 import { FinaleStage } from '@/ui/finaleStage';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap, type Vignette } from '@/vignettes/Vignette';
-import { easeOut } from '@/vignettes/motion';
+import { easeInOutCubic, easeOut } from '@/vignettes/motion';
+
+/**
+ * How far under the headline's top the breather's label hangs, in headline sizes: clear
+ * of the display face's descenders and its outline, which the Text's own height pads.
+ */
+const REST_LABEL_DROP = 1.36;
 
 /**
  * The first-run demonstration pass: one whole cycle at a teaching tempo, played by the
@@ -324,6 +330,14 @@ export class PlayScene extends BaseScene {
   private verdictAt = -Infinity;
   /** The count into the player's turn: "3 2 1 Go!", in the free band under the face. */
   private turnCall!: Phaser.GameObjects.Text;
+  /**
+   * The breather's words: "Halfway" or "Last bar" under the headline, "Rest" on the shelf,
+   * and "3 bars to go" in the count-in's place under the face, which is free until the
+   * demonstration's own bar.
+   */
+  private restLabel!: Phaser.GameObjects.Text;
+  private restShelf!: Phaser.GameObjects.Text;
+  private restCall!: Phaser.GameObjects.Text;
   /** The numeral currently rasterised, so the beat pays for `setText` and nothing else does. */
   private turnCalled: number | null = null;
   /** Whether the "Go!" of the current task has thrown its sparks; once per task, on the strike. */
@@ -412,6 +426,9 @@ export class PlayScene extends BaseScene {
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.turnCall = display(this, '', { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.restLabel = label(this, '', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setAlpha(0).setDepth(12);
+    this.restShelf = label(this, 'Rest', { size: 18, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.restCall = display(this, '', { size: 40, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.keepsakeCard = this.add.graphics().setDepth(11).setVisible(false);
     this.keepsakeLabel = label(this, 'New keepsake', { size: 20, colour: PALETTE.coral }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -517,6 +534,11 @@ export class PlayScene extends BaseScene {
     this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
     this.turnCall.setPosition(safe.centerX, this.turnCallY);
     this.turnCalled = null;
+    this.restCall.setPosition(safe.centerX, this.turnCallY);
+    this.restLabel.setX(safe.centerX);
+    resize(this.restCall, 40 * s, this.definition.ink);
+    resize(this.restLabel, 22 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.restShelf, 18 * s, SHELL.cream, STYLE.current, false);
     this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
@@ -1219,6 +1241,7 @@ export class PlayScene extends BaseScene {
       // From the font size rather than the Text's height, which carries the outline's padding.
       this.introCaption.setAlpha(entry.alpha * endReveal).setY(this.headline.y + this.headlineSize * 1.08);
     }
+    if (this.restLabel.text !== '') this.restLabel.setAlpha(entry.alpha).setY(this.headline.y + this.headlineSize * REST_LABEL_DROP);
     if (this.summaryShown) this.animateStars(now);
     else this.accuracy.setAlpha(1);
     this.drawKeepsakeCard(now);
@@ -1295,6 +1318,27 @@ export class PlayScene extends BaseScene {
     resize(this.headline, this.headlineSize, colour);
   }
   /**
+   * The breather's words, from where the rest is: the label under the headline and the
+   * line under the face, and the headline itself turning to "Get ready" for the last bar.
+   * `null` clears them — the demonstration has started, or this is not a breather.
+   */
+  private setRestWords(rest: RestProgress | null): void {
+    const copy = rest ? restCopy(rest) : null;
+    // A finale's pennants hang in exactly the band under the headline, so its breather says
+    // "Breathe" and "Get ready" without the label that would sit on the line.
+    const labelText = this.spec.finale ? '' : copy?.label.toUpperCase() ?? '';
+    if (this.restLabel.text !== labelText) this.restLabel.setText(labelText).setAlpha(labelText === '' ? 0 : this.restLabel.alpha);
+    const caption = copy?.caption ?? '';
+    if (this.restCall.text !== caption) this.restCall.setText(caption);
+    this.restCall.setAlpha(caption === '' ? 0 : 1);
+    if (copy && this.headline.text !== copy.headline && (this.headline.text === 'Breathe' || this.headline.text === 'Get ready')) this.changeHeadline(copy.headline, SHELL.cream);
+    if (!rest) this.restShelf.setAlpha(0);
+  }
+  /** Whether this task carries the level's breather: the one task past the first that waits. */
+  private get resting(): boolean {
+    return this.taskIndex > 0 && this.taskIndex === breatherTask(this.spec.tasks.length);
+  }
+  /**
    * No word says whose turn it is any more.
    *
    * Watch and Your turn were a headline at the top of the screen that flipped on the same
@@ -1302,13 +1346,15 @@ export class PlayScene extends BaseScene {
    * thumb was at the bottom. The block at the thumb says it instead, and says it
    * `RHYTHM.runwayBeats` early. The headline is kept for outcomes — Cleared, Again?, Paused, No hearts — which
    * are results rather than cues, and for the breather, which is the one place in a level
-   * where nothing at all is being asked.
+   * where nothing at all is being asked. Its last bar says "Get ready" (`setRestWords`): the
+   * one headline that looks ahead, allowed there because the player's eyes are free — no
+   * turn is changing hands, and the count-in's pips and the baton say the rest.
    */
   private showPhase(phase: Phase): void {
     this.vignette.onPhase(phase, this.now());
     // The breather is the one task past the first that waits; a finale's longer opening is
     // its title card, not a rest.
-    const resting = this.taskIndex > 0 && this.taskIndex === breatherTask(this.spec.tasks.length);
+    const resting = this.resting;
     // An introduction keeps its two lines up through the count-in and the example, which is
     // what they describe, and lets go of them on the player's downbeat like every word here.
     const introducing = this.intro !== null;
@@ -1317,6 +1363,7 @@ export class PlayScene extends BaseScene {
       this.setAction('');
     }
     if (phase === 'demonstrate' && !introducing) this.changeHeadline('');
+    if (phase !== 'prepare') this.setRestWords(null);
     if (phase === 'respond') {
       this.changeHeadline('');
       this.setIntroCaption('');
@@ -1410,6 +1457,7 @@ export class PlayScene extends BaseScene {
       this.roomDim.setAlpha(0);
       this.turnCall.setAlpha(0);
       this.flawless.setAlpha(0);
+      this.setRestWords(null);
       return;
     }
     const { safe } = this.viewport;
@@ -1429,8 +1477,20 @@ export class PlayScene extends BaseScene {
     const last = centres.at(-1) ?? 0;
     const span = last + radius + 34 * s;
     const beadSpan = last - (centres[0] ?? 0) + radius * 2;
-    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * s);
+    // A breather's task keeps the tiles' width from its rest through its response, so the
+    // block does not change size inside the task.
+    const resting = !teach && this.resting;
+    const floor = resting ? TRACK.restWidth * s : 0;
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s), floor), safe.width - 48 * s);
     const geo = blockGeometry(safe.centerX, this.trackY, width, s);
+    // The rest meter: four bar tiles for the breather's lead-in, from the plan's own lead
+    // cues. It adds no cue and moves none.
+    const rest = resting && !this.intro && phase === 'prepare' ? restProgress(plan, now) : null;
+    this.setRestWords(rest);
+    const beatSec = plan ? 60 / plan.bpm : 0.5;
+    const barAge = rest && rest.beat >= 0 ? now - (rest.at - rest.beat * beatSec) : 0;
+    const lastBar = isLastRestBar(rest);
+    this.restShelf.setAlpha(rest && !lastBar ? 0.7 : 0).setPosition(geo.shelf.centerX, geo.shelfCentreY);
 
     drawBlock(g, geo, s, {
       centres,
@@ -1445,6 +1505,12 @@ export class PlayScene extends BaseScene {
       ink: this.definition.ink,
       landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
       flawless: now - this.flawlessAt,
+      rest: rest && {
+        bar: rest.bar, beat: rest.beat, bars: rest.bars,
+        pressAge: now - rest.at, barAge,
+        // Back to the hammer slot over the last bar's first beat; under reduced motion it is there.
+        returning: !lastBar ? 0 : still ? 1 : easeInOutCubic(Math.min(1, barAge / (beatSec * 0.9))),
+      },
     });
     this.drawFlawless(geo.face.centerX, centres, geo.faceCentreY, now);
 
@@ -1867,8 +1933,17 @@ export class PlayScene extends BaseScene {
     const gap = 20 * s, y = safe.top + 58 * s;
     const g = this.taskMarks.clear();
     const f = faces(this.definition.ink);
+    // A level with a breather marks its midpoint: a short tick between the last task before
+    // the rest and the rest's own, with half a gap either side of it.
+    const breather = breatherTask(count);
+    const split = breather > 0 ? gap * 0.3 : 0;
+    const at = (i: number) => safe.centerX + (i - (count - 1) / 2) * gap + (breather > 0 ? (i >= breather ? split : -split) : 0);
+    if (breather > 0) {
+      const tx = (at(breather - 1) + at(breather)) / 2;
+      g.lineStyle(2.5 * s, PALETTE.muted, 0.9).lineBetween(tx, y - 7 * s, tx, y + 7 * s);
+    }
     for (let i = 0; i < count; i++) {
-      const x = safe.centerX + (i - (count - 1) / 2) * gap;
+      const x = at(i);
       const done = i < this.taskIndex || this.summaryShown;
       const current = i === this.taskIndex && !this.summaryShown && !this.intro;
       const r = (current ? 5.5 : 4.5) * s;

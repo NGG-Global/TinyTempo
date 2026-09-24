@@ -1,3 +1,4 @@
+import { PROGRESSION } from '@/config/progression';
 import { RHYTHM } from '@/config/rhythm';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
@@ -83,6 +84,60 @@ export function countIn(plan: RoundPlan | null, now: number, beats = 4): number 
   let filled = 0;
   for (const cue of last) if (cue.time <= now) filled++;
   return filled;
+}
+
+/**
+ * Where a breather is: which of its bars, and which beat of that bar was heard last.
+ *
+ * The breather used to be sixteen beats of nothing but the word "Breathe" and then, in its
+ * last four, the count-in's pips; a player could not tell how long the rest was or how far
+ * into it they were. This is what the turn block shows instead — four bar tiles of four
+ * beats — and it is the same intent `countIn` states: a rest, **not** a count to sixteen.
+ * Beats are grouped into bars and never numbered.
+ *
+ * A function of the plan's own lead cues and the audio clock, like `countIn`, so it adds
+ * no cue and moves none. `bars` is the breather's length; any other lead-in — a level's
+ * opening bar, a finale's longer opening — is not a breather and returns null, as does the
+ * moment the demonstration starts. One beat of warning before the first cue, `beat` is -1:
+ * the tiles arrive rather than appearing with a beat already played.
+ */
+export interface RestProgress {
+  /** The bar the rest is in, from 0. */
+  readonly bar: number;
+  /** The last beat heard in that bar, from 0; -1 in the beat of warning before the first. */
+  readonly beat: number;
+  readonly bars: number;
+  /** When that beat sounded, for a tile's press; -Infinity before the first. */
+  readonly at: number;
+}
+
+export function restProgress(plan: RoundPlan | null, now: number, bars: number = PROGRESSION.breatherBars): RestProgress | null {
+  if (!plan || !Number.isFinite(now) || now >= plan.demo || !(bars > 0)) return null;
+  const lead = plan.cues.filter(cue => cue.kind !== 'action');
+  if (lead.length !== bars * RHYTHM.beatsPerBar) return null;
+  const beat = 60 / plan.bpm;
+  if (now < lead[0]!.time - beat) return null;
+  let heard = 0;
+  for (const cue of lead) if (cue.time <= now) heard++;
+  if (heard === 0) return { bar: 0, beat: -1, bars, at: -Infinity };
+  const index = heard - 1;
+  return { bar: Math.floor(index / RHYTHM.beatsPerBar), beat: index % RHYTHM.beatsPerBar, bars, at: lead[index]!.time };
+}
+
+/** The breather's last bar: where the rest hands over to the count-in and the next example. */
+export function isLastRestBar(rest: RestProgress | null): boolean {
+  return rest !== null && rest.bar >= rest.bars - 1;
+}
+
+/**
+ * The words a breather carries: the headline and the label under it, and the line under
+ * the face. "3 bars to go" counts the bars after this one, so the line runs 3, 2, 1 and
+ * clears for the last, which the count-in and "Get ready" have instead.
+ */
+export function restCopy(rest: RestProgress): { readonly headline: string; readonly label: string; readonly caption: string } {
+  if (isLastRestBar(rest)) return { headline: 'Get ready', label: 'Last bar', caption: '' };
+  const left = rest.bars - rest.bar - 1;
+  return { headline: 'Breathe', label: 'Halfway', caption: `${left} ${left === 1 ? 'bar' : 'bars'} to go` };
 }
 
 /**

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
   batonAt, batonCrossing, batonTrail, blockGeometry, blockWidth, columnRoom, dropLine, faceHeat, faceLift, glyphFlip,
-  landingRipple, landingSquash, socketFuse, socketPop, TRACK,
+  landingRipple, landingSquash, restTiles, socketFuse, socketPop, tileGrowth, TRACK,
 } from '../src/ui/turnBlock';
 import type { Handover } from '../src/game/beatTrack';
 
@@ -196,5 +196,43 @@ describe('the pattern dropping into the sockets', () => {
     expect(lit).toBeGreaterThan(0);
     expect(dropLine(turn(1, 1), 0, false)).toBeLessThan(lit);
     expect(dropLine(turn(1, 1), 0, false)).toBeGreaterThan(0);
+  });
+});
+
+describe('the breather on the block', () => {
+  it('lays four bar tiles on the face, after the owner slot and inside the edge', () => {
+    for (const s of [0.9, 1, 1.113]) {
+      for (const width of [TRACK.restWidth * s, 640 * s]) {
+        const tiles = restTiles(width, s, 4);
+        expect(tiles).toHaveLength(4);
+        const slotEdge = (TRACK.ownerInset + TRACK.ownerSlotRadius) * s;
+        expect(tiles[0]!.x).toBeGreaterThan(slotEdge);
+        expect(tiles.at(-1)!.x + tiles.at(-1)!.width).toBeLessThanOrEqual(width - TRACK.tileInset * s + 1e-9);
+        for (let k = 1; k < tiles.length; k++) {
+          expect(tiles[k]!.width).toBeCloseTo(tiles[0]!.width, 9);
+          expect(tiles[k]!.x - (tiles[k - 1]!.x + tiles[k - 1]!.width)).toBeCloseTo(TRACK.tileGap * s, 9);
+        }
+        for (const tile of tiles) {
+          expect(tile.height).toBeLessThan(TRACK.plateHeight * s);
+          // Four dots inside the tile, and the grown ones still clear of each other.
+          expect(tile.dots).toHaveLength(4);
+          expect(tile.dots[0]! - TRACK.pipRadius * s).toBeGreaterThan(0);
+          expect(tile.dots[3]! + TRACK.pipRadius * s).toBeLessThan(tile.width);
+          expect(tile.dots[1]! - tile.dots[0]!).toBeGreaterThan(TRACK.pipRadius * s * 2.5);
+        }
+      }
+    }
+    expect(restTiles(0, 1, 4)).toEqual([]);
+    expect(restTiles(560, 1, 0)).toEqual([]);
+  });
+
+  it('grows the last bar\'s dots to pip size, and only the last bar\'s', () => {
+    const rest = (bar: number, barAge: number) => ({ bar, beat: 0, bars: 4, pressAge: 0, barAge, returning: 0 });
+    expect(tileGrowth(rest(2, 5), false)).toBe(0);
+    expect(tileGrowth(rest(3, 0), false)).toBe(0);
+    expect(tileGrowth(rest(3, 0.1), false)).toBeGreaterThan(0);
+    expect(tileGrowth(rest(3, 1), false)).toBe(1);
+    // Under reduced motion there is no growing, only grown.
+    expect(tileGrowth(rest(3, 0), true)).toBe(1);
   });
 });

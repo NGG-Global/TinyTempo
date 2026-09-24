@@ -61,6 +61,21 @@ export const TRACK = {
   faceLift: 15,
   /** How far the baton bows out, over the columns it is handing across. */
   batonBow: 60,
+
+  /** The breather's bar tiles on the face: height, corner, gap, and the right-hand inset. */
+  tileHeight: 44,
+  tileRadius: 12,
+  tileGap: 10,
+  tileInset: 22,
+  /** A tile's beat dots, and their pitch; in the last bar they grow to `pipRadius`. */
+  tileDot: 5,
+  tileDotPitch: 0.2,
+  /**
+   * The narrowest the block is while a breather's tiles are on it, so four bars of four
+   * dots stay readable on a short pattern's block. The breather task's own plan carries it
+   * from the rest through its response, so nothing moves inside the task.
+   */
+  restWidth: 560,
 } as const;
 
 /**
@@ -177,6 +192,60 @@ export interface BlockState {
   readonly landed: number;
   /** Seconds since every beat of the task was judged Perfect; omitted or -Infinity otherwise. */
   readonly flawless?: number;
+  /** A breather in progress: the face carries its bar tiles instead of the sockets. */
+  readonly rest?: BlockRest | null;
+}
+
+/**
+ * The breather, as the block draws it: four bar tiles of four beat dots on the face, and
+ * the shelf at rest. Every value comes from `restProgress` and the audio clock.
+ */
+export interface BlockRest {
+  readonly bar: number;
+  /** The last beat heard in the bar, from 0; -1 before the first. */
+  readonly beat: number;
+  readonly bars: number;
+  /** Seconds since that beat, for the tile's press; Infinity before the first. */
+  readonly pressAge: number;
+  /** Seconds since the current bar's first beat. */
+  readonly barAge: number;
+  /** 0 → 1 as the baton goes back to the hammer slot in the last bar; 0 during the rest. */
+  readonly returning: number;
+}
+
+/** A bar tile's place on the face, as offsets from the face's own left edge and centre line. */
+export interface RestTile {
+  readonly x: number;
+  readonly width: number;
+  readonly height: number;
+  /** The four dot centres, as offsets from the tile's left edge. */
+  readonly dots: readonly number[];
+}
+
+/**
+ * Where the breather's tiles sit on a face of `width`: after the owner slot and its
+ * clearance, and in from the right edge by the same inset, evenly split with a gap
+ * between. Pure, so the one property that matters — no tile under the slot, none off the
+ * face — is checked under node.
+ */
+export function restTiles(width: number, s: number, bars: number): readonly RestTile[] {
+  if (!(bars > 0) || !(width > 0)) return [];
+  const left = (TRACK.ownerInset + TRACK.ownerSlotRadius + TRACK.slotClearance) * s;
+  const right = width - TRACK.tileInset * s;
+  const gap = TRACK.tileGap * s;
+  const tile = Math.max(0, (right - left - gap * (bars - 1)) / bars);
+  return Array.from({ length: bars }, (_, k) => ({
+    x: left + k * (tile + gap),
+    width: tile,
+    height: TRACK.tileHeight * s,
+    dots: [0, 1, 2, 3].map(j => tile / 2 + (j - 1.5) * tile * TRACK.tileDotPitch),
+  }));
+}
+
+/** How far the last bar's dots have grown toward the count-in's pips. */
+export function tileGrowth(rest: BlockRest, still: boolean): number {
+  if (rest.bar < rest.bars - 1) return 0;
+  return still ? 1 : easeOut(clamp01(rest.barAge / 0.22));
 }
 
 /** How far the face has warmed toward coral, and how far it has risen into the thumb. */
@@ -277,6 +346,7 @@ export function socketFuse(turn: Handover, index: number, still: boolean): numbe
 
 /** The whole block, in one pass over one Graphics. */
 export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState): void {
+  if (state.rest) { drawRestBlock(g, geo, s, state, state.rest); return; }
   const { turn, still, rattle } = state;
   const heat = faceHeat(turn, still);
   const lift = faceLift(turn, still);
@@ -286,8 +356,57 @@ export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s:
   drawBaton(g, geo, s, turn, still, lift, rattle, state.landed);
 }
 
+/**
+ * The block through a breather: the shelf at rest, the face carrying four bar tiles, and —
+ * in the last bar only — the baton going back to the hammer slot and the example's beads
+ * returning to the shelf, so the next demonstration is expected before it starts. Nothing
+ * here is warmed or lifted: the turn is nobody's.
+ */
+function drawRestBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, rest: BlockRest): void {
+  const last = rest.bar >= rest.bars - 1;
+  drawShelf(g, geo, s, state, 0, last);
+  const fill = mix(PALETTE.paper, SHELL.wood, 0.16);
+  const plate = new Phaser.Geom.Rectangle(geo.face.x, geo.face.y, geo.face.width, geo.face.height);
+  drawPanel(g, plate, s, { fill, depth: TRACK.plateDepth, radius: TRACK.plateRadius });
+  const grow = tileGrowth(rest, state.still);
+  const press = state.still ? 0 : squash(rest.pressAge, 0.24, 1);
+  restTiles(geo.face.width, s, rest.bars).forEach((tile, k) => {
+    const done = k < rest.bar;
+    const current = k === rest.bar;
+    // The current tile dips on each beat, the press a key gives under a finger.
+    const dip = current ? press * 2.5 * s : 0;
+    const x = geo.face.x + tile.x, y = geo.faceCentreY - tile.height / 2 + dip;
+    const r = TRACK.tileRadius * s;
+    if (done) {
+      // Recessed: the hole first and the tile inside it, a hard shadow along the top.
+      g.fillStyle(0x000000, 0.2).fillRoundedRect(x, y, tile.width, tile.height, r);
+      g.fillStyle(mix(fill, RECESS, 0.2), 1).fillRoundedRect(x, y + 3 * s, tile.width, tile.height - 3 * s, r);
+    } else {
+      g.fillStyle(shade(fill, -0.18), 1).fillRoundedRect(x, y + 3 * s, tile.width, tile.height, r);
+      g.fillStyle(mix(fill, SHELL.cream, 0.6), 1).fillRoundedRect(x, y, tile.width, tile.height, r);
+    }
+    if (current) g.lineStyle(3 * s, PALETTE.ink, 1).strokeRoundedRect(x, y, tile.width, tile.height, r);
+    const lastTile = k === rest.bars - 1;
+    const radius = (TRACK.tileDot + (lastTile ? (TRACK.pipRadius - TRACK.tileDot) * grow : 0)) * s;
+    tile.dots.forEach((dx, j) => {
+      const played = done || (current && j <= rest.beat);
+      const cx = x + dx, cy = y + tile.height / 2 + (done ? 1.5 * s : 0);
+      if (played) {
+        const pop = current && j === rest.beat && !state.still ? squash(rest.pressAge, 0.24, 0.35) : 0;
+        g.fillStyle(PALETTE.ink, done ? 0.8 : 1).fillCircle(cx, cy, radius * (1 + pop));
+      } else {
+        g.lineStyle(2 * s, PALETTE.muted, 1).strokeCircle(cx, cy, radius);
+      }
+    });
+  });
+  drawOwnerSlots(g, geo, s, { runway: 0, yours: 0 }, fill, 0, 0, last ? 1 : 0.4);
+  // In the last bar the baton goes back to the hammer slot, over the face it was handed
+  // to: the turn is about to be theirs again. Under reduced motion it is simply there.
+  if (last) drawBaton(g, geo, s, { runway: 1 - rest.returning, yours: 0 }, state.still, 0, 0, -Infinity);
+}
+
 /** The demonstration's row: a plank recessed into the scene, and the beats landing on it. */
-function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, rattle: number): void {
+function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, rattle: number, beads = true): void {
   // Their side goes quiet once the turn has passed, rather than disappearing: the
   // pattern that has just been played is what the player is answering.
   const alpha = 1 - 0.5 * state.turn.yours;
@@ -316,6 +435,8 @@ function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
     .fillRect(x + inner, plankTop + plankHeight * 0.55, Math.max(0, shelf.width - inner * 2), plankHeight * 0.45);
   g.fillStyle(SHELL.cream, 0.14 * alpha)
     .fillRect(x + inner, shelf.y + shelf.height - lip, Math.max(0, shelf.width - inner * 2), lip);
+  // At rest the shelf carries its label instead of the example's beads; the scene sets it.
+  if (!beads) return;
 
   const radius = TRACK.shelfBeadRadius * s;
   for (let i = 0; i < state.centres.length; i++) {
@@ -439,10 +560,11 @@ function drawFlawless(
  */
 function drawOwnerSlots(
   g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, turn: Handover, face: number, lift: number, rattle: number,
+  dim = 1,
 ): void {
   const r = TRACK.ownerSlotRadius * s;
   const glyph = r * 0.62;
-  const shelfAlpha = 1 - 0.5 * turn.yours;
+  const shelfAlpha = (1 - 0.5 * turn.yours) * dim;
   if (shelfAlpha > 0.01) {
     const sx = geo.shelfSlot.x + rattle;
     g.fillStyle(0x000000, 0.3 * shelfAlpha).fillCircle(sx, geo.shelfSlot.y, r);
