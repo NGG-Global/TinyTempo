@@ -314,7 +314,7 @@ it('plays the middle coda where an act has one, and clears the room before the n
   engine.dispose();
 });
 
-it('keeps both arrangements and the separate title theme under the same global mute', async () => {
+it('keeps both arrangements under the same global mute', async () => {
   const gainNodes: { gain: { value: number; setValueAtTime: ReturnType<typeof vi.fn> } }[] = [];
   vi.stubGlobal('AudioContext', class {
     currentTime = 10; state = 'running'; sampleRate = 100; destination = {};
@@ -343,11 +343,8 @@ it('keeps both arrangements and the separate title theme under the same global m
     await engine.music.load(id); engine.music.start(12);
     expect(engine.muted).toBe(true);
     expect(gainNodes[0]!.gain.setValueAtTime).toHaveBeenLastCalledWith(0, 10);
-    expect(engine.theme.playing).toBe(false);
   }
   engine.music.stop();
-  await engine.theme.enter();
-  expect(engine.theme.playing).toBe(true);
   expect(engine.music.activeSources).toBe(0);
   expect(engine.music.arrangementId).toBe('b');
   expect(gainNodes[0]!.gain.setValueAtTime).toHaveBeenLastCalledWith(0, 10);

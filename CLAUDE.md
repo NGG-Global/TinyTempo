@@ -317,19 +317,16 @@ sample eleven times running.
 
 Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
 (`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
-**The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
-`bgm/theme/cozy-quest.mp3` on `MenuScene` and stops on every way out, with its own player
-rather than a mode inside `MusicSystem`, because every guarantee that system makes is
-about a beat grid a level is judged against and the menu is judged against nothing. A
-browser will not sound it until the page has been touched, so it fetches nothing on a cold
-start and every tap that leaves the player on the title screen asks again.
-The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. The same loop is the **shell bed** on settings and the map
-(`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
-reuse the one source, a level fades it out and starts a fresh source on its own
-downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
-the track from a scene without going through the bed is how a leftover level
-and the menu overlap.
+**It is the only music in the game.** A second track played the title screen for a while
+(`audio/ThemeMusic.ts`, `bgm/theme/cozy-quest.mp3`) and was removed because it did not sit
+on the beat the rest of the game is judged against; the menu is quiet on a cold start and
+otherwise plays the same loop as every other shell screen. The `AudioEngine` is game-wide
+via `audio/sharedAudio.ts` and is unlocked by the menu's PLAY tap. The one loop is the
+**shell bed** on the menu, settings and the map (`audio/musicBed.ts`): PLAY starts it, those
+screens reuse the one source through `ensureShellMusic`, a level fades it out and starts a
+fresh source on its own downbeat, and Tap offset cuts it so the metronome is the only
+pulse. Starting the track from a scene without going through the bed is how a leftover
+level and the menu overlap.
 
 Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from
@@ -609,7 +606,6 @@ src/
     AudioClock.ts      DOM event time to output time, plus the input offset
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
     musicBed.ts        Shell, level or silent: which job the one loop is doing
-    ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
