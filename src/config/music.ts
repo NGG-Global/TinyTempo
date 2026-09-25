@@ -1,6 +1,4 @@
-import bEdit from '../../bgm/arrangement-b/edit.json';
-
-/** Shared playback policy and the original A model, preserved for compatibility. */
+/** Musical model of the shipped track. */
 export const MUSIC = {
   // Measured from the delivered files (see docs/MUSIC.md): 120 BPM, 60 bars, every stem
   // 119.925 s. The first downbeat sits about 0.156 s into the WAV, and the file ends 75 ms
@@ -34,36 +32,31 @@ export const MUSIC = {
   // that peaked at +2.7 dBFS. This gain gives that back: 0.4 / 0.710, so the track sits at
   // exactly the level the seven stems did, and the bus still supplies SFX headroom.
   masterGain: 0.5632,
-  // Bound unavailable downloads/decodes; serialization still prevents overlapping decodes.
-  loadTimeoutMs: 12_000,
+  // One premixed stereo track, written by `npm run music:encode` from the WAV masters in
+  // bgm/. Nothing mixes stems at runtime, and seven decodes cost ~307 MiB of float PCM.
+  url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
 } as const;
-
-export interface GameplayArrangement {
-  readonly url: string;
-  readonly sourceBpm: number;
-  readonly bars: number;
-  readonly gain: number;
-  /** Correct a residual lossy-codec seam over the final few milliseconds, without moving beats. */
-  readonly seamRampSec?: number;
-  readonly leadIn: { readonly threshold: number; readonly fallbackSec: number; readonly minSec: number; readonly maxSec: number };
-}
-
-export const GAMEPLAY_ARRANGEMENTS = {
-  a: {
-    url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
-    sourceBpm: MUSIC.sourceBpm, bars: MUSIC.bars, gain: MUSIC.masterGain, leadIn: MUSIC.leadIn,
-  },
-  b: {
-    url: new URL('../../bgm/mix/tiny-tempo-b.mp3', import.meta.url).href,
-    sourceBpm: bEdit.sourceBpm, bars: bEdit.bars,
-    // Matched to A after real MP3 decoding; see docs/MUSIC.md for both context rates.
-    gain: 0.3843, seamRampSec: 0.003,
-    leadIn: { threshold: 0.05, fallbackSec: 0.1751, minSec: 0.12, maxSec: 0.22 },
-  },
-} as const satisfies Record<string, GameplayArrangement>;
-export type ArrangementId = keyof typeof GAMEPLAY_ARRANGEMENTS;
-export const ARRANGEMENT_CYCLE: readonly ArrangementId[] = ['a', 'b'];
+/**
+ * The title theme. A second track, and deliberately not part of the model above.
+ *
+ * Nothing on the menu is judged, scheduled or counted against it, so it needs none of
+ * what `MUSIC` describes: no measured downbeat, no whole-bar loop, no tempo changes. It
+ * only has to start, loop and get out of the way — which is why it has its own small
+ * player rather than a second mode inside `MusicSystem`, where every one of those
+ * guarantees would have to be made optional.
+ *
+ * `gain` matches it to the gameplay track by measurement rather than by ear: the mix
+ * sits at −18.2 dB RMS against the premix's −21.2 dB, so at 0.4 the two are heard at the
+ * same level and the switch from the title screen into a level is not a jump.
+ */
+export const THEME = {
+  gain: 0.4,
+  /** Long enough not to be a cut, short enough that leaving the menu feels immediate. */
+  fadeInSec: 1.2,
+  fadeOutSec: 0.45,
+  url: new URL('../../bgm/theme/cozy-quest.mp3', import.meta.url).href,
+} as const;
 
 export const pickupSeconds = (bpm: number, beats: number): number => beats * 60 / bpm;
 /** Exact loop length in seconds: whole bars at the source tempo. */
-export const loopSeconds = (arrangement: GameplayArrangement = GAMEPLAY_ARRANGEMENTS.a): number => arrangement.bars * MUSIC.beatsPerBar * 60 / arrangement.sourceBpm;
+export const loopSeconds = (): number => MUSIC.bars * MUSIC.beatsPerBar * 60 / MUSIC.sourceBpm;

@@ -4,7 +4,6 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
-import { arrangementForLevel } from '@/game/musicSelection';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
@@ -875,8 +874,7 @@ export class PlayScene extends BaseScene {
       }
       await this.audio!.unlock();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
-      await setMusicBed(this.audio!, 'level', { arrangement: arrangementForLevel(this.spec.level) });
-      if (!this.audio!.music.ready) throw new Error('Music is unavailable. Tap Retry.');
+      await this.audio!.music.load();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       // The act's voices are built synchronously below, so the bank has to be decoded
       // first. It never rejects: a sample that did not arrive leaves that act on the
@@ -945,7 +943,7 @@ export class PlayScene extends BaseScene {
     };
     this.struckIndex = -1;
     this.struckAt = this.extraAt = this.verdictAt = -Infinity;
-    this.audio!.music.setBpm(bpm, origin);
+    this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
     // The demonstration half is the plan's own cues; the answered half is the game
     // sounding each target itself. Both go in ahead of time, like every other phrase.
     for (const cue of plan.cues) this.audio!.play(cue.time, cue.kind);
@@ -982,7 +980,7 @@ export class PlayScene extends BaseScene {
       // Seen, once the whole cycle has played. Marking it at the start would have spent
       // the one showing on a player who backed out during the count-in.
       markDemonstrationSeen();
-      this.audio!.music.setBpm(this.task.bpm, teach.taskAt);
+      this.audio!.music.setRate(this.task.bpm / MUSIC.sourceBpm, teach.taskAt);
       this.sequence = new TaskSequence(this.task.bpm, teach.taskAt, 1);
       this.beginTask(teach.taskAt);
     }
@@ -1004,7 +1002,7 @@ export class PlayScene extends BaseScene {
       visit: playAnalytics.beginSubdivisionIntro(grid, this.spec.level, attemptMode(progress, this.spec.level)),
       bpm,
     };
-    this.audio!.music.setBpm(bpm, origin);
+    this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
     this.beginIntroTry(origin);
   }
 
@@ -1078,7 +1076,7 @@ export class PlayScene extends BaseScene {
     // After an introduction the loop is already at full level, and ducking it would read as
     // a fault rather than a build.
     if (startAt === this.levelOrigin) {
-      audio.music.swell(audio.music.defaultGain * PROGRESSION.finale.musicFloor, audio.music.defaultGain, startAt, demo);
+      audio.music.swell(MUSIC.masterGain * PROGRESSION.finale.musicFloor, MUSIC.masterGain, startAt, demo);
     }
   }
 
@@ -1206,7 +1204,7 @@ export class PlayScene extends BaseScene {
         else this.taskIndex++;
         // The music speeds up on the same downbeat the next count-in starts, so the grid and
         // the stems change tempo together. Every task's plan is whole beats, so `next` is on a beat.
-        this.audio.music.setBpm(this.task.bpm, transition.next);
+        this.audio.music.setRate(this.task.bpm / MUSIC.sourceBpm, transition.next);
         this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
         this.beginTask(transition.next);
       }
@@ -1232,7 +1230,7 @@ export class PlayScene extends BaseScene {
     mute.addEventListener('click', () => {
       const music = this.audio?.music;
       if (!music) return;
-      music.setGain(music.gain === 0 ? music.defaultGain : 0);
+      music.setGain(music.gain === 0 ? MUSIC.masterGain : 0);
       mute.style.opacity = music.gain === 0 ? '0.45' : '1';
     });
     panel.appendChild(mute);
@@ -1754,7 +1752,7 @@ export class PlayScene extends BaseScene {
     this.finishUnlock = contact + this.definition.endingSec;
     this.transition = last ? null : { ...ending, swapped: false };
     if (last) {
-      this.audio!.music.setBpm(MUSIC.sourceBpm, ending.next); // back to the 120 BPM shell tempo on the next downbeat
+      this.audio!.music.setRate(1, ending.next); // back to the source tempo on the next downbeat
       // Record here, not when the summary draws. The summary waits out the coda, and a
       // notification in that window used to route through interrupt() and discard a
       // cleared level entirely.
@@ -2338,12 +2336,12 @@ export class PlayScene extends BaseScene {
     if (this.curtain.active) return;
     this.persistAbandonedAttempt();
     // Stop outgoing action voices immediately. The map will claim this loop as the
-    // shell bed at its base rate rather than starting a second source over it.
+    // shell bed at rate 1 rather than starting a second source over it.
     this.controller?.dispose();
     this.transition = null;
     this.replay = null;
     this.audio?.cancel();
-    this.audio?.music.setBpm(MUSIC.sourceBpm, this.audio.context.currentTime);
+    this.audio?.music.setRate(1, this.audio.context.currentTime);
     // The stars this run added are the map's to deliver: they fly from this level's plate
     // into the collection on the bench, and the count there does not move until they land.
     const outcome = this.outcome;

@@ -73,7 +73,8 @@ project rather than an NGG product, whatever the repository host suggests.
 
 ### Real gaps that are not launch blockers
 
-**5. One gameplay loop.** `docs/MUSIC.md` describes a single premixed 60-bar loop at 120
+**5. One gameplay loop.** The title screen has its own track (`audio/ThemeMusic.ts`).
+Everywhere else, `docs/MUSIC.md` describes a single premixed 60-bar loop at 120
 BPM, and the game is endless. A player in a twenty-minute session hears that loop
 roughly twenty times. For a rhythm game this is the largest retention risk on the
 list; the seven WAV stems are already in `bgm/`, so a second arrangement is
