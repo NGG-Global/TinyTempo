@@ -25,6 +25,7 @@ import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelS
 import { areaFinale } from '@/game/finale';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
+import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
@@ -151,6 +152,8 @@ export class PlayScene extends BaseScene {
   /** Computed and persisted the instant the last task resolves; the summary only displays it. */
   private outcome: LevelOutcome | null = null;
   private saveFailed = false;
+  /** The cleared result's Continue, once it has been pressed: the review flow, then the map. */
+  private continuation: Continuation | null = null;
   /** Set once gameplay actually begins; refunds use the same id so a double-finish cannot restore two hearts. */
   private attemptId: string | null = null;
   /** The analytics side of the same attempt: started once, finished or abandoned once. */
@@ -377,6 +380,7 @@ export class PlayScene extends BaseScene {
     // player had already walked away from is exactly the duplicate analytics must not see.
     this.attemptId = null;
     this.outcome = null;
+    this.continuation = null;
     this.levelRun = null;
     this.intro = null;
     this.keepsake = null;
@@ -1072,7 +1076,10 @@ export class PlayScene extends BaseScene {
     this.drawTaskMarks();
   }
   private handleTap(tap: Tap): void {
-    if (this.blocked() || this.curtain.active) return;
+    // Continue pressed: the level is on its way out, through the review flow when there is
+    // one. Every control is inert until the map, so a second tap cannot launch a second
+    // sheet, and the pucks cannot start a restart the map would land on top of.
+    if (this.blocked() || this.curtain.active || this.continuation?.busy) return;
     const near = (at: { x: number; y: number }) => Math.abs(tap.x - at.x) < this.controlSize / 2 && Math.abs(tap.y - at.y) < this.controlSize / 2;
     if (near(this.muteAt)) {
       this.pressPuck('mute');
@@ -1124,7 +1131,7 @@ export class PlayScene extends BaseScene {
     }
     if (phase === 'result') {
       // Cleared: back to the road, centred on what just opened. Failed: straight into another go.
-      if (this.summaryShown) { if (this.levelCleared) this.leaveForMap(); else void this.startRound(); }
+      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound(); }
       return;
     }
     if (!this.audio || !this.controller?.active) return;
@@ -1781,6 +1788,13 @@ export class PlayScene extends BaseScene {
       this.gateLabel.setText(this.gateChip.text.toUpperCase());
     } else this.gateChip = null;
     this.setAction(outcome.cleared ? 'Continue' : 'Try again');
+    // A milestone's review flow is prepared now, in the background, and launched from
+    // Continue, never here: the celebration runs its course and the button is what asks.
+    // Which clears are milestones is `review/appReview.ts`; this scene only reports the facts.
+    const milestone = appReview().offer({
+      level: this.spec.level, cleared: outcome.cleared, finale: this.finaleCleared, saved: !this.saveFailed,
+    });
+    if (milestone) breadcrumb('review offered', { milestone: milestone.id });
     // Placed now that the rows under the plaque are known, then drawn.
     this.placeResult();
     this.drawStars();
@@ -2170,6 +2184,22 @@ export class PlayScene extends BaseScene {
       }
     }
     this.drawStars();
+  }
+  /**
+   * The cleared result's Continue. Not `leaveForMap`, which the map puck and the mid-run
+   * sheet also use: only this exit is where a review milestone's flow is launched, and
+   * it goes to the map on every branch — unavailable, refused, failed or slow included.
+   */
+  private continueFromSummary(): void {
+    if (this.curtain.active) return;
+    this.continuation ??= createContinuation(
+      async () => {
+        const result = await appReview().launch();
+        if (result !== 'skipped') breadcrumb('review launched', { result });
+      },
+      () => { if (!this.disposed) this.leaveForMap(); },
+    );
+    void this.continuation.run();
   }
   private leaveForMap(): void {
     if (this.curtain.active) return;

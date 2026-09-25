@@ -102,6 +102,9 @@ dependencies {
     // Play In-App Updates, used directly by PlayUpdatePlugin. 2.1.0 is the current
     // partitioned artifact and the one that targets API 36.
     implementation "com.google.android.play:app-update:$playAppUpdateVersion"
+    // Play In-App Review, used directly by PlayReviewPlugin. The same partitioned Play Core
+    // family as app-update; the monolithic com.google.android.play:core is not used.
+    implementation "com.google.android.play:review:$playReviewVersion"
     // Play Games Services v2, used directly by PlayGamesPlugin. v2 only: the deprecated
     // com.google.android.gms:play-services-games (v1) must never be added beside it.
     implementation "com.google.android.gms:play-services-games-v2:$playGamesVersion"

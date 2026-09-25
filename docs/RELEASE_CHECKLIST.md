@@ -312,6 +312,11 @@ these is a blocker — but none has been run on a device.
       Play, then the newer one: priority 0–3 should download in the background
       and show the restart sheet on a chrome screen, priority 4–5 should block.
       See `docs/UPDATES.md`.
+- [ ] **Confirm in-app review on a Play-installed build.** The same rule: a sideload
+      gets nothing from `requestReviewFlow`. From a closed-testing install with a
+      fresh store, clear levels 1–10 and tap Continue on the level 10 result; Play's
+      sheet appears at its discretion and the map follows either way. A replay of
+      level 10 and a clear of level 20 must show nothing. See `docs/IN_APP_REVIEW.md`.
 
 ### E. Store listing assets — none of these exist in the repo
 

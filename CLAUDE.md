@@ -698,6 +698,11 @@ src/
     playUpdate.ts      Flexible vs immediate, when to restart; no native import
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
     boot.ts            Native-only check on boot and resume
+  review/
+    appReview.ts       The review milestone, the wait, when the opportunity is spent; no native import
+    reviewRecord.ts    Which milestones this device has tried; never in a save code
+    native.ts          The PlayReview plugin wrap, unloaded in the browser
+    boot.ts            Native-only install; the browser keeps the stub
   vignettes/
     registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
     rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
@@ -938,7 +943,16 @@ is ever lost, taking the registrations with it. See `docs/PLAY_GAMES.md`. In-app
 are the fifth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
 `src/updates/playUpdate.ts` decides flexible vs immediate and when to ask for a restart,
 and a browser or a Studio-sideloaded APK is silent — Play only answers for a package it
-installed. See `docs/UPDATES.md`. Beyond those, the game
+installed. See `docs/UPDATES.md`. In-app review is the sixth, and the same shape again:
+`PlayReviewPlugin.java` holds a `ReviewInfo` and shows it, `src/review/appReview.ts` decides
+which clear is the milestone and when the opportunity is spent, and the browser keeps a stub
+that offers nothing. **The first area finale is the only milestone**: `PlayScene.showSummary`
+reports the facts of a finished level to `offer`, and the cleared result's Continue —
+`continueFromSummary`, never `leaveForMap`, which the map puck also uses — launches the flow
+and goes to the map on every branch. Play does not say whether it showed a dialog, so a
+completed launch means "attempted" and nothing more, and the one stored bit
+(`tiny-tempo.review.v1`) is written when a launch is tried, not when one is offered. See
+`docs/IN_APP_REVIEW.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately
@@ -964,6 +978,6 @@ different app and says nothing.
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are
-file-level and all eight storage keys share one LevelDB store, so nothing can be excluded
+file-level and all nine storage keys share one LevelDB store, so nothing can be excluded
 selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
 a restored backup granting Premium forever.
