@@ -1,5 +1,6 @@
 import { AudioClock } from './AudioClock';
 import { MusicSystem } from './MusicSystem';
+import { ThemeMusic } from './ThemeMusic';
 import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
 
 const TONE = { count: 440, ready: 660, action: 880 } as const;
@@ -61,6 +62,8 @@ export class AudioEngine implements SoundSink {
   public readonly clock = new AudioClock(this.context);
   private readonly master = this.context.createGain();
   public readonly music = new MusicSystem(this.context, this.master);
+  /** The title theme, on the same bus so the mute switch covers it like everything else. */
+  public readonly theme = new ThemeMusic(this.context, this.master);
   private readonly sources = new Map<AudioScheduledSourceNode, GainNode>();
   private sounds: VignetteSounds | null = null;
   /** The action voice's takes, and which one the next beat gets. */
@@ -218,6 +221,7 @@ export class AudioEngine implements SoundSink {
   public dispose(): void {
     if (this.disposed) return;
     this.cancel();
+    this.theme.dispose();
     this.music.dispose();
     this.disposed = true;
     this.context.removeEventListener?.('sinkchange', this.onSink);

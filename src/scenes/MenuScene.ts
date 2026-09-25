@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { setMusicBed } from '@/audio/musicBed';
 import { arrangementForLevel } from '@/game/musicSelection';
-import { ensureShellMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
+import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -124,12 +125,9 @@ export class MenuScene extends BaseScene {
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.enteredAt = performance.now() / 1000;
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
+    this.events.once(Phaser.Scenes.Events.CREATE, () => { this.curtain.reveal(); this.openTheme(); });
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
-    // A return from the map or Settings finds the loop already running as the shell bed
-    // and joins it; on a cold start the context is not running and this does nothing.
-    ensureShellMusic(this);
   }
 
   protected override layout(): void {
@@ -280,6 +278,7 @@ export class MenuScene extends BaseScene {
       this.objectives = markObjectivesSeen(Date.now(), objectiveContext(loadProgress()));
       this.puckDirty = true;
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
+      this.openTheme();
       return;
     }
     if (Math.abs(tap.x - this.muteAt.x) < half && Math.abs(tap.y - this.muteAt.y) < half) {
@@ -287,12 +286,16 @@ export class MenuScene extends BaseScene {
       this.puckPressed = 'mute';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
+      // Unmuting on the title screen should leave something to hear, and this tap is
+      // itself the gesture a cold start was missing.
+      this.openTheme();
       return;
     }
     if (Math.abs(tap.x - this.setupAt.x) < half && Math.abs(tap.y - this.setupAt.y) < half) {
       this.puckPressed = 'setup';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
+      this.closeTheme();
       this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: SceneKey.Menu }));
       return;
     }
@@ -300,6 +303,7 @@ export class MenuScene extends BaseScene {
       this.puckPressed = 'book';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
+      this.closeTheme();
       this.curtain.cover(() => this.scene.start(SceneKey.Scrapbook, { from: SceneKey.Menu }));
       return;
     }
@@ -309,7 +313,60 @@ export class MenuScene extends BaseScene {
       void this.play();
       return;
     }
-    if (Phaser.Geom.Rectangle.Contains(this.tutorialRect, tap.x, tap.y)) void this.play(true);
+    if (Phaser.Geom.Rectangle.Contains(this.tutorialRect, tap.x, tap.y)) { void this.play(true); return; }
+    // Anything else is a tap that stays on the title screen, and on a cold start it is
+    // the first gesture the page has had — which is all a browser was waiting for.
+    this.openTheme();
+  }
+  /**
+   * Play the theme, if the platform will let us yet.
+   *
+   * On a return to the title screen the engine is already unlocked and this simply
+   * starts. On a cold start there has been no gesture, so no audio may sound at all: the
+   * attempt is silent, and the first tap on the menu tries again. Where a platform allows
+   * playback without a gesture — a packaged WebView can — the unlock below succeeds and
+   * the theme comes up on its own.
+   */
+  private openTheme(): void {
+    if (!this.disposed && !this.busy) void this.wakeTheme();
+  }
+
+  /**
+   * Bring the engine up far enough to sound, then play.
+   *
+   * Not `unlock()`: that races a three-second timeout, because it is called from a
+   * gesture and a context that will not resume from one has genuinely failed. Here a
+   * suspended context is the ordinary answer — a browser refuses audio until the page has
+   * been touched — so the attempt is quiet and every tap on the menu asks again. Where
+   * the platform does allow it, which a packaged WebView can, this is what lets the theme
+   * come up on its own.
+   *
+   * This does construct the AudioContext before the PLAY gesture, which the menu used to
+   * avoid. The reason it avoided it was that the mute puck must read a stored setting
+   * rather than an engine — `isMuted` still does, so that reason is intact, and a title
+   * screen with a theme is a title screen that has something to do with a context.
+   */
+  private async wakeTheme(): Promise<void> {
+    if (this.disposed || this.busy) return;
+    const audio = sharedAudio(this);
+    if (audio.context.state !== 'running') {
+      try { await audio.context.resume(); } catch { return; }
+    }
+    // `busy` as well as `disposed`: a resume left pending from the title screen's own
+    // create resolves the moment PLAY grants the gesture credit it was waiting for, and
+    // that is precisely when the player is on their way out. Without this the theme
+    // fetched 3.5 MB to start a track behind a closing curtain.
+    if (this.disposed || this.busy || audio.context.state !== 'running') return;
+    // The gameplay loop is the shell on the map and settings. Coming back to the title
+    // with it still running is the overlap this screen used to ship: hush it, then the
+    // theme is the only thing the menu plays.
+    hushMusic(this, MUSIC.bedFadeSec);
+    await audio.theme.enter();
+  }
+
+  /** The title screen is the only place the theme plays, so every way out stops it. */
+  private closeTheme(): void {
+    currentAudio(this)?.theme.leave();
   }
 
   private async play(tutorial = false): Promise<void> {
@@ -325,7 +382,8 @@ export class MenuScene extends BaseScene {
       await audio.music.load(arrangementForLevel(loadProgress().unlocked));
       if (this.disposed || request !== this.request) return;
       // The gameplay loop is the shell bed from here: start it on the tap that unlocked
-      // audio, so the map and settings share it rather than each starting a copy.
+      // audio, so the map and settings share it rather than each starting a copy. The
+      // title theme is a second track and leaves on closeTheme below.
       await setMusicBed(audio, 'shell', { arrangement: arrangementForLevel(loadProgress().unlocked) });
       if (this.disposed || request !== this.request) return;
       // Warmed here and awaited where it is used. The map is several taps from a level,
@@ -333,6 +391,7 @@ export class MenuScene extends BaseScene {
       void samples.load(audio.context);
       this.playLabel.setText('Play');
       const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || tutorialComplete());
+      this.closeTheme();
       // Which door the lesson was entered by is the difference between a player who was
       // sent there and one who went looking; the tutorial's events carry it.
       const tutorialData = { source: tutorial ? 'menu' : 'first_play' } as const;
@@ -350,6 +409,7 @@ export class MenuScene extends BaseScene {
     ++this.request;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+    this.closeTheme();
     this.taps.dispose();
     this.illustration.destroy();
   }

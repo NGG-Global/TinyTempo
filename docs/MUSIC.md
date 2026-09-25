@@ -1,8 +1,7 @@
 # Music: two premixed gameplay arrangements
 
 TinyTempo plays one selected gameplay premix through `MusicSystem` on the shared
-`AudioContext`. It is the only music in the game: the title screen's separate track was
-removed because it did not sit on the beat. There is no
+`AudioContext`. The title theme remains a separate `ThemeMusic` player. There is no
 runtime stem mixing, arrangement cache, new save field, or arrangement-specific judgement.
 
 ## Assets and provenance
@@ -174,9 +173,10 @@ below its authored pitch. The normalized loops are whole bars to the nearest aud
 At 44.1 kHz B is 5,598,149 frames; at 48 kHz it is 6,093,223 frames.
 
 Judgement, timing windows, `AudioClock`, round plans, calibration, and progression are
-unchanged. Mute still acts on the shared master bus, including both arrangements. Interruption stops the attempt/source; resume starts the same
+unchanged. Mute still acts on the shared master bus, including both arrangements and the
+separate title theme. Interruption stops the attempt/source; resume starts the same
 arrangement from musical zero with a fresh count-in and its base rate. No song choice
-is persisted. Returning to the title keeps the shell bed running under the menu.
+is persisted. Returning to the title silences gameplay and uses the existing title player.
 
 ## Loading, failures, and memory
 
@@ -194,7 +194,7 @@ Measured allocation sizes from real normalized buffers:
 As before, normalizing temporarily holds the new decode plus its new loop copy: about
 85.5 MiB for B at 44.1 kHz, 93.1 MiB at 48 kHz, plus decoder/compressed-data overhead.
 These are buffer sizes, not a measured Android process RSS or a forced-GC guarantee.
-There is no permanent A+B cache.
+There is no permanent A+B cache. The separate title player's existing memory policy is unchanged.
 
 B fetch/decode/normalization failure falls back to a newly loaded A on A's valid grid.
 The requested chapter stays B, preventing repeated retries on every map/settings visit.
@@ -210,11 +210,10 @@ stops/disconnects sources, and prevents late commits.
 
 ## Title theme
 
-There is none. `bgm/theme/cozy-quest.mp3`, `THEME` and `ThemeMusic.ts` played the menu for a
-while and were removed: the track was not on the beat the rest of the game is judged
-against, and a title screen that sounds different from the map it leads into is not
-worth a second player. The menu is silent on a cold start, because nothing may sound
-before the PLAY gesture, and joins the shell bed on every return from the map or Settings.
+`bgm/theme/cozy-quest.mp3`, `THEME`, and `ThemeMusic.ts` are unchanged. The title theme has
+no arrangement ID, normalized gameplay loop, tempo scheduling, or scoring role. Its
+existing gain is 0.4 and it stays on the same master mute bus. It loads only when title
+playback is possible. Gameplay arrangement selection never fetches it.
 
 ## Adding C
 
@@ -228,24 +227,24 @@ before the PLAY gesture, and joins the shell bed on every return from the map or
 4. Add `c` to `ARRANGEMENT_CYCLE` if an A/B/C rotation is intended. That deliberately
    changes chapter assignment; no architecture or save-format change is needed.
 5. Re-encode, measure the actual browser decode, and extend selection/asset tests and
-   phone listening checks. Do not add another resident buffer, a second track or any scoring branch.
+   phone listening checks. Do not add another resident buffer or any scoring branch.
 
 ## Validation and Android listening
 
 Final verification: `npm run typecheck`, `npm run lint`, `npm test` (**87 files / 1,088
 tests**), `npm run build`, and `npm run music:encode` all passed. Thirty tests were added
-across `music.test.ts`, `musicBed.test.ts`, `musicSelection.test.ts`, and `audio.test.ts`.
-No test timeouts were increased. The build retains
+across `music.test.ts`, `musicBed.test.ts`, `musicSelection.test.ts`, and `audio.test.ts`;
+existing title-theme tests also pass. No test timeouts were increased. The build retains
 the existing font-path, unset-Sentry-DSN, and mixed-import warnings.
 
 Tests cover deterministic boundaries/deeper chapters and derived chapter sizes; the
 expanded visual-registry discrepancy; selected-source ownership and buffer release;
 stale fade/load races; fetch/decode/normalization failure and timeout fallback; identical
 BPM, round plans and judgements; per-arrangement loop normalization and B seam correction;
-shared mute; and fresh-count-in resume.
+shared mute; fresh-count-in resume; and separate title playback.
 
 Actual Chromium scene checks exercised frontier 26 → settings (same B source) → level 26
-(correct B origin at 120 BPM) → map → frontier 51 (A) → title (the same shell source),
+(correct B origin at 120 BPM) → map → frontier 51 (A) → title (zero gameplay sources),
 with no page errors. Decoder measurements ran at both 44.1 and 48 kHz. Passing automated
 checks do not substitute for listening to the edited musical join on a phone.
 
@@ -254,7 +253,7 @@ On Android, check:
 1. Leave B playing on the map through at least 128 seconds to hear its complete loop seam.
 2. Compare A/B chapter changes (25→26 and 50→51), then replay an older chapter; listen for
    an intentional fade and correct first count-in, with no track change during a response.
-3. Compare loudness against the vignette SFX at low/high volume.
+3. Compare loudness against the title theme and vignette SFX at low/high volume.
 4. Mute/unmute during B, background/resume, and change output route; confirm a fresh,
    aligned count-in after interruption and no simultaneous gameplay sources.
 5. Block B loading in a debug build: A should take over; with both unavailable, the level
