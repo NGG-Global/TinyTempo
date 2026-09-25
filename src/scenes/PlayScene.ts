@@ -23,8 +23,13 @@ import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
+import { advanceGroove, GROOVE_START, isMastered, type GrooveState } from '@/game/groove';
+import { GrooveStage } from '@/ui/grooveStage';
+import { MASTERY, masteryPose } from '@/ui/groove';
+import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
+import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
@@ -151,6 +156,8 @@ export class PlayScene extends BaseScene {
   /** Computed and persisted the instant the last task resolves; the summary only displays it. */
   private outcome: LevelOutcome | null = null;
   private saveFailed = false;
+  /** The cleared result's Continue, once it has been pressed: the review flow, then the map. */
+  private continuation: Continuation | null = null;
   /** Set once gameplay actually begins; refunds use the same id so a double-finish cannot restore two hearts. */
   private attemptId: string | null = null;
   /** The analytics side of the same attempt: started once, finished or abandoned once. */
@@ -249,6 +256,22 @@ export class PlayScene extends BaseScene {
   private finale: FinaleStage | null = null;
   /** This run cleared a finale, so the result carries the "Area complete" payoff. */
   private finaleCleared = false;
+  /**
+   * How locked in this pass is (`game/groove.ts`): read by the room's light, the block's
+   * edge, the Perfect sparks and the accents, and by nothing that judges or scores.
+   */
+  private groove: GrooveState = GROOVE_START;
+  /** The generic groove treatment: the warm pool behind the act and the rim on the block. */
+  private grooveStage!: GrooveStage;
+  /** The three accents, synthesized once per entry on the shared context. */
+  private grooveVoices: GrooveVoices | null = null;
+  /** The pass that finished was flawless on every scored task: the result's mastery payoff. */
+  private mastered = false;
+  /** When the mastery payoff is due on the audio clock; -Infinity when there is none. */
+  private masteryAt = -Infinity;
+  private masteryStruck = false;
+  private masteryPlate!: Phaser.GameObjects.Graphics;
+  private masteryLabel!: Phaser.GameObjects.Text;
   /** The context time the level's music started, which a finale's opening swell is keyed to. */
   private levelOrigin = -Infinity;
   /**
@@ -377,6 +400,7 @@ export class PlayScene extends BaseScene {
     // player had already walked away from is exactly the duplicate analytics must not see.
     this.attemptId = null;
     this.outcome = null;
+    this.continuation = null;
     this.levelRun = null;
     this.intro = null;
     this.keepsake = null;
@@ -387,6 +411,13 @@ export class PlayScene extends BaseScene {
     setErrorContext('level', this.spec.level);
     setErrorContext('act', this.spec.vignette);
     this.vignette = this.definition.create(this, this.spec.lap);
+    // Under the act and over its backdrop, so the room warms without covering anything in it.
+    this.grooveStage = new GrooveStage(this);
+    this.groove = GROOVE_START;
+    this.grooveVoices = null;
+    this.mastered = false;
+    this.masteryAt = -Infinity;
+    this.masteryStruck = false;
     const ink = this.definition.ink;
     this.stars = this.add.graphics().setDepth(9);
     this.fx = new Feedback(this, 5);
@@ -441,6 +472,8 @@ export class PlayScene extends BaseScene {
     this.chipEarned = [null, null, null];
     this.nextStarPlate = this.add.graphics().setDepth(9).setVisible(false);
     this.finalePlate = this.add.graphics().setDepth(9).setVisible(false);
+    this.masteryPlate = this.add.graphics().setDepth(9).setVisible(false);
+    this.masteryLabel = label(this, 'IN THE POCKET', { size: 24, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.nextStar = body(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCount = display(this, '', { size: 48, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCountLabel = label(this, 'Stars', { size: 20, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -485,6 +518,7 @@ export class PlayScene extends BaseScene {
   protected override layout(): void {
     const { safe, full } = this.viewport;
     this.vignette.layout(this.viewport);
+    this.grooveStage.layout(this.viewport);
     const s = Math.min(safe.width / 720, safe.height / 1150);
     this.uiScale = s;
     const left = safe.centerX - 310 * s;
@@ -774,6 +808,12 @@ export class PlayScene extends BaseScene {
     this.hideKeepsakeCard();
     this.finale?.reset();
     this.finaleCleared = false;
+    // Groove is the pass's, never the level's: a restart starts it cold, and the room with it.
+    this.setGroove(GROOVE_START);
+    this.grooveStage.reset();
+    this.mastered = false;
+    this.masteryAt = -Infinity;
+    this.masteryStruck = false;
     // A restart is a new pass: only the pass that finishes is counted.
     this.tally = { perfect: 0, flawless: 0 };
     this.lastJudgement = '';
@@ -1072,7 +1112,10 @@ export class PlayScene extends BaseScene {
     this.drawTaskMarks();
   }
   private handleTap(tap: Tap): void {
-    if (this.blocked() || this.curtain.active) return;
+    // Continue pressed: the level is on its way out, through the review flow when there is
+    // one. Every control is inert until the map, so a second tap cannot launch a second
+    // sheet, and the pucks cannot start a restart the map would land on top of.
+    if (this.blocked() || this.curtain.active || this.continuation?.busy) return;
     const near = (at: { x: number; y: number }) => Math.abs(tap.x - at.x) < this.controlSize / 2 && Math.abs(tap.y - at.y) < this.controlSize / 2;
     if (near(this.muteAt)) {
       this.pressPuck('mute');
@@ -1124,7 +1167,7 @@ export class PlayScene extends BaseScene {
     }
     if (phase === 'result') {
       // Cleared: back to the road, centred on what just opened. Failed: straight into another go.
-      if (this.summaryShown) { if (this.levelCleared) this.leaveForMap(); else void this.startRound(); }
+      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound(); }
       return;
     }
     if (!this.audio || !this.controller?.active) return;
@@ -1421,10 +1464,16 @@ export class PlayScene extends BaseScene {
     this.verdictAt = now;
     this.verdict.setText(word);
     resize(this.verdict, 38 * this.uiScale, colour);
-    if (result.grade === 'Perfect' && result.kind === 'hit' && !this.reducedMotion) {
-      const { centres } = this.beads();
-      const x = this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0);
-      this.fx.burst('sparks', x, this.trackY, [PALETTE.coral, SHELL.cream], 8);
+    if (result.grade === 'Perfect' && result.kind === 'hit') {
+      // At level 3 the room answers a Perfect too: the pool flares for a moment.
+      if (this.groove.level >= 3) this.grooveStage.flare(now);
+      if (!this.reducedMotion) {
+        const { centres } = this.beads();
+        const x = this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0);
+        // Richer with the groove: a few more sparks, and the sun among them from level 2.
+        const level = this.groove.level;
+        this.fx.burst('sparks', x, this.trackY, level >= 2 ? [PALETTE.coral, SHELL.cream, SHELL.sun] : [PALETTE.coral, SHELL.cream], 8 + (level >= 2 ? 3 : 0) + (level >= 3 ? 3 : 0));
+      }
     }
   }
   private verdictColour(result?: Judgement): number {
@@ -1460,6 +1509,10 @@ export class PlayScene extends BaseScene {
       this.turnCall.setAlpha(0);
       this.flawless.setAlpha(0);
       this.setRestWords(null);
+      // The room settles: a pause, the summary and the idle stage all show no groove,
+      // and the state itself is the pass's, reset with it.
+      this.grooveStage.show(0, now);
+      this.grooveStage.update(now, null, this.reducedMotion);
       return;
     }
     const { safe } = this.viewport;
@@ -1514,6 +1567,11 @@ export class PlayScene extends BaseScene {
         returning: !lastBar ? 0 : still ? 1 : easeInOutCubic(Math.min(1, barAge / (beatSec * 0.9))),
       },
     });
+    // The groove's rim on the face, and the room's breath, from the plan's own bar: the
+    // demonstration downbeat is a bar line, so beat 1 is the level's beat 1.
+    const bar = plan ? { origin: plan.demo, bpm: plan.bpm } : null;
+    this.grooveStage.show(this.groove.level, now);
+    this.grooveStage.drawRim(g, geo.face, TRACK.plateRadius * s, s, this.grooveStage.update(now, bar, still));
     this.drawFlawless(geo.face.centerX, centres, geo.faceCentreY, now);
 
     // The count-in: the last four ticks before the example, so the opening bar is not
@@ -1654,7 +1712,8 @@ export class PlayScene extends BaseScene {
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
     this.tally.perfect += result.perfect;
-    if (isFlawless(this.outcomes)) {
+    const flawless = isFlawless(this.outcomes);
+    if (flawless) {
       this.tally.flawless++;
       this.flawlessAt = this.now();
       this.flawlessSwept = 0;
@@ -1664,9 +1723,24 @@ export class PlayScene extends BaseScene {
     }
     this.results[this.taskIndex] = result.accuracy;
     this.levelRun?.task(this.taskIndex, result);
+    // The one place groove moves: a scored task's verdict. The introduction and the
+    // first-run pass never reach here, so neither can move it. Level 1 is the flourish
+    // above and nothing more; from 2 the room answers (`grooveStage`), and a milestone
+    // is reported once per run.
+    const before = this.groove;
+    this.setGroove(advanceGroove(before, { flawless }));
+    if (this.groove.level > before.level) this.levelRun?.groove(this.groove.level, this.taskIndex);
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
     const contact = ending.contact;
     const last = this.taskIndex >= this.spec.tasks.length - 1;
+    // The accents, on times the level already has: a chime on this coda's contact at
+    // level 3, a shaker on the downbeat the next task's count-in starts on. Decorative,
+    // through the same bus as every voice, and never on a beat the player is copying.
+    if (this.audio && flawless && this.groove.level >= 2) {
+      const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
+      if (this.groove.level >= 3) this.audio.playStinger(contact, voices.chime, 0.3);
+      if (!last) this.audio.playStinger(ending.next, voices.shaker, 0.36);
+    }
     // One decision, read twice: the words on the plaque and the coda that plays under
     // them are the same verdict, so an act with a middle ending never says one and
     // sounds the other.
@@ -1692,6 +1766,12 @@ export class PlayScene extends BaseScene {
     this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
     this.setAction('');
   }
+  /** The groove state, and the act told of a change: only a change, so nothing is called per task. */
+  private setGroove(next: GrooveState): void {
+    const changed = next.level !== this.groove.level;
+    this.groove = next;
+    if (changed) this.vignette.onGroove?.(next.level, this.now());
+  }
   /** Idempotent: the level is scored and saved once, however often this is reached. */
   private recordOutcome(): void {
     if (this.outcome) return;
@@ -1699,9 +1779,12 @@ export class PlayScene extends BaseScene {
     const before = loadProgress();
     const outcome = recordResult(before, this.spec.level, accuracy);
     this.outcome = outcome;
+    // Every scored task flawless, on a cleared level: the result's one extra payoff. It
+    // changes no star, threshold, heart or unlock; the scorer above never saw the groove.
+    this.mastered = isMastered(this.groove, this.spec.tasks.length, outcome.cleared);
     // Beside the save, not the summary: this is the one step every finished run passes
     // exactly once, including the one a notification interrupts during its coda.
-    this.levelRun?.finish(outcome, accuracy);
+    this.levelRun?.finish(outcome, accuracy, this.mastered);
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
     // The player is told, but nobody else was: a device whose storage is blocked loses
@@ -1755,6 +1838,10 @@ export class PlayScene extends BaseScene {
     const outcome = this.outcome!;
     // A cleared finale names the area it closed, and the ribbon over the plaque says so.
     this.finaleCleared = this.finale !== null && outcome.cleared && !this.saveFailed;
+    // The mastery payoff waits for the medals, and on a finale for the ribbon and its card:
+    // Area complete is the bigger thing and goes first; this follows as the smaller one.
+    this.masteryAt = this.mastered ? this.summaryAt + (this.finaleCleared ? MASTERY.finaleDelay : MASTERY.delay) : -Infinity;
+    this.masteryStruck = false;
     this.changeHeadline(this.saveFailed ? 'Couldn’t save' : this.finaleCleared ? this.spec.areaName : outcome.cleared ? 'Cleared' : 'Again?');
     if (this.finaleCleared) {
       const at = this.summaryAt + FINALE_PAYOFF.ribbonDelay;
@@ -1781,6 +1868,13 @@ export class PlayScene extends BaseScene {
       this.gateLabel.setText(this.gateChip.text.toUpperCase());
     } else this.gateChip = null;
     this.setAction(outcome.cleared ? 'Continue' : 'Try again');
+    // A milestone's review flow is prepared now, in the background, and launched from
+    // Continue, never here: the celebration runs its course and the button is what asks.
+    // Which clears are milestones is `review/appReview.ts`; this scene only reports the facts.
+    const milestone = appReview().offer({
+      level: this.spec.level, cleared: outcome.cleared, finale: this.finaleCleared, saved: !this.saveFailed,
+    });
+    if (milestone) breadcrumb('review offered', { milestone: milestone.id });
     // Placed now that the rows under the plaque are known, then drawn.
     this.placeResult();
     this.drawStars();
@@ -1805,6 +1899,7 @@ export class PlayScene extends BaseScene {
     const plan = planResult(frame, {
       refund: summary && this.heartRefunded,
       finale: summary && this.finaleCleared,
+      mastery: summary && this.mastered,
       strip: summary && nextStarCopy(this.summaryStars, this.spec.starAccuracy) !== null,
       keepsake: summary && this.keepsake ? this.measureKeepsakeCard(cardW) : 0,
       replay: summary && this.replayOffered,
@@ -1868,6 +1963,7 @@ export class PlayScene extends BaseScene {
     resize(this.nextStar, 30 * s, PALETTE.ink, STYLE.current, false);
     resize(this.finaleCount, 48 * s, PALETTE.ink);
     resize(this.finaleCountLabel, 20 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.masteryLabel, 24 * s, shade(BRASS, -0.62), STYLE.current, false);
     resize(this.gateLabel, 20 * s, this.gateChip?.ink ?? PALETTE.ink, STYLE.current, false);
     resize(this.replayLabel, 34 * s, SHELL.cream);
   }
@@ -1898,7 +1994,8 @@ export class PlayScene extends BaseScene {
    */
   private drawKeepsakeCard(now: number): void {
     const keepsake = this.keepsake;
-    const age = now - this.summaryAt - KEEPSAKE_CARD.delay - (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0);
+    const age = now - this.summaryAt - KEEPSAKE_CARD.delay - (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0)
+      - (this.mastered ? MASTERY.keepsakeLag : 0);
     if (!this.summaryShown || !keepsake || age < 0) {
       if (this.keepsakeCard.visible) this.hideKeepsakeCard();
       return;
@@ -1996,8 +2093,8 @@ export class PlayScene extends BaseScene {
     for (const chip of this.chipLabels) chip.setVisible(shown);
     this.replayRoot.setVisible(shown && this.replayOffered);
     if (!shown || !this.resultPlan) {
-      for (const plate of [this.nextStarPlate, this.finalePlate]) plate.clear().setVisible(false);
-      for (const text of [this.nextStar, this.finaleCount, this.finaleCountLabel, this.gateLabel]) text.setVisible(false);
+      for (const plate of [this.nextStarPlate, this.finalePlate, this.masteryPlate]) plate.clear().setVisible(false);
+      for (const text of [this.nextStar, this.finaleCount, this.finaleCountLabel, this.gateLabel, this.masteryLabel]) text.setVisible(false);
       return;
     }
     const plan = this.resultPlan;
@@ -2007,13 +2104,23 @@ export class PlayScene extends BaseScene {
     const earned = this.summaryStars;
     const exaggeration = STYLE.current.exaggeration;
     const pose = plaquePose(age, still);
-    const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration);
+    const mastery = masteryPose(this.now() - this.masteryAt, still);
+    const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration) + (mastery?.knock ?? 0);
     const plaqueH = plan.plaqueHeight;
     const drop = (pose.drop + jolt) * plaqueH;
     const width = PLATE.width * s;
     const top = plan.rope;
     const g = this.stars;
     g.setPosition(this.plaqueAt.x, this.plaqueAt.y + drop).setRotation(pose.tilt).setAlpha(pose.alpha);
+
+    // Mastery: a brass ring opening behind the whole plaque, after the chorus has faded.
+    // Behind the ropes and the plate, so it frames the result rather than crossing it.
+    if (mastery && mastery.ring.alpha > 0.01) {
+      const centre = { x: 0, y: top + plaqueH * 0.45 };
+      const reach = width * (0.42 + 0.46 * mastery.ring.spread);
+      g.lineStyle((16 - 11 * mastery.ring.spread) * s, BRASS, mastery.ring.alpha).strokeCircle(centre.x, centre.y, reach);
+      g.lineStyle(4 * s, 0xffe7a0, mastery.ring.alpha * 0.7).strokeCircle(centre.x, centre.y, reach * 0.93);
+    }
 
     // The chorus: a fan of light behind the whole plaque, thrown by the third medal only.
     const burst = still ? { scale: 0, alpha: 0, spin: 0 } : chorusBurst(age, earned);
@@ -2057,7 +2164,8 @@ export class PlayScene extends BaseScene {
           landed = medal.landed;
           drawStarMark(g, {
             x: at.x, y: at.y, radius, color: prizeColour(empty, medal.fill), pose: medal,
-            impactAge: starImpactAge(local, true), chorus: still ? 0 : chorusGlow(age, earned),
+            // The medals glint together once for mastery, on the chorus's own bloom.
+            impactAge: starImpactAge(local, true), chorus: still ? 0 : Math.max(chorusGlow(age, earned), mastery?.flash ?? 0),
           });
         }
       }
@@ -2074,6 +2182,7 @@ export class PlayScene extends BaseScene {
       this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
     }
     this.drawResultRows(age, still);
+    this.drawMasteryRow(mastery, still);
   }
 
   /**
@@ -2098,6 +2207,30 @@ export class PlayScene extends BaseScene {
       text.setColor(hex(earned ? SHELL.cream : PALETTE.ink));
     }
     this.hangText(text, cx, cy, tilt, drop, alpha);
+  }
+
+  /**
+   * The mastery plate under the plaque: brass, like a refunded heart's, with the words
+   * and a star at each end. It stands on the frame, not on the ropes, and arrives with
+   * the ring. Null pose means not yet, or never.
+   */
+  private drawMasteryRow(mastery: ReturnType<typeof masteryPose>, still: boolean): void {
+    const row = this.resultPlan?.rows.find(r => r.kind === 'mastery');
+    const g = this.masteryPlate.clear();
+    if (!row || !mastery) {
+      g.setVisible(false);
+      this.masteryLabel.setVisible(false);
+      return;
+    }
+    const s = this.uiScale, w = Math.min(RESULT_ROWS.replayWidth * s, this.resultRowWidth());
+    const x = this.viewport.safe.centerX - w / 2;
+    const rise = still ? 0 : mastery.label.rise, alpha = still ? 1 : mastery.label.alpha;
+    const y = row.y + rise * 24 * s, cy = y + row.height / 2;
+    g.setVisible(true).setAlpha(alpha);
+    drawPanel(g, new Rect(x, y, w, row.height), s, { fill: BRASS, depth: 6, radius: 18 });
+    drawStar(g, x + 44 * s, cy, 15 * s, STAR_PRIZE);
+    drawStar(g, x + w - 44 * s, cy, 15 * s, STAR_PRIZE);
+    this.masteryLabel.setPosition(this.viewport.safe.centerX, cy).setAlpha(alpha).setVisible(true);
   }
 
   /**
@@ -2148,8 +2281,22 @@ export class PlayScene extends BaseScene {
     const still = this.reducedMotion;
     const summaryAge = now - this.summaryAt;
     const pose = plaquePose(summaryAge, still);
-    const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration)))
+    const mastery = masteryPose(now - this.masteryAt, still);
+    const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration) + (mastery?.knock ?? 0)))
       * (this.resultPlan?.plaqueHeight ?? 0);
+    // Mastery's one strike: the sting, a pulse and sparks over the plaque, as the ring opens.
+    if (mastery && !this.masteryStruck) {
+      this.masteryStruck = true;
+      if (this.audio) {
+        const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
+        this.audio.playStinger(this.masteryAt, voices.sting, 0.42);
+      }
+      vibrate('stamp');
+      if (!still) {
+        const crest = this.hangAt(0, (this.resultPlan?.rope ?? 0) + (this.resultPlan?.plaqueHeight ?? 0) * 0.45, pose.tilt, drop);
+        this.starFx.burst('sparks', crest.x, crest.y, [BRASS, 0xffe7a0, SHELL.cream], 18);
+      }
+    }
     for (let k = 0; k < 3; k++) {
       const age = starAge(summaryAge, k, still);
       const medal = starPose(age, k < earned, STYLE.current.exaggeration);
@@ -2170,6 +2317,22 @@ export class PlayScene extends BaseScene {
       }
     }
     this.drawStars();
+  }
+  /**
+   * The cleared result's Continue. Not `leaveForMap`, which the map puck and the mid-run
+   * sheet also use: only this exit is where a review milestone's flow is launched, and
+   * it goes to the map on every branch — unavailable, refused, failed or slow included.
+   */
+  private continueFromSummary(): void {
+    if (this.curtain.active) return;
+    this.continuation ??= createContinuation(
+      async () => {
+        const result = await appReview().launch();
+        if (result !== 'skipped') breadcrumb('review launched', { result });
+      },
+      () => { if (!this.disposed) this.leaveForMap(); },
+    );
+    void this.continuation.run();
   }
   private leaveForMap(): void {
     if (this.curtain.active) return;
@@ -2380,6 +2543,7 @@ export class PlayScene extends BaseScene {
     this.replayPanel = null;
     this.controller?.dispose();
     this.vignette.destroy();
+    this.grooveStage.destroy();
     this.fx.destroy();
     this.starFx.destroy();
     this.premiumSheen.destroy();

@@ -54,6 +54,8 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   objective_progress: ['objective', 'slot', 'progress', 'target'],
   objective_completed: ['objective', 'slot', 'target', 'completed'],
   daily_objectives_all_completed: ['stamps', 'week'],
+  groove_reached: ['level', 'area', 'vignette', 'mode', 'groove', 'task_index', 'task_count'],
+  level_mastered: ['level', 'area', 'vignette', 'mode', 'task_count', 'accuracy', 'stars'],
   leaderboard_score_submitted: ['leaderboard', 'accuracy', 'new_best', 'retry'],
   leaderboard_submit_failed: ['leaderboard', 'reason', 'retry'],
   leaderboard_opened: ['leaderboard', 'result', 'sign_in'],

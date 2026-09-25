@@ -418,6 +418,11 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     ledger.scrapbookOpened('menu', 3, 32);
     ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
+    // A flawless level: groove 2 and 3 reached, then mastered.
+    const locked = start(2, road(1, 3));
+    const pocket = ledger.beginLevel(locked)!;
+    locked.spec.tasks.forEach((_, i) => { pocket.task(i, task(100, { good: 0 })); if (i === 1) pocket.groove(2, i); if (i === 2) pocket.groove(3, i); });
+    pocket.finish(recordResult(road(1, 3), 2, 100), 100, true);
     // A day of objectives: progress, a completion each, and the stamp.
     let day: ObjectivesState = {
       day: '2026-09-23', stampedDays: [], stamps: 0, seen: 0,
@@ -502,5 +507,44 @@ describe('the small derivations', () => {
     expect(weakestTask([50, 20, 20, 90])).toEqual({ task: 2, accuracy: 20 });
     expect(weakestTask([])).toEqual({ task: 0, accuracy: 0 });
     expect(weakestTask([undefined, 64.6])).toEqual({ task: 2, accuracy: 65 });
+  });
+});
+
+describe('what groove reports', () => {
+  it('reports reaching 2 and 3 once each per attempt, whatever the climbs, and nothing for 1', () => {
+    const run = ledger.beginLevel(start(4, EMPTY))!;
+    run.groove(1, 0);
+    run.groove(2, 1);
+    run.groove(3, 2);
+    run.groove(2, 4);
+    run.groove(3, 5);
+    run.restart();
+    run.groove(2, 1);
+    run.groove(3, 2);
+    const reached = only('groove_reached');
+    expect(reached).toHaveLength(2);
+    expect(reached[0]).toMatchObject({ level: 4, area: 1, vignette: levelSpec(4).vignette, groove: 2, task_index: 2, task_count: levelSpec(4).tasks.length });
+    expect(reached[1]).toMatchObject({ groove: 3, task_index: 3, mode: 'frontier' });
+  });
+
+  it('reports mastery once, beside the completion, and never on a failed or unmastered level', () => {
+    const begin = start(3, EMPTY);
+    const run = ledger.beginLevel(begin)!;
+    begin.spec.tasks.forEach((_, i) => run.task(i, task(100, { good: 0 })));
+    const outcome = recordResult(EMPTY, 3, 100);
+    run.finish(outcome, 100, true);
+    run.finish(outcome, 100, true);
+    expect(only('level_mastered')).toHaveLength(1);
+    expect(only('level_mastered')[0]).toMatchObject({ level: 3, stars: 3, accuracy: 100, task_count: begin.spec.tasks.length });
+    expect(names().indexOf('level_completed')).toBeLessThan(names().indexOf('level_mastered'));
+
+    fresh();
+    playThrough(3, EMPTY, 100);
+    expect(only('level_mastered')).toHaveLength(0);
+    fresh();
+    const failed = ledger.beginLevel(start(3, EMPTY))!;
+    failed.finish(recordResult(EMPTY, 3, 10), 10, true);
+    expect(only('level_mastered')).toHaveLength(0);
+    expect(only('level_failed')).toHaveLength(1);
   });
 });

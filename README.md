@@ -275,6 +275,10 @@ cannot drift; that file says how to re-render it.
   [cucumber](docs/CUCUMBER_KNIFE.md), [banana](docs/BANANA_KNIFE.md).
 - [Music](docs/MUSIC.md) — measured metadata, the premix, and open listening
   questions.
+- [Groove](docs/GROOVE.md) — the room warming with consecutive flawless tasks, and the
+  mastery payoff for a flawless level.
+- [In-app review](docs/IN_APP_REVIEW.md) — the first finale as the one milestone,
+  what Play does and does not say back, and how to test it from a Play install.
 - [Crash reporting](docs/DIAGNOSTICS.md) — the capture layer, the Sentry adapter,
   and the release flow that uploads sourcemaps and then deletes them.
 - [Release readiness](docs/RELEASE_CHECKLIST.md) — what the product is missing

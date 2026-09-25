@@ -55,7 +55,7 @@ if (services === null) {
 }
 
 /*
- * Billing, Play Games and in-app updates are plugins in this module rather than npm
+ * Billing, Play Games, in-app updates and in-app review are plugins in this module rather than npm
  * packages, which buys directness and costs the two guarantees a package would have given.
  * Nothing makes Gradle pull the libraries in, and nothing makes Capacitor register
  * the plugins — `cap` regenerates MainActivity from its own template if the file
@@ -74,6 +74,11 @@ if (!mainActivity.includes('registerPlugin(PlayUpdatePlugin.class)')) {
     + '    offer in-app updates — every install would stay on the version it shipped.\n'
     + '    Add registerPlugin(PlayUpdatePlugin.class) before super.onCreate.');
 }
+if (!mainActivity.includes('registerPlugin(PlayReviewPlugin.class)')) {
+  notes.push('MainActivity.java does not register PlayReviewPlugin, so this build never\n'
+    + '    asks for a review — the first finale would go to the map without one, silently.\n'
+    + '    Add registerPlugin(PlayReviewPlugin.class) before super.onCreate.');
+}
 
 const appGradle = read('android/app/build.gradle') ?? '';
 if (!appGradle.includes('com.android.billingclient:billing')) {
@@ -83,6 +88,10 @@ if (!appGradle.includes('com.android.billingclient:billing')) {
 if (!appGradle.includes('com.google.android.play:app-update')) {
   notes.push('android/app/build.gradle has no com.google.android.play:app-update dependency,\n'
     + '    so PlayUpdatePlugin cannot compile. See docs/UPDATES.md.');
+}
+if (!appGradle.includes('com.google.android.play:review')) {
+  notes.push('android/app/build.gradle has no com.google.android.play:review dependency,\n'
+    + '    so PlayReviewPlugin cannot compile. See docs/IN_APP_REVIEW.md.');
 }
 
 /*

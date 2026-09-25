@@ -48,6 +48,8 @@ export const GAMEPLAY_EVENTS = [
   'objective_progress',
   'objective_completed',
   'daily_objectives_all_completed',
+  'groove_reached',
+  'level_mastered',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -225,6 +227,32 @@ export interface AnalyticsPayloads {
    * A finished level earned its keepsake: three stars where it had fewer. Never sent for a
    * keepsake a player already held — including the ones an existing save owned on arrival.
    */
+  /**
+   * The first time a run reaches groove 2, and the first time it reaches 3: at most two
+   * per attempt, never one per task. Nothing hit by hit.
+   */
+  readonly groove_reached: {
+    readonly level: number;
+    readonly area: number;
+    /** The act's registry id. */
+    readonly vignette: string;
+    readonly mode: AttemptMode;
+    /** 2 or 3. */
+    readonly groove: number;
+    /** 1-based: the scored task whose verdict reached it. */
+    readonly task_index: number;
+    readonly task_count: number;
+  };
+  /** Every scored task flawless on a cleared level. Once per finished attempt, beside `level_completed`. */
+  readonly level_mastered: {
+    readonly level: number;
+    readonly area: number;
+    readonly vignette: string;
+    readonly mode: AttemptMode;
+    readonly task_count: number;
+    readonly accuracy: number;
+    readonly stars: number;
+  };
   readonly collectible_unlocked: {
     /** The act's registry id: 25 values. */
     readonly vignette: string;

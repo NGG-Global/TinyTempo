@@ -130,6 +130,8 @@ export class LevelRun {
   private startedAt: number;
   private restarts = 0;
   private closed = false;
+  /** Groove levels this attempt has reported reaching: 2 and 3 at most, once each. */
+  private readonly grooveReported = new Set<number>();
 
   public constructor(
     private readonly ledger: PlayAnalytics,
@@ -165,10 +167,29 @@ export class LevelRun {
   }
 
   /**
+   * The groove level a scored task's verdict reached (`game/groove.ts`). Only 2 and 3 are
+   * milestones, and each is reported once per attempt however many times the level
+   * climbs back to it: what the dashboard needs is whether the treatment is reached, not
+   * the shape of every climb.
+   */
+  public groove(level: number, taskIndex: number): void {
+    guard(undefined, () => {
+      if (this.closed || level < 2 || this.grooveReported.has(level)) return;
+      this.grooveReported.add(level);
+      this.ledger.emit('groove_reached', {
+        level: this.spec.level, area: this.params.area, vignette: this.spec.vignette, mode: this.params.mode,
+        groove: level, task_index: taskIndex + 1, task_count: this.spec.tasks.length,
+      });
+    });
+  }
+
+  /**
    * The level was scored. Exactly one of `level_completed` and `level_failed`, however
    * often the scene reaches its own record step, followed by what the result changed.
+   * `mastered` is a cleared level every scored task of which was flawless, reported once
+   * beside the completion.
    */
-  public finish(outcome: LevelOutcome, accuracy: number): void {
+  public finish(outcome: LevelOutcome, accuracy: number, mastered = false): void {
     guard(undefined, () => {
       if (this.closed) return;
       this.closed = true;
@@ -184,6 +205,12 @@ export class LevelRun {
       };
       if (outcome.cleared) this.ledger.emit('level_completed', { ...result, stars: outcome.stars });
       else this.ledger.emit('level_failed', result);
+      if (outcome.cleared && mastered) {
+        this.ledger.emit('level_mastered', {
+          level: this.spec.level, area: this.params.area, vignette: this.spec.vignette, mode: this.params.mode,
+          task_count: this.spec.tasks.length, accuracy: result.accuracy, stars: outcome.stars,
+        });
+      }
       // Once per finished finale attempt, from the same single close as the result above.
       if (this.spec.finale) {
         const finale = finaleParams(this.spec, this.params);

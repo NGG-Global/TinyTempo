@@ -81,6 +81,8 @@ export const RESULT_ROWS = {
   gap: 20,
   /** A cleared finale's card: the collection and the next area's gate. */
   finale: 112,
+  /** A full-level flawless run: the brass plate that says so, under the plaque. */
+  mastery: 74,
   /** Short of three stars: what the next one asks. */
   strip: 100,
   replayWidth: 480,
@@ -93,6 +95,8 @@ export const RESULT_ROWS = {
 export interface ResultNeeds {
   readonly refund: boolean;
   readonly finale: boolean;
+  /** Every scored task flawless: the mastery plate. Never with `strip`, since it is three stars. */
+  readonly mastery?: boolean;
   readonly strip: boolean;
   /** The keepsake card's height in world units, or 0 for none. */
   readonly keepsake: number;
@@ -112,7 +116,7 @@ export interface ResultFrame {
   readonly replayHeight: number;
 }
 
-export type ResultRowKind = 'finale' | 'strip' | 'keepsake';
+export type ResultRowKind = 'finale' | 'mastery' | 'strip' | 'keepsake';
 
 export interface ResultPlan {
   /** The ropes' ceiling anchor, and their length. */
@@ -128,7 +132,7 @@ export interface ResultPlan {
 
 /**
  * Stacks the plaque, the rows under it and the replay block over Continue. Rows go in one
- * order — the finale's card, then the next star or the keepsake — so the same thing is
+ * order — the finale's card, the mastery plate, then the next star or the keepsake — so the same thing is
  * always in the same place. On a tall frame this hangs the plaque exactly as it hung
  * before: a fifth of the spare room down from `preferredTop`. On a short one it takes rope
  * first and then shrinks the plaque, never below `minScale`, rather than letting a row run
@@ -140,6 +144,7 @@ export function planResult(frame: ResultFrame, needs: ResultNeeds): ResultPlan {
   const floor = (replayY ?? frame.blockTop) - RESULT_ROWS.margin * s;
   const heights: { kind: ResultRowKind; height: number }[] = [];
   if (needs.finale) heights.push({ kind: 'finale', height: RESULT_ROWS.finale * s });
+  if (needs.mastery) heights.push({ kind: 'mastery', height: RESULT_ROWS.mastery * s });
   if (needs.strip) heights.push({ kind: 'strip', height: RESULT_ROWS.strip * s });
   if (needs.keepsake > 0) heights.push({ kind: 'keepsake', height: needs.keepsake });
   const rowsH = heights.reduce((sum, row) => sum + gap + row.height, 0);
