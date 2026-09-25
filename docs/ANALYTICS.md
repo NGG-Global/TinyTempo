@@ -188,9 +188,12 @@ The cost of not committing it is that a fresh clone builds an APK with no Fireba
 and nothing says so. `scripts/check-android-config.mjs` runs after `cap sync` and says it
 out loud, along with two neighbouring traps: a `google-services.json` from the **wrong**
 Firebase app, which is worse than none because the plugin applies and every event is filed
-under an app this is not, and the two copies of the AdMob app ID drifting apart. Warnings
-rather than errors, because a quick debug APK is a legitimate thing to build without any
-of it.
+under an app this is not, and the two copies of the AdMob app ID drifting apart. Warnings rather than errors, because a quick debug APK is a legitimate thing
+to build without any of it — except on the release path. `npm run android:bundle` passes
+`--release`, and then a build with `VITE_ANALYTICS=on` and no `google-services.json`, or one
+whose file names another app, **refuses** instead. Version 0.1.9 reached Play with analytics
+on and no Firebase in the bundle: every check was green, and the only symptom was a
+dashboard that stayed empty.
 
 ## Gameplay and progression events
 

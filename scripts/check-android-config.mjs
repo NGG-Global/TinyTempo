@@ -14,6 +14,12 @@ import { fileURLToPath } from 'node:url';
  *
  * Warnings, not errors: a debug APK for a quick look on a handset is a legitimate thing
  * to build without any of this, and a script that refuses would just be worked around.
+ *
+ * The release path is the one exception. `--release` (passed by `android:sync:release`)
+ * turns the two Firebase findings into a refusal: a build with analytics switched on and
+ * no `google-services.json`, or a `google-services.json` naming another app. Version 0.1.9
+ * went to Play exactly that way — analytics on, no Firebase in the bundle, every check
+ * green — and the only symptom was a dashboard that stayed empty for a day.
  */
 
 const root = new URL('../', import.meta.url);
@@ -22,12 +28,19 @@ const read = (path) => {
   return existsSync(file) ? readFileSync(file, 'utf8') : null;
 };
 
+const release = process.argv.includes('--release');
 const notes = [];
+/** Findings a release must not ship with; the same warnings, off the release path. */
+const refusals = [];
+const finding = (fatal, note) => (fatal && release ? refusals : notes).push(note);
 
 const services = read('android/app/google-services.json');
-const analyticsOn = (read('.env') ?? '').includes('VITE_ANALYTICS=on');
+// The shell as well as `.env`: Vite reads both, so a release built with the flag exported
+// rather than written down is still a release that expects events.
+const analyticsOn = (read('.env') ?? '').includes('VITE_ANALYTICS=on')
+  || process.env.VITE_ANALYTICS === 'on';
 if (services === null) {
-  notes.push(analyticsOn
+  finding(analyticsOn, analyticsOn
     ? 'VITE_ANALYTICS=on but android/app/google-services.json is missing, so this build\n'
       + '    has no Firebase in it and will send no events. Download it from the Firebase\n'
       + '    console (Project settings -> your Android app). See docs/ANALYTICS.md.'
@@ -36,7 +49,7 @@ if (services === null) {
 } else if (!services.includes('"package_name": "com.tinytempo.app"')) {
   // A file from the wrong Firebase app is worse than none: the plugin applies, the SDK
   // starts, and every event is filed under an app this is not.
-  notes.push('android/app/google-services.json does not name com.tinytempo.app. Firebase\n'
+  finding(true, 'android/app/google-services.json does not name com.tinytempo.app. Firebase\n'
     + '    would file this build\'s events under a different app. Re-download it for the\n'
     + '    right Android app in the Firebase console.');
 }
@@ -250,4 +263,8 @@ if (modeShips && boardId === '') {
 
 if (notes.length > 0) {
   console.warn(`\n  ⚠ ${notes.join('\n\n  ⚠ ')}\n`);
+}
+if (refusals.length > 0) {
+  console.error(`\n  ✗ ${refusals.join('\n\n  ✗ ')}\n\n    This is a release build, so it stops here rather than shipping without Firebase.\n`);
+  process.exit(1);
 }

@@ -218,9 +218,11 @@ export class SettingsScene extends BaseScene {
       analytics: rowTitle('Share usage data'),
       // Kept short on purpose: the switch starts 150 units from the card's right edge, so
       // a note has about 450 design units — roughly forty characters at this size — before
-      // it runs under the knob. It also answers the question a consent row actually raises,
-      // which is what is *not* sent.
-      analyticsNote: rowNote('No name, no progress — offers only'),
+      // it runs under the knob. It names what is sent — levels and their results, and the
+      // offers — as well as what is not, because a consent row that understates what it
+      // covers is not consent to it: "offers only" was true until the gameplay events
+      // joined the same bus.
+      analyticsNote: rowNote('Levels, results and offers — no name'),
       adPrivacy: rowTitle('Ad privacy'),
       adPrivacyNote: rowNote('Manage your ad choices'),
       adPrivacyGo: chip('Open'),
