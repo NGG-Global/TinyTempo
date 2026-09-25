@@ -379,6 +379,20 @@ what makes the token read as handed over. **A task answered Perfect throughout g
 celebration a task has**: `isFlawless` reads the judge's marks, and `ui/flourish.ts` strikes
 *Flawless!* onto the verdict's line and sweeps a light across the face, glinting each socket in
 turn. It is `f(age)` from the audio clock, like everything else on the block.
+**Groove is the room, not a meter** (`game/groove.ts`, `ui/groove.ts`, `ui/grooveStage.ts`):
+a level-local state 0–3 that a flawless task steps up and any other scored task steps down,
+reset on every `startRound`, stored nowhere and read by nothing that judges, scores, paces,
+saves or unlocks — `tests/groove.test.ts` reads those sources to make sure. Level 1 is the
+flawless flourish and nothing more; from 2 a warm pool comes up behind the act and the
+block's face takes a brass edge, breathing with the bar from the plan's own demonstration
+downbeat, beat 1 fullest; at 3 it is plainly lit, a Perfect flares it and a flawless coda
+takes a chime, with a shaker on the next task's downbeat from 2. The accents are
+synthesized (`audio/grooveSounds.ts`) and placed on grid times through `playStinger`. A
+level every scored task of which was flawless is **mastered** (`isMastered`): after the
+medals' chorus a brass ring opens behind the plaque, the medals glint once and an
+**IN THE POCKET** plate takes a row under it (`planResult`'s `mastery`), after a finale's
+card and before a keepsake — nothing is added to the score. `Vignette.onGroove?` is an
+optional hook for an act's own reaction; none implements it. See `docs/GROOVE.md`.
 The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
@@ -598,6 +612,7 @@ src/
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
+    grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
@@ -640,6 +655,7 @@ src/
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
+    groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
   input/
@@ -688,6 +704,8 @@ src/
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
     finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
     finalePose.ts      Their poses as pure f(t)
+    groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
+    grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure

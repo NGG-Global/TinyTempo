@@ -4,6 +4,7 @@ import type { Phase } from '@/game/RoundController';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
 import type { VignetteSounds } from '@/audio/AudioEngine';
+import type { GrooveLevel } from '@/game/groove';
 
 export interface Vignette {
   layout(viewport: Viewport): void;
@@ -23,6 +24,15 @@ export interface Vignette {
    * act walks off screen.
    */
   translate(offset: number): void;
+  /**
+   * Optional: the player's groove level changed (`game/groove.ts`), at `now` on the audio
+   * clock. The generic treatment — the warm pool, the brass rim, the breath on the bar —
+   * is the scene's and every act gets it without this; an act implements it only to add
+   * a reaction of its own (a booth's lights, a porch light, a drum shell's hum), and must
+   * consume nothing of its subject and move no cue. Nothing calls it on a level that has
+   * not changed.
+   */
+  onGroove?(level: GrooveLevel, now: number): void;
   destroy(): void;
 }
 /** The words an act's look may replace: the name on the map, the intro and the two endings. */
