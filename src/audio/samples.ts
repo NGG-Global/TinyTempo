@@ -96,6 +96,12 @@ export function trimToAttack(context: BaseAudioContext, source: AudioBuffer, thr
  */
 export class SampleBank {
   private readonly buffers = new Map<SampleName, AudioBuffer>();
+  /**
+   * Names that failed to arrive for the current context. A level start awaits `load`,
+   * so retrying a miss on every level is a delay in front of the grid for a sample
+   * that will not be there.
+   */
+  private readonly missing = new Set<SampleName>();
   private context: BaseAudioContext | null = null;
   private pending: Promise<void> | null = null;
 
@@ -114,14 +120,16 @@ export class SampleBank {
   public load(context: BaseAudioContext): Promise<void> {
     if (this.context !== context) {
       this.buffers.clear();
+      this.missing.clear();
       this.context = context;
       this.pending = null;
     }
     if (this.pending) return this.pending;
-    if (this.buffers.size === Object.keys(SAMPLE_URLS).length) return Promise.resolve();
-    const names = Object.keys(SAMPLE_URLS) as SampleName[];
-    this.pending = Promise.all(names.map(async name => {
-      if (this.buffers.has(name)) return;
+    const names = (Object.keys(SAMPLE_URLS) as SampleName[]).filter(
+      name => !this.buffers.has(name) && !this.missing.has(name),
+    );
+    if (names.length === 0) return Promise.resolve();
+    const flight = Promise.all(names.map(async name => {
       try {
         const response = await fetch(SAMPLE_URLS[name]);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -130,15 +138,23 @@ export class SampleBank {
         if (this.context !== context) return;
         this.buffers.set(name, trimToAttack(context, decoded));
       } catch (error) {
+        // Only remember the failure for the context that asked. A newer context has
+        // already cleared `missing` and must be allowed to try for itself.
+        if (this.context === context) this.missing.add(name);
         console.warn(`Sound sample "${name}" is unavailable; using the synthesized voice.`, error);
       }
-    })).then(() => undefined).finally(() => { this.pending = null; });
-    return this.pending;
+    })).then(() => undefined);
+    this.pending = flight;
+    // Identity, not a bare clear: a context swap starts a newer flight, and the older
+    // one's `finally` must not drop that newer promise or the next level fetches twice.
+    void flight.finally(() => { if (this.pending === flight) this.pending = null; });
+    return flight;
   }
 
   /** Drops the decoded buffers. The next `load` fetches again. */
   public clear(): void {
     this.buffers.clear();
+    this.missing.clear();
     this.context = null;
     this.pending = null;
   }

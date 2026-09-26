@@ -122,12 +122,29 @@ describe('the sample bank', () => {
 
   it('keeps the samples that did arrive when one of them did not', async () => {
     const table = takes();
-    stubFetch([SAMPLE_URLS.wipe2]);
+    const fetcher = stubFetch([SAMPLE_URLS.wipe2]);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const bank = new SampleBank();
+    const context = fakeContext(url => table[url]!);
+    await bank.load(context);
+    expect(bank.get('wipe1')).not.toBeNull();
+    expect(bank.get('wipe2')).toBeNull();
+    // A later level awaits this same load. The miss stays missed for this context
+    // instead of being fetched again in front of the grid.
+    await bank.load(context);
+    expect(fetcher).toHaveBeenCalledTimes(urls.length);
+    warn.mockRestore();
+  });
+
+  it('tries a missed sample again for a context it has not decoded into', async () => {
+    const table = takes();
+    const fetcher = stubFetch([SAMPLE_URLS.shoe]);
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     const bank = new SampleBank();
     await bank.load(fakeContext(url => table[url]!));
-    expect(bank.get('wipe1')).not.toBeNull();
-    expect(bank.get('wipe2')).toBeNull();
+    const first = fetcher.mock.calls.length;
+    await bank.load(fakeContext(url => table[url]!));
+    expect(fetcher.mock.calls.length).toBe(first + urls.length);
     warn.mockRestore();
   });
 
