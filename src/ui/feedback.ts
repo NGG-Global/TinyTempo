@@ -64,7 +64,10 @@ export class Feedback {
 
   private emitter(preset: Preset, tint: number | number[]): Emitter {
     const existing = this.emitters.get(preset);
-    if (existing) { existing.setParticleTint(Array.isArray(tint) ? tint[0]! : tint); return existing; }
+    // An array is a palette Phaser picks from per particle. Keeping only the first
+    // colour made every burst after the emitter was created a single flat tint, so a
+    // later Perfect and the flawless sweep no longer matched the colours they asked for.
+    if (existing) { existing.setParticleTint(tint); return existing; }
     const config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = { emitting: false, tint };
     switch (preset) {
       case 'dust':

@@ -9,7 +9,7 @@ interface Ramp { readonly to: number; readonly at: number }
 /** Enough of a context to see what the theme asks for, and nothing more. */
 function stub(state: 'running' | 'suspended' = 'running') {
   const ramps: Ramp[] = [];
-  const sources: { loop: boolean; started: boolean; stoppedAt: number | null; buffer: unknown }[] = [];
+  const sources: { loop: boolean; started: boolean; stoppedAt: number | null; buffer: unknown; disconnect: ReturnType<typeof vi.fn> }[] = [];
   const gain = {
     value: 0,
     cancelScheduledValues: vi.fn(),
@@ -77,6 +77,23 @@ describe('the title theme', () => {
     await theme.enter();
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect(sources).toHaveLength(1);
+  });
+
+  it('does not keep a fading copy when the title screen comes back', async () => {
+    // leave() schedules the stop at the end of the fade and drops its playing
+    // reference. Coming back before that stop used to start a second copy on top.
+    vi.stubGlobal('fetch', ok());
+    const { context, sources } = stub();
+    const theme = new ThemeMusic(context, {} as AudioNode);
+    await theme.enter();
+    theme.leave();
+    await theme.enter();
+    expect(theme.playing).toBe(true);
+    expect(sources).toHaveLength(2);
+    expect(sources[0]!.disconnect).toHaveBeenCalled();
+    expect(sources[0]!.stoppedAt).toBe(5 + THEME.fadeOutSec);
+    expect(sources[1]!.started).toBe(true);
+    expect(sources[1]!.stoppedAt).toBeNull();
   });
 
   it('fades out and stops on the way off the title screen', async () => {

@@ -358,8 +358,10 @@ export class MenuScene extends BaseScene {
     if (this.disposed || this.busy || audio.context.state !== 'running') return;
     // The gameplay loop is the shell on the map and settings. Coming back to the title
     // with it still running is the overlap this screen used to ship: hush it, then the
-    // theme is the only thing the menu plays.
-    hushMusic(this, MUSIC.bedFadeSec);
+    // theme is the only thing the menu plays. The hush is a fade, so starting the theme
+    // on the same turn played both until the fade finished.
+    await hushMusic(this, MUSIC.bedFadeSec);
+    if (this.disposed || this.busy || audio.context.state !== 'running') return;
     await audio.theme.enter();
   }
 

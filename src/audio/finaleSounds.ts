@@ -74,9 +74,22 @@ export function synthesizeFinale(sampleRate: number, kind: FinaleSound, beatSec 
   return data;
 }
 
+/**
+ * The fanfare does not depend on tempo, and synthesizing it is a long stretch of
+ * per-sample work — long enough to hitch the medal animation if it is built when the
+ * ribbon asks for it. One buffer per context; the roll stays uncached because its
+ * length is the task's own beat.
+ */
+const fanfareCache = new WeakMap<BaseAudioContext, AudioBuffer>();
+
 export function createFinaleSound(context: BaseAudioContext, kind: FinaleSound, beatSec?: number, rollBeats?: number): AudioBuffer {
+  if (kind === 'fanfare') {
+    const cached = fanfareCache.get(context);
+    if (cached && cached.sampleRate === context.sampleRate) return cached;
+  }
   const samples = synthesizeFinale(context.sampleRate, kind, beatSec, rollBeats);
   const buffer = context.createBuffer(1, samples.length, context.sampleRate);
   buffer.getChannelData(0).set(samples);
+  if (kind === 'fanfare') fanfareCache.set(context, buffer);
   return buffer;
 }

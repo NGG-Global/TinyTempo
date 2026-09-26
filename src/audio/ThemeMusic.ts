@@ -17,6 +17,12 @@ export class ThemeMusic {
   private readonly bus: GainNode;
   private buffer: AudioBuffer | null = null;
   private source: AudioBufferSourceNode | null = null;
+  /**
+   * A source `leave()` has already told to stop at the end of its fade. It is still
+   * audible until then. Dropping the only reference to it is how a quick return to the
+   * title started a second copy over the one that was still fading out.
+   */
+  private fading: AudioBufferSourceNode | null = null;
   private pending: Promise<AudioBuffer> | null = null;
   private disposed = false;
   /** Whether the title screen currently wants it. A load that lands after the player has
@@ -58,22 +64,43 @@ export class ThemeMusic {
   /** The title screen is leaving. Fades rather than cuts, and cancels a pending start. */
   public leave(): void {
     this.wanted = false;
-    this.fade(0, THEME.fadeOutSec);
     const source = this.source;
     this.source = null;
     if (!source) return;
-    try { source.stop(this.context.currentTime + THEME.fadeOutSec); } catch { source.disconnect(); }
+    this.fading = source;
+    this.fade(0, THEME.fadeOutSec);
+    source.onended = () => {
+      source.disconnect();
+      if (this.fading === source) this.fading = null;
+    };
+    try { source.stop(this.context.currentTime + THEME.fadeOutSec); }
+    catch {
+      source.disconnect();
+      if (this.fading === source) this.fading = null;
+    }
   }
 
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.wanted = false;
-    const source = this.source;
+    this.silence(this.source);
     this.source = null;
-    if (source) { source.onended = null; try { source.stop(); } catch { /* already stopped */ } source.disconnect(); }
+    this.silence(this.fading);
+    this.fading = null;
     this.bus.disconnect();
     this.buffer = null;
+  }
+
+  /**
+   * A source that is leaving. `stop` may already have been scheduled by `leave`, and a
+   * second call throws, so the disconnect is what actually takes it out of the mix.
+   */
+  private silence(source: AudioBufferSourceNode | null): void {
+    if (!source) return;
+    source.onended = null;
+    try { source.stop(); } catch { /* The fade already scheduled this stop. */ }
+    try { source.disconnect(); } catch { /* Already disconnected. */ }
   }
 
   private async fetchTrack(): Promise<AudioBuffer> {
@@ -88,6 +115,16 @@ export class ThemeMusic {
   }
 
   private begin(): void {
+    // The outgoing fade is still in the graph until its stop time. Disconnect it before
+    // starting another, or the title plays two copies for the rest of that fade.
+    const fading = this.fading;
+    this.fading = null;
+    if (fading) {
+      // `leave` already scheduled the stop. Clearing the ended handler keeps that
+      // later callback from touching a source the new playback has replaced.
+      fading.onended = null;
+      fading.disconnect();
+    }
     const source = this.context.createBufferSource();
     source.buffer = this.buffer;
     source.loop = true;
