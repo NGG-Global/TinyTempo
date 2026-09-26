@@ -1072,6 +1072,11 @@ export class PlayScene extends BaseScene {
     const demo = startAt + this.task.leadBeats * beat;
     this.finale!.showTitle(startAt, demo - FINALE_PAYOFF.cardClearBeats * beat);
     const rollBeats = Math.min(this.task.leadBeats, RHYTHM.beatsPerBar);
+    // The fanfare is about a second of synthesis. The ribbon wants it while the medals
+    // are already moving; building it here, inside the opening lead-in, is the same work
+    // done where a long frame cannot expire a target. The buffer is cached per context,
+    // so the ribbon and a replay both reuse it.
+    createFinaleSound(audio.context, 'fanfare');
     audio.playStinger(demo - rollBeats * beat, createFinaleSound(audio.context, 'roll', beat, rollBeats), FINALE_PAYOFF.rollGain);
     // After an introduction the loop is already at full level, and ducking it would read as
     // a fault rather than a build.
@@ -1178,7 +1183,7 @@ export class PlayScene extends BaseScene {
     this.puckDirty = true;
   }
   private tick(): void {
-    if (!this.audio || this.blocked()) return;
+    if (this.disposed || !this.audio || this.blocked()) return;
     if (this.audio.context.state !== 'running') {
       // A Bluetooth rebuffer can suspend the context for a frame when the player first
       // sounds. Interrupting here ended the response while the demonstration — whose
@@ -1264,6 +1269,10 @@ export class PlayScene extends BaseScene {
     canvas.dispatchEvent(new MouseEvent('mouseup', { ...options, buttons: 0 }));
   }
   public override update(): void {
+    // Shutdown can still receive the frame that was already queued. Drawing into
+    // objects the scene just destroyed throws, and that throw is reported as a crash
+    // on the way out of a level.
+    if (this.disposed) return;
     const now = this.now();
     this.vignette.update(now);
     const slide = this.transition;
@@ -2481,12 +2490,17 @@ export class PlayScene extends BaseScene {
   }
 
   private showPause(): void {
+    if (this.disposed) return;
     this.vignette.pause();
     this.setIntroCaption('');
     this.changeHeadline('Paused');
     this.setAction('Resume');
   }
   private interrupt(): void {
+    // `pagehide` in main.ts destroys the game before this scene's own listener runs —
+    // both are on the same snapshot — so this can be entered after shutdown has already
+    // destroyed the act and the text. Touching them here is a throw on the way out.
+    if (this.disposed) return;
     ++this.startRequest;
     this.replay = null;
     this.replayOffset = null;
@@ -2523,7 +2537,8 @@ export class PlayScene extends BaseScene {
     if (document.hidden && !this.commerceBusy) this.interrupt();
   };
   private readonly pageHide = (): void => {
-    if (!this.commerceBusy) this.interrupt();
+    if (this.disposed || this.commerceBusy) return;
+    this.interrupt();
   };
   private readonly audioState = (): void => { this.audio?.recover(); };
   private checkOrientation(): void { if (this.blocked()) this.interrupt(); }

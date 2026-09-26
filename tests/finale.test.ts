@@ -14,7 +14,7 @@ import { keepsakeAt } from '../src/game/scrapbook';
 import { starsRequired } from '../src/game/stars';
 import { contrastRatio } from '../src/ui/colour';
 import { FINALE_POSE, buntingPoints, lineShift, pennantSwing, ribbonPose, titleCardPose } from '../src/ui/finalePose';
-import { ROLL_CLEARANCE_SEC, synthesizeFinale } from '../src/audio/finaleSounds';
+import { ROLL_CLEARANCE_SEC, createFinaleSound, synthesizeFinale } from '../src/audio/finaleSounds';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -281,5 +281,23 @@ describe('the sounds', () => {
     }
     // Deterministic: the same buffer every time it is made.
     expect(synthesizeFinale(rate, 'fanfare')).toEqual(fanfare);
+  });
+
+  it('keeps one fanfare buffer per context and still builds each roll', () => {
+    const made: number[] = [];
+    const context = {
+      sampleRate: 8000,
+      createBuffer(_channels: number, length: number, sampleRate: number) {
+        made.push(length);
+        const data = new Float32Array(length);
+        return { length, sampleRate, getChannelData: () => data };
+      },
+    } as unknown as BaseAudioContext;
+    const first = createFinaleSound(context, 'fanfare');
+    expect(createFinaleSound(context, 'fanfare')).toBe(first);
+    expect(made).toHaveLength(1);
+    // The roll's length is the task's beat, so a second tempo is a second buffer.
+    expect(createFinaleSound(context, 'roll', 0.5, 4)).not.toBe(first);
+    expect(made).toHaveLength(2);
   });
 });

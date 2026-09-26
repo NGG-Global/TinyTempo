@@ -63,9 +63,13 @@ export function ensureShellMusic(scene: Phaser.Scene): void {
   void setMusicBed(audio, 'shell');
 }
 
-/** Tap offset, and the curtain into a level. `fadeSec` 0 is an immediate cut. */
-export function hushMusic(scene: Phaser.Scene, fadeSec = 0): void {
+/**
+ * Tap offset, and the curtain into a level. `fadeSec` 0 is an immediate cut.
+ * Resolves once the bed has actually stopped, so a caller that must not overlap it
+ * — the title theme — can wait.
+ */
+export function hushMusic(scene: Phaser.Scene, fadeSec = 0): Promise<void> {
   const audio = currentAudio(scene);
-  if (!audio) return;
-  void setMusicBed(audio, 'silent', { fadeSec });
+  if (!audio) return Promise.resolve();
+  return setMusicBed(audio, 'silent', { fadeSec });
 }
