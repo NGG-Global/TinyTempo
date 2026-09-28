@@ -18,25 +18,26 @@ export const GROOVE_POSE = Object.freeze({
   /** Seconds the room takes to warm up to a new level, or settle back to a lower one. */
   blend: 0.7,
   /** The warm pool behind the act, per level. */
-  glow: [0, 0, 0.3, 0.52] as const,
+  glow: [0, 0, 0.34, 0.54] as const,
   /** The brass edge on the block's face, per level. */
-  rim: [0, 0, 0.32, 0.65] as const,
+  rim: [0, 0, 0.42, 0.76] as const,
   /** The room's breath on a beat: how far the pool swells, as a fraction of its size, per level. */
   breath: [0, 0, 0.012, 0.02] as const,
   /** The downbeat breathes fully; the other three beats less. */
-  offbeat: 0.55,
+  offbeat: 0.3,
   /** How far into the beat the breath peaks, and by when it has let go. */
   breathIn: 0.08,
   breathOut: 0.85,
   /** A Perfect hit at level 3 flares the pool for this long. */
   flare: 0.4,
+  activation: 0.65,
 });
 
 /**
  * Where the room is between two levels: `from` at the change and `to` once `blend` has
  * passed, as a continuous amount from 0 to 3. Under reduced motion the change is at once.
  */
-export function grooveBlend(from: GrooveLevel, to: GrooveLevel, age: number, still = false): number {
+export function grooveBlend(from: number, to: GrooveLevel, age: number, still = false): number {
   if (!Number.isFinite(age) || age < 0) return from;
   if (still) return to;
   return from + (to - from) * easeOut(age / GROOVE_POSE.blend);
@@ -51,11 +52,11 @@ function at(table: readonly [number, number, number, number], amount: number): n
 
 export interface BeatPulse {
   /** 0–3 within the bar. */
-  readonly beat: number;
+  beat: number;
   /** 0–1 through the beat. */
-  readonly phase: number;
+  phase: number;
   /** How much of a breath the room is taking right now, 0–1: fullest just after beat 1. */
-  readonly strength: number;
+  strength: number;
 }
 
 const REST_PULSE: BeatPulse = Object.freeze({ beat: 0, phase: 0, strength: 0 });
@@ -67,7 +68,7 @@ const REST_PULSE: BeatPulse = Object.freeze({ beat: 0, phase: 0, strength: 0 });
  * Continuous across the beat: it rises over the first `breathIn` of a beat and has let go
  * by `breathOut`, so the room never jumps. Still under reduced motion.
  */
-export function beatPulse(now: number, barOrigin: number, bpm: number, still = false): BeatPulse {
+export function beatPulse(now: number, barOrigin: number, bpm: number, still = false, out: BeatPulse = { beat: 0, phase: 0, strength: 0 }): BeatPulse {
   if (still || !(bpm > 0) || !Number.isFinite(now) || !Number.isFinite(barOrigin)) return REST_PULSE;
   const beatSec = 60 / bpm;
   const beats = (now - barOrigin) / beatSec;
@@ -78,18 +79,22 @@ export function beatPulse(now: number, barOrigin: number, bpm: number, still = f
   const shape = phase < P.breathIn
     ? easeOut(phase / P.breathIn)
     : 1 - easeOut((phase - P.breathIn) / (P.breathOut - P.breathIn));
-  return { beat, phase, strength: clamp01(shape) * (beat === 0 ? 1 : P.offbeat) };
+  out.beat = beat; out.phase = phase; out.strength = clamp01(shape) * (beat === 0 ? 1 : P.offbeat);
+  return out;
 }
 
 export interface GroovePose {
   /** The warm pool's alpha, 0 at rest. */
-  readonly glow: number;
+  glow: number;
   /** The pool's size, as a multiple of its laid-out size: 1 plus the breath. */
-  readonly scale: number;
+  scale: number;
   /** The brass edge on the block's face, 0 at rest. */
-  readonly rim: number;
+  rim: number;
   /** How far the pool is tinted from the paper toward the sun, 0–1. */
-  readonly warmth: number;
+  warmth: number;
+  /** Side lighting only joins at 3; it is absent at 2. */
+  sides: number;
+  glint: number;
 }
 
 /**
@@ -98,22 +103,48 @@ export interface GroovePose {
  * extra swell that is gone inside a beat. Under reduced motion the pool and the rim hold
  * their level's value and nothing moves.
  */
-export function groovePose(amount: number, pulse: BeatPulse, flareAge: number, still = false): GroovePose {
+export function groovePose(amount: number, pulse: BeatPulse, flareAge: number, still = false,
+  out: GroovePose = { glow: 0, scale: 1, rim: 0, warmth: 0, sides: 0, glint: 0 }): GroovePose {
   const P = GROOVE_POSE;
   const glow = at(P.glow, amount);
   const rim = at(P.rim, amount);
   const warmth = clamp01(amount / 3);
-  if (still) return { glow, scale: 1, rim, warmth };
-  const breath = at(P.breath, amount) * pulse.strength;
+  const sides = clamp01(amount - 2);
+  const strength = still ? 0 : pulse.strength;
+  const breath = at(P.breath, amount) * strength;
   const flareOn = clamp01(amount - 2);
-  const flare = Number.isFinite(flareAge) && flareAge >= 0 && flareAge < P.flare
+  const flare = !still && Number.isFinite(flareAge) && flareAge >= 0 && flareAge < P.flare
     ? Math.sin(Math.PI * flareAge / P.flare) * 0.08 * flareOn : 0;
-  return {
-    glow: Math.min(1, glow + breath * 4 + flare * 0.5),
-    scale: 1 + breath + flare * 0.25,
-    rim: Math.min(1, rim + breath * 6),
-    warmth,
-  };
+  out.glow = Math.min(1, glow + breath * 4 + flare * 0.5);
+  out.scale = 1 + breath + flare * 0.25;
+  out.rim = Math.min(1, rim + breath * 6);
+  out.warmth = warmth;
+  out.sides = sides * (0.5 + strength * 0.25) + flare;
+  out.glint = sides * (0.25 + strength * 0.25) + flare * 5;
+  return out;
+}
+
+/** Short, single threshold response; never a new beat or a repeating cue. */
+export function grooveActivation(age: number, level: GrooveLevel, still = false): number {
+  if (level < 2 || age < 0 || age >= GROOVE_POSE.activation || !Number.isFinite(age)) return 0;
+  const p = age / GROOVE_POSE.activation;
+  return Math.sin(Math.PI * p) * (level === 3 ? 1 : 0.55) * (still ? 0.3 : 1);
+}
+
+/** Continuous presentation state shared by the room and optional object highlights. */
+export class GrooveEnvelope {
+  private from = 0;
+  private to: GrooveLevel = 0;
+  private at = -Infinity;
+  public amount(now: number): number { return grooveBlend(this.from, this.to, now - this.at); }
+  public show(level: GrooveLevel, now: number): boolean {
+    if (level === this.to) return false;
+    this.from = this.amount(now);
+    this.to = level;
+    this.at = now;
+    return true;
+  }
+  public reset(): void { this.from = this.to = 0; this.at = -Infinity; }
 }
 
 /**
@@ -124,18 +155,19 @@ export function groovePose(amount: number, pulse: BeatPulse, flareAge: number, s
  */
 export const MASTERY = Object.freeze({
   /** Seconds after the summary: past the third medal's chorus, which fades from 0.9 s. */
-  delay: 1.35,
-  /** On a cleared finale: after the ribbon (1.0 s) and its card (1.25 s) have landed. */
-  finaleDelay: 1.9,
+  delay: 1.5,
+  /** After the area's 1.0 s ribbon start plus its complete 1.7 s fanfare. */
+  finaleDelay: 2.75,
   /** The ring's opening, and how long the whole payoff lasts. */
   ring: 0.8,
   hold: 2.2,
   /** The medals' shared glint. */
   flash: 0.5,
   /** The knock the plaque takes, in plaque heights. */
-  knock: 0.035,
-  /** A keepsake earned by the same clear waits this long behind the label, so the two never arrive together. */
-  keepsakeLag: 0.7,
+  knock: 0.018,
+  /** Minimum extra keepsake delay for a mastered result. Also wait for badgeSettle. */
+  keepsakeLag: 1.15,
+  badgeSettle: 0.65,
 });
 
 export interface MasteryPose {

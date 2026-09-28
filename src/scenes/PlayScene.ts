@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
-import { reducedMotion } from '@/core/motionPreference';
+import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
@@ -22,7 +22,7 @@ import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
-import { advanceGroove, GROOVE_START, isMastered, type GrooveState } from '@/game/groove';
+import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
@@ -260,6 +260,10 @@ export class PlayScene extends BaseScene {
    * edge, the Perfect sparks and the accents, and by nothing that judges or scores.
    */
   private groove: GrooveState = GROOVE_START;
+  private groovePreview: GrooveLevel | null = null;
+  private previewResult = false;
+  private grooveStudy = false;
+  private grooveHandoff = false;
   /** The generic groove treatment: the warm pool behind the act and the rim on the block. */
   private grooveStage!: GrooveStage;
   /** The three accents, synthesized once per entry on the shared context. */
@@ -384,6 +388,12 @@ export class PlayScene extends BaseScene {
   private lastJudgement = '';
   private replay: { roundId: number; targets: readonly number[]; next: number } | null = null;
   private replayPanel: HTMLElement | null = null;
+  private readonly debugKey = (event: KeyboardEvent): void => {
+    if (event.key.toLowerCase() !== 'h' || !this.replayPanel) return;
+    const visible = this.replayPanel.style.visibility !== 'hidden';
+    this.replayPanel.style.visibility = visible ? 'hidden' : 'visible';
+    this.debug.setVisible(!visible);
+  };
   private pump: ReturnType<typeof setInterval> | null = null;
   /** Last Date.now() we re-read storage on the out-of-hearts WATCH plaque. */
   private watchPollAt = 0;
@@ -413,6 +423,8 @@ export class PlayScene extends BaseScene {
     // Under the act and over its backdrop, so the room warms without covering anything in it.
     this.grooveStage = new GrooveStage(this);
     this.groove = GROOVE_START;
+    this.groovePreview = null;
+    this.previewResult = this.grooveStudy = this.grooveHandoff = false;
     this.grooveVoices = null;
     this.mastered = false;
     this.masteryAt = -Infinity;
@@ -778,7 +790,8 @@ export class PlayScene extends BaseScene {
   private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
-  private async startRound(): Promise<void> {
+  private async startRound(study = false): Promise<void> {
+    const rehearsal = import.meta.env.DEV && study;
     const health = loadHealth();
     const progress = loadProgress();
     const premium = monetization().premium();
@@ -786,7 +799,7 @@ export class PlayScene extends BaseScene {
     // are the same attempt. Try-again after the plaque is a new one (`outcome` is set).
     const resumeId = this.outcome === null ? this.attemptId : null;
     // Gate before tearing anything down: a denied restart must not kill a paid run.
-    if (!canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
+    if (!rehearsal && !canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
       if (this.controller?.active) return;
       this.showNoHearts();
       return;
@@ -808,8 +821,13 @@ export class PlayScene extends BaseScene {
     this.finale?.reset();
     this.finaleCleared = false;
     // Groove is the pass's, never the level's: a restart starts it cold, and the room with it.
+    if (this.groovePreview !== null && this.groove.level === 0) this.vignette.onGroove?.(0, this.now());
     this.setGroove(GROOVE_START);
     this.grooveStage.reset();
+    this.groovePreview = null;
+    this.previewResult = false;
+    this.grooveStudy = false;
+    this.grooveHandoff = false;
     this.mastered = false;
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
@@ -874,6 +892,7 @@ export class PlayScene extends BaseScene {
       }
       await this.audio!.unlock();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
+      this.grooveVoices ??= createGrooveVoices(this.audio!.context);
       await this.audio!.music.load();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       // The act's voices are built synchronously below, so the bank has to be decoded
@@ -888,6 +907,15 @@ export class PlayScene extends BaseScene {
       void setMusicBed(this.audio!, 'level');
       if (this.disposed || request !== this.startRequest || this.blocked()) {
         this.audio!.music.stop();
+        return;
+      }
+      if (rehearsal) {
+        this.attemptId = null;
+        this.levelRun = null;
+        this.grooveStudy = true;
+        this.replayOffset = 0;
+        this.sequence = new TaskSequence(this.task.bpm, origin, 1);
+        this.beginTask(origin);
         return;
       }
       // Spend only once audio is running: a failed unlock/load above never reaches here.
@@ -1162,6 +1190,7 @@ export class PlayScene extends BaseScene {
       if (this.offeringHeart()) return;
       if (this.actionCaption === 'Map') { this.leaveForMap(); return; }
       if (this.outcome !== null) {
+        if (this.previewResult && this.summaryShown) { this.leaveForMap(); return; }
         if (!this.summaryShown) this.showSummary();
         return;
       }
@@ -1212,6 +1241,9 @@ export class PlayScene extends BaseScene {
         this.audio.music.setRate(this.task.bpm / MUSIC.sourceBpm, transition.next);
         this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
         this.beginTask(transition.next);
+        // start() cancels the previous plan's voices. Schedule the handoff AFTER it.
+        if (this.grooveHandoff && this.grooveVoices) this.audio.playStinger(transition.next, this.grooveVoices.shaker, 0.36);
+        this.grooveHandoff = false;
       }
     }
     if (transition && this.now() >= transition.next) this.transition = null;
@@ -1221,7 +1253,7 @@ export class PlayScene extends BaseScene {
   /** Development-only integration exercise: actual DOM mouse events go through TapInput. */
   private installReplayPanel(): void {
     const panel = document.createElement('div');
-    panel.style.cssText = 'position:fixed;left:8px;top:108px;z-index:20;display:flex;flex-direction:column;gap:6px;max-width:118px;';
+    panel.style.cssText = 'position:fixed;left:8px;top:108px;z-index:20;display:flex;flex-direction:column;gap:6px;max-width:118px;max-height:calc(100dvh - 116px);overflow-y:auto;';
     for (const mode of ['Accurate replay', 'Good replay', 'Rough replay', 'Spam replay'] as const) {
       const button = document.createElement('button');
       button.textContent = mode;
@@ -1239,8 +1271,52 @@ export class PlayScene extends BaseScene {
       mute.style.opacity = music.gain === 0 ? '0.45' : '1';
     });
     panel.appendChild(mute);
+    const previews = document.createElement('details');
+    const title = document.createElement('summary');
+    title.textContent = 'Groove preview';
+    previews.style.cssText = 'background:#eee8d8;color:#243e35;font:11px monospace;padding:6px';
+    previews.appendChild(title);
+    const add = (text: string, action: () => void): void => {
+      const button = document.createElement('button');
+      button.textContent = text;
+      button.style.cssText = 'padding:6px;margin:2px;font:11px monospace';
+      button.addEventListener('click', action);
+      previews.appendChild(button);
+    };
+    add('Loop room study', () => { void this.startRound(true); });
+    for (const level of [0, 1, 2, 3] as const) add(`Room ${level}`, () => {
+      if (this.groovePreview === level || this.teach || this.intro) return;
+      this.groovePreview = level;
+      const now = this.now();
+      this.grooveStage.show(level, now, now);
+      this.vignette.onGroove?.(level, now);
+    });
+    add('Perfect flare', () => this.grooveStage.flare(this.now()));
+    add('Reduced motion', () => previewReducedMotion(!reducedMotion()));
+    add('Mastery result', () => {
+      if (!this.audio || !this.controller) return;
+      this.previewResult = true;
+      this.grooveStudy = false;
+      this.summaryShown = false;
+      this.controller.dispose();
+      this.audio.cancel();
+      this.replay = null;
+      this.transition = null;
+      this.teach = null;
+      this.intro = null;
+      this.results = this.spec.tasks.map(() => 100);
+      this.outcome = recordResult(loadProgress(), this.spec.level, 100);
+      this.mastered = true;
+      this.levelCleared = true;
+      this.saveFailed = false;
+      this.keepsake = null;
+      this.heartRefunded = false;
+      this.showSummary();
+    });
+    panel.appendChild(previews);
     document.body.appendChild(panel);
     this.replayPanel = panel;
+    window.addEventListener('keydown', this.debugKey);
   }
   private async runReplay(offsetSec: number): Promise<void> {
     const request = this.startRequest + 1;
@@ -1359,7 +1435,7 @@ export class PlayScene extends BaseScene {
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
       const music = this.audio?.music;
-      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
+      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
     }
   }
   private changeHeadline(text: string, colour = SHELL.cream): void {
@@ -1473,7 +1549,7 @@ export class PlayScene extends BaseScene {
     resize(this.verdict, 38 * this.uiScale, colour);
     if (result.grade === 'Perfect' && result.kind === 'hit') {
       // At level 3 the room answers a Perfect too: the pool flares for a moment.
-      if (this.groove.level >= 3) this.grooveStage.flare(now);
+      if (!this.intro && !this.teach && this.controller?.phase === 'respond' && (this.groovePreview ?? this.groove.level) === 3) this.grooveStage.flare(now);
       if (!this.reducedMotion) {
         const { centres } = this.beads();
         const x = this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0);
@@ -1516,9 +1592,9 @@ export class PlayScene extends BaseScene {
       this.turnCall.setAlpha(0);
       this.flawless.setAlpha(0);
       this.setRestWords(null);
-      // The room settles: a pause, the summary and the idle stage all show no groove,
-      // and the state itself is the pass's, reset with it.
-      this.grooveStage.show(0, now);
+      // A pause or summary settles the room; an idle gap retains this attempt's light.
+      // A temporarily idle/null plan during a table slide is still the same attempt.
+      this.grooveStage.show(this.summaryShown || phase === 'paused' ? 0 : (this.groovePreview ?? this.groove.level), now);
       this.grooveStage.update(now, null, this.reducedMotion);
       return;
     }
@@ -1576,8 +1652,8 @@ export class PlayScene extends BaseScene {
     });
     // The groove's rim on the face, and the room's breath, from the plan's own bar: the
     // demonstration downbeat is a bar line, so beat 1 is the level's beat 1.
-    const bar = plan ? { origin: plan.demo, bpm: plan.bpm } : null;
-    this.grooveStage.show(this.groove.level, now);
+    const bar = plan ? { origin: plan.demo, bpm: plan.bpm, from: plan.start } : null;
+    this.grooveStage.show(this.teach || this.intro ? 0 : (this.groovePreview ?? this.groove.level), now);
     this.grooveStage.drawRim(g, geo.face, TRACK.plateRadius * s, s, this.grooveStage.update(now, bar, still));
     this.drawFlawless(geo.face.centerX, centres, geo.faceCentreY, now);
 
@@ -1713,13 +1789,21 @@ export class PlayScene extends BaseScene {
 
   private showResult(result: RoundResult): void {
     if (this.intro) { this.showIntroResult(result); return; }
+    // DEV rehearsal repeats the real plan but never counts or saves a completed task.
+    if (import.meta.env.DEV && this.grooveStudy) {
+      const plan = this.controller!.plan!;
+      this.beginTask(plan.end + 4 * 60 / plan.bpm);
+      return;
+    }
+    // A duplicate completion must not count a task twice or replay its accents.
+    if (this.results[this.taskIndex] !== undefined) return;
     const strong = result.accuracy >= this.definition.successAccuracy;
     this.sequence!.complete(result.accuracy);
     // Every beat Perfect: the one moment a task earns its own celebration. It reads the
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
     this.tally.perfect += result.perfect;
-    const flawless = isFlawless(this.outcomes);
+    const flawless = isFlawless(this.outcomes) && result.extras === 0;
     if (flawless) {
       this.tally.flawless++;
       this.flawlessAt = this.now();
@@ -1739,14 +1823,15 @@ export class PlayScene extends BaseScene {
     if (this.groove.level > before.level) this.levelRun?.groove(this.groove.level, this.taskIndex);
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
     const contact = ending.contact;
+    this.grooveStage.show(this.groovePreview ?? this.groove.level, this.now(), contact);
     const last = this.taskIndex >= this.spec.tasks.length - 1;
+    this.grooveHandoff = flawless && this.groove.level >= 2 && !last;
     // The accents, on times the level already has: a chime on this coda's contact at
     // level 3, a shaker on the downbeat the next task's count-in starts on. Decorative,
     // through the same bus as every voice, and never on a beat the player is copying.
     if (this.audio && flawless && this.groove.level >= 2) {
       const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
-      if (this.groove.level >= 3) this.audio.playStinger(contact, voices.chime, 0.3);
-      if (!last) this.audio.playStinger(ending.next, voices.shaker, 0.36);
+      if (this.groove.level >= 3) this.audio.playStinger(contact, voices.chime, 0.3, this.task.bpm / MUSIC.sourceBpm);
     }
     // One decision, read twice: the words on the plaque and the coda that plays under
     // them are the same verdict, so an act with a middle ending never says one and
@@ -1828,6 +1913,7 @@ export class PlayScene extends BaseScene {
     }
   }
   private showSummary(): void {
+    if (this.summaryShown) return;
     this.summaryShown = true;
     breadcrumb('level finished', {
       level: this.spec.level,
@@ -1849,6 +1935,10 @@ export class PlayScene extends BaseScene {
     // Area complete is the bigger thing and goes first; this follows as the smaller one.
     this.masteryAt = this.mastered ? this.summaryAt + (this.finaleCleared ? MASTERY.finaleDelay : MASTERY.delay) : -Infinity;
     this.masteryStruck = false;
+    if (this.mastered && this.audio) {
+      const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
+      this.audio.playStinger(this.masteryAt, voices.sting, this.finaleCleared ? 0.28 : 0.36);
+    }
     this.changeHeadline(this.saveFailed ? 'Couldn’t save' : this.finaleCleared ? this.spec.areaName : outcome.cleared ? 'Cleared' : 'Again?');
     if (this.finaleCleared) {
       const at = this.summaryAt + FINALE_PAYOFF.ribbonDelay;
@@ -1878,7 +1968,7 @@ export class PlayScene extends BaseScene {
     // A milestone's review flow is prepared now, in the background, and launched from
     // Continue, never here: the celebration runs its course and the button is what asks.
     // Which clears are milestones is `review/appReview.ts`; this scene only reports the facts.
-    const milestone = appReview().offer({
+    const milestone = this.previewResult ? null : appReview().offer({
       level: this.spec.level, cleared: outcome.cleared, finale: this.finaleCleared, saved: !this.saveFailed,
     });
     if (milestone) breadcrumb('review offered', { milestone: milestone.id });
@@ -2001,8 +2091,10 @@ export class PlayScene extends BaseScene {
    */
   private drawKeepsakeCard(now: number): void {
     const keepsake = this.keepsake;
-    const age = now - this.summaryAt - KEEPSAKE_CARD.delay - (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0)
-      - (this.mastered ? MASTERY.keepsakeLag : 0);
+    const at = this.mastered ? Math.max(this.masteryAt + MASTERY.badgeSettle,
+      this.summaryAt + KEEPSAKE_CARD.delay + MASTERY.keepsakeLag + (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0))
+      : this.summaryAt + KEEPSAKE_CARD.delay + (this.finaleCleared ? FINALE_PAYOFF.keepsakeLag : 0);
+    const age = now - at;
     if (!this.summaryShown || !keepsake || age < 0) {
       if (this.keepsakeCard.visible) this.hideKeepsakeCard();
       return;
@@ -2124,9 +2216,9 @@ export class PlayScene extends BaseScene {
     // Behind the ropes and the plate, so it frames the result rather than crossing it.
     if (mastery && mastery.ring.alpha > 0.01) {
       const centre = { x: 0, y: top + plaqueH * 0.45 };
-      const reach = width * (0.42 + 0.46 * mastery.ring.spread);
-      g.lineStyle((16 - 11 * mastery.ring.spread) * s, BRASS, mastery.ring.alpha).strokeCircle(centre.x, centre.y, reach);
-      g.lineStyle(4 * s, 0xffe7a0, mastery.ring.alpha * 0.7).strokeCircle(centre.x, centre.y, reach * 0.93);
+      const reach = width * (0.46 + 0.12 * mastery.ring.spread);
+      const alpha = mastery.ring.alpha * (this.finaleCleared ? 0.3 : 0.65);
+      g.lineStyle(3 * s, BRASS, alpha).strokeEllipse(centre.x, centre.y, reach * 2, plaqueH * 1.14, 48);
     }
 
     // The chorus: a fan of light behind the whole plaque, thrown by the third medal only.
@@ -2229,14 +2321,24 @@ export class PlayScene extends BaseScene {
       this.masteryLabel.setVisible(false);
       return;
     }
-    const s = this.uiScale, w = Math.min(RESULT_ROWS.replayWidth * s, this.resultRowWidth());
+    const s = this.uiScale, w = Math.min(360 * s, this.resultRowWidth());
     const x = this.viewport.safe.centerX - w / 2;
     const rise = still ? 0 : mastery.label.rise, alpha = still ? 1 : mastery.label.alpha;
     const y = row.y + rise * 24 * s, cy = y + row.height / 2;
     g.setVisible(true).setAlpha(alpha);
-    drawPanel(g, new Rect(x, y, w, row.height), s, { fill: BRASS, depth: 6, radius: 18 });
-    drawStar(g, x + 44 * s, cy, 15 * s, STAR_PRIZE);
-    drawStar(g, x + w - 44 * s, cy, 15 * s, STAR_PRIZE);
+    drawPanel(g, new Rect(x, y + 8 * s, w, row.height - 16 * s), s, { fill: BRASS, depth: 4, radius: 9 });
+    g.lineStyle(s, shade(BRASS, -0.28), 0.7).strokeRoundedRect(x + 7 * s, y + 14 * s, w - 14 * s, row.height - 28 * s, 5 * s);
+    // Stamped sound notches and two rivets, never additional reward stars.
+    for (const side of [-1, 1]) {
+      const edge = this.viewport.safe.centerX + side * (w / 2 - 19 * s);
+      g.fillStyle(shade(BRASS, -0.48), 0.85).fillCircle(edge, cy, 2 * s);
+      g.lineStyle(1.5 * s, shade(BRASS, -0.48), 0.8);
+      for (let i = 0; i < 3; i++) {
+        const nx = edge - side * (10 + i * 5) * s;
+        const h = (3 + i * 2) * s;
+        g.lineBetween(nx, cy - h, nx, cy + h);
+      }
+    }
     this.masteryLabel.setPosition(this.viewport.safe.centerX, cy).setAlpha(alpha).setVisible(true);
   }
 
@@ -2294,14 +2396,10 @@ export class PlayScene extends BaseScene {
     // Mastery's one strike: the sting, a pulse and sparks over the plaque, as the ring opens.
     if (mastery && !this.masteryStruck) {
       this.masteryStruck = true;
-      if (this.audio) {
-        const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
-        this.audio.playStinger(this.masteryAt, voices.sting, 0.42);
-      }
       vibrate('stamp');
       if (!still) {
         const crest = this.hangAt(0, (this.resultPlan?.rope ?? 0) + (this.resultPlan?.plaqueHeight ?? 0) * 0.45, pose.tilt, drop);
-        this.starFx.burst('sparks', crest.x, crest.y, [BRASS, 0xffe7a0, SHELL.cream], 18);
+        this.starFx.burst('sparks', crest.x, crest.y, [BRASS, 0xffe7a0, SHELL.cream], this.finaleCleared ? 6 : 10);
       }
     }
     for (let k = 0; k < 3; k++) {
@@ -2501,6 +2599,7 @@ export class PlayScene extends BaseScene {
     // both are on the same snapshot — so this can be entered after shutdown has already
     // destroyed the act and the text. Touching them here is a throw on the way out.
     if (this.disposed) return;
+    this.grooveHandoff = false;
     ++this.startRequest;
     this.replay = null;
     this.replayOffset = null;
@@ -2554,6 +2653,8 @@ export class PlayScene extends BaseScene {
     this.taps.dispose();
     this.replayPanel?.remove();
     this.replayPanel = null;
+    window.removeEventListener('keydown', this.debugKey);
+    if (import.meta.env.DEV) previewReducedMotion(null);
     this.controller?.dispose();
     this.vignette.destroy();
     this.grooveStage.destroy();

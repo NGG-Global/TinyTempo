@@ -42,6 +42,7 @@ export class DjScratchVignette extends HouseholdVignette {
     const look = scratchLook(lap);
     super(scene, look.paper, look.glow);
     this.look = look;
+    this.lightMaterial(scene, 'booth');
     this.hands = { skin: faces(0xc98a5e), nail: 0xf1d3bd, sleeve: faces(look.sleeve), band: look.band };
   }
 

@@ -12,6 +12,7 @@ export class SnareDrumVignette extends HouseholdVignette {
   public constructor(scene: Phaser.Scene, lap = 0) {
     super(scene, 0xe9e4d8, 0xf5cb8f);
     this.look = snareLook(lap);
+    this.lightMaterial(scene, 'snare');
   }
 
   protected draw(now: number, ending: number): void {

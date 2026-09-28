@@ -1,3 +1,5 @@
+import type { GrooveLevel } from '@/game/groove';
+import { GrooveReaction } from '@/ui/grooveReaction';
 import Phaser from 'phaser';
 import { STYLE } from '@/config/style';
 import { reducedMotion } from '@/core/motionPreference';
@@ -31,6 +33,8 @@ const FRAME = { x: -272, y: -286, width: 544, height: 606, radius: 108 } as cons
  */
 export class WindowCleaningVignette implements Vignette {
   /** Which window this lap looks through. The wipe does not change. */
+  private readonly grooveReaction: GrooveReaction;
+  public onGroove(level: GrooveLevel, now: number): void { this.grooveReaction.show(level, now); }
   private readonly look: WindowLook;
   private readonly backdrop: Backdrop;
   private readonly stage: Phaser.GameObjects.Container;
@@ -77,6 +81,7 @@ export class WindowCleaningVignette implements Vignette {
     this.drawSqueegee(scene);
     this.stage.add([this.frame, this.glass, this.dirt, this.gleam, this.tool]);
     this.bursts = new Feedback(scene, -10, this.stage);
+    this.grooveReaction = new GrooveReaction(scene, this.stage, 'glass');
   }
 
   /** Vertical rubber blade and a warm mitten: lateral motion, not a hammer reskin. */
@@ -278,6 +283,7 @@ export class WindowCleaningVignette implements Vignette {
     this.stroke(now);
   }
   public onAccuracy(result: Judgement, now: number): void {
+    if (this.phase === 'respond' && result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction.perfect(now);
     if (result.kind === 'hit' && result.index !== null) {
       this.lane = result.index;
       this.cleanAt[this.lane] = now;
@@ -313,6 +319,7 @@ export class WindowCleaningVignette implements Vignette {
   }
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow; else this.lastNow = now;
+    this.grooveReaction.update(now, this.plan, this.reducedMotion);
     this.openStage(now);
     this.stage.setPosition(this.baseX, this.baseY);
     if (this.phase === 'prepare' || this.phase === 'demonstrate') {

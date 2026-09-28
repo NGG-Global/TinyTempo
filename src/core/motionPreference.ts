@@ -13,4 +13,7 @@ const query = typeof window !== 'undefined' && typeof window.matchMedia === 'fun
 let reduced = query?.matches ?? false;
 query?.addEventListener?.('change', event => { reduced = event.matches; });
 
-export function reducedMotion(): boolean { return reduced; }
+let preview: boolean | null = null;
+/** DEV panel only; no preference is saved and production ignores it. */
+export function previewReducedMotion(value: boolean | null): void { if (import.meta.env.DEV) preview = value; }
+export function reducedMotion(): boolean { return (import.meta.env.DEV ? preview : null) ?? reduced; }

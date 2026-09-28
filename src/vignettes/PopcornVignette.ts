@@ -33,6 +33,7 @@ export class PopcornVignette extends HouseholdVignette {
   public constructor(scene: Phaser.Scene, lap = 0) {
     super(scene, 0xf1ebdc, 0xf6dfa6);
     this.look = popcornLook(lap);
+    this.lightMaterial(scene, 'hob');
   }
 
   protected draw(now: number, ending: number): void {

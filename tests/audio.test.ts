@@ -11,8 +11,37 @@ import { createWindowSounds } from '../src/audio/windowSounds';
 import { createPaperSounds } from '../src/audio/paperSounds';
 import { createClapSounds } from '../src/audio/clapSounds';
 import { createScratchSounds } from '../src/audio/scratchSounds';
+import { createGrooveVoices } from '../src/audio/grooveSounds';
 
 afterEach(() => vi.unstubAllGlobals());
+
+it('schedules cached Groove accents on the shared bus and cancels future mastery on exit', () => {
+  const nodes: { playbackRate: { value: number }; start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = [];
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 10;
+    sampleRate = 8000;
+    destination = {};
+    close = vi.fn();
+    createGain() { return { gain: { value: 1 }, connect: vi.fn((to: object) => to), disconnect: vi.fn() }; }
+    createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() {
+      const node = { playbackRate: { value: 1 }, buffer: null, connect: vi.fn((to: object) => to), start: vi.fn(), stop: vi.fn(), disconnect: vi.fn(), onended: null };
+      nodes.push(node); return node;
+    }
+  });
+  const audio = new AudioEngine();
+  const voices = createGrooveVoices(audio.context);
+  audio.playStinger(12, voices.chime, 0.3, 1.1);
+  audio.playStinger(20, voices.sting, 0.36);
+  expect(nodes[0]!.start).toHaveBeenCalledWith(12);
+  expect(nodes[0]!.playbackRate.value).toBe(1.1);
+  expect(nodes[1]!.start).toHaveBeenCalledWith(20);
+  expect(nodes[1]!.playbackRate.value).toBe(1);
+  audio.cancel();
+  expect(audio.activeSources).toBe(0);
+  for (const node of nodes) { expect(node.stop).toHaveBeenCalledTimes(1); expect(node.disconnect).toHaveBeenCalledTimes(1); }
+  expect(createGrooveVoices(audio.context)).toBe(voices);
+});
 
 it('schedules hammer/coda sources at absolute times and cancels every voice on restart', async () => {
   const nodes: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; onended: (() => void) | null }[] = [];

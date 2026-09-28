@@ -1,3 +1,5 @@
+import type { GrooveLevel } from '@/game/groove';
+import { GrooveReaction } from '@/ui/grooveReaction';
 import Phaser from 'phaser';
 import { STYLE } from '@/config/style';
 import { reducedMotion } from '@/core/motionPreference';
@@ -32,6 +34,8 @@ export const WORKSHOP = {
  */
 export class HammerNailVignette implements Vignette {
   /** Which bench this lap of the rotation is at. The swing does not change. */
+  private readonly grooveReaction: GrooveReaction;
+  public onGroove(level: GrooveLevel, now: number): void { this.grooveReaction.show(level, now); }
   private readonly look: HammerLook;
   private readonly stage: Phaser.GameObjects.Container;
   private readonly backdrop: Backdrop;
@@ -86,6 +90,7 @@ export class HammerNailVignette implements Vignette {
     this.dust = scene.add.graphics();
     this.stage.add([this.disc, this.bench, this.wood, this.shadow, this.nail, this.hammer, this.dust]);
     this.bursts = new Feedback(scene, -10, this.stage);
+    this.grooveReaction = new GrooveReaction(scene, this.stage, 'bench');
   }
 
   private drawHammer(): void {
@@ -187,6 +192,7 @@ export class HammerNailVignette implements Vignette {
     this.strike(now, 1);
   }
   public onAccuracy(result: Judgement, now: number): void {
+    if (this.phase === 'respond' && result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction.perfect(now);
     if (result.kind === 'hit') this.setDepth(this.depthTo + 0.75 / (this.plan?.targets.length ?? 4), now);
     else if (result.kind === 'extra') this.strength = 0.4;
   }
@@ -216,6 +222,7 @@ export class HammerNailVignette implements Vignette {
   public update(now: number): void {
     if (this.phase === 'paused') now = this.lastNow;
     else this.lastNow = now;
+    this.grooveReaction.update(now, this.plan, this.reducedMotion);
     // Rendering may observe a beat before the controller's next pump. Contact is
     // sampled from the same absolute cue, preventing a one-frame rebound/pop.
     if (this.phase === 'prepare' || this.phase === 'demonstrate') {

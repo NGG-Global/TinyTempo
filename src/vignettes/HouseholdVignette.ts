@@ -8,9 +8,16 @@ import { Backdrop } from '@/ui/backdrop';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
 import { acceptDemoBeat, turnOpen } from './motion';
+import type { GrooveLevel } from '@/game/groove';
+import { GrooveReaction, type GrooveMaterial } from '@/ui/grooveReaction';
 
 /** Lifecycle only. Each act owns its art; the round controller owns every verdict. */
 export abstract class HouseholdVignette implements Vignette {
+  private grooveReaction: GrooveReaction | null = null;
+  protected lightMaterial(scene: Phaser.Scene, material: GrooveMaterial): void {
+    this.grooveReaction = new GrooveReaction(scene, this.stage, material);
+  }
+  public onGroove(level: GrooveLevel, now: number): void { this.grooveReaction?.show(level, now); }
   protected readonly stage: Phaser.GameObjects.Container;
   protected readonly art: Phaser.GameObjects.Graphics;
   private readonly backdrop: Backdrop;
@@ -88,6 +95,7 @@ export abstract class HouseholdVignette implements Vignette {
   }
   public onAccuracy(result: Judgement, now: number): void {
     if (this.phase !== 'respond') return;
+    if (result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction?.perfect(now);
     if (result.kind === 'hit') this.hitTimes.push(now);
     else this.errorAt = now;
   }
@@ -110,6 +118,7 @@ export abstract class HouseholdVignette implements Vignette {
     this.backdrop.open(turnOpen(now, this.handoverAt, this.phase));
     const ending = this.finishAt === null ? -Infinity : now - this.finishAt;
     this.draw(now, ending);
+    this.grooveReaction?.update(now, this.plan, this.still);
   }
   protected abstract draw(now: number, ending: number): void;
   public translate(offset: number): void { if (!this.still) this.stage.x += offset; }

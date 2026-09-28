@@ -12,6 +12,7 @@ export class DoorbellVignette extends HouseholdVignette {
   public constructor(scene: Phaser.Scene, lap = 0) {
     super(scene, 0xf0e5d7, 0xf0cd9b);
     this.look = doorLook(lap);
+    this.lightMaterial(scene, 'porch');
   }
 
   protected draw(now: number, ending: number): void {

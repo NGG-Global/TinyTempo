@@ -161,14 +161,15 @@ export class AudioEngine implements SoundSink {
    * fanfare. Through the same bus as every voice, so mute, `cancel()` and a restart stop it
    * like anything else; never used for anything the judge listens to.
    */
-  public playStinger(time: number, buffer: AudioBuffer, gain = 0.6): void {
-    this.playBuffer(time, buffer, gain);
+  public playStinger(time: number, buffer: AudioBuffer, gain = 0.6, rate = 1): void {
+    this.playBuffer(time, buffer, gain, undefined, rate);
   }
-  private playBuffer(time: number, buffer: AudioBuffer, gain: number, silentBy?: number): void {
+  private playBuffer(time: number, buffer: AudioBuffer, gain: number, silentBy?: number, rate = 1): void {
     if (this.disposed) return;
     const source = this.context.createBufferSource();
     const envelope = this.context.createGain();
     source.buffer = buffer;
+    if (rate !== 1) source.playbackRate.value = rate;
     envelope.gain.value = gain;
     source.connect(envelope).connect(this.master);
     this.sources.set(source, envelope);
