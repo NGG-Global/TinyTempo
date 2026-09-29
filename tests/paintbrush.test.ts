@@ -15,7 +15,6 @@ const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'j
 describe('paintbrush act', () => {
   it('is the twenty-ninth act, and first plays level 107', () => {
     expect(VIGNETTES[28]?.id).toBe('paintbrush');
-    expect(VIGNETTES).toHaveLength(29);
     expect(levelSpec(107)).toMatchObject({ vignette: 'paintbrush', lap: 0 });
     expect(actLevel('paintbrush', 1)).toBe(136);
     const definition = VIGNETTES[28]!;

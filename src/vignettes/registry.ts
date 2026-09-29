@@ -65,6 +65,11 @@ import { createCanvasSounds } from '@/audio/canvasSounds';
 import { CANVAS_REVEAL_SEC } from './canvasMotion';
 import { CANVAS_LOOKS } from './canvasLooks';
 import type { RotationEra } from './rotation';
+import { NoseBlowingVignette } from './NoseBlowingVignette';
+import { DishCleaningVignette } from './DishCleaningVignette';
+import { DISH_LOOKS } from './dishLooks';
+import { createCleaningSounds } from '@/audio/cleaningSounds';
+import { CLEANING_REVEAL_SEC } from './cleaningMotion';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -263,6 +268,19 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new PaintbrushVignette(scene, lap), sounds: createCanvasSounds,
     looks: CANVAS_LOOKS.map(look => look.copy),
   },
+  {
+    id: 'nose', title: 'Blow your nose', intro: 'Tissue at\nthe ready.', ink: HOME_INK,
+    success: ['All\nclear!', 'Now that feels better.'], rough: ['Still\nsniffling.', 'Better keep that tissue.'],
+    endingSec: CLEANING_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new NoseBlowingVignette(scene, lap), sounds: context => createCleaningSounds(context, 'nose'),
+  },
+  {
+    id: 'dish', title: 'Wash the plate', intro: 'A little\nelbow grease.', ink: HOME_INK,
+    success: ['Squeaky\nclean.', 'Ready for another helping.'], rough: ['Still\ndirty.', 'A little more elbow grease.'],
+    endingSec: CLEANING_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new DishCleaningVignette(scene, lap), sounds: context => createCleaningSounds(context, 'dish'),
+    looks: DISH_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
@@ -270,7 +288,8 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
  * first twenty-five acts twice, exactly as they did before the barber, popcorn and
  * toothbrush arrived — every keepsake earned on those levels stays put — and from level 51
  * the rotation carries the first twenty-eight. The paintbrush joins at level 107, past
- * every keepsake, opening on the act it adds.
+ * every earlier keepsake, opening on the act it adds. Nose blowing and washing up join
+ * at level 165, after the paintbrush's two keepsakes and two complete 29-act laps.
  *
  * **Appending an act means adding an era here**, at a level past every keepsake players
  * could hold: the tests fail on a registry the last era does not cover.
@@ -279,4 +298,6 @@ export const ROTATION: readonly RotationEra[] = [
   { fromLevel: 1, acts: 25 },
   { fromLevel: 51, acts: 28 },
   { fromLevel: 107, acts: 29 },
+  // Two complete paintbrush-era laps preserve its second keepsake at level 136.
+  { fromLevel: 165, acts: 31 },
 ];

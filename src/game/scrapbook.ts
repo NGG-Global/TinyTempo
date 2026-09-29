@@ -111,6 +111,10 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   // The paintbrush joins at level 107, so its two sits past every keepsake already pinned.
   { id: 'paintbrush-studio', vignette: 'paintbrush', lap: 0, name: 'Studio brush' },
   { id: 'paintbrush-sail', vignette: 'paintbrush', lap: 1, name: 'Little sail' },
+  { id: 'nose-tissue-box', vignette: 'nose', lap: 0, name: 'Tissue box' },
+  { id: 'dish-sponge', vignette: 'dish', lap: 0, name: 'Golden sponge' },
+  { id: 'nose-pocket-tissue', vignette: 'nose', lap: 1, name: 'Pocket tissues' },
+  { id: 'dish-glass', vignette: 'dish', lap: 1, name: 'Sparkling glass' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */

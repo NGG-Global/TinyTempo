@@ -4,7 +4,7 @@ import type { Voice } from './AudioEngine';
  * The recorded one-shots.
  *
  * Every other sound in the game is synthesized at runtime, which is what kept the download
- * to one music track. These six acts are the exception: a stomp, a snip, a grunt, two
+ * to one music track. Recorded acts are the exception: a nose blow, a stomp, a snip, a grunt, two
  * wipes, a trombone's two notes and two endings, and a clap with the three rooms that
  * answer it, delivered as recordings, because a
  * voice can be *performed* in a way a few lines of oscillator maths cannot reach. They are an enhancement over a working game, never a
@@ -18,6 +18,7 @@ import type { Voice } from './AudioEngine';
 
 /** Files as delivered. Levels and edits belong in the source WAV, not in a gain here. */
 export const SAMPLE_URLS = {
+  nose: new URL('../../sfx/nose.wav', import.meta.url).href,
   shoe: new URL('../../sfx/shoe.wav', import.meta.url).href,
   scissors: new URL('../../sfx/scissors.wav', import.meta.url).href,
   grunt: new URL('../../sfx/grunt.wav', import.meta.url).href,

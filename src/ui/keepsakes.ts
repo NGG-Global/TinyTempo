@@ -682,6 +682,39 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       p.line([[-2, 6], [-2, -36]], 2.4, look.strokes[6]!.ink);
     });
   },
+  'nose-tissue-box': p => {
+    p.fill(0xfffef6).poly([[-23, -4], [-22, -35], [-8, -25], [14, -37], [22, -4]]);
+    p.fill(0x92b5ab).box(-39, -5, 78, 43, 8);
+    p.detail(() => {
+      p.line([[-25, -3], [25, -3]], 3, 0x54786d);
+      p.fill(0xd5e4db).oval(0, 18, 36, 16, false);
+    });
+  },
+  'nose-pocket-tissue': p => {
+    p.fill(0xfffef6).poly([[-25, -14], [-22, -37], [0, -28], [20, -36], [24, -12]]);
+    p.fill(0xe7a34c).box(-30, -13, 60, 51, 8);
+    p.detail(() => {
+      p.fill(0xfff0ca).box(-23, -5, 46, 31, 5, false);
+      p.line([[-18, 2], [0, 18], [18, 2]], 2, 0xcaa15b);
+    });
+  },
+  'dish-sponge': p => {
+    p.fill(0xe1b544).box(-40, -20, 80, 48, 10);
+    p.fill(0xf8d863).box(-40, -26, 80, 42, 10);
+    p.fill(0x4f8a6e).box(-40, -29, 80, 13, 6);
+    p.detail(() => {
+      for (const x of [-26, -8, 10, 28]) p.fill(0xd3a33d).oval(x, 1, 7, 4, false);
+      glint(p, 26, -26, 9);
+    });
+  },
+  'dish-glass': p => {
+    p.fill(0xd1edec).poly([[-29, -36], [29, -36], [22, 33], [15, 39], [-15, 39], [-22, 33]]);
+    p.detail(() => {
+      p.fill(0xf2fffa).oval(0, -35, 28, 5.5);
+      p.line([[-20, -22], [-15, 25]], 3, 0xfaffff);
+      glint(p, 24, -10, 10);
+    });
+  },
 };
 
 /** Whether a keepsake has a drawing. The test that asks this is what keeps a new entry honest. */

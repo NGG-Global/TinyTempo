@@ -84,10 +84,11 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Twenty-eight vignettes rotate by registry order, **in eras**: `levelSpec` places a level
+Thirty-one vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
-did, from level 51 the first twenty-eight, and from level 107 all twenty-nine,
+did, from level 51 the first twenty-eight, from level 107 the first twenty-nine,
+and from level 165 all thirty-one,
 each era opening on the acts it added. The paintbrush is act 29: one stroke a
 beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
 or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
@@ -97,6 +98,9 @@ append under the old `VIGNETTES[(level - 1) % VIGNETTES.length]` would have move
 keepsake on 26–50. `LevelSpec.lap` is how many earlier levels the act played, and
 `actLevel` is its inverse — never `level + VIGNETTES.length`. See
 `docs/BARBER_POPCORN_TOOTHBRUSH.md`.
+Nose blowing and washing up are acts 30–31, with four people and three dish types.
+Their era begins at 165 to preserve the paintbrush keepsake at 136. See
+`docs/NOSE_AND_DISHES.md` for sounds, progress, endings and preview levels.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
