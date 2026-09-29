@@ -13,9 +13,11 @@ Four identical grey cards became labelled sections. Each section is an eyebrow
 sentence and a button whose caption was the opposite of that sentence — "Sound on"
 beside "Mute".
 
-- **Sound & feel** — two switches (`ui/switch.ts`). A switch states the value and
-  the action at once; the knob's side is the state and the track's colour is
-  whether it is on. Haptics is new; see below.
+- **Sound & feel** — music and effects sliders (`ui/slider.ts`), then the haptics
+  switch. A slider states the level as a length and as a percent. While the
+  speaker puck's mute is on, the length is drawn quiet and the section says
+  Muted; moving a slider takes the mute off so the level can be heard. Haptics
+  stays a switch; see below.
 - **Timing** — the measured offset, `TUNE` into its own screen, and `RESET` back
   to zero. A kept measurement adds to the offset already in force, so without a
   reset a bad run can only be undone by measuring the opposite error.
@@ -169,9 +171,10 @@ offer worded three ways reads as three products.
 | Module | What it is |
 | --- | --- |
 | `ui/switch.ts` | The two-state switch; `switchKnob` is Phaser-free so its geometry is unit-tested |
+| `ui/slider.ts` | The music and effects level; `sliderKnob` is Phaser-free so its geometry is unit-tested |
 | `ui/sheen.ts` | The band of light crossing a brass panel, clipped to its corners, still under reduced motion |
 | `ui/chrome.ts` | `drawActionDisc` (the cream play disc inside a coral block) and `drawHeartRow` |
-| `ui/icons.ts` | `drawChevron`, `drawInfinity`, `drawVibrate`, `fillHeart`, `strokeHeart` |
+| `ui/icons.ts` | `drawChevron`, `drawInfinity`, `drawVibrate`, `drawNote`, `fillHeart`, `strokeHeart` |
 | `ui/colour.ts` | `OUTLINE_CONTRAST`, and a `typeStroke` that returns `null` rather than an illegible border |
 | `ui/panel.ts` | `PanelSpec.frame`, so a brass panel takes a cream accent line rather than brass on brass |
 

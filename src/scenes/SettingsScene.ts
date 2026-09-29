@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setAnalyticsConsent } from '@/analytics/boot';
-import { applyCalibration, currentAudio, ensureShellMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, ensureShellMusic, setBusVolume } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -13,18 +13,19 @@ import { redrawToday } from '@/game/objectives';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard } from '@/playgames/dailyTempo';
 import { achievementsOffered, openAchievements } from '@/playgames/achievementSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
-import { loadSettings, saveSettings } from '@/game/settings';
+import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
-import { drawBack, drawChevron, drawHeart, drawInfinity, drawSpeaker, drawVibrate } from '@/ui/icons';
+import { drawBack, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawVibrate } from '@/ui/icons';
 import { faces } from '@/ui/light';
 import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { arrive } from '@/ui/spring';
+import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
 import { drawSwitch, SWITCH } from '@/ui/switch';
 import { body, display, label, resize } from '@/ui/type';
 import { formatOffset } from './CalibrateScene';
@@ -43,7 +44,7 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'sound' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
+type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
   | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
@@ -58,8 +59,8 @@ const LEGAL = {
  *
  * It was a flat stack of four identical cards, each stating its value in a sentence and
  * offering a button labelled with the opposite of that sentence — "Sound on" beside
- * "Mute". The refinement groups the rows under labelled sections, states the two audio
- * settings with switches instead of words, shows the hearts the player actually has,
+ * "Mute". The refinement groups the rows under labelled sections. Music and effects are
+ * levels, haptics stays a switch, the hearts are the ones the player actually has,
  * gives the store its own brass object rather than a fifth grey card, and moves the
  * sixteen-second latency measurement onto its own screen.
  *
@@ -96,7 +97,11 @@ export class SettingsScene extends BaseScene {
   private scrollY = 0;
   private scrollMax = 0;
   private velocity = 0;
-  private drag: { id: number; lastY: number; lastAt: number; startY: number; moved: boolean; scrollable: boolean } | null = null;
+  private drag: {
+    id: number; lastY: number; lastAt: number; startY: number; moved: boolean; scrollable: boolean;
+    /** Set when the gesture began on a level, so a vertical drift cannot scroll the band. */
+    slider: VolumeBus | null;
+  } | null = null;
   private pressedAt = -Infinity;
   private pressed: Action | null = null;
   private pressDirty = false;
@@ -106,12 +111,16 @@ export class SettingsScene extends BaseScene {
   private from: string = SceneKey.Menu;
   private enteredAt = 0;
   private headlineAt = { x: 0, y: 0 };
-  private soundOn = true;
+  private music = 1;
+  private sfx = 1;
+  /** The speaker puck's mute. The sliders keep their levels underneath it. */
+  private masterMuted = false;
   private hapticsOn = true;
   private analyticsOn = false;
   /** 0-1 positions, so a flipped switch slides rather than jumping. */
-  private switchAt = { sound: 1, haptics: 1, analytics: 1 };
-  private switchedAt = { sound: -Infinity, haptics: -Infinity, analytics: -Infinity };
+  private switchAt = { haptics: 1, analytics: 1 };
+  private switchedAt = { haptics: -Infinity, analytics: -Infinity };
+  private lastSfxTick = 0;
   private disposed = false;
   private get reducedMotion(): boolean { return reducedMotion(); }
 
@@ -130,13 +139,14 @@ export class SettingsScene extends BaseScene {
     this.pressed = null;
     this.pressedAt = -Infinity;
     const settings = loadSettings();
-    this.soundOn = !isMuted(this);
+    this.music = settings.music;
+    this.sfx = settings.sfx;
+    this.masterMuted = settings.muted;
     this.hapticsOn = settings.haptics;
     this.analyticsOn = settings.analytics;
-    this.switchAt = {
-      sound: this.soundOn ? 1 : 0, haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0,
-    };
-    this.switchedAt = { sound: -Infinity, haptics: -Infinity, analytics: -Infinity };
+    this.switchAt = { haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0 };
+    this.switchedAt = { haptics: -Infinity, analytics: -Infinity };
+    this.lastSfxTick = 0;
     this.enteredAt = performance.now() / 1000;
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.16 }, glowAlpha: 0.6 });
     this.band = this.add.container(0, 0).setDepth(1);
@@ -191,7 +201,11 @@ export class SettingsScene extends BaseScene {
     const chip = (caption: string, colour: number = ink): Phaser.GameObjects.Text =>
       this.banded(label(this, caption, { size: 23, colour, align: 'center' })).setOrigin(0.5);
     this.texts = {
-      sound: rowTitle('Sound'),
+      music: rowTitle('Music'),
+      sfx: rowTitle('Effects'),
+      musicValue: this.banded(body(this, '', { size: 26, colour: ink })).setOrigin(1, 0.5),
+      sfxValue: this.banded(body(this, '', { size: 26, colour: ink })).setOrigin(1, 0.5),
+      mutedNote: this.banded(label(this, 'Muted', { size: 21, colour: PALETTE.coral })).setOrigin(1, 0.5),
       haptics: rowTitle('Haptics'),
       hapticsNote: rowNote('Not on this device'),
       offset: rowTitle('Tap offset'),
@@ -354,20 +368,41 @@ export class SettingsScene extends BaseScene {
         SWITCH.width * s, SWITCH.height * s,
       );
 
-    // SOUND & FEEL — two switch rows on one card, parted by a scored line.
+    // SOUND & FEEL — two levels, then the haptics switch. The levels are dragged; the
+    // switch still fires on release, because a press there may be the start of a scroll.
     eyebrow(0);
-    const audio = plate(row * 2);
-    this.rows.sound = switchRect(audio, audio.y, row);
-    this.rows.haptics = switchRect(audio, audio.y + row, row);
+    resize(this.texts.mutedNote!, 21 * s, PALETTE.coral, STYLE.current, false);
+    this.texts.mutedNote!.setPosition(left + width - 28 * s, this.eyebrows[0]!.y).setVisible(this.masterMuted);
+    const audio = plate(row * 3);
+    const level = (index: number): Phaser.Geom.Rectangle => {
+      const top = audio.y + row * index;
+      const trackH = SLIDER.height * s;
+      // The percent keeps a fixed slot, so "9%" and "100%" do not shove the track.
+      const slot = 84 * s;
+      const track = new Phaser.Geom.Rectangle(
+        left + 248 * s, top + row / 2 - trackH / 2,
+        audio.right - 22 * s - slot - 10 * s - (left + 248 * s), trackH,
+      );
+      return track;
+    };
+    this.rows.musicTrack = level(0);
+    this.rows.sfxTrack = level(1);
+    this.rows.musicRow = new Phaser.Geom.Rectangle(left, audio.y, width, row);
+    this.rows.sfxRow = new Phaser.Geom.Rectangle(left, audio.y + row, width, row);
+    this.rows.haptics = switchRect(audio, audio.y + row * 2, row);
     this.rows.audioCard = audio;
-    this.texts.sound!.setPosition(left + 96 * s, audio.y + row / 2);
+    this.texts.music!.setPosition(left + 96 * s, audio.y + row / 2);
+    this.texts.sfx!.setPosition(left + 96 * s, audio.y + row * 1.5);
+    this.texts.musicValue!.setPosition(audio.right - 22 * s, audio.y + row / 2);
+    this.texts.sfxValue!.setPosition(audio.right - 22 * s, audio.y + row * 1.5);
+    this.texts.musicValue!.setText(`${Math.round(this.music * 100)}%`);
+    this.texts.sfxValue!.setText(`${Math.round(this.sfx * 100)}%`);
     // On a device with no vibrator the row carries a note under its title and the title
-    // rides up to make room; everywhere else the title is centred on the row like Sound's.
+    // rides up to make room; everywhere else the title is centred on the row.
     const buzzes = hapticsSupported();
-    this.texts.haptics!.setPosition(left + 96 * s, audio.y + row * 1.5 - (buzzes ? 0 : 15 * s));
-    this.texts.hapticsNote!.setPosition(left + 96 * s, audio.y + row * 1.5 + 19 * s);
-    this.hits.push({ name: 'sound', rect: new Phaser.Geom.Rectangle(left, audio.y, width, row), pinned: false });
-    this.hits.push({ name: 'haptics', rect: new Phaser.Geom.Rectangle(left, audio.y + row, width, row), pinned: false });
+    this.texts.haptics!.setPosition(left + 96 * s, audio.y + row * 2.5 - (buzzes ? 0 : 15 * s));
+    this.texts.hapticsNote!.setPosition(left + 96 * s, audio.y + row * 2.5 + 19 * s);
+    this.hits.push({ name: 'haptics', rect: new Phaser.Geom.Rectangle(left, audio.y + row * 2, width, row), pinned: false });
 
     // TIMING — the measured offset, the screen that measures it, and a way back to zero.
     // A kept measurement adds to the offset already in force, so without Reset a bad
@@ -568,15 +603,18 @@ export class SettingsScene extends BaseScene {
     const entitled = monetization().premium();
     const sunk = (name: Action): number => (this.pressed === name ? press : 0);
 
-    // Sound & feel: the scored line between the two rows, the two icons, the two switches.
+    // Sound & feel: two scored lines, a note and a speaker, the two levels, the switch.
     const audio = this.rows.audioCard;
     if (audio) {
       const row = SETTINGS.rowHeight * s;
       g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row - 1.5 * s, audio.width - 48 * s, 3 * s);
-      drawSpeaker(g, audio.x + 56 * s, audio.y + row / 2, 26 * s, PALETTE.ink, !this.soundOn);
+      g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row * 2 - 1.5 * s, audio.width - 48 * s, 3 * s);
+      drawNote(g, audio.x + 56 * s, audio.y + row / 2, 22 * s, PALETTE.ink);
+      drawSpeaker(g, audio.x + 56 * s, audio.y + row * 1.5, 22 * s, PALETTE.ink, this.sfx === 0);
       const canBuzz = hapticsSupported();
-      drawVibrate(g, audio.x + 56 * s, audio.y + row * 1.5, 24 * s, canBuzz ? PALETTE.ink : shade(PALETTE.muted, 0.35));
-      if (this.rows.sound) drawSwitch(g, this.rows.sound, s, this.switchAt.sound);
+      drawVibrate(g, audio.x + 56 * s, audio.y + row * 2.5, 24 * s, canBuzz ? PALETTE.ink : shade(PALETTE.muted, 0.35));
+      if (this.rows.musicTrack) drawSlider(g, this.rows.musicTrack, s, this.music, !this.masterMuted);
+      if (this.rows.sfxTrack) drawSlider(g, this.rows.sfxTrack, s, this.sfx, !this.masterMuted);
       if (this.rows.haptics) drawSwitch(g, this.rows.haptics, s, this.switchAt.haptics, !canBuzz);
     }
     // Timing.
@@ -767,8 +805,8 @@ export class SettingsScene extends BaseScene {
       if (!this.pressDirty) this.pressed = null;
     }
     // The switches slide rather than cut, and the slide is the only thing that redraws.
-    const switchOn = { sound: this.soundOn, haptics: this.hapticsOn, analytics: this.analyticsOn };
-    for (const key of ['sound', 'haptics', 'analytics'] as const) {
+    const switchOn = { haptics: this.hapticsOn, analytics: this.analyticsOn };
+    for (const key of ['haptics', 'analytics'] as const) {
       const target = switchOn[key] ? 1 : 0;
       if (Math.abs(this.switchAt[key] - target) < 0.002) { this.switchAt[key] = target; continue; }
       const age = now - this.switchedAt[key];
@@ -838,17 +876,30 @@ export class SettingsScene extends BaseScene {
   private pointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.velocity = 0;
+    // A level takes the gesture. The thumb drifts vertically on a horizontal drag, and
+    // that drift must not scroll the section out from under the knob.
+    const slider = this.sliderAt(pointer.x, pointer.y);
     this.drag = {
       id: pointer.id, lastY: pointer.y, lastAt: performance.now(), startY: pointer.y, moved: false,
+      slider,
       // Only a gesture that began inside the band can scroll it; one that began on Done
       // travels without moving the sections under it.
-      scrollable: Phaser.Geom.Rectangle.Contains(this.bandRect, pointer.x, pointer.y),
+      scrollable: slider === null && Phaser.Geom.Rectangle.Contains(this.bandRect, pointer.x, pointer.y),
     };
+    if (slider) {
+      vibrate('tap');
+      this.commitVolume(slider, this.volumeAt(slider, pointer.x));
+    }
   }
 
   private pointerMove(pointer: Phaser.Input.Pointer): void {
     const drag = this.drag;
     if (!drag || pointer.id !== drag.id || !pointer.isDown) return;
+    if (drag.slider) {
+      const changed = this.commitVolume(drag.slider, this.volumeAt(drag.slider, pointer.x));
+      if (drag.slider === 'sfx' && changed) this.previewEffects();
+      return;
+    }
     const now = performance.now();
     const dy = pointer.y - drag.lastY;
     if (Math.abs(pointer.y - drag.startY) > SETTINGS.tapSlop * this.viewport.unitScale) drag.moved = true;
@@ -871,6 +922,12 @@ export class SettingsScene extends BaseScene {
     const drag = this.drag;
     if (!drag || drag.id !== pointer.id) return;
     this.drag = null;
+    if (drag.slider) {
+      // A tap that did not move still lands the level, and effects confirm with a click
+      // at the level just set — including one that only took the mute off.
+      if (drag.slider === 'sfx') this.previewEffects(true);
+      return;
+    }
     if (drag.moved || this.curtain.active) return;
     this.tapAt(pointer.x, pointer.y);
   }
@@ -914,7 +971,6 @@ export class SettingsScene extends BaseScene {
       case 'help':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Support, { from: this.from })));
         return;
-      case 'sound': this.toggleSound(); return;
       case 'haptics': this.toggleHaptics(); return;
       case 'analytics': this.toggleAnalytics(); return;
       case 'adPrivacy': void this.openAdPrivacy(); return;
@@ -929,10 +985,55 @@ export class SettingsScene extends BaseScene {
     }
   }
 
-  private toggleSound(): void {
-    this.soundOn = !toggleMute(sharedAudio(this));
-    this.switchedAt.sound = performance.now() / 1000;
-    this.refreshCopy();
+  /**
+   * The track, from its left rest to its right, read in the band's own x. The title is
+   * not part of the target: a press there is a scroll, and mapping it would zero the level.
+   */
+  private sliderAt(x: number, y: number): VolumeBus | null {
+    if (!Phaser.Geom.Rectangle.Contains(this.bandRect, x, y)) return null;
+    const localY = y + this.scrollY;
+    for (const bus of ['music', 'sfx'] as const) {
+      const row = this.rows[bus === 'music' ? 'musicRow' : 'sfxRow'];
+      const track = this.rows[bus === 'music' ? 'musicTrack' : 'sfxTrack'];
+      if (!row || !track) continue;
+      const hit = new Phaser.Geom.Rectangle(track.x, row.y, row.right - track.x, row.height);
+      if (Phaser.Geom.Rectangle.Contains(hit, x, localY)) return bus;
+    }
+    return null;
+  }
+
+  private volumeAt(bus: VolumeBus, x: number): number {
+    const track = this.rows[bus === 'music' ? 'musicTrack' : 'sfxTrack'];
+    return track ? clampVolume(sliderValue(track, x)) : bus === 'music' ? this.music : this.sfx;
+  }
+
+  /** False when the stored level did not move, so a drag does not click on every pixel. */
+  private commitVolume(bus: VolumeBus, volume: number): boolean {
+    const next = setBusVolume(currentAudio(this), bus, volume);
+    const changed = next.music !== this.music || next.sfx !== this.sfx || next.muted !== this.masterMuted;
+    this.music = next.music;
+    this.sfx = next.sfx;
+    this.masterMuted = next.muted;
+    this.texts.musicValue!.setText(`${Math.round(this.music * 100)}%`);
+    this.texts.sfxValue!.setText(`${Math.round(this.sfx * 100)}%`);
+    this.texts.mutedNote!.setVisible(this.masterMuted);
+    if (changed) this.drawBandControls(0);
+    return changed;
+  }
+
+  /**
+   * One effects click, so the level just set is audible. Throttled while the knob is
+   * moving; a release always sounds, because that click is the confirmation.
+   */
+  private previewEffects(force = false): void {
+    const now = performance.now();
+    // A release just after a drag tick would sound twice. The release still confirms a tap,
+    // which has not ticked yet.
+    if (now - this.lastSfxTick < (force ? 45 : 90)) return;
+    this.lastSfxTick = now;
+    const engine = currentAudio(this);
+    if (!engine || engine.context.state !== 'running') return;
+    engine.play(engine.context.currentTime, 'action');
   }
 
   /** The switch stays live on a device that cannot buzz; only the pulse is missing. */

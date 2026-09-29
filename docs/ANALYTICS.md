@@ -148,7 +148,7 @@ a yes. That is the opposite of the rule `haptics` follows, and deliberately so: 
 preference can be assumed, a missing consent cannot.
 
 **Consent does not travel in a save code.** `SaveData.settings` is a
-`Pick<Settings, 'calibrationMs' | 'muted' | 'haptics'>` so the compiler enforces it.
+`Pick<Settings, 'calibrationMs' | 'muted' | 'music' | 'sfx' | 'haptics'>` so the compiler enforces it.
 Consent belongs to a device and the jurisdiction its owner is in; restoring a code must
 not answer that question on a phone whose owner was never asked it.
 

@@ -66,7 +66,7 @@ Download went from 16.8 MB to 2.4 MB, and `dist/` from 28 MB to 3.8 MB with sour
 
 ## Playback
 
-`MusicSystem` shares `AudioEngine.context` and master output/mute, never creating another
+`MusicSystem` shares `AudioEngine.context` and the music bus under master mute, never creating another
 live context. `load()` fetches and decodes the one track and commits it atomically after
 validation. Concurrent callers share one promise; the decoded buffer is cached. A failed
 fetch, an empty decode or an invalid sample rate rejects playback with a visible retry
@@ -85,10 +85,13 @@ which is why the level curve caps there.
 
 ## Gain and cleanup
 
-One GainNode carries the whole track at `MUSIC.masterGain`, feeding master output. `setGain`
-validates 0-1 and ramps over 25 ms; zero gain leaves the source running silently, and global
-mute likewise changes only gain. There is no per-stem control any more, and no player-facing
-mixer — the DEV replay panel has a single music toggle.
+One GainNode carries the whole track at `MUSIC.masterGain`, feeding the player's music
+bus, which feeds master output. `setGain` validates 0-1 and ramps over 25 ms; zero gain
+leaves the source running silently, and global mute likewise changes only the master gain.
+The player's music level is that parent bus, so a swell, a bed fade and the title theme
+all scale with it and none of them has to know the setting. Effects have their own bus.
+There is no per-stem control any more. The DEV replay panel still has a single music toggle,
+which ducks the mix gain and leaves the player's level where it is.
 
 Music continues through task slides, vignette changes, the final summary and the return to
 the menu. Task SFX cancellation and profile changes do not touch it. An explicit session
@@ -141,7 +144,7 @@ not be. The theme only has to start, loop and get out of the way.
 `THEME.gain` is measured rather than judged by ear: the theme sits at −18.2 dB RMS against
 the premix's −21.2 dB, so 0.4 against the premix's 0.5632 puts the two at the same heard
 level and the move from the title screen into a level is not a jump. Both hang off the
-engine's master bus, so the mute switch covers the theme like everything else.
+music bus, so the player's music level and the mute cover the theme like the loop.
 
 **A browser will not play it until the page has been touched.** That is the autoplay
 policy and not something the code can route around: on a cold start the context is

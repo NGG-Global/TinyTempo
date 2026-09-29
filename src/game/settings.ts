@@ -10,7 +10,19 @@ export interface Settings {
    * tap, and from nothing else — see `AudioClock.input`.
    */
   readonly calibrationMs: number;
+  /**
+   * Master silence. The speaker puck flips this and nothing else: the two levels below
+   * stay where the player left them, and come back when the mute comes off.
+   */
   readonly muted: boolean;
+  /**
+   * Fraction of the measured music mix, 0–1 in whole percent. The title theme and the
+   * gameplay loop share it. Absent on a save written when sound was only a switch, and
+   * that save was already full volume whenever it was not muted, so the default is 1.
+   */
+  readonly music: number;
+  /** Fraction of the effects mix, on the same scale and with the same default as `music`. */
+  readonly sfx: number;
   /**
    * Short vibrations on a judged hit and on a control. Defaults on: the pulse is the
    * only confirmation left to a player who has muted the game, and the one device that
@@ -39,8 +51,34 @@ export const CALIBRATION_LIMIT_MS = 500;
 /** Below this many usable taps a median says more about the sample than the device. */
 export const CALIBRATION_TAPS = 8;
 const DEFAULTS: Settings = Object.freeze({
-  calibrationMs: 0, muted: false, haptics: true, analytics: ANALYTICS.consentGranted,
+  calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: ANALYTICS.consentGranted,
 });
+
+export type VolumeBus = 'music' | 'sfx';
+
+/**
+ * A player level, as a fraction of the mix.
+ *
+ * Whole percent, because that is the step the slider, the stored setting and the save
+ * code all share — a finer value would round differently in each of them. Anything that
+ * is not a number reads as full: a corrupt field should not silence the game.
+ */
+export function clampVolume(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(100, Math.round(value * 100))) / 100;
+}
+
+/**
+ * The setting after the player moves one level.
+ *
+ * A level above zero while muted would not be heard, so moving one takes the mute off.
+ * Zeroing a bus leaves the mute as it was: the other bus, and the puck, still mean what
+ * they did.
+ */
+export function withVolume(settings: Settings, bus: VolumeBus, volume: number): Settings {
+  const value = clampVolume(volume);
+  return Object.freeze({ ...settings, [bus]: value, muted: settings.muted && value === 0 });
+}
 
 export function clampCalibration(ms: number): number {
   if (!Number.isFinite(ms)) return 0;
@@ -54,12 +92,15 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
-    const { calibrationMs, muted, haptics, analytics } = parsed as {
-      calibrationMs?: unknown; muted?: unknown; haptics?: unknown; analytics?: unknown;
+    const { calibrationMs, muted, music, sfx, haptics, analytics } = parsed as {
+      calibrationMs?: unknown; muted?: unknown; music?: unknown; sfx?: unknown;
+      haptics?: unknown; analytics?: unknown;
     };
     return Object.freeze({
       calibrationMs: typeof calibrationMs === 'number' ? clampCalibration(calibrationMs) : 0,
       muted: muted === true,
+      music: typeof music === 'number' ? clampVolume(music) : 1,
+      sfx: typeof sfx === 'number' ? clampVolume(sfx) : 1,
       // Absent in a v1 save written before the switch existed, and the default is on,
       // so only an explicit `false` turns it off.
       haptics: haptics !== false,
@@ -74,7 +115,12 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
 /** False means nothing was written — blocked storage, a private window, or a full quota. */
 export function saveSettings(settings: Settings, storage: Storage | null = safeStorage()): boolean {
   try {
-    storage?.setItem(KEY, JSON.stringify({ version: VERSION, ...settings, calibrationMs: clampCalibration(settings.calibrationMs) }));
+    storage?.setItem(KEY, JSON.stringify({
+      version: VERSION, ...settings,
+      calibrationMs: clampCalibration(settings.calibrationMs),
+      music: clampVolume(settings.music),
+      sfx: clampVolume(settings.sfx),
+    }));
     return storage !== null;
   } catch { return false; }
 }

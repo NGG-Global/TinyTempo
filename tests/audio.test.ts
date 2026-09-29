@@ -342,3 +342,61 @@ it('plays the middle coda where an act has one, and clears the room before the n
   expect(sources.at(-1)!.buffer).toBe(scratch.rough);
   engine.dispose();
 });
+
+it('keeps music and effects on separate buses, and mute does not discard either level', () => {
+  const nodes: { gain: { value: number; setValueAtTime: ReturnType<typeof vi.fn>; cancelScheduledValues: ReturnType<typeof vi.fn> }; connect: ReturnType<typeof vi.fn> }[] = [];
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 4;
+    sampleRate = 8000;
+    destination = {};
+    close = vi.fn();
+    createGain() {
+      const gain = {
+        value: 1,
+        setValueAtTime: vi.fn((value: number) => { gain.value = value; }),
+        cancelScheduledValues: vi.fn(),
+        linearRampToValueAtTime: vi.fn(),
+        exponentialRampToValueAtTime: vi.fn(),
+      };
+      const node = { gain, connect: vi.fn((target: object) => target), disconnect: vi.fn() };
+      nodes.push(node);
+      return node;
+    }
+    createOscillator() {
+      return {
+        frequency: { value: 0 },
+        connect: vi.fn((target: object) => target),
+        start: vi.fn(), stop: vi.fn(), disconnect: vi.fn(), onended: null,
+      };
+    }
+  });
+  const engine = new AudioEngine();
+  // master, music bus, effects bus, then the loop's own bus and the theme's.
+  const master = nodes[0]!;
+  const musicBus = nodes[1]!;
+  const sfxBus = nodes[2]!;
+  expect(nodes[3]!.connect).toHaveBeenCalledWith(musicBus);
+  expect(nodes[4]!.connect).toHaveBeenCalledWith(musicBus);
+  engine.setMusicVolume(0.5);
+  engine.setSfxVolume(0.25);
+  expect(musicBus.gain.value).toBe(0.5);
+  expect(sfxBus.gain.value).toBe(0.25);
+  engine.play(5, 'count');
+  expect(nodes.at(-1)!.connect).toHaveBeenCalledWith(sfxBus);
+  engine.toggleMute();
+  expect(engine.muted).toBe(true);
+  expect(master.gain.value).toBe(0);
+  // The levels are still there. Unmute is the puck coming back, not a reset to full.
+  expect(engine.musicVolume).toBe(0.5);
+  expect(engine.sfxVolume).toBe(0.25);
+  expect(musicBus.gain.value).toBe(0.5);
+  expect(engine.silent).toBe(true);
+  engine.toggleMute();
+  expect(master.gain.value).toBe(1);
+  expect(engine.silent).toBe(false);
+  engine.setMusicVolume(0);
+  engine.setSfxVolume(0);
+  expect(engine.muted).toBe(false);
+  expect(engine.silent).toBe(true);
+  engine.dispose();
+});

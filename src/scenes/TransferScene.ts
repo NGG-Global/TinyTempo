@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyCalibration, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { applyCalibration, applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -325,7 +325,9 @@ export class TransferScene extends BaseScene {
     saveSettings({ ...loadSettings(), ...data.settings });
     const engine = sharedAudio(this);
     applyCalibration(engine, data.settings.calibrationMs);
-    if (engine.muted !== data.settings.muted) engine.toggleMute();
+    // Levels as well as the mute. An engine that already existed did not re-read the save
+    // when `sharedAudio` returned it, and a mute flip on its own would have left the old mix.
+    applyMix(engine, loadSettings());
     setHaptics(data.settings.haptics);
     if (data.tutorialComplete) completeTutorial();
     if (!stored) return 'Restored for now, but this device wouldn’t save it.';

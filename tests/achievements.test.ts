@@ -120,7 +120,7 @@ describe('what a save has earned', () => {
     const phone = road(22);
     const tablet = road(31);
     expect(earnedAchievements(mergeProgress(phone, tablet), FIVE).map(a => a.key)).toEqual(['clear-10', 'clear-20', 'clear-30']);
-    const code = encodeSaveCode({ progress: tablet, settings: { calibrationMs: 0, muted: false, haptics: true }, tutorialComplete: true });
+    const code = encodeSaveCode({ progress: tablet, settings: { calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true }, tutorialComplete: true });
     const decoded = decodeSaveCode(code);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) expect(earnedAchievements(decoded.data.progress, FIVE)).toEqual(earnedAchievements(tablet, FIVE));

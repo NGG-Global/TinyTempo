@@ -77,7 +77,7 @@ describe('restoring onto a device that already has progress', () => {
     const local = { unlocked: 5, best: { 1: 100, 9: 44 } };
     const result = decodeSaveCode(encodeSaveCode({
       progress: { unlocked: 23, best: { 1: 92, 2: 78, 3: 100, 22: 61 } },
-      settings: { calibrationMs: -42, muted: false, haptics: true },
+      settings: { calibrationMs: -42, muted: false, music: 1, sfx: 1, haptics: true },
       tutorialComplete: true,
     }));
     expect(result.ok).toBe(true);

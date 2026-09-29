@@ -3,7 +3,7 @@ import { decodeSaveCode, encodeSaveCode, SAVE_CODE, type SaveData } from '../src
 
 const save = (over: Partial<SaveData> = {}): SaveData => ({
   progress: { unlocked: 23, best: { 1: 92, 2: 78, 3: 100, 22: 61 } },
-  settings: { calibrationMs: -42, muted: false, haptics: true },
+  settings: { calibrationMs: -42, muted: false, music: 1, sfx: 1, haptics: true },
   tutorialComplete: true,
   ...over,
 });
@@ -34,7 +34,7 @@ describe('a save code', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(Object.keys(result.data).sort()).toEqual(['progress', 'settings', 'tutorialComplete']);
-    expect(Object.keys(result.data.settings).sort()).toEqual(['calibrationMs', 'haptics', 'muted']);
+    expect(Object.keys(result.data.settings).sort()).toEqual(['calibrationMs', 'haptics', 'music', 'muted', 'sfx']);
     expect(JSON.stringify(result.data)).not.toMatch(/heart|premium|refill|entitle/i);
   });
 });
@@ -110,7 +110,7 @@ describe('a code that is wrong', () => {
     const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
     const last = ALPHABET.indexOf(code[code.length - 1] ?? '0');
     expect(last).toBeGreaterThanOrEqual(0);
-    // 29 bytes is 232 bits against 47 characters' 235, so the low two bits are padding.
+    // 31 bytes is 248 bits against 50 characters' 250, so the low two bits are padding.
     const nudged = code.slice(0, -1) + ALPHABET[last ^ 0b10];
     // Reported as a typo rather than as a malformed string: it is a real code with one
     // character wrong in it, and that is what the player needs to be told to look for.
@@ -150,7 +150,7 @@ describe('values at their limits', () => {
   it('keeps a negative calibration negative', () => {
     for (const calibrationMs of [-500, -1, 0, 1, 500]) {
       const result = decodeSaveCode(encodeSaveCode(save({
-        settings: { calibrationMs, muted: true, haptics: false },
+        settings: { calibrationMs, muted: true, music: 1, sfx: 1, haptics: false },
       })));
       expect(result.ok).toBe(true);
       if (result.ok) expect(result.data.settings.calibrationMs).toBe(calibrationMs);
@@ -160,11 +160,50 @@ describe('values at their limits', () => {
   it('keeps each switch independent', () => {
     for (const muted of [false, true]) for (const haptics of [false, true]) {
       const result = decodeSaveCode(encodeSaveCode(save({
-        settings: { calibrationMs: 0, muted, haptics },
+        settings: { calibrationMs: 0, muted, music: 1, sfx: 1, haptics },
       })));
       expect(result.ok).toBe(true);
-      if (result.ok) expect(result.data.settings).toEqual({ calibrationMs: 0, muted, haptics });
+      if (result.ok) expect(result.data.settings).toEqual({ calibrationMs: 0, muted, music: 1, sfx: 1, haptics });
     }
+  });
+
+  it('carries each level on its own, in whole percent', () => {
+    for (const music of [0, 0.33, 0.5, 1]) for (const sfx of [0, 0.01, 1]) {
+      const result = decodeSaveCode(encodeSaveCode(save({
+        settings: { calibrationMs: 12, muted: false, music, sfx, haptics: true },
+      })));
+      expect(result.ok).toBe(true);
+      if (result.ok) expect(result.data.settings.music).toBe(music);
+      if (result.ok) expect(result.data.settings.sfx).toBe(sfx);
+    }
+  });
+
+  it('reads a version 1 code as full levels under the mute it already carried', () => {
+    // Header of six and a checksum. No level bytes: nothing was cleared. The flags byte
+    // is muted + haptics + tutorial, which is what a code from before the sliders held.
+    const bytes = new Uint8Array(7);
+    bytes[0] = 1;
+    bytes[1] = 5;
+    bytes[5] = 1 | 2 | 4;
+    let sum = 0;
+    for (let i = 0; i < 6; i++) sum = (sum + (bytes[i] ?? 0)) & 0xff;
+    bytes[6] = sum;
+    const ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+    let out = '';
+    let buffer = 0;
+    let bits = 0;
+    for (const byte of bytes) {
+      buffer = (buffer << 8) | byte;
+      bits += 8;
+      while (bits >= 5) { bits -= 5; out += ALPHABET[(buffer >> bits) & 31]; }
+    }
+    if (bits > 0) out += ALPHABET[(buffer << (5 - bits)) & 31];
+    const result = decodeSaveCode(out);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.data.progress.unlocked).toBe(5);
+    expect(result.data.settings).toEqual({ calibrationMs: 0, muted: true, music: 1, sfx: 1, haptics: true });
+    expect(result.data.tutorialComplete).toBe(true);
   });
 
   it('does not trust a level or an accuracy beyond its range', () => {

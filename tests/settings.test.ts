@@ -14,7 +14,7 @@ import { AudioClock } from '../src/audio/AudioClock';
 import { createJudge, judgeTap } from '../src/rhythm/judge';
 import {
   CALIBRATION_LIMIT_MS, CALIBRATION_TAPS, calibrationFrom, clampCalibration,
-  loadSettings, saveSettings,
+  clampVolume, loadSettings, saveSettings, withVolume,
 } from '../src/game/settings';
 
 function fakeStorage(initial?: string) {
@@ -32,15 +32,15 @@ function fakeStorage(initial?: string) {
 
 describe('stored settings', () => {
   it('falls back to the defaults for missing, unparseable and wrongly shaped values', () => {
-    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false, haptics: true, analytics: false });
+    expect(loadSettings(null)).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage())).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
   });
   it('clamps a stored offset rather than trusting it', () => {
-    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibrationMs: 180, muted: true, music: 1, sfx: 1, haptics: true, analytics: false });
     expect(loadSettings(fakeStorage(`{"calibrationMs":${1e9}}`)).calibrationMs).toBe(CALIBRATION_LIMIT_MS);
     expect(loadSettings(fakeStorage('{"calibrationMs":-1e9}')).calibrationMs).toBe(-CALIBRATION_LIMIT_MS);
     expect(clampCalibration(NaN)).toBe(0);
@@ -57,14 +57,14 @@ describe('stored settings', () => {
   });
   it('reports whether a write landed and clamps on the way out', () => {
     const storage = fakeStorage();
-    expect(saveSettings({ calibrationMs: 5000, muted: true, haptics: true, analytics: false }, storage)).toBe(true);
-    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true, haptics: true, analytics: false });
-    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics: false }, null)).toBe(false);
+    expect(saveSettings({ calibrationMs: 5000, muted: true, music: 1, sfx: 1, haptics: true, analytics: false }, storage)).toBe(true);
+    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 1, calibrationMs: CALIBRATION_LIMIT_MS, muted: true, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(saveSettings({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false }, null)).toBe(false);
     const blocked = { setItem: () => { throw new Error('quota'); } } as unknown as Storage;
-    expect(saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics: false }, blocked)).toBe(false);
+    expect(saveSettings({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false }, blocked)).toBe(false);
     // A round trip through storage is the shape the game actually uses.
-    saveSettings({ calibrationMs: -40, muted: false, haptics: false, analytics: false }, storage);
-    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, haptics: false, analytics: false });
+    saveSettings({ calibrationMs: -40, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false }, storage);
+    expect(loadSettings(storage)).toEqual({ calibrationMs: -40, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false });
     // Reset is writing zero, not measuring the inverse of a kept offset.
     saveSettings({ ...loadSettings(storage), calibrationMs: 0 }, storage);
     expect(loadSettings(storage).calibrationMs).toBe(0);
@@ -141,6 +141,37 @@ describe('the offset applies to judged input only', () => {
   });
 });
 
+describe('music and effects levels', () => {
+  const base = { calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: false };
+  it('reads a save from before the sliders as full, mute and all', () => {
+    // The mute still silences. The levels underneath it are what unmuting used to restore,
+    // which was everything, so a missing field is full rather than zero.
+    const muted = loadSettings(fakeStorage('{"calibrationMs":40,"muted":true,"haptics":false}'));
+    expect(muted).toEqual({ ...base, calibrationMs: 40, muted: true, haptics: false });
+    expect(loadSettings(fakeStorage('{"music":"loud","sfx":null}')).music).toBe(1);
+    expect(loadSettings(fakeStorage('{"music":"loud","sfx":null}')).sfx).toBe(1);
+  });
+  it('clamps to whole percent, and a nonsense value stays full', () => {
+    expect(clampVolume(0.333)).toBe(0.33);
+    expect(clampVolume(0)).toBe(0);
+    expect(clampVolume(1)).toBe(1);
+    expect(clampVolume(1.4)).toBe(1);
+    expect(clampVolume(-0.2)).toBe(0);
+    expect(clampVolume(Number.NaN)).toBe(1);
+    expect(loadSettings(fakeStorage('{"music":0.336,"sfx":2}')).music).toBe(0.34);
+    expect(loadSettings(fakeStorage('{"music":0.336,"sfx":2}')).sfx).toBe(1);
+  });
+  it('takes the mute off when a level is raised, and leaves it when a level is zeroed', () => {
+    const muted = { ...base, muted: true, music: 0.8, sfx: 0.4 };
+    expect(withVolume(muted, 'music', 0.5).muted).toBe(false);
+    expect(withVolume(muted, 'music', 0.5).music).toBe(0.5);
+    expect(withVolume(muted, 'music', 0.5).sfx).toBe(0.4);
+    expect(withVolume(muted, 'sfx', 0).muted).toBe(true);
+    expect(withVolume(muted, 'sfx', 0).sfx).toBe(0);
+    expect(withVolume(base, 'music', 0).muted).toBe(false);
+  });
+});
+
 describe('analytics consent', () => {
   it('treats a save written before the switch existed as unanswered, not as a yes', () => {
     // The opposite of the `haptics` rule above, and deliberately so: a missing preference
@@ -155,7 +186,7 @@ describe('analytics consent', () => {
   it('keeps an explicit answer of either kind', () => {
     for (const analytics of [true, false]) {
       const storage = fakeStorage();
-      saveSettings({ calibrationMs: 0, muted: false, haptics: true, analytics }, storage);
+      saveSettings({ calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics }, storage);
       expect(loadSettings(storage).analytics).toBe(analytics);
     }
   });

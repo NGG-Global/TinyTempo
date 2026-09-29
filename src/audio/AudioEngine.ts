@@ -61,9 +61,17 @@ export class AudioEngine implements SoundSink {
   public readonly context = new AudioContext({ latencyHint: 'interactive' });
   public readonly clock = new AudioClock(this.context);
   private readonly master = this.context.createGain();
-  public readonly music = new MusicSystem(this.context, this.master);
-  /** The title theme, on the same bus so the mute switch covers it like everything else. */
-  public readonly theme = new ThemeMusic(this.context, this.master);
+  /**
+   * Player levels, above the mix. MusicSystem and the title theme keep their own measured
+   * gains — a swell, a bed fade, `MUSIC.masterGain` — and this bus scales all of them, so
+   * none of those call sites has to know what the player chose. Effects never go through it.
+   */
+  private readonly musicBus = this.context.createGain();
+  /** Every voice, accent and stinger. Independent of the music level. */
+  private readonly sfxBus = this.context.createGain();
+  public readonly music = new MusicSystem(this.context, this.musicBus);
+  /** The title theme, on the music bus so the music level and the mute cover it like the loop. */
+  public readonly theme = new ThemeMusic(this.context, this.musicBus);
   private readonly sources = new Map<AudioScheduledSourceNode, GainNode>();
   private sounds: VignetteSounds | null = null;
   /** The action voice's takes, and which one the next beat gets. */
@@ -71,6 +79,10 @@ export class AudioEngine implements SoundSink {
   private take = 0;
   private disposed = false;
   public muted = false;
+  /** The player's music level, 0–1. Mute does not change it. */
+  public musicVolume = 1;
+  /** The player's effects level, 0–1. Mute does not change it. */
+  public sfxVolume = 1;
   /**
    * A genuine device change should adopt the new output pair. `reset()` would drop the
    * last audible mapping onto `currentTime` the instant the stamp is missing — and Chrome
@@ -81,8 +93,17 @@ export class AudioEngine implements SoundSink {
   private readonly onSink = (): void => { this.clock.refresh(); };
 
   public constructor() {
+    this.musicBus.gain.value = 1;
+    this.sfxBus.gain.value = 1;
+    this.musicBus.connect(this.master);
+    this.sfxBus.connect(this.master);
     this.master.connect(this.context.destination);
     this.context.addEventListener?.('sinkchange', this.onSink);
+  }
+
+  /** Nothing is coming out: the puck is off, or both levels are. */
+  public get silent(): boolean {
+    return this.muted || (this.musicVolume === 0 && this.sfxVolume === 0);
   }
   public setSounds(sounds: VignetteSounds): void {
     this.cancel();
@@ -128,7 +149,7 @@ export class AudioEngine implements SoundSink {
     envelope.gain.setValueAtTime(0, start);
     envelope.gain.linearRampToValueAtTime(kind === 'action' ? 0.22 : 0.1, start + 0.002);
     envelope.gain.exponentialRampToValueAtTime(0.001, start + DURATION);
-    source.connect(envelope).connect(this.master);
+    source.connect(envelope).connect(this.sfxBus);
     this.sources.set(source, envelope);
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
     this.startVoice(source, envelope, start, start + DURATION);
@@ -171,7 +192,7 @@ export class AudioEngine implements SoundSink {
     source.buffer = buffer;
     if (rate !== 1) source.playbackRate.value = rate;
     envelope.gain.value = gain;
-    source.connect(envelope).connect(this.master);
+    source.connect(envelope).connect(this.sfxBus);
     this.sources.set(source, envelope);
     source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
     const start = Math.max(time, this.context.currentTime);
@@ -206,9 +227,23 @@ export class AudioEngine implements SoundSink {
       this.sources.delete(source);
     }
   }
+  public setMusicVolume(value: number): void {
+    this.musicVolume = unitGain(value);
+    this.setBus(this.musicBus, this.musicVolume);
+  }
+  public setSfxVolume(value: number): void {
+    this.sfxVolume = unitGain(value);
+    this.setBus(this.sfxBus, this.sfxVolume);
+  }
   public toggleMute(): void {
     this.muted = !this.muted;
-    this.master.gain.setValueAtTime(this.muted ? 0 : 1, this.context.currentTime);
+    this.setBus(this.master, this.muted ? 0 : 1);
+  }
+  /** Instant, and it cancels a ramp already aimed at this bus. A slider cannot queue. */
+  private setBus(bus: GainNode, value: number): void {
+    const now = this.context.currentTime;
+    bus.gain.cancelScheduledValues(now);
+    bus.gain.setValueAtTime(value, now);
   }
   public cancel(): void {
     for (const [source, envelope] of this.sources) {
@@ -226,7 +261,14 @@ export class AudioEngine implements SoundSink {
     this.music.dispose();
     this.disposed = true;
     this.context.removeEventListener?.('sinkchange', this.onSink);
+    this.musicBus.disconnect();
+    this.sfxBus.disconnect();
     this.master.disconnect();
     void this.context.close();
   }
+}
+
+function unitGain(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.max(0, Math.min(1, value));
 }
