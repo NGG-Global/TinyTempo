@@ -354,7 +354,7 @@ export class TutorialScene extends BaseScene {
       this.actionLabel.setPosition(this.action.centerX, this.action.centerY + sink);
     }
     drawPuck(g, this.mute.x, this.mute.y, s);
-    drawSpeaker(g, this.mute.x, this.mute.y, 17 * s, PALETTE.ink, this.audio.muted);
+    drawSpeaker(g, this.mute.x, this.mute.y, 17 * s, PALETTE.ink, this.audio.silent);
     // Watch again is offered once a pass is over, never while one is playing or judging.
     this.replayLabel.setVisible(this.started && !this.busy && !this.paused && showAction);
     this.drawTurnBlock(now, words);

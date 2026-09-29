@@ -868,7 +868,7 @@ export class PlayScene extends BaseScene {
       if (!this.controller) {
         this.audio = sharedAudio(this);
         this.audio.context.addEventListener('statechange', this.audioState);
-        this.muted = this.audio.muted;
+        this.muted = this.audio.silent;
         this.drawChrome(this.uiScale, 0);
         this.controller = new RoundController(this.audio, {
           phase: phase => this.showPhase(phase),
@@ -1150,7 +1150,7 @@ export class PlayScene extends BaseScene {
     const near = (at: { x: number; y: number }) => Math.abs(tap.x - at.x) < this.controlSize / 2 && Math.abs(tap.y - at.y) < this.controlSize / 2;
     if (near(this.muteAt)) {
       this.pressPuck('mute');
-      if (this.audio) this.muted = toggleMute(this.audio);
+      if (this.audio) { toggleMute(this.audio); this.muted = this.audio.silent; }
       return;
     }
     if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }

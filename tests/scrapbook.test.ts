@@ -185,7 +185,7 @@ describe('restores and merges', () => {
 
   it('travel in a save code without the code knowing about them', () => {
     const progress = { ...road(50, 2), best: { ...road(50, 2).best, 1: 100, 24: on(24, 3), 50: on(50, 3) } };
-    const code = encodeSaveCode({ progress, settings: { calibrationMs: 0, muted: false, haptics: true }, tutorialComplete: true });
+    const code = encodeSaveCode({ progress, settings: { calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true }, tutorialComplete: true });
     const decoded = decodeSaveCode(code);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;

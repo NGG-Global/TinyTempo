@@ -1,5 +1,5 @@
 import type { Progress } from './progress';
-import type { Settings } from './settings';
+import { clampVolume, type Settings } from './settings';
 
 /**
  * A save as a short string the player can carry.
@@ -10,7 +10,7 @@ import type { Settings } from './settings';
  * This is that route, and the only one that does not require the game to have accounts.
  *
  * **What travels is what the player earned, never what they owe or own.** Levels, best
- * accuracies, calibration, the two switches and whether the tutorial is done. Not hearts,
+ * accuracies, calibration, the mute, the two levels and whether the tutorial is done. Not hearts,
  * not the refill ledger, not the daily-heart ledger, not the premium cache — restoring
  * those is either an exploit or an incoherence, and premium comes back through the store
  * rather than through a string a player can edit.
@@ -30,7 +30,11 @@ const DECODE = new Map<string, number>([
 ]);
 
 export const SAVE_CODE = {
-  version: 1,
+  /**
+   * 2 adds the music and effects levels. 1 is still read: a code written before the
+   * sliders existed carries the mute and neither level, and both levels come back full.
+   */
+  version: 2,
   /** Levels beyond this are not encoded; far past where the difficulty curve saturates. */
   maxLevel: 4000,
   /** Characters per group in the printed form. Groups are cosmetic and stripped on read. */
@@ -47,7 +51,7 @@ export type SaveCodeError = 'empty' | 'malformed' | 'checksum' | 'version';
  * a consent question on a phone whose owner was never asked it, so the type says so and
  * the compiler keeps it that way.
  */
-export type PortableSettings = Pick<Settings, 'calibrationMs' | 'muted' | 'haptics'>;
+export type PortableSettings = Pick<Settings, 'calibrationMs' | 'muted' | 'music' | 'sfx' | 'haptics'>;
 
 export interface SaveData {
   readonly progress: Progress;
@@ -63,12 +67,14 @@ const FLAG_MUTED = 1;
 const FLAG_HAPTICS = 2;
 const FLAG_TUTORIAL = 4;
 /**
- * Bytes before the per-level scores: version, unlocked (2), calibration (2), flags.
- * The checksum is one further byte at the very end, so a buffer is `HEADER + levels + 1`
- * — getting that wrong let the checksum land on the last level's score and silently
- * corrupt it, which the round-trip test now pins.
+ * Bytes before the per-level scores. Version 1 is six: version, unlocked (2), calibration
+ * (2), flags. Version 2 inserts the two levels after the flags, and the scores start
+ * after those. The checksum is one further byte at the very end, so a buffer is
+ * `header + levels + 1` — getting that wrong let the checksum land on the last level's
+ * score and silently corrupt it, which the round-trip test now pins.
  */
-const HEADER = 6;
+const HEADER_V1 = 6;
+const HEADER_V2 = 8;
 
 /** Sum of every preceding byte. Catches a truncated paste and most single-character slips. */
 function checksum(bytes: Uint8Array, end: number): number {
@@ -90,7 +96,7 @@ export function encodeSaveCode(data: SaveData): string {
     .map(Number)
     .filter(level => Number.isInteger(level) && level >= 1 && level <= SAVE_CODE.maxLevel);
   const top = cleared.length === 0 ? 0 : Math.max(...cleared);
-  const bytes = new Uint8Array(HEADER + top + 1);
+  const bytes = new Uint8Array(HEADER_V2 + top + 1);
   bytes[0] = SAVE_CODE.version;
   bytes[1] = unlocked & 0xff;
   bytes[2] = (unlocked >> 8) & 0xff;
@@ -102,9 +108,13 @@ export function encodeSaveCode(data: SaveData): string {
   bytes[5] = (data.settings.muted ? FLAG_MUTED : 0)
     | (data.settings.haptics ? FLAG_HAPTICS : 0)
     | (data.tutorialComplete ? FLAG_TUTORIAL : 0);
+  // Whole percent. `clampVolume` is the same rounding the slider stores, so a code and
+  // the device it came from cannot disagree by a step.
+  bytes[6] = Math.round(clampVolume(data.settings.music) * 100);
+  bytes[7] = Math.round(clampVolume(data.settings.sfx) * 100);
   for (let level = 1; level <= top; level++) {
     const best = data.progress.best[level];
-    bytes[HEADER - 1 + level] = typeof best === 'number' && Number.isFinite(best)
+    bytes[HEADER_V2 - 1 + level] = typeof best === 'number' && Number.isFinite(best)
       ? Math.max(0, Math.min(100, Math.round(best)))
       : 0;
   }
@@ -120,20 +130,25 @@ export function decodeSaveCode(code: string): SaveCodeResult {
   // *is* in the alphabet but leaves rubbish in the padding is a save code with a slip in
   // it, and telling a player to check their typing beats telling them it is not a code.
   if (read === null) return { ok: false, reason: 'malformed' };
-  if (read.bytes.length < HEADER + 1) return { ok: false, reason: 'malformed' };
+  // Long enough to be a version 1 code. A shorter one never was; a version 2 code that
+  // is only this long fails once the version is known, below.
+  if (read.bytes.length < HEADER_V1 + 1) return { ok: false, reason: 'malformed' };
   const bytes = read.bytes;
   if (!read.canonical || checksum(bytes, bytes.length - 1) !== bytes[bytes.length - 1]) {
     return { ok: false, reason: 'checksum' };
   }
-  if (bytes[0] !== SAVE_CODE.version) return { ok: false, reason: 'version' };
+  const version = bytes[0];
+  if (version !== 1 && version !== SAVE_CODE.version) return { ok: false, reason: 'version' };
+  const header = version === 1 ? HEADER_V1 : HEADER_V2;
+  if (bytes.length < header + 1) return { ok: false, reason: 'malformed' };
   const unlocked = clampLevel((bytes[1] ?? 0) | ((bytes[2] ?? 0) << 8));
   const raw = (bytes[3] ?? 0) | ((bytes[4] ?? 0) << 8);
   const calibrationMs = raw >= 0x8000 ? raw - 0x10000 : raw;
   const flags = bytes[5] ?? 0;
   const best: Record<number, number> = {};
-  const levels = bytes.length - HEADER - 1;
+  const levels = bytes.length - header - 1;
   for (let level = 1; level <= levels; level++) {
-    const value = bytes[HEADER - 1 + level] ?? 0;
+    const value = bytes[header - 1 + level] ?? 0;
     if (value > 0) best[level] = Math.min(100, value);
   }
   return {
@@ -143,6 +158,9 @@ export function decodeSaveCode(code: string): SaveCodeResult {
       settings: {
         calibrationMs,
         muted: (flags & FLAG_MUTED) !== 0,
+        // A version 1 code has no levels to restore. Full is what that mute was covering.
+        music: version === 1 ? 1 : clampVolume((bytes[6] ?? 0) / 100),
+        sfx: version === 1 ? 1 : clampVolume((bytes[7] ?? 0) / 100),
         haptics: (flags & FLAG_HAPTICS) !== 0,
       },
       tutorialComplete: (flags & FLAG_TUTORIAL) !== 0,

@@ -145,7 +145,7 @@ same problem:
 ```ts
 interface SaveData {
   progress: Progress;                 // unlocked + best accuracy per level
-  settings: PortableSettings;         // calibrationMs, muted, haptics
+  settings: PortableSettings;         // calibrationMs, muted, music, sfx, haptics
   tutorialComplete: boolean;
 }
 ```

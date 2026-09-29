@@ -165,7 +165,10 @@ export class SupportScene extends BaseScene {
       usageData: settings.analytics,
       saveCode: encodeSaveCode({
         progress,
-        settings: { calibrationMs: settings.calibrationMs, muted: settings.muted, haptics: settings.haptics },
+        settings: {
+          calibrationMs: settings.calibrationMs, muted: settings.muted,
+          music: settings.music, sfx: settings.sfx, haptics: settings.haptics,
+        },
         tutorialComplete: tutorialComplete(),
       }),
     };

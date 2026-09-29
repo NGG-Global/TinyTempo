@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setMusicBed } from '@/audio/musicBed';
-import { currentAudio, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
@@ -94,7 +94,7 @@ export class MenuScene extends BaseScene {
     this.busy = false;
     this.pressedAt = this.puckPressedAt = -Infinity;
     this.puckPressed = null;
-    this.muted = isMuted(this);
+    this.muted = outputSilent(this);
     // Read, not stored: a player whose old save already three-starred a keepsake's level
     // sees the dot on their first launch after the Scrapbook shipped, and never again once
     // they have looked.
@@ -281,7 +281,8 @@ export class MenuScene extends BaseScene {
       return;
     }
     if (Math.abs(tap.x - this.muteAt.x) < half && Math.abs(tap.y - this.muteAt.y) < half) {
-      this.muted = toggleMute(sharedAudio(this));
+      toggleMute(sharedAudio(this));
+      this.muted = outputSilent(this);
       this.puckPressed = 'mute';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
@@ -342,7 +343,7 @@ export class MenuScene extends BaseScene {
    *
    * This does construct the AudioContext before the PLAY gesture, which the menu used to
    * avoid. The reason it avoided it was that the mute puck must read a stored setting
-   * rather than an engine — `isMuted` still does, so that reason is intact, and a title
+   * rather than an engine — `outputSilent` still does, so that reason is intact, and a title
    * screen with a theme is a title screen that has something to do with a context.
    */
   private async wakeTheme(): Promise<void> {

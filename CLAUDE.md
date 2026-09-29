@@ -9,7 +9,9 @@ reachable from the menu and the map. `src/game/levels.ts` derives every level
 one curve in `src/config/progression.ts`; keep new difficulty knobs on that
 curve. `src/game/progress.ts` owns saved progress and `src/game/settings.ts`
 owns player settings; both validate every field on read, because storage can be
-blocked, stale or tampered with. Progress leaves the device two ways, neither of them an
+blocked, stale or tampered with. Music and effects are separate levels on that save —
+each a fraction of its own mix, full when a save has neither — and the speaker puck is a
+master mute that silences both without discarding them. Progress leaves the device two ways, neither of them an
 account: Android's Auto Backup, and the save code on `TransferScene` — a checksummed
 Crockford base32 string carrying levels, accuracies and settings, never hearts or
 purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
@@ -609,7 +611,7 @@ src/
     eventShape.ts      Firebase's name and parameter limits, as pure functions
     firebase.ts        The Firebase adapter; the only file that knows the vendor
   audio/
-    AudioEngine.ts     The only AudioContext; SFX scheduling and mute
+    AudioEngine.ts     The only AudioContext; music and effects buses, and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
     MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
     musicBed.ts        Shell, level or silent: which job the one loop is doing
@@ -653,7 +655,7 @@ src/
     progress.ts        Saved unlocks and best accuracies; merging two saves
     saveCode.ts        Progress as a checksummed string, no Phaser import; never consent
     supportReport.ts   The details a support email carries, as pure text
-    settings.ts        Saved audio offset and mute
+    settings.ts        Saved audio offset, music and effects levels, and mute
     beatTrack.ts       What the two rows show, and the handover, as pure functions
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
     subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries

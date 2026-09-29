@@ -24,6 +24,14 @@ export function drawSpeaker(g: Phaser.GameObjects.Graphics, x: number, y: number
   }
 }
 
+/** An eighth note. The Music row, so it is not a second speaker beside Effects. */
+export function drawNote(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  g.fillStyle(colour, alpha);
+  g.fillEllipse(x - r * 0.22, y + r * 0.28, r * 0.72, r * 0.52);
+  g.fillRect(x + r * 0.08, y - r * 0.72, Math.max(2.5, r * 0.14), r * 1.15);
+  g.fillTriangle(x + r * 0.18, y - r * 0.72, x + r * 0.92, y - r * 0.28, x + r * 0.18, y - r * 0.08);
+}
+
 export function drawBack(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
   g.lineStyle(Math.max(2.5, r * 0.22), colour, alpha);
   g.lineBetween(x - r * 0.7, y, x + r * 0.7, y);

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { reducedMotion } from '@/core/motionPreference';
 import { MUSIC } from '@/config/music';
-import { currentAudio, ensureShellMusic, hushMusic, isMuted, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, ensureShellMusic, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -294,7 +294,7 @@ export class MapScene extends BaseScene {
     this.feedbackAt = this.touchAt = this.pressedAt = this.puckPressedAt = -Infinity;
     this.lockedIndex = -1;
     this.puckPressed = null;
-    this.muted = isMuted(this);
+    this.muted = outputSilent(this);
     this.progress = loadProgress();
     this.health = loadHealth();
     // Against the saved stars, not the shown count: a flight in progress is presentation,
@@ -2147,7 +2147,8 @@ export class MapScene extends BaseScene {
       return;
     }
     if (near(this.muteAt)) {
-      this.muted = toggleMute(sharedAudio(this));
+      toggleMute(sharedAudio(this));
+      this.muted = outputSilent(this);
       this.pressPuck('mute');
       return;
     }

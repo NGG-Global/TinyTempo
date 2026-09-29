@@ -96,9 +96,9 @@ and reaches no log, crash report or analytics event.
 **8. No rate prompt, no share, no "what's new".** Nothing asks a happy player to
 review, which is what drives early ranking.
 
-**9. Audio is one mute switch.** Haptics and the tap-offset calibration are
-separate controls. There are still no separate music and effects levels. Common
-request, and the `AudioEngine` already separates the two buses.
+**9. ~~Audio is one mute switch.~~ Music and effects each have a level.** The
+speaker puck is still a master mute, and it does not discard either level.
+Haptics and the tap-offset calibration stay separate controls.
 
 **10. Accessibility stops at reduced motion.** `core/motionPreference.ts` is
 honoured throughout, which is good. But the coral-on-green palette has had no

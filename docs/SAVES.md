@@ -46,13 +46,18 @@ printed in groups of five:
 04BG1-NQZ0S-E4WS0-07M00-00000-005G0-00000-00000-0004F-Q8
 ```
 
+That sample is a version 1 code. A code written now is version 2, which is the same
+record with the two levels inserted after the flags. A version 1 code still restores:
+the mute is the mute, and both levels come back full.
+
 | Bytes | Holds |
 | --- | --- |
-| 0 | Format version. A code from a newer version is refused, not guessed at. |
+| 0 | Format version. 1 is the original record; 2 adds the two levels. A newer version is refused, not guessed at. |
 | 1–2 | Highest unlocked level |
 | 3–4 | Calibration offset, signed |
 | 5 | Muted, haptics, tutorial complete |
-| 6 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared |
+| 6–7 | Version 2 only: music and effects, each a whole percent, 0–100. A version 1 code reads both as full. |
+| 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. |
 | n | Checksum: the sum of every preceding byte |
 
 One byte per level sounds wasteful and is not: a level nobody cleared costs a zero byte,
@@ -60,8 +65,9 @@ which base32 and the run of zeros between clears compress into very little to re
 300-level save is under 600 characters, and a typical one is under 60.
 
 **What travels is what the player earned, never what they owe or own.** Levels, best
-accuracies, calibration, the two switches, the tutorial flag. Not hearts, not the refill
-ledger, not the daily-heart ledger, not the premium cache — restoring any of those is
+accuracies, calibration, the mute, the two levels, the haptics switch, the tutorial flag.
+Not hearts, not the refill ledger, not the daily-heart ledger, not the premium cache —
+restoring any of those is
 either an exploit or an incoherence, and a purchase comes back through the store's own
 Restore, which is the only place it can be checked. `tests/saveCode.test.ts` asserts the
 shape of a decoded save, so a later field cannot quietly join the code.
