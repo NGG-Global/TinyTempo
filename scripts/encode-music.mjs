@@ -1,53 +1,85 @@
 /**
  * Encodes the delivered WAV stems in bgm/ to the MP3s the game ships.
  *
- * The WAVs stay the source of truth (161 MB, unmodified). The game loads one
- * premixed stereo track, `bgm/mix/tiny-tempo.mp3`, because nothing mixes stems at
- * runtime: seven separate decodes cost ~307 MiB of float PCM and roughly double
- * that transiently, to play seven buffers at a fixed relative level. Pass
- * `--stems` to also write the per-stem MP3s, which is what a future dynamic mix
- * would need. Pure JavaScript LAME (lamejs), so no native encoder is required.
- * Re-run after replacing a stem, then measure the decoded lead-in again
- * (see docs/MUSIC.md).
+ * The WAVs stay the source of truth (unmodified). Each gameplay track is one premixed
+ * stereo MP3 in bgm/mix/, because nothing mixes stems at runtime: separate decodes cost
+ * ~42 MiB of float PCM each, and roughly double that transiently, to play buffers at a
+ * fixed relative level. Pass `--stems` to also write per-stem MP3s beside the masters,
+ * which is what a future dynamic mix would need. Pure JavaScript LAME (lamejs), so no
+ * native encoder is required. Re-run after replacing a stem, then measure the decoded
+ * lead-in again (see docs/MUSIC.md).
  *
- *   node scripts/encode-music.mjs [kbps] [--stems]
+ *   node scripts/encode-music.mjs [kbps] [--stems] [--track a|b]
+ *
+ * Without `--track` every track is encoded. Track A's encode is deterministic, so a
+ * re-run with the same masters and bitrate writes the same bytes.
  */
 import { mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Mp3Encoder } from '@breezystack/lamejs';
 
 const args = process.argv.slice(2);
 const WITH_STEMS = args.includes('--stems');
-const KBPS = Number(args.find(a => !a.startsWith('--')) ?? 160);
-const SOURCE = new URL('../bgm/', import.meta.url).pathname;
-const STEM_TARGET = join(SOURCE, 'mp3');
-const MIX_TARGET = join(SOURCE, 'mix');
-const MIX_NAME = 'tiny-tempo.mp3';
-/**
- * Relative stem levels in the premix. Mirrors `MUSIC.mix` in src/config/music.ts,
- * which is the only other place these weights exist; keep the two in step.
- */
-const MIX = { Drums: 1, Bass: 1, Guitar: 1, Keyboard: 1, Percussion: 1, Synth: 1, Brass: 1 };
-/** Sample peak the premix is normalised to. Leaves ~0.26 dB before full scale. */
+const ONLY = args.includes('--track') ? args[args.indexOf('--track') + 1] : null;
+const KBPS = Number(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--track') ?? 160);
+const ROOT = fileURLToPath(new URL('../bgm/', import.meta.url));
+const MIX_TARGET = join(ROOT, 'mix');
+/** Sample peak a premix is normalised down to. Leaves ~0.26 dB before full scale. */
 const MIX_PEAK = 0.97;
-/** The bus gain the seven stems were played through, for the compensation report below. */
-const PREVIOUS_MASTER_GAIN = 0.4;
+/** Every gameplay track is authored at this tempo in 4/4; `MUSIC.sourceBpm` in src/config/music.ts. */
+const SOURCE_BPM = 120;
 
+/**
+ * One entry per gameplay track, mirroring `GAMEPLAY_TRACKS` in src/config/music.ts.
+ *
+ * `mix` holds the relative stem levels, keyed by the stem's name without its ordering
+ * prefix ("3 Keyboard.wav" -> "Keyboard"); a stem with no weight is an error rather than
+ * a silent omission. `bars` is what the loop has to be, and is only reported here — the
+ * game's `normalizeLoop` is what enforces it. `headSec` is silence written in front of
+ * the premix: track A's masters already carry 156 ms of room before the first downbeat,
+ * track B's start on it, and an MP3 whose first transient sits in the very first granule
+ * is where decoders disagree most about how much encoder delay to trim. A tenth of a
+ * second of silence puts B's opening hit in the same regime as A's, inside the same
+ * detection window, and `normalizeLoop` drops it at load like any other lead-in.
+ * `gain` is the bus gain the track ships with; A's is the measured compensation for its
+ * normalisation (see docs/MUSIC.md) and every other track is matched to A's heard level
+ * by the report at the end of the run.
+ */
+const TRACKS = [
+  {
+    id: 'a', directory: ROOT, output: 'tiny-tempo.mp3', bars: 60, headSec: 0, gain: 0.5632,
+    mix: { Drums: 1, Bass: 1, Guitar: 1, Keyboard: 1, Percussion: 1, Synth: 1, Brass: 1 },
+  },
+  {
+    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.3762,
+    mix: { Drums: 1, Bass: 1, Harmony: 1, 'Synth Lead': 1, Orchestral: 1, Risers: 1 },
+  },
+];
+
+/** 16- or 24-bit stereo PCM to float. Track B's masters are 24-bit; A's are 16. */
 function readWav(path) {
   const buf = readFileSync(path);
-  let offset = 12, channels = 0, sampleRate = 0, bits = 0, data = null;
+  if (buf.toString('ascii', 0, 4) !== 'RIFF' || buf.toString('ascii', 8, 12) !== 'WAVE') throw new Error(`${basename(path)}: expected a RIFF WAV`);
+  let offset = 12, format = 0, channels = 0, sampleRate = 0, bits = 0, data = null;
   while (offset + 8 <= buf.length) {
     const id = buf.toString('ascii', offset, offset + 4);
     const size = buf.readUInt32LE(offset + 4);
-    if (id === 'fmt ') { channels = buf.readUInt16LE(offset + 10); sampleRate = buf.readUInt32LE(offset + 12); bits = buf.readUInt16LE(offset + 22); }
-    if (id === 'data') { data = buf.subarray(offset + 8, offset + 8 + size); break; }
+    if (id === 'fmt ') { format = buf.readUInt16LE(offset + 8); channels = buf.readUInt16LE(offset + 10); sampleRate = buf.readUInt32LE(offset + 12); bits = buf.readUInt16LE(offset + 22); }
+    if (id === 'data') { data = buf.subarray(offset + 8, offset + 8 + Math.min(size, buf.length - offset - 8)); break; }
     offset += 8 + size + (size % 2);
   }
-  if (!data || bits !== 16 || channels !== 2) throw new Error(`${basename(path)}: expected 16-bit stereo PCM`);
-  const frames = data.length / 4;
-  const left = new Int16Array(frames), right = new Int16Array(frames);
-  for (let i = 0; i < frames; i++) { left[i] = data.readInt16LE(i * 4); right[i] = data.readInt16LE(i * 4 + 2); }
+  if (!data || format !== 1 || channels !== 2 || (bits !== 16 && bits !== 24)) throw new Error(`${basename(path)}: expected 16- or 24-bit stereo PCM`);
+  const bytes = bits / 8, frames = Math.floor(data.length / (bytes * 2)), full = 1 << (bits - 1);
+  const left = new Float32Array(frames), right = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) { const o = i * bytes * 2; left[i] = data.readIntLE(o, bytes) / full; right[i] = data.readIntLE(o + bytes, bytes) / full; }
   return { sampleRate, frames, left, right };
+}
+
+function toPcm16(channel, scale) {
+  const out = new Int16Array(channel.length);
+  for (let i = 0; i < channel.length; i++) out[i] = Math.max(-32768, Math.min(32767, Math.round(channel[i] * scale * 32768)));
+  return out;
 }
 
 function encode(left, right, sampleRate, target) {
@@ -64,46 +96,66 @@ function encode(left, right, sampleRate, target) {
   return statSync(target).size;
 }
 
-/** Stem name as `MIX` keys it: "3 Keyboard.wav" -> "Keyboard". */
+/** Stem name as `mix` keys it: "3 Keyboard.wav" -> "Keyboard". */
 const stemName = file => basename(file, '.wav').replace(/^\d+\s*/, '');
+const dB = value => (20 * Math.log10(value)).toFixed(2);
 
-const files = readdirSync(SOURCE).filter(f => f.endsWith('.wav')).sort();
-if (!files.length) throw new Error(`No WAV masters in ${SOURCE}`);
-
-// Sum in float, at full precision, and only then scale: summing seven stems that each
-// peak near -3 dBFS overflows 16-bit, and clipping the sum would be irreversible.
-let sampleRate = 0, frames = 0, sumL = null, sumR = null;
-for (const file of files) {
-  const name = stemName(file);
-  const weight = MIX[name];
-  if (weight === undefined) throw new Error(`${file}: no mix weight for stem "${name}". Add it to MIX and to MUSIC.mix.`);
-  const wav = readWav(join(SOURCE, file));
-  if (!sumL) {
-    ({ sampleRate, frames } = wav);
-    sumL = new Float32Array(frames); sumR = new Float32Array(frames);
-  } else if (wav.sampleRate !== sampleRate || wav.frames !== frames) {
-    throw new Error(`${file}: ${wav.frames} frames at ${wav.sampleRate} Hz, expected ${frames} at ${sampleRate}. The masters were not trimmed to one length.`);
+function premix(track) {
+  const files = readdirSync(track.directory).filter(f => f.endsWith('.wav')).sort();
+  if (!files.length) throw new Error(`No WAV masters in ${track.directory}`);
+  // Sum in float, at full precision, and only then scale: stems that each peak near
+  // -3 dBFS overflow 16-bit together, and clipping the sum would be irreversible.
+  let sampleRate = 0, frames = 0, sumL = null, sumR = null;
+  for (const file of files) {
+    const name = stemName(file);
+    const weight = track.mix[name];
+    if (weight === undefined) throw new Error(`${file}: no mix weight for stem "${name}" of track ${track.id}. Add it to TRACKS.`);
+    const wav = readWav(join(track.directory, file));
+    if (!sumL) {
+      ({ sampleRate, frames } = wav);
+      sumL = new Float32Array(frames); sumR = new Float32Array(frames);
+    } else if (wav.sampleRate !== sampleRate || wav.frames !== frames) {
+      throw new Error(`${file}: ${wav.frames} frames at ${wav.sampleRate} Hz, expected ${frames} at ${sampleRate}. The masters were not trimmed to one length.`);
+    }
+    for (let i = 0; i < frames; i++) { sumL[i] += wav.left[i] * weight; sumR[i] += wav.right[i] * weight; }
+    if (WITH_STEMS) {
+      const target = join(track.directory, 'mp3');
+      mkdirSync(target, { recursive: true });
+      const size = encode(toPcm16(wav.left, 1), toPcm16(wav.right, 1), sampleRate, join(target, file.replace(/\.wav$/, '.mp3')));
+      console.log(`${file} -> ${(size / 1e6).toFixed(2)} MB`);
+    }
   }
-  for (let i = 0; i < frames; i++) { sumL[i] += wav.left[i] / 32768 * weight; sumR[i] += wav.right[i] / 32768 * weight; }
-  if (WITH_STEMS) {
-    mkdirSync(STEM_TARGET, { recursive: true });
-    const target = join(STEM_TARGET, file.replace(/\.wav$/, '.mp3'));
-    console.log(`${file} -> ${basename(target)} ${(encode(wav.left, wav.right, wav.sampleRate, target) / 1e6).toFixed(2)} MB`);
-  }
+  let peak = 0, energy = 0;
+  for (let i = 0; i < frames; i++) { peak = Math.max(peak, Math.abs(sumL[i]), Math.abs(sumR[i])); energy += sumL[i] * sumL[i] + sumR[i] * sumR[i]; }
+  const scale = peak > MIX_PEAK ? MIX_PEAK / peak : 1;
+  const rms = Math.sqrt(energy / (2 * frames)) * scale;
+  const head = Math.round(track.headSec * sampleRate);
+  const left = new Int16Array(head + frames), right = new Int16Array(head + frames);
+  left.set(toPcm16(sumL, scale), head); right.set(toPcm16(sumR, scale), head);
+  mkdirSync(MIX_TARGET, { recursive: true });
+  const size = encode(left, right, sampleRate, join(MIX_TARGET, track.output));
+  const loop = track.bars * 4 * 60 / SOURCE_BPM;
+  console.log(`track ${track.id}: ${files.length} stems -> ${track.output} ${(size / 1e6).toFixed(2)} MB, ${frames} frames at ${sampleRate} Hz = ${(frames / sampleRate).toFixed(6)} s against ${loop} s for ${track.bars} bars${head ? `, ${track.headSec} s of silence in front` : ''}`);
+  console.log(`  sum peak ${peak.toFixed(4)} (${dB(peak)} dBFS), scaled by ${scale.toFixed(6)}; premix RMS ${dB(rms)} dBFS`);
+  return { rms, scale };
 }
 
-let peak = 0;
-for (let i = 0; i < frames; i++) peak = Math.max(peak, Math.abs(sumL[i]), Math.abs(sumR[i]));
-const scale = peak > MIX_PEAK ? MIX_PEAK / peak : 1;
-const left = new Int16Array(frames), right = new Int16Array(frames);
-for (let i = 0; i < frames; i++) {
-  left[i] = Math.max(-32768, Math.min(32767, Math.round(sumL[i] * scale * 32768)));
-  right[i] = Math.max(-32768, Math.min(32767, Math.round(sumR[i] * scale * 32768)));
+const selected = TRACKS.filter(t => ONLY === null || t.id === ONLY);
+if (!selected.length) throw new Error(`No track "${ONLY}". Tracks: ${TRACKS.map(t => t.id).join(', ')}.`);
+const results = new Map(selected.map(track => [track.id, premix(track)]));
+
+// Loudness is matched by measurement, not by ear. Track A's gain gives back what its
+// normalisation took, so it plays at the level its stems did; every other track is set
+// so its heard RMS equals A's, and the switch between chapters is not a jump.
+const a = TRACKS[0];
+const reference = results.get(a.id) ?? { rms: null };
+if (reference.rms !== null) {
+  console.log(`track a heard RMS ${dB(reference.rms * a.gain)} dBFS at gain ${a.gain}`);
+  for (const track of selected) {
+    if (track === a) continue;
+    const gain = reference.rms * a.gain / results.get(track.id).rms;
+    console.log(`set GAMEPLAY_TRACKS.${track.id}.gain to ${gain.toFixed(4)} to match track a's heard level (currently ${track.gain ?? 'unset'})`);
+  }
+} else {
+  console.log('encode track a in the same run to get the matching gain for the others');
 }
-mkdirSync(MIX_TARGET, { recursive: true });
-const size = encode(left, right, sampleRate, join(MIX_TARGET, MIX_NAME));
-console.log(`premix -> ${MIX_NAME} ${(size / 1e6).toFixed(2)} MB, ${frames} frames at ${sampleRate} Hz`);
-console.log(`sum peak ${peak.toFixed(4)} (${(20 * Math.log10(peak)).toFixed(2)} dBFS), scaled by ${scale.toFixed(6)}`);
-// The premix is normalised for SNR, so the bus has to give back what normalising took,
-// or the track plays louder than the seven stems did.
-console.log(`set MUSIC.masterGain to ${(PREVIOUS_MASTER_GAIN / scale).toFixed(4)} to keep the previous loudness`);

@@ -1,24 +1,21 @@
-/** Musical model of the shipped track. */
+/**
+ * Musical model of the gameplay tracks.
+ *
+ * `MUSIC` is what every gameplay track shares and the game is built around: the tempo the
+ * level curve starts from, the bar, and the scheduling policy. `GAMEPLAY_TRACKS` is what
+ * differs between them — a file, its length in bars, its lead-in and its gain — all of it
+ * measured from the delivered stems (see docs/MUSIC.md). Nothing here is a knob to tune
+ * by ear; a value that is not measured is written down as one that is not.
+ */
 export const MUSIC = {
-  // Measured from the delivered files (see docs/MUSIC.md): 120 BPM, 60 bars, every stem
-  // 119.925 s. The first downbeat sits about 0.156 s into the WAV, and the file ends 75 ms
-  // short of bar 61, so the raw file neither starts on the beat nor loops on a bar.
-  // MusicSystem copies the decode into an exact whole-bar loop: it drops the lead-in and
-  // pads the silent tail to `bars` bars. The lead-in is detected at load from the opening
-  // transient rather than configured, because the shipped MP3 decodes with an extra
-  // decoder delay (23 ms in Chromium) that other decoders may or may not trim.
+  /**
+   * Every gameplay track is authored at 120 BPM in 4/4. That is not a per-track value:
+   * every level starts at this tempo and `setRate` is the level's BPM over it, so a track
+   * at any other tempo would be pitch-shifted on every level of the game to sit on the
+   * grid. A delivery at another tempo is re-rendered, not compensated.
+   */
   sourceBpm: 120,
   beatsPerBar: 4,
-  bars: 60,
-  // The threshold is -26 dBFS, not the -40 dBFS this used to carry, because MP3 pre-echo
-  // smears energy backwards into the granule before a transient and -40 dBFS is exactly
-  // that level. Measured in Chromium, the two files disagree by 64 frames (1.45 ms) at
-  // -40 dBFS and by 4 frames (0.09 ms) at -26 dBFS; the opening drum hit rises from -26 to
-  // -14 dBFS in 1 ms, so the higher threshold still lands on the attack itself.
-  // A detected lead outside the range is not a downbeat at all: a wrong file, a silent
-  // head, or a hit later in the opening bar. Falling back is then safer than trusting it,
-  // because an accepted false trigger shifts the whole beat grid against the music for good.
-  leadIn: { threshold: 0.05, fallbackSec: 0.182, minSec: 0.05, maxSec: 0.5 },
   pickupBeats: 0,
   startLeadSec: 0.2,
   gainRampSec: 0.025,
@@ -28,14 +25,91 @@ export const MUSIC = {
    * `gainRampSec`; this is only the shell ↔ level ↔ silent hand-off.
    */
   bedFadeSec: 0.35,
-  // The premix is normalised to 0.97 peak for signal-to-noise, which took 0.710 off a sum
-  // that peaked at +2.7 dBFS. This gain gives that back: 0.4 / 0.710, so the track sits at
-  // exactly the level the seven stems did, and the bus still supplies SFX headroom.
-  masterGain: 0.5632,
-  // One premixed stereo track, written by `npm run music:encode` from the WAV masters in
-  // bgm/. Nothing mixes stems at runtime, and seven decodes cost ~307 MiB of float PCM.
-  url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
+  /**
+   * Levels are scored in chapters of this many, and the chapters take the tracks in turn
+   * (`game/musicSelection.ts`): 1–25 on the first, 26–50 on the second, 51–75 on the
+   * first again. Twenty-five is two and a half areas, so a chapter boundary is not an
+   * area's, and that is deliberate: the areas already change the ground and the finale,
+   * and the music changing on the same line would make every gate a wall of new things.
+   * The map plays the frontier's chapter, so a player hears the change once, on the road.
+   */
+  chapterLevels: 25,
 } as const;
+
+/** What `MusicSystem` needs to know about one gameplay track, measured, not tuned. */
+export interface GameplayTrack {
+  readonly url: string;
+  /** Whole bars at `MUSIC.sourceBpm`; the loop is copied to exactly this length at load. */
+  readonly bars: number;
+  /**
+   * Where the first downbeat sits in the decoded file, found at load from the opening
+   * transient rather than configured, because the shipped MP3 decodes with an extra
+   * decoder delay (23 ms in Chromium) that other decoders may or may not trim. The
+   * bounds admit the shipped file on both kinds of decoder and reject a crossing that
+   * cannot be the downbeat: a wrong file, a silent head, or a hit later in the opening
+   * bar. Falling back is then safer than trusting it, because an accepted false trigger
+   * shifts the whole beat grid against the music for good.
+   */
+  readonly leadIn: {
+    readonly threshold: number; readonly fallbackSec: number; readonly minSec: number; readonly maxSec: number;
+  };
+  /** The bus gain the track plays at, so every track is heard at one level. */
+  readonly gain: number;
+}
+
+export const GAMEPLAY_TRACKS = {
+  /**
+   * The seven-stem workshop loop. Measured from the delivered files: 120 BPM, 60 bars,
+   * every stem 119.925 s. The first downbeat sits about 0.156 s into the WAV and the file
+   * ends 75 ms short of bar 61, so the raw file neither starts on the beat nor loops on a
+   * bar; MusicSystem drops the lead-in and pads the silent tail to `bars` bars.
+   */
+  a: {
+    url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
+    bars: 60,
+    // The threshold is -26 dBFS, not the -40 dBFS this used to carry, because MP3
+    // pre-echo smears energy backwards into the granule before a transient and -40 dBFS
+    // is exactly that level. Measured in Chromium, the two files disagree by 64 frames
+    // (1.45 ms) at -40 dBFS and by 4 frames (0.09 ms) at -26 dBFS; the opening drum hit
+    // rises from -26 to -14 dBFS in 1 ms, so the higher threshold still lands on the
+    // attack itself. Decoded lead in Chromium: 0.1818 s.
+    leadIn: { threshold: 0.05, fallbackSec: 0.182, minSec: 0.05, maxSec: 0.5 },
+    // The premix is normalised to 0.97 peak for signal-to-noise, which took 0.710 off a
+    // sum that peaked at +2.7 dBFS. This gain gives that back: 0.4 / 0.710, so the track
+    // sits at exactly the level the seven stems did, and the bus still supplies SFX
+    // headroom.
+    gain: 0.5632,
+  },
+  /**
+   * The six-stem second track: drums, bass, harmony, synth lead, orchestral colour and
+   * risers. Measured from the delivered 24-bit masters: 120 BPM, 54 bars, every stem
+   * exactly 108.000 s, and the first downbeat on the first sample — every bar's kick
+   * lands 3.7 ms after a grid laid from zero, the synth lead enters on bar 11, the
+   * orchestra on bar 7 and leaves on bar 28. The loop is the file's whole length, so the
+   * tail is music, not silence, and the seam is the composer's.
+   */
+  b: {
+    url: new URL('../../bgm/mix/tiny-tempo-b.mp3', import.meta.url).href,
+    bars: 54,
+    // The encoder writes 0.1 s of silence in front of this premix (see
+    // scripts/encode-music.mjs): a transient in an MP3's first granule is where decoders
+    // disagree most about the encoder delay, and the head puts the opening hit inside the
+    // same window as track A's. Decoded lead in Chromium: 0.1247 s — the head, 23 ms of
+    // decoder delay and the harmony's 1.8 ms rise to -26 dBFS. A decoder that trims the
+    // delay lands near 0.102 s; both sit inside these bounds, and a file with no head
+    // does not.
+    leadIn: { threshold: 0.05, fallbackSec: 0.125, minSec: 0.05, maxSec: 0.25 },
+    // Matched to track A by measurement, not by ear, the way the title theme is: decoded
+    // in Chromium, this premix sits at -17.66 dB RMS against A's -21.16 dB, and A is heard
+    // through 0.5632, so 0.376 puts the two at the same level and a chapter's change of
+    // track is not a jump. The encoder's estimate from the float sums agrees within 0.02 dB.
+    gain: 0.3762,
+  },
+} as const satisfies Record<string, GameplayTrack>;
+export type TrackId = keyof typeof GAMEPLAY_TRACKS;
+/** The order the chapters take the tracks in. Append to add a track; reordering moves every chapter. */
+export const TRACK_CYCLE: readonly TrackId[] = ['a', 'b'];
+
 /**
  * The title theme. A second track, and deliberately not part of the model above.
  *
@@ -58,5 +132,5 @@ export const THEME = {
 } as const;
 
 export const pickupSeconds = (bpm: number, beats: number): number => beats * 60 / bpm;
-/** Exact loop length in seconds: whole bars at the source tempo. */
-export const loopSeconds = (): number => MUSIC.bars * MUSIC.beatsPerBar * 60 / MUSIC.sourceBpm;
+/** Exact loop length in seconds: the track's whole bars at the source tempo. */
+export const loopSeconds = (track: GameplayTrack): number => track.bars * MUSIC.beatsPerBar * 60 / MUSIC.sourceBpm;

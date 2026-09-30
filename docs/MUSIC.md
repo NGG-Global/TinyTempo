@@ -1,6 +1,14 @@
-# Music: one premixed loop from seven composition stems
+# Music: two premixed gameplay loops, and the title theme
 
-## Files and inspection
+Two gameplay tracks, each one premixed MP3 from its own WAV stems, each normalised at load
+into an exact whole-bar loop at 120 BPM, and one of them decoded at a time. Track A is the
+seven-stem workshop loop this document was written for, and every measurement below is
+still it unless the section says otherwise. Track B is the six-stem second track, in
+[its own section](#track-b-the-second-track). Which one a level plays is
+[a chapter rule](#which-track-a-level-plays). The title theme is a third file, and the
+[last section](#the-title-theme) says why it is not a track.
+
+## Track A: files and inspection
 
 Seven unmodified stems: `bgm/0 Drums.wav`, `1 Bass.wav`, `2 Guitar.wav`, `3 Keyboard.wav`, `4 Percussion.wav`, `5 Synth.wav`, `6 Brass.wav`. All are stereo 16-bit PCM at 48 kHz with 5,756,414 frames: **119.925292 seconds**, about 23 MB each. They replace the earlier four-stem composition (kept in Git history). No trimming, normalization, independent offsets or time stretching was applied to the files.
 
@@ -14,15 +22,19 @@ The delivery note said the music begins on the first beat at second 0 and loops 
 
 `MusicSystem.normalizeLoop()` therefore copies the decoded track into an exact 120.000 s buffer: it drops the detected lead-in and pads the silent tail to `bars × beatsPerBar` beats. Beat 0 of the loop is the first downbeat, so `pickupBeats` is 0 and the count-in begins on the loop origin. The gameplay grid and the file loop then stay aligned indefinitely. Bar phase (which beat is "one") assumes the first audible beat is a downbeat; confirm with the composer.
 
-## Shipped format: one premixed MP3 from the WAV masters
+## Shipped format: one premixed MP3 per track from the WAV masters
 
-The WAVs are 161 MB and are kept only as masters. `npm run music:encode`
-(`scripts/encode-music.mjs`, pure-JavaScript LAME at 160 kb/s joint stereo) sums the seven
-masters at the `MIX` weights and writes one stereo track, `bgm/mix/tiny-tempo.mp3`, 2.40 MB.
-`config/music.ts` points at that file, so the web bundle and the Android APK carry one
-music asset instead of seven. Pass `--stems` to also write `bgm/mp3/*.mp3`, which is what a
-future dynamic mix would need; nothing loads them today. Re-run the script whenever a WAV
-changes, and re-measure the lead-in afterwards.
+The WAVs are kept only as masters. `npm run music:encode` (`scripts/encode-music.mjs`,
+pure-JavaScript LAME at 160 kb/s joint stereo) sums each track's masters at the weights in
+its `TRACKS` entry and writes one stereo file per track into `bgm/mix/`: `tiny-tempo.mp3`,
+2.40 MB, from the seven in `bgm/`, and `tiny-tempo-b.mp3`, 2.16 MB, from the six in
+`bgm/track-b/`. `GAMEPLAY_TRACKS` in `config/music.ts` points at those files, so the web
+bundle and the Android APK carry two music assets instead of thirteen. `--track a` or
+`--track b` encodes one; `--stems` also writes per-stem MP3s beside that track's masters,
+which is what a future dynamic mix would need; nothing loads them today. Re-run the script
+whenever a WAV changes, and re-measure the lead-in afterwards. Track A's encode is
+deterministic: re-running it with the same masters writes the same bytes, which is how a
+change to the script is checked against the file that ships.
 
 The premix is summed and scaled in float, never in 16-bit: the seven stems together peak at
 **1.3658 (+2.71 dBFS)**, so a 16-bit sum would clip irreversibly. The script normalises to
@@ -64,14 +76,90 @@ roughly 85 MB transiently. The seven-stem load was seven times that — about 29
 and 592 MB transient, allocated during the PLAY tap before the player had seen anything.
 Download went from 16.8 MB to 2.4 MB, and `dist/` from 28 MB to 3.8 MB with sourcemaps off.
 
+## Track B: the second track
+
+Six stems, delivered as `BASIC_DRUM_STEM`, `BASS_STEM`, `MAIN_HARMONY_STEM`,
+`SYNTH_LEAD_STEM`, `ORCHESTRAL_SPICES_STEM` and `RISERS_NOISES_AND_PERCS_STEM`, kept
+unmodified in `bgm/track-b/` under the masters' naming convention (`0 Drums.wav` to
+`5 Risers.wav`). All are stereo **24-bit** PCM at 48 kHz with 5,184,000 frames:
+**108.000000 s**, 31 MB each. The encoder reads 24-bit as well as 16-bit for them.
+
+Measured, the same way as track A:
+
+- **Tempo 120 BPM, 4/4.** A comb scan of the drum stem prefers 80 and 160 BPM, and that
+  is the kick pattern, not the tempo: the strong hits sit three sixteenths apart (375 ms)
+  with a second hit 86 ms behind each. Against a 120 BPM grid laid from sample zero,
+  **every bar's downbeat kick reaches −26 dBFS 3.6–3.7 ms after the beat, from bar 1 to
+  bar 54**, and a least-squares fit over the on-beat attacks gives 120.01 BPM. The harmony
+  stem changes chord on beats 1 and 3 of a four-beat bar and is flat against a three-beat
+  one. The arrangement confirms the bar: the orchestra enters at 12.0 s (bar 7) and leaves
+  at 54.0 s (bar 28), the synth lead enters at 20.0 s (bar 11) — all whole bars at 120 and
+  not at 80 or 160.
+- **Lead-in 0 s.** The harmony exceeds −26 dBFS 1.8 ms into the file and the first kick
+  3.6 ms in. The file starts on the downbeat.
+- **Loop exactly 54 bars.** 108.000 s is 216 beats at 120 BPM. Nothing is padded or
+  trimmed; the music runs to the last sample and the seam is the composer's own. The
+  harmony's last 5 ms sit at −38.8 dB against −29.9 dB for its first 5 ms, so the join is
+  an attack after a decay rather than a click, but it has not been checked by ear.
+
+The six stems sum to a peak of **0.9494 (−0.45 dBFS)**, so the premix is not scaled. The
+encoder writes **0.1 s of silence in front of it**. The masters start on the downbeat, and
+an MP3 whose first transient sits in the opening granule is where decoders disagree most
+about how much encoder delay to trim; the head puts B's opening hit in the same regime as
+A's, whose masters carry 156 ms of room, and inside a detection window with a real guard
+on both sides. `normalizeLoop` drops it at load like any lead-in.
+
+Decoded in Chromium, at both 44.1 and 48 kHz: 108.144 s, the first crossing of −26 dBFS at
+**0.1247 s** — the head, the same 23 ms of decoder delay track A shows, and the harmony's
+1.8 ms rise — and 108.019 s of music after it, so the 108.000 s loop is whole. A decoder
+that trims the delay through the LAME header lands near 0.102 s. `GAMEPLAY_TRACKS.b.leadIn`
+is therefore `{ threshold 0.05, fallback 0.125, min 0.05, max 0.25 }`, which admits both
+and rejects a premix encoded without its head.
+
+Loudness is matched to track A by measurement, as the title theme's is: the decoded premix
+sits at **−17.66 dB RMS** against A's **−21.16 dB**, and A is heard through 0.5632, so
+`gain` is **0.3762** and a chapter's change of track is not a jump. The encoder's estimate
+from the float sums (−17.23 against −20.71 dB) gives 0.3770, within 0.02 dB.
+
+## Which track a level plays
+
+`trackForLevel` in `game/musicSelection.ts`: levels are taken in chapters of
+`MUSIC.chapterLevels`, twenty-five, and the chapters go round `TRACK_CYCLE` — 1–25 on A,
+26–50 on B, 51–75 on A again. The rule is the level alone, so nothing is stored, save codes
+and merges hear the same track for the same level, and a replay plays what the level
+played. Twenty-five is two and a half areas, so a chapter boundary is never an area gate,
+which is deliberate: the areas already change the ground and the finale, and the music
+changing on the same line would make every gate a wall of new things. The shell on the map
+and settings plays the frontier's chapter (`shellTrack` in `audio/sharedAudio.ts`), so a
+player hears the change once, on the road, and a replay from the other chapter hands its
+track back on the way out.
+
+Both tracks are authored at 120 BPM, and `MUSIC.sourceBpm` is not a per-track value: every
+level starts there and `setRate` is the level's BPM over it. A track at another tempo would
+be pitch-shifted on every level to sit on the grid, so a delivery at another tempo is
+re-rendered, not compensated.
+
 ## Playback
 
 `MusicSystem` shares `AudioEngine.context` and the music bus under master mute, never creating another
-live context. `load()` fetches and decodes the one track and commits it atomically after
-validation. Concurrent callers share one promise; the decoded buffer is cached. A failed
+live context. `load(id)` fetches and decodes one track and commits it atomically after
+validation. Concurrent callers for the same track share one promise; the decoded loop is
+cached until another track is asked for. A failed
 fetch, an empty decode or an invalid sample rate rejects playback with a visible retry
 error, and nothing partial starts. Disposal aborts the download and prevents a late decode
 from committing.
+
+**One track is decoded at a time.** A loop is ~42 MB of float PCM and the normalising copy
+doubles that transiently, so holding both would double the steady cost for a switch that
+happens once every twenty-five levels. Asking for a different track stops the source — a
+source can only play the buffer it was given — releases the loaded loop, and only then
+fetches; a load still in flight for another track is cancelled and its callers told it was
+superseded. Scenes select at their boundaries and nowhere else: the menu's PLAY loads the
+frontier's track before the shell starts, a shell screen's create names it through
+`setMusicBed(engine, 'shell', { track })`, which fades whatever is running out before it
+loads and starts the one asked for, and a level loads its own chapter's track after the
+map's curtain has hushed the shell. A leftover level from the other chapter is never
+reused as the shell, however smoothly it is running.
 
 After the menu's PLAY gesture resumes the shared AudioContext and awaits loading, the play
 scene schedules one future start (context time + the configured 200 ms lead) with
@@ -85,8 +173,9 @@ which is why the level curve caps there.
 
 ## Gain and cleanup
 
-One GainNode carries the whole track at `MUSIC.masterGain`, feeding the player's music
-bus, which feeds master output. `setGain` validates 0-1 and ramps over 25 ms; zero gain
+One GainNode carries the whole track at the loaded track's `gain` (`trackGain`), feeding
+the player's music bus, which feeds master output. Committing a different track moves the
+bus to its gain while nothing is playing, so the level is right before anything is heard. `setGain` validates 0-1 and ramps over 25 ms; zero gain
 leaves the source running silently, and global mute likewise changes only the master gain.
 The player's music level is that parent bus, so a swell, a bed fade and the title theme
 all scale with it and none of them has to know the setting. Effects have their own bus.
@@ -105,18 +194,24 @@ gain and releases the buffer.
 `tests/music.test.ts` covers a single atomic load, the full-buffer loop, silent running and
 restoration, repeated loops without source creation, restart and disposal, failed-load
 retry, disposal during loading, invalid starts and gains, lead-in detection including both
-out-of-range cases, whole-bar normalisation, and the musical pickup calculation.
-`tests/audio.test.ts` verifies that task SFX cancellation cannot stop music.
+out-of-range cases and track B's bounds against both kinds of decoder, whole-bar
+normalisation of both tracks, one track loaded at a time with the source stopped and the
+loop released before the next fetch, a superseded load, and the musical pickup calculation.
+`tests/musicBed.test.ts` covers the shell switching tracks under a fade and refusing a
+leftover level from the other chapter; `tests/musicSelection.test.ts` pins the chapter
+rule. `tests/audio.test.ts` verifies that task SFX cancellation cannot stop music.
 
 Browser QA used the actual file, driven in headless Chromium at 393x851: one active source,
 loop length exactly 120.000000 s, detected lead 0.181814 s, bus gain 0.5632, unchanged
 across task transitions and round restarts, with no console errors and no failed requests.
 
 Remaining risks, none of which a browser can settle: confirm the bar phase with the
-composer; verify the detected lead-in and the loop seam by ear on Android and iOS decoders,
-including whether either trims the encoder delay via the LAME header; check the premix's
-relative loudness and headroom against the SFX by ear now that `masterGain` compensates for
-normalisation; and test iOS/Android unlock, interruption and output routing.
+composer; verify the detected lead-in and the loop seam of both tracks by ear on Android
+and iOS decoders, including whether either trims the encoder delay via the LAME header;
+check each premix's relative loudness and headroom against the SFX by ear now that each
+track's `gain` is a measured match; listen to the change of track at level 26 and on the
+map when the frontier crosses it; and test iOS/Android unlock, interruption and output
+routing.
 
 ## The title theme
 
@@ -133,13 +228,13 @@ by task — and a level is judged against all three. The menu judges nothing, so
 code would have meant making each of those guarantees optional in the one place they must
 not be. The theme only has to start, loop and get out of the way.
 
-| | Gameplay loop | Title theme |
-| --- | --- | --- |
-| Length | 120.000 s, exactly 60 bars | 152.0 s, as delivered |
-| Loop | whole bars, lead-in detected and dropped | the file's own ends, which fade |
-| Tempo | `setRate` per task | fixed |
-| Gain | 0.5632 | 0.4 |
-| Size | 2.4 MB | 3.5 MB |
+| | Track A | Track B | Title theme |
+| --- | --- | --- | --- |
+| Length | 120.000 s, exactly 60 bars | 108.000 s, exactly 54 bars | 152.0 s, as delivered |
+| Loop | whole bars, lead-in detected and dropped | whole bars, lead-in detected and dropped | the file's own ends, which fade |
+| Tempo | `setRate` per task | `setRate` per task | fixed |
+| Gain | 0.5632 | 0.3762 | 0.4 |
+| Size | 2.4 MB | 2.2 MB | 3.5 MB |
 
 `THEME.gain` is measured rather than judged by ear: the theme sits at −18.2 dB RMS against
 the premix's −21.2 dB, so 0.4 against the premix's 0.5632 puts the two at the same heard

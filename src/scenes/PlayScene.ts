@@ -7,6 +7,7 @@ import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
+import { trackForLevel } from '@/game/musicSelection';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
 import { SceneKey } from '@/config/scenes';
 import { LAYOUT } from '@/config/design';
@@ -893,7 +894,9 @@ export class PlayScene extends BaseScene {
       await this.audio!.unlock();
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       this.grooveVoices ??= createGrooveVoices(this.audio!.context);
-      await this.audio!.music.load();
+      // The level's chapter's track. A different one than the shell's fades out under
+      // the map's curtain (hushMusic) and is released here before this one is decoded.
+      await this.audio!.music.load(trackForLevel(this.spec.level));
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       // The act's voices are built synchronously below, so the bank has to be decoded
       // first. It never rejects: a sample that did not arrive leaves that act on the
@@ -1109,7 +1112,7 @@ export class PlayScene extends BaseScene {
     // After an introduction the loop is already at full level, and ducking it would read as
     // a fault rather than a build.
     if (startAt === this.levelOrigin) {
-      audio.music.swell(MUSIC.masterGain * PROGRESSION.finale.musicFloor, MUSIC.masterGain, startAt, demo);
+      audio.music.swell(audio.music.trackGain * PROGRESSION.finale.musicFloor, audio.music.trackGain, startAt, demo);
     }
   }
 
@@ -1267,7 +1270,7 @@ export class PlayScene extends BaseScene {
     mute.addEventListener('click', () => {
       const music = this.audio?.music;
       if (!music) return;
-      music.setGain(music.gain === 0 ? MUSIC.masterGain : 0);
+      music.setGain(music.gain === 0 ? music.trackGain : 0);
       mute.style.opacity = music.gain === 0 ? '0.45' : '1';
     });
     panel.appendChild(mute);
@@ -1435,7 +1438,7 @@ export class PlayScene extends BaseScene {
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
       const music = this.audio?.music;
-      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? MUSIC.masterGain).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
+      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.trackId ?? '—'} ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? 0).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
     }
   }
   private changeHeadline(text: string, colour = SHELL.cream): void {

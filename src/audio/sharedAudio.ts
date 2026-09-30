@@ -2,6 +2,9 @@ import Phaser from 'phaser';
 import { AudioEngine } from './AudioEngine';
 import { clampCalibration, loadSettings, saveSettings, withVolume, type Settings, type VolumeBus } from '../game/settings';
 import { setMusicBed } from './musicBed';
+import type { TrackId } from '../config/music';
+import { loadProgress } from '../game/progress';
+import { trackForLevel } from '../game/musicSelection';
 
 const KEY = 'audio';
 
@@ -82,11 +85,20 @@ export function applyCalibration(engine: AudioEngine | null, calibrationMs: numb
   return saveSettings({ ...loadSettings(), calibrationMs: value });
 }
 
-/** Shell scenes call this on create. No-ops until PLAY has unlocked the context. */
+/**
+ * Shell scenes call this on create. No-ops until PLAY has unlocked the context. The
+ * shell plays the frontier's chapter: the track the next new level will, so the road
+ * and the level agree, and a replay from another chapter hands its track back here.
+ */
 export function ensureShellMusic(scene: Phaser.Scene): void {
   const audio = currentAudio(scene);
   if (!audio || audio.context.state !== 'running') return;
-  void setMusicBed(audio, 'shell');
+  void setMusicBed(audio, 'shell', { track: shellTrack() });
+}
+
+/** The gameplay track the shell plays: the frontier level's. */
+export function shellTrack(): TrackId {
+  return trackForLevel(loadProgress().unlocked);
 }
 
 /**

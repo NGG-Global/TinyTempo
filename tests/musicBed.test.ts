@@ -3,7 +3,7 @@ import { MusicSystem } from '../src/audio/MusicSystem';
 import {
   canReuseShell, currentMusicBed, resetMusicBedState, setMusicBed,
 } from '../src/audio/musicBed';
-import { MUSIC } from '../src/config/music';
+import { GAMEPLAY_TRACKS, MUSIC } from '../src/config/music';
 
 const RATE = 100;
 const FILE_FRAMES = 11993;
@@ -26,9 +26,10 @@ function setup() {
     playbackRate: { value: 1, setValueAtTime: vi.fn() },
     start: vi.fn(), stop: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), onended: null,
   });
+  const urls: string[] = [];
   const context = {
     currentTime: 10, state: 'running',
-    decodeAudioData: vi.fn(async () => fakeBuffer(FILE_FRAMES)),
+    decodeAudioData: vi.fn(async () => (urls[urls.length - 1] === GAMEPLAY_TRACKS.b.url ? fakeBuffer(10814, RATE, 2, 12) : fakeBuffer(FILE_FRAMES))),
     createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels),
     createGain: () => ({
       gain: {
@@ -39,9 +40,10 @@ function setup() {
     }),
     createBufferSource: () => { const source = makeSource(); nodes.push(source); return source; },
   };
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) })));
+  const fetcher = vi.fn(async (url: string) => { urls.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) }; });
+  vi.stubGlobal('fetch', fetcher);
   const system = new MusicSystem(context as unknown as AudioContext, {} as AudioNode);
-  return { system, context, nodes, host: { music: system, context: context as unknown as AudioContext } };
+  return { system, context, nodes, fetcher, host: { music: system, context: context as unknown as AudioContext } };
 }
 
 afterEach(() => {
@@ -59,6 +61,43 @@ describe('the shell / level / silent music bed', () => {
     expect(canReuseShell(1, 1, 'silent')).toBe(false);
     expect(canReuseShell(0, 1, 'shell')).toBe(false);
     expect(canReuseShell(1, 1.15, 'level')).toBe(false);
+    // A leftover level from the other chapter is running smoothly and is still not the shell.
+    expect(canReuseShell(1, 1, 'level', false)).toBe(false);
+  });
+
+  it('switches the shell to the track a scene names, fading the other chapter out first', async () => {
+    const { system, nodes, fetcher, host } = setup();
+    await system.load('a');
+    await setMusicBed(host, 'shell', { fadeSec: 0, track: 'a' });
+    expect(nodes).toHaveLength(1);
+    // The frontier moved into the next chapter: the map asks for its track.
+    await setMusicBed(host, 'shell', { fadeSec: 0, track: 'b' });
+    expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
+    expect(nodes).toHaveLength(2);
+    expect(system.trackId).toBe('b');
+    expect(nodes[1]!.loopEnd).toBe(108);
+    expect(fetcher).toHaveBeenLastCalledWith(GAMEPLAY_TRACKS.b.url, expect.anything());
+    expect(currentMusicBed()).toBe('shell');
+    // Naming the loaded track again reuses the source rather than restarting the loop.
+    await setMusicBed(host, 'shell', { fadeSec: 0, track: 'b' });
+    expect(nodes).toHaveLength(2);
+    expect(nodes[1]!.stop).not.toHaveBeenCalled();
+    // A shell with no track named keeps what is loaded.
+    await setMusicBed(host, 'shell', { fadeSec: 0 });
+    expect(nodes).toHaveLength(2);
+    expect(system.gain).toBe(GAMEPLAY_TRACKS.b.gain);
+  });
+
+  it('does not keep a leftover level from another chapter as the shell', async () => {
+    const { system, nodes, host } = setup();
+    await system.load('b');
+    system.start(12);
+    await setMusicBed(host, 'level');
+    await setMusicBed(host, 'shell', { fadeSec: 0, track: 'a' });
+    expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
+    expect(nodes).toHaveLength(2);
+    expect(system.trackId).toBe('a');
+    expect(system.gain).toBe(GAMEPLAY_TRACKS.a.gain);
   });
 
   it('starts the shell once and does not stack a second source over it', async () => {
