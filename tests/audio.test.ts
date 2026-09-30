@@ -55,7 +55,7 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
     close = close;
     createGain() {
       return {
-        gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn() },
+        gain: { value: 1, setValueAtTime: vi.fn(), linearRampToValueAtTime: vi.fn(), cancelScheduledValues: vi.fn() },
         connect: vi.fn((target: object) => target), disconnect: vi.fn(),
       };
     }

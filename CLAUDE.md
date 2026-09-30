@@ -332,9 +332,22 @@ and `trackForLevel` (`game/musicSelection.ts`) takes the tracks in turn in chapt
 `MUSIC.chapterLevels`, twenty-five, from the level alone, so nothing is stored. The shell
 plays the frontier's chapter. **`TRACK_CYCLE` is `['b']` for now**, so every level and the
 shell play the second track while it is heard on devices; restoring `['a', 'b']` is the
-whole change back. **One track is decoded at a time**: a loop is ~42 MB of float
-PCM, so `MusicSystem.load(id)` stops the source and drops the loaded loop before fetching
-another, and scenes select only at their boundaries — the menu's PLAY, a shell screen's
+whole change back. **Track B plays as its six stems, and a level earns them**:
+`GAMEPLAY_TRACKS.b.stems` are the stems in the order they join (drums, bass, harmony,
+lead, orchestral, risers), each an MP3 the encoder writes with the premix's head and scale
+so together they are the premix; `MusicSystem` starts one looping source per stem on the
+same sample under the same rate automation, detects the lead-in on the first stem and
+applies it to all, and `setLayers(count, at)` fades stems in or out on a bar line. A level
+starts on the first stem with a **metronome bar** under it (`audio/metronomeSounds.ts`,
+one synthesized bar looped from the same sample, beat 1 accented) and `advanceLayers`
+(`game/musicLayers.ts`) moves the count per scored task — strong adds a stem, weak takes
+one — applied on the next task's downbeat with the tempo; the shell hears every stem and no
+click; track A is one stem and hears nothing of it. **The cost is ~230 MB of decoded PCM
+and a 10.4 MB download** for track B, the cost the premix existed to avoid, accepted for a
+mix that answers the player; `docs/MUSIC.md` names the cheaper shape if a handset cannot
+carry it. **One track is decoded at a time**: `MusicSystem.load(id)` stops the sources
+and drops the loaded loop before fetching another, and scenes select only at their
+boundaries — the menu's PLAY, a shell screen's
 create, a level's start — through `setMusicBed(..., { track })`, which fades the other
 chapter out before it starts the one asked for. The second premix carries 0.1 s of silence
 in front, written by the encoder: its masters start on the downbeat, and an MP3 whose first
@@ -633,7 +646,8 @@ src/
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
-    MusicSystem.ts     One premixed loop at a time: load a track, normalize, start, rate, gain
+    MusicSystem.ts     One track at a time, a source per stem: load, normalize, start, layers, rate, gain
+    metronomeSounds.ts The metronome bar: a click a beat, the first accented, as samples
     musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
@@ -685,6 +699,7 @@ src/
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
+    musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce

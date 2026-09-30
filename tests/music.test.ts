@@ -13,7 +13,7 @@ const B_FRAMES = 10814;
 const B_LEAD = 12;
 function fakeBuffer(length: number, rate = RATE, channels = 2, onset = LEAD) {
   const data = Array.from({ length: channels }, () => new Float32Array(length));
-  if (length > onset) data[1]![onset] = 0.5; // one decoded transient after silence
+  if (length > onset && channels > 1) data[1]![onset] = 0.5; // one decoded transient after silence
   return { length, sampleRate: rate, duration: length / rate, numberOfChannels: channels,
     getChannelData: (c: number) => data[c]!,
     copyToChannel: (source: Float32Array, c: number) => { data[c]!.set(source.subarray(0, length)); } };
@@ -27,12 +27,12 @@ function setup(empty = false) {
     start: vi.fn(), stop: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), onended: null });
   const gains: { gain: { value: number; cancelScheduledValues: ReturnType<typeof vi.fn>; setValueAtTime: ReturnType<typeof vi.fn>; linearRampToValueAtTime: ReturnType<typeof vi.fn> }; disconnect: ReturnType<typeof vi.fn> }[] = [];
   const context = {
-    currentTime: 10, state: 'running',
+    currentTime: 10, state: 'running', sampleRate: RATE,
     decodeAudioData: vi.fn(async () => {
       // The last fetched url says which track's decode this is.
-      const url = decodes[decodes.length - 1];
+      const url = decodes[decodes.length - 1] ?? '';
       if (empty) return fakeBuffer(0);
-      return url === B.url ? fakeBuffer(B_FRAMES, RATE, 2, B_LEAD) : fakeBuffer(FILE_FRAMES);
+      return url.includes('tiny-tempo-b') ? fakeBuffer(B_FRAMES, RATE, 2, B_LEAD) : fakeBuffer(FILE_FRAMES);
     }),
     createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels),
     createGain: () => {
@@ -54,7 +54,7 @@ describe('the premixed music loop', () => {
     expect(system.load('a')).toBe(first);
     await first;
     // One request and one decode: the seven-stem load cost seven of each and ~307 MiB of PCM.
-    expect(fetcher).toHaveBeenCalledExactlyOnceWith(A.url, expect.anything());
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(A.stems[0].url, expect.anything());
     expect(system.trackId).toBe('a');
     expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
     expect(system.start(12)).toBeCloseTo(12 + pickupSeconds(MUSIC.sourceBpm, MUSIC.pickupBeats), 9);
@@ -118,21 +118,27 @@ describe('the premixed music loop', () => {
     expect(loop.getChannelData(0)[loop.length - 1]).toBe(B_LEAD + 108 * RATE - 1);
     expect(B_LEAD + 108 * RATE).toBeLessThanOrEqual(B_FRAMES);
   });
-  it('loads one track at a time: selecting the other stops the source and releases the loop first', async () => {
+  it('loads one track at a time: selecting the other stops the sources and releases the loop first', async () => {
     const { system, nodes, fetcher, context } = setup();
     await system.load('b');
     expect(system.trackId).toBe('b');
     expect(system.trackGain).toBe(B.gain);
     expect(system.gain).toBe(B.gain);
-    expect(fetcher).toHaveBeenLastCalledWith(B.url, expect.anything());
+    // Every stem, in the track's order, and the same lead applied to each of them.
+    expect(fetcher.mock.calls.map(call => call[0])).toEqual(B.stems.map(stem => stem.url));
+    expect(system.leadInSeconds).toBeCloseTo(B_LEAD / RATE, 9);
     system.start(12);
-    expect(nodes[0]!.loopEnd).toBe(108);
-    expect(nodes[0]!.buffer!.length).toBe(108 * RATE);
+    expect(system.activeSources).toBe(B.stems.length);
+    for (const node of nodes) {
+      expect(node.loopEnd).toBe(108);
+      expect(node.buffer!.length).toBe(108 * RATE);
+      expect(node.start).toHaveBeenCalledExactlyOnceWith(12, 0);
+    }
     // Same track again: nothing fetched, nothing stopped.
     await system.load('b');
-    expect(fetcher).toHaveBeenCalledTimes(1);
-    expect(system.activeSources).toBe(1);
-    // The other track: the running source cannot play it, so it stops before the fetch,
+    expect(fetcher).toHaveBeenCalledTimes(B.stems.length);
+    expect(system.activeSources).toBe(B.stems.length);
+    // The other track: the running sources cannot play it, so they stop before the fetch,
     // and the old loop is dropped before the new decode is held.
     const loading = system.load('a');
     expect(system.activeSources).toBe(0);
@@ -142,9 +148,51 @@ describe('the premixed music loop', () => {
     await loading;
     expect(system.trackId).toBe('a');
     expect(system.gain).toBe(A.gain);
-    expect(context.decodeAudioData).toHaveBeenCalledTimes(2);
+    expect(context.decodeAudioData).toHaveBeenCalledTimes(B.stems.length + 1);
     system.start(14);
-    expect(nodes[1]!.loopEnd).toBe(120);
+    expect(system.activeSources).toBe(1);
+    expect(nodes[nodes.length - 1]!.loopEnd).toBe(120);
+  });
+  it('brings a layered track in one stem at a time, on the bar line, and counts under a level', async () => {
+    const { system, nodes, gains, context } = setup();
+    await system.load('b');
+    // The bus is gains[0]; one gain per stem follows it.
+    expect(gains).toHaveLength(1 + B.stems.length);
+    const stemGains = gains.slice(1);
+    system.start(12, { layers: 1, metronome: true });
+    // Every stem is started on the same sample; only the first is heard.
+    expect(nodes).toHaveLength(B.stems.length + 1);
+    stemGains.forEach((gain, i) => expect(gain.gain.setValueAtTime).toHaveBeenLastCalledWith(i === 0 ? 1 : 0, context.currentTime));
+    expect(system.activeLayers).toBe(1);
+    expect(system.metronome).toBe(true);
+    // The click bar: one bar at the source tempo, started with the stems, rated with them.
+    const click = nodes[nodes.length - 1]!;
+    expect(click.loopEnd).toBeCloseTo(4 * 60 / MUSIC.sourceBpm, 9);
+    expect(click.start).toHaveBeenCalledExactlyOnceWith(12, 0);
+    system.setRate(1.1, 20);
+    for (const node of nodes) expect(node.playbackRate.setValueAtTime).toHaveBeenLastCalledWith(1.1, 20);
+    // A strong task: the bass joins on the next downbeat, faded in over the configured time.
+    system.setLayers(2, 24);
+    expect(system.activeLayers).toBe(2);
+    expect(stemGains[1]!.gain.setValueAtTime).toHaveBeenLastCalledWith(0, 24);
+    expect(stemGains[1]!.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, 24 + MUSIC.layers.fadeSec);
+    // Unchanged stems are left alone: no ramp is scheduled on the drums.
+    expect(stemGains[0]!.gain.linearRampToValueAtTime).not.toHaveBeenCalled();
+    // A weak one takes it away again; more than the track has is all of it.
+    system.setLayers(1, 28);
+    expect(stemGains[1]!.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, 28 + MUSIC.layers.fadeSec);
+    system.setLayers(99, 32);
+    expect(system.activeLayers).toBe(B.stems.length);
+    expect(() => system.setLayers(0, 40)).toThrow(/At least one/);
+    // Stopping takes the click with the stems.
+    system.stop();
+    expect(click.stop).toHaveBeenCalledTimes(1);
+    expect(system.metronome).toBe(false);
+    expect(system.activeSources).toBe(0);
+    // The shell takes every stem and no click.
+    system.start(50);
+    expect(system.activeLayers).toBe(B.stems.length);
+    expect(system.metronome).toBe(false);
   });
   it('lets a later selection supersede a load still in flight', async () => {
     const { system, fetcher } = setup();
@@ -154,7 +202,7 @@ describe('the premixed music loop', () => {
     await second;
     expect(system.trackId).toBe('b');
     expect(system.ready).toBe(true);
-    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher).toHaveBeenCalledTimes(1 + B.stems.length);
   });
   it('keeps the one source running through a silent gain, restoration and multiple loops', async () => {
     const { system, nodes, gains, context } = setup();
@@ -176,7 +224,7 @@ describe('the premixed music loop', () => {
   });
   it('cleans the old source on restart and disposes idempotently', async () => {
     const { system, nodes } = setup();
-    await system.load(); system.start(12); system.start(14);
+    await system.load('a'); system.start(12); system.start(14);
     expect(system.activeSources).toBe(1);
     expect(nodes).toHaveLength(2);
     expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
@@ -184,25 +232,25 @@ describe('the premixed music loop', () => {
     system.dispose(); system.dispose();
     expect(system.activeSources).toBe(0);
     for (const node of nodes) expect(node.stop).toHaveBeenCalledTimes(1);
-    await expect(system.load()).rejects.toThrow(/disposed/);
+    await expect(system.load('a')).rejects.toThrow(/disposed/);
   });
   it('rejects an empty decode without starting anything', async () => {
     const { system, nodes } = setup(true);
-    await expect(system.load()).rejects.toThrow(/empty or invalid/);
+    await expect(system.load('a')).rejects.toThrow(/empty or invalid/);
     expect(system.ready).toBe(false); expect(nodes).toHaveLength(0);
   });
   it('can retry a failed fetch without committing a partial load', async () => {
     const { system, fetcher, nodes } = setup();
     fetcher.mockRejectedValueOnce(new Error('Network unavailable'));
-    await expect(system.load()).rejects.toThrow(/Network/);
+    await expect(system.load('a')).rejects.toThrow(/Network/);
     expect(system.ready).toBe(false);
     expect(nodes).toHaveLength(0);
-    await system.load();
+    await system.load('a');
     expect(system.ready).toBe(true);
   });
   it('ramps the tempo at one beat-aligned instant', async () => {
     const { system, nodes, context } = setup();
-    await system.load(); system.start(12);
+    await system.load('a'); system.start(12);
     expect(system.playbackRate).toBe(1);
     system.setRate(1.15, 20);
     expect(nodes[0]!.playbackRate.setValueAtTime).toHaveBeenCalledExactlyOnceWith(1.15, 20);
@@ -216,7 +264,7 @@ describe('the premixed music loop', () => {
   });
   it('rejects suspended or non-future starts and invalid gains', async () => {
     const { system, context, nodes } = setup();
-    await system.load();
+    await system.load('a');
     expect(() => system.start(10)).toThrow(/future/);
     context.state = 'suspended';
     expect(() => system.start(12)).toThrow(/Unlock/);
@@ -226,7 +274,7 @@ describe('the premixed music loop', () => {
   });
   it('does not commit a decoded buffer after disposal during loading', async () => {
     const { system, nodes } = setup();
-    const loading = system.load(); system.dispose();
+    const loading = system.load('a'); system.dispose();
     await expect(loading).rejects.toThrow(/disposed/);
     expect(system.ready).toBe(false); expect(nodes).toHaveLength(0);
   });

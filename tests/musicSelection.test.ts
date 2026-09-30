@@ -25,7 +25,9 @@ describe('which track a level plays', () => {
   it('names only shipped tracks, each a whole number of bars at the source tempo', () => {
     for (const id of TRACK_CYCLE) {
       const track = GAMEPLAY_TRACKS[id];
-      expect(track.url).toMatch(/\.mp3$/);
+      expect(track.stems.length).toBeGreaterThan(0);
+      for (const stem of track.stems) expect(stem.url).toMatch(/\.mp3$/);
+      expect(new Set(track.stems.map(stem => stem.id)).size).toBe(track.stems.length);
       expect(Number.isInteger(track.bars)).toBe(true);
       expect(track.gain).toBeGreaterThan(0);
       expect(track.gain).toBeLessThanOrEqual(1);

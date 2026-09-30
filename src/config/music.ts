@@ -34,11 +34,38 @@ export const MUSIC = {
    * The map plays the frontier's chapter, so a player hears the change once, on the road.
    */
   chapterLevels: 25,
+  /**
+   * The metronome under every level: a click on each beat with the bar's first accented,
+   * as a one-bar loop started with the music and driven by the same rate automation, so
+   * it can never drift from the loop it is counting. Its gain rides the track's bus, so
+   * the track's loudness match scales it; the values here are set by ear against track B
+   * and are the one thing in this model that is not measured.
+   */
+  metronome: { gain: 0.7, accentHz: 1500, beatHz: 1000, accentLevel: 0.4, beatLevel: 0.25, clickSec: 0.03 },
+  /**
+   * How a level brings a layered track in. It starts on the first stem alone and a scored
+   * task's accuracy moves the count: at or above `strong` one more stem joins on the next
+   * task's downbeat, below `weak` the last one leaves, in between it holds. The change
+   * lands on the bar line with the tempo change, faded over `fadeSec`.
+   */
+  layers: { strong: 70, weak: 40, fadeSec: 0.5 },
 } as const;
+
+/** One playable file of a track: a premix, or one stem of a layered track. */
+export interface TrackStem {
+  readonly id: string;
+  readonly url: string;
+}
 
 /** What `MusicSystem` needs to know about one gameplay track, measured, not tuned. */
 export interface GameplayTrack {
-  readonly url: string;
+  /**
+   * The files that make the track, in the order a level brings them in. A premixed
+   * track is one stem; a layered one is its stems, the first of which is always heard.
+   * Each is decoded whole (~38 MB of float PCM per stereo stem at 44.1 kHz), which is
+   * why a track is layered only where the game plays them one at a time.
+   */
+  readonly stems: readonly TrackStem[];
   /** Whole bars at `MUSIC.sourceBpm`; the loop is copied to exactly this length at load. */
   readonly bars: number;
   /**
@@ -65,7 +92,7 @@ export const GAMEPLAY_TRACKS = {
    * bar; MusicSystem drops the lead-in and pads the silent tail to `bars` bars.
    */
   a: {
-    url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href,
+    stems: [{ id: 'mix', url: new URL('../../bgm/mix/tiny-tempo.mp3', import.meta.url).href }],
     bars: 60,
     // The threshold is -26 dBFS, not the -40 dBFS this used to carry, because MP3
     // pre-echo smears energy backwards into the granule before a transient and -40 dBFS
@@ -89,20 +116,37 @@ export const GAMEPLAY_TRACKS = {
    * tail is music, not silence, and the seam is the composer's.
    */
   b: {
-    url: new URL('../../bgm/mix/tiny-tempo-b.mp3', import.meta.url).href,
+    // The six stems, each encoded by the same pipeline as the premix with the same head
+    // and scale, so together they are the premix to the sample. The order is the order a
+    // level adds them: the drums are the floor, the bass and harmony the body, the lead
+    // and the colours the reward. Every one is genuinely stereo (the drums, the narrowest,
+    // carry −14.6 dB of side), so none ships mono.
+    stems: [
+      { id: 'drums', url: new URL('../../bgm/mix/tiny-tempo-b-drums.mp3', import.meta.url).href },
+      { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href },
+      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href },
+      { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href },
+      { id: 'orchestral', url: new URL('../../bgm/mix/tiny-tempo-b-orchestral.mp3', import.meta.url).href },
+      { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href },
+    ],
     bars: 54,
-    // The encoder writes 0.1 s of silence in front of this premix (see
+    // The encoder writes 0.1 s of silence in front of every file of this track (see
     // scripts/encode-music.mjs): a transient in an MP3's first granule is where decoders
     // disagree most about the encoder delay, and the head puts the opening hit inside the
-    // same window as track A's. Decoded lead in Chromium: 0.1247 s — the head, 23 ms of
-    // decoder delay and the harmony's 1.8 ms rise to -26 dBFS. A decoder that trims the
-    // delay lands near 0.102 s; both sit inside these bounds, and a file with no head
-    // does not.
-    leadIn: { threshold: 0.05, fallbackSec: 0.125, minSec: 0.05, maxSec: 0.25 },
+    // same window as track A's. The lead is detected on the first stem alone — the drums,
+    // whose first kick reaches -26 dBFS 3.6 ms after the downbeat — and applied to every
+    // stem, because each stem's own first sound sits somewhere else in the bar and the
+    // stems have to stay sample-aligned. Decoded lead of the premix in Chromium: 0.1247 s
+    // — the head, 23 ms of decoder delay and the harmony's 1.8 ms rise; the drums land
+    // ~2 ms later. A decoder that trims the delay lands near 0.104 s; both sit inside
+    // these bounds, and a file with no head does not.
+    leadIn: { threshold: 0.05, fallbackSec: 0.127, minSec: 0.05, maxSec: 0.25 },
     // Matched to track A by measurement, not by ear, the way the title theme is: decoded
-    // in Chromium, this premix sits at -17.66 dB RMS against A's -21.16 dB, and A is heard
+    // in Chromium, the premix sits at -17.66 dB RMS against A's -21.16 dB, and A is heard
     // through 0.5632, so 0.376 puts the two at the same level and a chapter's change of
     // track is not a jump. The encoder's estimate from the float sums agrees within 0.02 dB.
+    // The stems sum to the premix, so this is the level of the full mix; fewer stems are
+    // simply quieter, as a thinner arrangement is.
     gain: 0.3762,
   },
 } as const satisfies Record<string, GameplayTrack>;

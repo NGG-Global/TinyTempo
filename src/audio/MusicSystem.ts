@@ -1,4 +1,5 @@
 import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds, type GameplayTrack, type TrackId } from '../config/music';
+import { metronomeBar } from './metronomeSounds';
 
 export function validateLoopBuffer(buffer: AudioBuffer | null): number {
   if (!buffer || buffer.length <= 0 || buffer.sampleRate <= 0) throw new Error('Music track is empty or invalid.');
@@ -43,21 +44,30 @@ export function normalizeLoop(context: BaseAudioContext, source: AudioBuffer, le
 }
 
 /**
- * One full-file loop of one premixed gameplay track, on the existing AudioContext.
+ * One gameplay track, looped whole on the existing AudioContext: every stem of it as its
+ * own source, started on the same sample and driven by the same rate automation, so the
+ * stems can be brought in one at a time and never drift apart. A premixed track is one
+ * stem. The metronome is one more looping source of a single bar, on the same terms.
  *
- * One track is decoded at a time. A decoded loop is ~42 MB of float PCM and the
- * normalising copy doubles that transiently, so holding both tracks would double the
- * steady cost for a switch that happens once every twenty-five levels; selecting a
- * different track drops the loaded one before the next fetch begins. Scenes select at
- * their boundaries — the menu's PLAY, a shell screen's create, a level's start — never
- * while a level is running, and `load` stops the source when the track changes because a
- * source can only play the buffer it was given.
+ * One track is decoded at a time. A decoded stem is ~38 MB of float PCM and the
+ * normalising copy adds one more transiently, so a six-stem track holds ~230 MB — the
+ * cost the premix was made to avoid, paid here for a mix that answers the player; holding
+ * two tracks would double it for a switch that happens once every twenty-five levels, so
+ * selecting a different track drops the loaded one before the next fetch begins. Scenes
+ * select at their boundaries — the menu's PLAY, a shell screen's create, a level's start —
+ * never while a level is running, and `load` stops the sources when the track changes
+ * because a source can only play the buffer it was given.
  */
 export class MusicSystem {
   private readonly bus: GainNode;
   private level: number;
-  private source: AudioBufferSourceNode | null = null;
-  private buffer: AudioBuffer | null = null;
+  private sources: AudioBufferSourceNode[] = [];
+  private buffers: AudioBuffer[] = [];
+  private stemGains: GainNode[] = [];
+  private stemLevels: number[] = [];
+  private layers = 0;
+  private click: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
+  private clickBar: AudioBuffer | null = null;
   private pending: Promise<void> | null = null;
   private pendingTrack: TrackId | null = null;
   private abort: AbortController | null = null;
@@ -82,13 +92,18 @@ export class MusicSystem {
   public get selectedTrack(): TrackId { return this.selected; }
   /** The bus gain the loaded track is meant to play at: what `setGain` restores to. */
   public get trackGain(): number { return this.track.gain; }
-  public get ready(): boolean { return this.buffer !== null; }
-  public get activeSources(): number { return this.source ? 1 : 0; }
+  public get ready(): boolean { return this.buffers.length > 0; }
+  /** Stem sources playing: one for a premix, one per stem for a layered track. */
+  public get activeSources(): number { return this.sources.length; }
+  /** How many stems are heard, or scheduled to be, of the loaded track. */
+  public get activeLayers(): number { return this.layers; }
+  /** Whether the metronome bar is looping with the track. */
+  public get metronome(): boolean { return this.click !== null; }
   public get startTime(): number | null { return this.origin; }
   public get downbeatTime(): number | null { return this.origin === null ? null : this.origin + pickupSeconds(MUSIC.sourceBpm, MUSIC.pickupBeats); }
-  public get duration(): number { return this.buffer?.duration ?? 0; }
+  public get duration(): number { return this.buffers[0]?.duration ?? 0; }
   /** Diagnostic: frames dropped before the first downbeat of the shipped decode. */
-  public get leadInSeconds(): number { return this.buffer ? this.leadInFrames / this.buffer.sampleRate : 0; }
+  public get leadInSeconds(): number { return this.buffers[0] ? this.leadInFrames / this.buffers[0].sampleRate : 0; }
   public get playbackGeneration(): number { return this.generation; }
   /** Diagnostic only. Gameplay never uses file position or loop count as its clock. */
   public get completedLoops(): number { return this.origin === null ? 0 : Math.floor(Math.max(0, this.context.currentTime - this.origin) / this.duration); }
@@ -97,10 +112,14 @@ export class MusicSystem {
   public get playbackRate(): number { return this.rate; }
 
   /**
-   * Atomic load of one track: playback cannot start until the fetch, decode and
-   * validation all succeed. The same track is loaded once and shared by concurrent
-   * callers. Asking for a different track stops the source, releases the loaded loop and
-   * cancels a load of any other; the callers of that load are told it was superseded.
+   * Atomic load of one track: playback cannot start until every stem has been fetched,
+   * decoded and validated. Stems are decoded one after another, so the transient cost is
+   * one decode over the stems already held rather than all of them at once. The lead-in
+   * is detected on the first stem and applied to every one: each stem's own first sound
+   * sits somewhere else in the bar, and they have to stay sample-aligned. The same track
+   * is loaded once and shared by concurrent callers. Asking for a different track stops
+   * the sources, releases the loaded loop and cancels a load of any other; the callers of
+   * that load are told it was superseded.
    */
   public load(id: TrackId = this.selected): Promise<void> {
     if (this.disposed) return Promise.reject(new Error('Music is disposed.'));
@@ -108,32 +127,47 @@ export class MusicSystem {
       this.selected = id;
       this.abort?.abort();
     }
-    if (this.loaded === id && this.buffer) return Promise.resolve();
+    if (this.loaded === id && this.ready) return Promise.resolve();
     if (this.pending && this.pendingTrack === id) return this.pending;
     if (this.loaded !== null) {
       this.stop();
-      this.buffer = null;
-      this.loaded = null;
+      this.release();
     }
     const track = GAMEPLAY_TRACKS[id];
     const abort = new AbortController();
     this.abort = abort;
     this.pendingTrack = id;
+    const superseded = (): Error => this.disposed ? new Error('Music was disposed during loading.') : new Error('Music load was superseded by another track.');
     const load = (async () => {
-      const response = await fetch(track.url, { signal: abort.signal });
-      if (!response.ok) throw new Error(`Could not load the music track (${response.status}).`);
-      return this.context.decodeAudioData(await response.arrayBuffer());
-    })().then(decoded => {
-      if (this.disposed) throw new Error('Music was disposed during loading.');
-      if (abort.signal.aborted) throw new Error('Music load was superseded by another track.');
-      validateLoopBuffer(decoded);
-      const lead = detectLeadIn(decoded, track.leadIn.threshold, track.leadIn.fallbackSec, track.leadIn.minSec, track.leadIn.maxSec);
-      const buffer = normalizeLoop(this.context, decoded, lead, track);
-      validateLoopBuffer(buffer);
+      const buffers: AudioBuffer[] = [];
+      let lead = 0;
+      for (const stem of track.stems) {
+        const response = await fetch(stem.url, { signal: abort.signal });
+        if (!response.ok) throw new Error(`Could not load the music track (${response.status}).`);
+        const decoded = await this.context.decodeAudioData(await response.arrayBuffer());
+        if (this.disposed || abort.signal.aborted) throw superseded();
+        validateLoopBuffer(decoded);
+        if (buffers.length === 0) lead = detectLeadIn(decoded, track.leadIn.threshold, track.leadIn.fallbackSec, track.leadIn.minSec, track.leadIn.maxSec);
+        const buffer = normalizeLoop(this.context, decoded, lead, track);
+        validateLoopBuffer(buffer);
+        if (buffers.length > 0 && buffer.length !== buffers[0]!.length) throw new Error('The stems of a track must decode to one length.');
+        buffers.push(buffer);
+      }
+      return { buffers, lead };
+    })().then(({ buffers, lead }) => {
+      if (this.disposed || abort.signal.aborted) throw superseded();
       this.leadInFrames = lead;
-      this.buffer = buffer;
+      this.buffers = buffers;
+      this.stemGains = buffers.map(() => {
+        const gain = this.context.createGain();
+        gain.gain.value = 1;
+        gain.connect(this.bus);
+        return gain;
+      });
+      this.stemLevels = buffers.map(() => 1);
+      this.layers = buffers.length;
       this.loaded = id;
-      // Nothing is playing — a change of track stopped the source above — so the bus can
+      // Nothing is playing — a change of track stopped the sources above — so the bus can
       // take the new track's level now, before anything hears it.
       if (this.level !== track.gain) this.setGain(track.gain, 0);
     }).catch((error: unknown) => {
@@ -146,28 +180,80 @@ export class MusicSystem {
     this.pending = load;
     return load;
   }
-  /** Returns the first musical downbeat, retaining the audible pickup at source position zero. */
-  public start(at = this.context.currentTime + MUSIC.startLeadSec): number {
-    if (this.disposed || !this.buffer) throw new Error('Load the music track before playback.');
+  /**
+   * Returns the first musical downbeat, retaining the audible pickup at source position
+   * zero. Every stem starts on that sample; `layers` says how many are heard from it (the
+   * shell takes them all, a level its first alone), and `metronome` adds the click bar,
+   * started on the same sample so its accent is the loop's downbeat.
+   */
+  public start(at = this.context.currentTime + MUSIC.startLeadSec, options?: { layers?: number; metronome?: boolean }): number {
+    if (this.disposed || !this.ready) throw new Error('Load the music track before playback.');
     if (this.context.state !== 'running') throw new Error('Unlock audio before starting music.');
     if (!Number.isFinite(at) || at <= this.context.currentTime) throw new Error('Schedule music at a future shared timestamp.');
+    const layers = Math.max(1, Math.min(this.buffers.length, options?.layers ?? this.buffers.length));
+    if (!Number.isInteger(layers)) throw new Error('Layers are a whole number of stems.');
     this.stop();
-    const end = validateLoopBuffer(this.buffer);
+    const end = validateLoopBuffer(this.buffers[0]!);
     try {
-      const source = this.context.createBufferSource();
-      source.buffer = this.buffer;
-      source.loop = true;
-      source.loopStart = 0;
-      source.loopEnd = end;
-      source.playbackRate.value = 1;
       this.rate = 1;
-      source.connect(this.bus);
-      this.source = source;
-      source.start(at, 0);
+      this.buffers.forEach((buffer, i) => {
+        const source = this.loopSource(buffer, end, this.stemGains[i]!);
+        source.start(at, 0);
+        this.sources.push(source);
+      });
+      this.layers = layers;
+      this.stemGains.forEach((gain, i) => {
+        const level = i < layers ? 1 : 0;
+        gain.gain.cancelScheduledValues(this.context.currentTime);
+        gain.gain.setValueAtTime(level, this.context.currentTime);
+        this.stemLevels[i] = level;
+      });
+      if (options?.metronome) {
+        this.clickBar ??= metronomeBar(this.context);
+        const gain = this.context.createGain();
+        gain.gain.value = MUSIC.metronome.gain;
+        gain.connect(this.bus);
+        const source = this.loopSource(this.clickBar, this.clickBar.duration, gain);
+        source.start(at, 0);
+        this.click = { source, gain };
+      }
       this.origin = at;
       this.generation++;
       return this.downbeatTime!;
     } catch (error) { this.stop(); throw error; }
+  }
+  private loopSource(buffer: AudioBuffer, end: number, destination: AudioNode): AudioBufferSourceNode {
+    const source = this.context.createBufferSource();
+    source.buffer = buffer;
+    source.loop = true;
+    source.loopStart = 0;
+    source.loopEnd = end;
+    source.playbackRate.value = 1;
+    source.connect(destination);
+    return source;
+  }
+  /**
+   * How many stems are heard from `at`, which the caller places on a bar line with the
+   * tempo change: a stem joining or leaving fades over `fadeSec` from there, so the change
+   * reads as the arrangement moving rather than a cut. Clamped to what the track has, so
+   * a premix hears nothing.
+   */
+  public setLayers(count: number, at: number, fadeSec: number = MUSIC.layers.fadeSec): void {
+    if (this.disposed || !this.ready) return;
+    if (!Number.isInteger(count) || count < 1) throw new Error('At least one stem is always heard.');
+    if (!Number.isFinite(at) || !Number.isFinite(fadeSec) || fadeSec < 0) throw new Error('A layer change needs a finite time and fade.');
+    const layers = Math.min(this.buffers.length, count);
+    const start = Math.max(at, this.context.currentTime);
+    this.stemGains.forEach((gain, i) => {
+      const level = i < layers ? 1 : 0;
+      if (level === this.stemLevels[i]) return;
+      gain.gain.cancelScheduledValues(start);
+      gain.gain.setValueAtTime(this.stemLevels[i]!, start);
+      if (fadeSec <= 0) gain.gain.setValueAtTime(level, start);
+      else gain.gain.linearRampToValueAtTime(level, start + fadeSec);
+      this.stemLevels[i] = level;
+    });
+    this.layers = layers;
   }
   /**
    * Speeds the track up at one instant, which the caller places on a beat. Pitch rises with
@@ -177,7 +263,9 @@ export class MusicSystem {
     if (this.disposed) return;
     if (!Number.isFinite(rate) || rate < 0.5 || rate > 2) throw new Error('Playback rate must be between 0.5 and 2.');
     if (!Number.isFinite(at)) throw new Error('Schedule the rate change at a finite time.');
-    this.source?.playbackRate.setValueAtTime(rate, Math.max(at, this.context.currentTime));
+    const when = Math.max(at, this.context.currentTime);
+    for (const source of this.sources) source.playbackRate.setValueAtTime(rate, when);
+    this.click?.source.playbackRate.setValueAtTime(rate, when);
     this.rate = rate;
   }
   public setGain(value: number, rampSec: number = MUSIC.gainRampSec): void {
@@ -214,22 +302,33 @@ export class MusicSystem {
     this.level = to;
   }
   public stop(): void {
-    const source = this.source;
-    if (source) {
+    const sources = this.click ? [...this.sources, this.click.source] : this.sources;
+    for (const source of sources) {
       source.onended = null;
       try { source.stop(); } catch { /* A source that never started cannot be stopped. */ }
       source.disconnect();
     }
-    this.source = null;
+    this.click?.gain.disconnect();
+    this.click = null;
+    this.sources = [];
     this.origin = null;
+  }
+  /** Drops the loaded track's stems and their gains; the click bar is the context's and stays. */
+  private release(): void {
+    for (const gain of this.stemGains) gain.disconnect();
+    this.buffers = [];
+    this.stemGains = [];
+    this.stemLevels = [];
+    this.layers = 0;
+    this.loaded = null;
   }
   public dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
     this.abort?.abort();
     this.stop();
-    this.buffer = null;
-    this.loaded = null;
+    this.release();
+    this.clickBar = null;
     this.bus.disconnect();
   }
 }
