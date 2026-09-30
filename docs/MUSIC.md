@@ -121,6 +121,50 @@ sits at **−17.66 dB RMS** against A's **−21.16 dB**, and A is heard through 
 `gain` is **0.3762** and a chapter's change of track is not a jump. The encoder's estimate
 from the float sums (−17.23 against −20.71 dB) gives 0.3770, within 0.02 dB.
 
+## Track B in layers, and the metronome
+
+Track B is not played as its premix. The encoder writes each of its six stems as its own
+MP3 (`tiny-tempo-b-drums.mp3` to `tiny-tempo-b-risers.mp3`, 128 kb/s, 1.73 MB each), with
+the same 0.1 s head and the same scale as the premix, so the six played together are the
+premix to the sample. `GAMEPLAY_TRACKS.b.stems` lists them in the order a level brings
+them in — drums, bass, harmony, synth lead, orchestral colour, risers — and track A is the
+same shape with one stem, its premix.
+
+`MusicSystem` decodes every stem of the selected track, one after another, and starts one
+looping source per stem on the same sample under the same rate automation, so they cannot
+drift apart. **The lead-in is detected on the first stem and applied to all of them**: each
+stem's own first sound sits somewhere else in the bar (the bass at 25 ms, the synth lead at
+20 s), and a per-stem detection would slide the stems against each other. Decoded in
+Chromium, the drums' first crossing of −26 dBFS sits ~2 ms after the premix's, which is the
+kick's own rise; `fallbackSec` is 0.127 for that reason.
+
+A level starts on the first stem alone, with a metronome bar under it, and earns the rest
+(`game/musicLayers.ts`): a scored task at or above `MUSIC.layers.strong` (70%) adds the
+next stem, one below `MUSIC.layers.weak` (40%) takes the last one away, anything between
+holds, and the change lands on the next task's downbeat with the tempo change, faded over
+`MUSIC.layers.fadeSec`. The count is level-local, reset at every start, stored nowhere and
+read by nothing that judges, scores, paces, saves or unlocks. The shell on the map and
+Settings hears every stem and no metronome. A premix is a track that is always full: the
+same rule runs and hears nothing.
+
+The metronome (`audio/metronomeSounds.ts`) is one synthesized bar at the source tempo — a
+click on every beat, the first accented by pitch and level — looped as one more source
+from the same start sample with the same rate automation, so its accent is always the
+loop's downbeat and it can never drift from what it counts. It rides the track's bus
+through its own gain (`MUSIC.metronome.gain`), so the bed's fades and the mute cover it,
+and the track's loudness match scales it. Its levels are set by ear, not measured.
+
+**The cost is memory and download, and it is the cost the premix was made to avoid.** A
+decoded stereo stem is ~38 MB of float PCM at 44.1 kHz (41.5 at 48), so the six stems hold
+~230 MB steady and one more decode transiently, against 38 MB for the premix; every stem is
+genuinely stereo (the drums, the narrowest, carry −14.6 dB of side energy), so none can
+ship mono. The download is 10.4 MB against 2.2. The seven-stem build this repository began
+with ran at ~296 MB, so the figure is known to work on the devices it was tried on, but it
+has not been measured on a low-memory handset and a WebView killed for memory looks like
+a freeze. If it proves too much, the cheaper shape is three cumulative mixes (drums, drums
+with bass and harmony, everything) crossfaded by the same rule, at half the memory and a
+coarser arrangement.
+
 ## Which track a level plays
 
 `trackForLevel` in `game/musicSelection.ts`: levels are taken in chapters of
@@ -232,11 +276,12 @@ not be. The theme only has to start, loop and get out of the way.
 
 | | Track A | Track B | Title theme |
 | --- | --- | --- | --- |
+| Files | one premix | six stems, layered by performance | one file |
 | Length | 120.000 s, exactly 60 bars | 108.000 s, exactly 54 bars | 152.0 s, as delivered |
 | Loop | whole bars, lead-in detected and dropped | whole bars, lead-in detected and dropped | the file's own ends, which fade |
 | Tempo | `setRate` per task | `setRate` per task | fixed |
 | Gain | 0.5632 | 0.3762 | 0.4 |
-| Size | 2.4 MB | 2.2 MB | 3.5 MB |
+| Size | 2.4 MB | 10.4 MB (six stems) | 3.5 MB |
 
 `THEME.gain` is measured rather than judged by ear: the theme sits at −18.2 dB RMS against
 the premix's −21.2 dB, so 0.4 against the premix's 0.5632 puts the two at the same heard

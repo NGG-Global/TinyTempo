@@ -80,11 +80,12 @@ presents it without changing level timing or judgement rules. See
 
 ## Music
 
-Two premixed stereo MP3s, `bgm/mix/tiny-tempo.mp3` (2.4 MB, 60 bars) and
-`bgm/mix/tiny-tempo-b.mp3` (2.2 MB, 54 bars), each normalized at load into an
-exact 120 BPM whole-bar loop whose origin is the first downbeat. Levels take them
-in chapters of twenty-five (`src/game/musicSelection.ts`), and one is decoded at
-a time. The WAV masters stay in `bgm/` and `bgm/track-b/` as the source of truth;
+Two gameplay tracks, each normalized at load into an exact 120 BPM whole-bar
+loop whose origin is the first downbeat: `bgm/mix/tiny-tempo.mp3` (2.4 MB, 60
+bars) as one premix, and track B (54 bars) as six stem MP3s a level brings in one
+at a time by how it is played, under a synthesized metronome. Levels take the
+tracks in chapters of twenty-five (`src/game/musicSelection.ts`), and one is
+decoded at a time. The WAV masters stay in `bgm/` and `bgm/track-b/` as the source of truth;
 `npm run music:encode` sums each set and writes the shipped tracks, and `--stems`
 also writes the per-stem MP3s a future dynamic mix would need. Tempo follows the
 level: `setRate` ramps playback rate on a task downbeat, so pitch rises with

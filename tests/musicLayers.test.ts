@@ -1,0 +1,27 @@
+import { describe, expect, it } from 'vitest';
+import { MUSIC } from '../src/config/music';
+import { advanceLayers, OPENING_LAYERS } from '../src/game/musicLayers';
+
+describe('how a level earns a layered track', () => {
+  it('starts on the first stem and moves one stem a task by the task\'s accuracy', () => {
+    expect(OPENING_LAYERS).toBe(1);
+    expect(advanceLayers(1, MUSIC.layers.strong, 6)).toBe(2);
+    expect(advanceLayers(2, 100, 6)).toBe(3);
+    expect(advanceLayers(3, MUSIC.layers.strong - 1, 6)).toBe(3); // between: holds
+    expect(advanceLayers(3, MUSIC.layers.weak, 6)).toBe(3);
+    expect(advanceLayers(3, MUSIC.layers.weak - 1, 6)).toBe(2);
+    expect(advanceLayers(1, 0, 6)).toBe(1); // the first stem is always heard
+    expect(advanceLayers(6, 100, 6)).toBe(6); // and there is nothing past the last
+  });
+  it('is the same rule for a premix, which is always full', () => {
+    expect(advanceLayers(1, 100, 1)).toBe(1);
+    expect(advanceLayers(1, 0, 1)).toBe(1);
+    expect(() => advanceLayers(0, 50, 6)).toThrow(/At least one/);
+    expect(() => advanceLayers(1, 50, 0)).toThrow(/at least one stem/);
+  });
+  it('reaches the whole arrangement inside a strong level of ordinary length', () => {
+    let layers = OPENING_LAYERS;
+    for (let task = 0; task < 5; task++) layers = advanceLayers(layers, 90, 6);
+    expect(layers).toBe(6);
+  });
+});

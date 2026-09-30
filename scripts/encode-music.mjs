@@ -11,6 +11,11 @@
  *
  *   node scripts/encode-music.mjs [kbps] [--stems] [--track a|b]
  *
+ * A track marked `layered` also gets one MP3 per stem in bgm/mix/, at `LAYER_KBPS`, each
+ * with the same head and the same scale as the premix, so the stems played together are
+ * the premix to the sample and the game can bring them in one at a time. Those are what
+ * the game loads for that track; the premix stays as the loudness reference.
+ *
  * Without `--track` every track is encoded. Track A's encode is deterministic, so a
  * re-run with the same masters and bitrate writes the same bytes.
  */
@@ -25,6 +30,8 @@ const ONLY = args.includes('--track') ? args[args.indexOf('--track') + 1] : null
 const KBPS = Number(args.find((a, i) => !a.startsWith('--') && args[i - 1] !== '--track') ?? 160);
 const ROOT = fileURLToPath(new URL('../bgm/', import.meta.url));
 const MIX_TARGET = join(ROOT, 'mix');
+/** A single stem is sparser than a mix and six of them ship at once; 128 kb/s keeps the set near 10 MB. */
+const LAYER_KBPS = 128;
 /** Sample peak a premix is normalised down to. Leaves ~0.26 dB before full scale. */
 const MIX_PEAK = 0.97;
 /** Every gameplay track is authored at this tempo in 4/4; `MUSIC.sourceBpm` in src/config/music.ts. */
@@ -52,7 +59,7 @@ const TRACKS = [
     mix: { Drums: 1, Bass: 1, Guitar: 1, Keyboard: 1, Percussion: 1, Synth: 1, Brass: 1 },
   },
   {
-    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.3762,
+    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.3762, layered: true,
     mix: { Drums: 1, Bass: 1, Harmony: 1, 'Synth Lead': 1, Orchestral: 1, Risers: 1 },
   },
 ];
@@ -82,8 +89,8 @@ function toPcm16(channel, scale) {
   return out;
 }
 
-function encode(left, right, sampleRate, target) {
-  const encoder = new Mp3Encoder(2, sampleRate, KBPS);
+function encode(left, right, sampleRate, target, kbps = KBPS) {
+  const encoder = new Mp3Encoder(2, sampleRate, kbps);
   const chunks = [];
   const block = 1152 * 8;
   for (let i = 0; i < left.length; i += block) {
@@ -106,6 +113,7 @@ function premix(track) {
   // Sum in float, at full precision, and only then scale: stems that each peak near
   // -3 dBFS overflow 16-bit together, and clipping the sum would be irreversible.
   let sampleRate = 0, frames = 0, sumL = null, sumR = null;
+  const stems = [];
   for (const file of files) {
     const name = stemName(file);
     const weight = track.mix[name];
@@ -118,6 +126,7 @@ function premix(track) {
       throw new Error(`${file}: ${wav.frames} frames at ${wav.sampleRate} Hz, expected ${frames} at ${sampleRate}. The masters were not trimmed to one length.`);
     }
     for (let i = 0; i < frames; i++) { sumL[i] += wav.left[i] * weight; sumR[i] += wav.right[i] * weight; }
+    if (track.layered) stems.push({ file, name, weight, wav });
     if (WITH_STEMS) {
       const target = join(track.directory, 'mp3');
       mkdirSync(target, { recursive: true });
@@ -134,6 +143,14 @@ function premix(track) {
   left.set(toPcm16(sumL, scale), head); right.set(toPcm16(sumR, scale), head);
   mkdirSync(MIX_TARGET, { recursive: true });
   const size = encode(left, right, sampleRate, join(MIX_TARGET, track.output));
+  // The stems the game layers: the premix's own scale and head, so their sum is the premix.
+  for (const stem of stems) {
+    const stemL = new Int16Array(head + frames), stemR = new Int16Array(head + frames);
+    stemL.set(toPcm16(stem.wav.left, scale * stem.weight), head); stemR.set(toPcm16(stem.wav.right, scale * stem.weight), head);
+    const name = `${track.output.replace(/\.mp3$/, '')}-${stem.name.toLowerCase().replace(/\s+/g, '-')}.mp3`;
+    const stemSize = encode(stemL, stemR, sampleRate, join(MIX_TARGET, name), LAYER_KBPS);
+    console.log(`  layer ${stem.file} -> ${name} ${(stemSize / 1e6).toFixed(2)} MB at ${LAYER_KBPS} kb/s`);
+  }
   const loop = track.bars * 4 * 60 / SOURCE_BPM;
   console.log(`track ${track.id}: ${files.length} stems -> ${track.output} ${(size / 1e6).toFixed(2)} MB, ${frames} frames at ${sampleRate} Hz = ${(frames / sampleRate).toFixed(6)} s against ${loop} s for ${track.bars} bars${head ? `, ${track.headSec} s of silence in front` : ''}`);
   console.log(`  sum peak ${peak.toFixed(4)} (${dB(peak)} dBFS), scaled by ${scale.toFixed(6)}; premix RMS ${dB(rms)} dBFS`);

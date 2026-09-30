@@ -28,8 +28,8 @@ function setup() {
   });
   const urls: string[] = [];
   const context = {
-    currentTime: 10, state: 'running',
-    decodeAudioData: vi.fn(async () => (urls[urls.length - 1] === GAMEPLAY_TRACKS.b.url ? fakeBuffer(10814, RATE, 2, 12) : fakeBuffer(FILE_FRAMES))),
+    currentTime: 10, state: 'running', sampleRate: RATE,
+    decodeAudioData: vi.fn(async () => ((urls[urls.length - 1] ?? '').includes('tiny-tempo-b') ? fakeBuffer(10814, RATE, 2, 12) : fakeBuffer(FILE_FRAMES))),
     createBuffer: (channels: number, length: number, rate: number) => fakeBuffer(length, rate, channels),
     createGain: () => ({
       gain: {
@@ -73,18 +73,22 @@ describe('the shell / level / silent music bed', () => {
     // The frontier moved into the next chapter: the map asks for its track.
     await setMusicBed(host, 'shell', { fadeSec: 0, track: 'b' });
     expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
-    expect(nodes).toHaveLength(2);
+    const stems = GAMEPLAY_TRACKS.b.stems.length;
+    expect(nodes).toHaveLength(1 + stems);
     expect(system.trackId).toBe('b');
     expect(nodes[1]!.loopEnd).toBe(108);
-    expect(fetcher).toHaveBeenLastCalledWith(GAMEPLAY_TRACKS.b.url, expect.anything());
+    expect(fetcher).toHaveBeenLastCalledWith(GAMEPLAY_TRACKS.b.stems[stems - 1]!.url, expect.anything());
     expect(currentMusicBed()).toBe('shell');
-    // Naming the loaded track again reuses the source rather than restarting the loop.
+    // The shell hears the whole arrangement, with no metronome under it.
+    expect(system.activeLayers).toBe(stems);
+    expect(system.metronome).toBe(false);
+    // Naming the loaded track again reuses the sources rather than restarting the loop.
     await setMusicBed(host, 'shell', { fadeSec: 0, track: 'b' });
-    expect(nodes).toHaveLength(2);
+    expect(nodes).toHaveLength(1 + stems);
     expect(nodes[1]!.stop).not.toHaveBeenCalled();
     // A shell with no track named keeps what is loaded.
     await setMusicBed(host, 'shell', { fadeSec: 0 });
-    expect(nodes).toHaveLength(2);
+    expect(nodes).toHaveLength(1 + stems);
     expect(system.gain).toBe(GAMEPLAY_TRACKS.b.gain);
   });
 
@@ -95,14 +99,14 @@ describe('the shell / level / silent music bed', () => {
     await setMusicBed(host, 'level');
     await setMusicBed(host, 'shell', { fadeSec: 0, track: 'a' });
     expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
-    expect(nodes).toHaveLength(2);
+    expect(nodes).toHaveLength(GAMEPLAY_TRACKS.b.stems.length + 1);
     expect(system.trackId).toBe('a');
     expect(system.gain).toBe(GAMEPLAY_TRACKS.a.gain);
   });
 
   it('starts the shell once and does not stack a second source over it', async () => {
     const { system, nodes, host } = setup();
-    await system.load();
+    await system.load('a');
     await setMusicBed(host, 'shell', { fadeSec: 0 });
     expect(currentMusicBed()).toBe('shell');
     expect(nodes).toHaveLength(1);
@@ -113,7 +117,7 @@ describe('the shell / level / silent music bed', () => {
 
   it('keeps a leftover level loop as the shell instead of starting over it', async () => {
     const { system, nodes, host } = setup();
-    await system.load();
+    await system.load('a');
     system.start(12);
     await setMusicBed(host, 'level');
     expect(currentMusicBed()).toBe('level');
@@ -127,7 +131,7 @@ describe('the shell / level / silent music bed', () => {
 
   it('cuts immediately on silent so tap offset is not competing with the loop', async () => {
     const { system, nodes, host } = setup();
-    await system.load();
+    await system.load('a');
     await setMusicBed(host, 'shell', { fadeSec: 0 });
     await setMusicBed(host, 'silent');
     expect(currentMusicBed()).toBe('silent');
@@ -138,7 +142,7 @@ describe('the shell / level / silent music bed', () => {
   it('does not let an in-flight fade stop a level that has already started', async () => {
     vi.useFakeTimers();
     const { system, nodes, host } = setup();
-    await system.load();
+    await system.load('a');
     await setMusicBed(host, 'shell', { fadeSec: 0 });
     const fading = setMusicBed(host, 'silent', { fadeSec: MUSIC.bedFadeSec });
     system.start(12);

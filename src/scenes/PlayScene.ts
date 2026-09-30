@@ -8,6 +8,7 @@ import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { trackForLevel } from '@/game/musicSelection';
+import { advanceLayers, OPENING_LAYERS } from '@/game/musicLayers';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
 import { SceneKey } from '@/config/scenes';
 import { LAYOUT } from '@/config/design';
@@ -261,6 +262,8 @@ export class PlayScene extends BaseScene {
    * edge, the Perfect sparks and the accents, and by nothing that judges or scores.
    */
   private groove: GrooveState = GROOVE_START;
+  /** Stems of the track the level has earned so far (`game/musicLayers.ts`); applied on the next task's downbeat. */
+  private layers = OPENING_LAYERS;
   private groovePreview: GrooveLevel | null = null;
   private previewResult = false;
   private grooveStudy = false;
@@ -424,6 +427,7 @@ export class PlayScene extends BaseScene {
     // Under the act and over its backdrop, so the room warms without covering anything in it.
     this.grooveStage = new GrooveStage(this);
     this.groove = GROOVE_START;
+    this.layers = OPENING_LAYERS;
     this.groovePreview = null;
     this.previewResult = this.grooveStudy = this.grooveHandoff = false;
     this.grooveVoices = null;
@@ -905,7 +909,10 @@ export class PlayScene extends BaseScene {
       if (this.disposed || request !== this.startRequest || this.blocked()) return;
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));
-      const origin = this.audio!.music.start(); // fresh sources: every level starts at the base tempo
+      // Fresh sources: every level starts at the base tempo, on the track's first stem alone,
+      // with the metronome bar counting under it from the same sample.
+      this.layers = OPENING_LAYERS;
+      const origin = this.audio!.music.start(undefined, { layers: OPENING_LAYERS, metronome: true });
       this.levelOrigin = origin;
       void setMusicBed(this.audio!, 'level');
       if (this.disposed || request !== this.startRequest || this.blocked()) {
@@ -1242,6 +1249,7 @@ export class PlayScene extends BaseScene {
         // The music speeds up on the same downbeat the next count-in starts, so the grid and
         // the stems change tempo together. Every task's plan is whole beats, so `next` is on a beat.
         this.audio.music.setRate(this.task.bpm / MUSIC.sourceBpm, transition.next);
+        this.audio.music.setLayers(this.layers, transition.next);
         this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
         this.beginTask(transition.next);
         // start() cancels the previous plan's voices. Schedule the handoff AFTER it.
@@ -1438,7 +1446,7 @@ export class PlayScene extends BaseScene {
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
       const music = this.audio?.music;
-      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.trackId ?? '—'} ${music?.activeSources ?? 0} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? 0).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
+      this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.trackId ?? '—'} ${music?.activeLayers ?? 0}/${music?.activeSources ?? 0}${music?.metronome ? ' +click' : ''} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? 0).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
     }
   }
   private changeHeadline(text: string, colour = SHELL.cream): void {
@@ -1817,6 +1825,9 @@ export class PlayScene extends BaseScene {
     }
     this.results[this.taskIndex] = result.accuracy;
     this.levelRun?.task(this.taskIndex, result);
+    // The arrangement answers the task: a strong one earns the next stem, a weak one loses
+    // the last, and the change lands on the next task's downbeat with the tempo (below).
+    this.layers = advanceLayers(this.layers, result.accuracy, this.audio?.music.track.stems.length ?? 1);
     // The one place groove moves: a scored task's verdict. The introduction and the
     // first-run pass never reach here, so neither can move it. Level 1 is the flourish
     // above and nothing more; from 2 the room answers (`grooveStage`), and a milestone
