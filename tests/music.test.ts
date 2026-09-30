@@ -47,11 +47,11 @@ function setup(empty = false) {
 }
 
 describe('the premixed music loop', () => {
-  it('loads once and schedules a full-buffer loop from offset zero', async () => {
+  it('loads the track it is asked for once and schedules a full-buffer loop from offset zero', async () => {
     const { system, nodes, fetcher, context } = setup();
     expect(() => system.start()).toThrow(/Load the music track/);
-    const first = system.load();
-    expect(system.load()).toBe(first);
+    const first = system.load('a');
+    expect(system.load('a')).toBe(first);
     await first;
     // One request and one decode: the seven-stem load cost seven of each and ~307 MiB of PCM.
     expect(fetcher).toHaveBeenCalledExactlyOnceWith(A.url, expect.anything());
@@ -67,7 +67,7 @@ describe('the premixed music loop', () => {
     expect(node.loopEnd).toBe(loopSeconds(A));
     expect(node.buffer!.length).toBe(loopSeconds(A) * RATE);
     expect(node.playbackRate.value).toBe(1);
-    await system.load();
+    await system.load('a');
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('detects the lead-in from the opening transient and falls back outside the plausible range', () => {
@@ -158,7 +158,7 @@ describe('the premixed music loop', () => {
   });
   it('keeps the one source running through a silent gain, restoration and multiple loops', async () => {
     const { system, nodes, gains, context } = setup();
-    await system.load(); system.start(12);
+    await system.load('a'); system.start(12);
     expect(system.gain).toBe(A.gain);
     system.setGain(0); expect(system.gain).toBe(0);
     system.setGain(A.gain, 0);

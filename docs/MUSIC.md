@@ -124,8 +124,10 @@ from the float sums (−17.23 against −20.71 dB) gives 0.3770, within 0.02 dB.
 ## Which track a level plays
 
 `trackForLevel` in `game/musicSelection.ts`: levels are taken in chapters of
-`MUSIC.chapterLevels`, twenty-five, and the chapters go round `TRACK_CYCLE` — 1–25 on A,
-26–50 on B, 51–75 on A again. The rule is the level alone, so nothing is stored, save codes
+`MUSIC.chapterLevels`, twenty-five, and the chapters go round `TRACK_CYCLE` — with
+`['a', 'b']`, 1–25 on A, 26–50 on B, 51–75 on A again. **For now the cycle is `['b']`**,
+so every level and the shell play track B while it is being heard on devices; the rule and
+track A stay, and restoring `['a', 'b']` is the whole change back. The rule is the level alone, so nothing is stored, save codes
 and merges hear the same track for the same level, and a replay plays what the level
 played. Twenty-five is two and a half areas, so a chapter boundary is never an area gate,
 which is deliberate: the areas already change the ground and the finale, and the music

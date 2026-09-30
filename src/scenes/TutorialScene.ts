@@ -10,7 +10,7 @@ import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Mark } from '@/game/beatTrack';
 import { RoundController, type Phase } from '@/game/RoundController';
-import { coach, completeTutorial, isPlayersWindow, momentOf, TUTORIAL, TutorialRun, tutorialComplete, type Coach } from '@/game/TutorialRun';
+import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach } from '@/game/TutorialRun';
 import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
 import { TapInput, type Tap } from '@/input/TapInput';
 import type { Judgement } from '@/rhythm/judge';
@@ -496,6 +496,9 @@ export class TutorialScene extends BaseScene {
     this.illustration.pause();
     this.paused = true;
     if (complete) { completeTutorial(); this.registry.set('tutorial-complete', true); }
+    // A skip is remembered too, so the next Play goes to the map rather than back here;
+    // the registry copy covers a device whose storage refuses the write for this session.
+    else { skipTutorial(); this.registry.set('tutorial-seen', true); }
     if (complete) this.visit?.complete(this.run.tries, this.run.step === 'done');
     else this.visit?.skip(this.run.step, this.run.tries);
     this.curtain.cover(() => this.scene.start(SceneKey.Map));

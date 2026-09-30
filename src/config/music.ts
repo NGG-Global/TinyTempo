@@ -107,8 +107,13 @@ export const GAMEPLAY_TRACKS = {
   },
 } as const satisfies Record<string, GameplayTrack>;
 export type TrackId = keyof typeof GAMEPLAY_TRACKS;
-/** The order the chapters take the tracks in. Append to add a track; reordering moves every chapter. */
-export const TRACK_CYCLE: readonly TrackId[] = ['a', 'b'];
+/**
+ * The order the chapters take the tracks in. Append to add a track; reordering moves
+ * every chapter. **For now this is the second track alone**, so every level and the shell
+ * play it while it is being tested on devices; the chapter rule and track A stay in
+ * place, and restoring `['a', 'b']` puts levels 1–25 back on A.
+ */
+export const TRACK_CYCLE: readonly TrackId[] = ['b'];
 
 /**
  * The title theme. A second track, and deliberately not part of the model above.

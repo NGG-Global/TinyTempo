@@ -5,15 +5,17 @@ import { trackForLevel } from '../src/game/musicSelection';
 describe('which track a level plays', () => {
   it('takes the tracks in turn, a chapter of twenty-five levels each', () => {
     expect(MUSIC.chapterLevels).toBe(25);
-    expect(TRACK_CYCLE).toEqual(['a', 'b']);
-    expect(trackForLevel(1)).toBe('a');
-    expect(trackForLevel(25)).toBe('a');
+    for (const level of [1, 25, 26, 50, 51, 75, 76, 1000]) {
+      expect(trackForLevel(level)).toBe(TRACK_CYCLE[Math.floor((level - 1) / 25) % TRACK_CYCLE.length]);
+    }
+  });
+  it('plays the second track everywhere while it is under test', () => {
+    // Deliberate and temporary: the cycle is ['b'] until the track has been heard on
+    // devices. Restoring ['a', 'b'] is the whole change back.
+    expect(TRACK_CYCLE).toEqual(['b']);
+    expect(trackForLevel(1)).toBe('b');
     expect(trackForLevel(26)).toBe('b');
-    expect(trackForLevel(50)).toBe('b');
-    expect(trackForLevel(51)).toBe('a');
-    expect(trackForLevel(75)).toBe('a');
-    expect(trackForLevel(76)).toBe('b');
-    expect(trackForLevel(1000)).toBe(TRACK_CYCLE[Math.floor(999 / 25) % TRACK_CYCLE.length]);
+    expect(trackForLevel(51)).toBe('b');
   });
   it('is the level alone, so nothing has to be stored', () => {
     for (let level = 1; level <= 200; level++) expect(trackForLevel(level)).toBe(trackForLevel(level));
