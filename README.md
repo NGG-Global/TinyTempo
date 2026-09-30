@@ -80,15 +80,16 @@ presents it without changing level timing or judgement rules. See
 
 ## Music
 
-One premixed stereo MP3, `bgm/mix/tiny-tempo.mp3` (2.4 MB), normalized at load
-into an exact 120 BPM, 60-bar loop whose origin is the first downbeat. The seven
-WAV masters (161 MB, drums, bass, guitar, keyboard, percussion, synth, brass)
-stay in `bgm/` as the source of truth; `npm run music:encode` sums them and
-writes the shipped track, and `--stems` also writes the per-stem MP3s a future
-dynamic mix would need. Tempo follows the level: `setRate` ramps playback rate on
-a task downbeat, so pitch rises with tempo. See
-[music notes](docs/MUSIC.md) for the measured metadata and the caveats that still
-need a listening check.
+Two premixed stereo MP3s, `bgm/mix/tiny-tempo.mp3` (2.4 MB, 60 bars) and
+`bgm/mix/tiny-tempo-b.mp3` (2.2 MB, 54 bars), each normalized at load into an
+exact 120 BPM whole-bar loop whose origin is the first downbeat. Levels take them
+in chapters of twenty-five (`src/game/musicSelection.ts`), and one is decoded at
+a time. The WAV masters stay in `bgm/` and `bgm/track-b/` as the source of truth;
+`npm run music:encode` sums each set and writes the shipped tracks, and `--stems`
+also writes the per-stem MP3s a future dynamic mix would need. Tempo follows the
+level: `setRate` ramps playback rate on a task downbeat, so pitch rises with
+tempo. See [music notes](docs/MUSIC.md) for the measured metadata and the caveats
+that still need a listening check.
 
 ## Audio latency
 

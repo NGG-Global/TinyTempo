@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setMusicBed } from '@/audio/musicBed';
-import { currentAudio, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
@@ -381,12 +381,13 @@ export class MenuScene extends BaseScene {
       await audio.unlock();
       if (this.disposed || request !== this.request) return;
       this.playLabel.setText('…');
-      await audio.music.load();
+      const track = shellTrack();
+      await audio.music.load(track);
       if (this.disposed || request !== this.request) return;
       // The gameplay loop is the shell bed from here: start it on the tap that unlocked
       // audio, so the map and settings share it rather than each starting a copy. The
       // title theme is a second track and leaves on closeTheme below.
-      await setMusicBed(audio, 'shell');
+      await setMusicBed(audio, 'shell', { track });
       if (this.disposed || request !== this.request) return;
       // Warmed here and awaited where it is used. The map is several taps from a level,
       // which is long enough to decode 180 KB without anyone waiting on it.

@@ -1,4 +1,4 @@
-import { MUSIC, loopSeconds, pickupSeconds } from '../config/music';
+import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds, type GameplayTrack, type TrackId } from '../config/music';
 
 export function validateLoopBuffer(buffer: AudioBuffer | null): number {
   if (!buffer || buffer.length <= 0 || buffer.sampleRate <= 0) throw new Error('Music track is empty or invalid.');
@@ -14,8 +14,7 @@ export function validateLoopBuffer(buffer: AudioBuffer | null): number {
  * range; the guard is against a grossly wrong detection, not a few milliseconds of smear.
  */
 export function detectLeadIn(
-  reference: AudioBuffer, threshold: number, fallbackSec: number,
-  minSec = MUSIC.leadIn.minSec, maxSec = MUSIC.leadIn.maxSec,
+  reference: AudioBuffer, threshold: number, fallbackSec: number, minSec: number, maxSec: number,
 ): number {
   const fallback = Math.round(fallbackSec * reference.sampleRate);
   const channels = Array.from({ length: reference.numberOfChannels }, (_, c) => reference.getChannelData(c));
@@ -27,12 +26,12 @@ export function detectLeadIn(
 
 /**
  * Copies the decoded track into an exact whole-bar loop buffer: `lead` frames of exported
- * pre-roll (and decoder delay) before the first downbeat are dropped and the (silent) tail
- * is padded or trimmed so the loop length is precisely `bars` bars. Native looping then
+ * pre-roll (and decoder delay) before the first downbeat are dropped and the tail is
+ * padded or trimmed so the loop length is precisely the track's bars. Native looping then
  * keeps the bar grid aligned indefinitely instead of slipping by the export's rounding.
  */
-export function normalizeLoop(context: BaseAudioContext, source: AudioBuffer, lead: number): AudioBuffer {
-  const frames = Math.round(loopSeconds() * source.sampleRate);
+export function normalizeLoop(context: BaseAudioContext, source: AudioBuffer, lead: number, track: GameplayTrack): AudioBuffer {
+  const frames = Math.round(loopSeconds(track) * source.sampleRate);
   if (!Number.isInteger(lead) || lead < 0) throw new Error('Lead-in must be a whole number of frames.');
   if (source.length <= lead) throw new Error('Music track is shorter than its lead-in.');
   if (lead === 0 && source.length === frames) return source;
@@ -43,24 +42,46 @@ export function normalizeLoop(context: BaseAudioContext, source: AudioBuffer, le
   return target;
 }
 
-/** One full-file loop of the premixed track, on the existing AudioContext. */
+/**
+ * One full-file loop of one premixed gameplay track, on the existing AudioContext.
+ *
+ * One track is decoded at a time. A decoded loop is ~42 MB of float PCM and the
+ * normalising copy doubles that transiently, so holding both tracks would double the
+ * steady cost for a switch that happens once every twenty-five levels; selecting a
+ * different track drops the loaded one before the next fetch begins. Scenes select at
+ * their boundaries — the menu's PLAY, a shell screen's create, a level's start — never
+ * while a level is running, and `load` stops the source when the track changes because a
+ * source can only play the buffer it was given.
+ */
 export class MusicSystem {
   private readonly bus: GainNode;
-  private level: number = MUSIC.masterGain;
+  private level: number;
   private source: AudioBufferSourceNode | null = null;
   private buffer: AudioBuffer | null = null;
   private pending: Promise<void> | null = null;
+  private pendingTrack: TrackId | null = null;
   private abort: AbortController | null = null;
+  private selected: TrackId = TRACK_CYCLE[0]!;
+  private loaded: TrackId | null = null;
   private disposed = false;
   private origin: number | null = null;
   private leadInFrames = 0;
   private rate = 1;
   private generation = 0;
   public constructor(private readonly context: AudioContext, destination: AudioNode) {
+    this.level = this.track.gain;
     this.bus = context.createGain();
     this.bus.gain.value = this.level;
     this.bus.connect(destination);
   }
+  /** The track that is loaded, or, while none is, the one selected. */
+  public get track(): GameplayTrack { return GAMEPLAY_TRACKS[this.loaded ?? this.selected]; }
+  /** The loaded track's id; null until a load has committed. */
+  public get trackId(): TrackId | null { return this.loaded; }
+  /** The id the last `load` asked for, which a pending load is fetching. */
+  public get selectedTrack(): TrackId { return this.selected; }
+  /** The bus gain the loaded track is meant to play at: what `setGain` restores to. */
+  public get trackGain(): number { return this.track.gain; }
   public get ready(): boolean { return this.buffer !== null; }
   public get activeSources(): number { return this.source ? 1 : 0; }
   public get startTime(): number | null { return this.origin; }
@@ -75,30 +96,55 @@ export class MusicSystem {
   /** Most recently scheduled playback rate (1 = the source tempo). */
   public get playbackRate(): number { return this.rate; }
 
-  /** Atomic load: playback cannot start until the fetch, decode and validation all succeed. */
-  public load(): Promise<void> {
+  /**
+   * Atomic load of one track: playback cannot start until the fetch, decode and
+   * validation all succeed. The same track is loaded once and shared by concurrent
+   * callers. Asking for a different track stops the source, releases the loaded loop and
+   * cancels a load of any other; the callers of that load are told it was superseded.
+   */
+  public load(id: TrackId = this.selected): Promise<void> {
     if (this.disposed) return Promise.reject(new Error('Music is disposed.'));
-    if (this.ready) return Promise.resolve();
-    if (this.pending) return this.pending;
+    if (id !== this.selected) {
+      this.selected = id;
+      this.abort?.abort();
+    }
+    if (this.loaded === id && this.buffer) return Promise.resolve();
+    if (this.pending && this.pendingTrack === id) return this.pending;
+    if (this.loaded !== null) {
+      this.stop();
+      this.buffer = null;
+      this.loaded = null;
+    }
+    const track = GAMEPLAY_TRACKS[id];
     const abort = new AbortController();
     this.abort = abort;
-    this.pending = (async () => {
-      const response = await fetch(MUSIC.url, { signal: abort.signal });
+    this.pendingTrack = id;
+    const load = (async () => {
+      const response = await fetch(track.url, { signal: abort.signal });
       if (!response.ok) throw new Error(`Could not load the music track (${response.status}).`);
       return this.context.decodeAudioData(await response.arrayBuffer());
     })().then(decoded => {
       if (this.disposed) throw new Error('Music was disposed during loading.');
+      if (abort.signal.aborted) throw new Error('Music load was superseded by another track.');
       validateLoopBuffer(decoded);
-      const lead = detectLeadIn(decoded, MUSIC.leadIn.threshold, MUSIC.leadIn.fallbackSec);
-      const buffer = normalizeLoop(this.context, decoded, lead);
-      this.leadInFrames = lead;
+      const lead = detectLeadIn(decoded, track.leadIn.threshold, track.leadIn.fallbackSec, track.leadIn.minSec, track.leadIn.maxSec);
+      const buffer = normalizeLoop(this.context, decoded, lead, track);
       validateLoopBuffer(buffer);
+      this.leadInFrames = lead;
       this.buffer = buffer;
+      this.loaded = id;
+      // Nothing is playing — a change of track stopped the source above — so the bus can
+      // take the new track's level now, before anything hears it.
+      if (this.level !== track.gain) this.setGain(track.gain, 0);
     }).catch((error: unknown) => {
       abort.abort();
       throw error;
-    }).finally(() => { this.pending = null; this.abort = null; });
-    return this.pending;
+    }).finally(() => {
+      if (this.pending === load) { this.pending = null; this.pendingTrack = null; }
+      if (this.abort === abort) this.abort = null;
+    });
+    this.pending = load;
+    return load;
   }
   /** Returns the first musical downbeat, retaining the audible pickup at source position zero. */
   public start(at = this.context.currentTime + MUSIC.startLeadSec): number {
@@ -183,6 +229,7 @@ export class MusicSystem {
     this.abort?.abort();
     this.stop();
     this.buffer = null;
+    this.loaded = null;
     this.bus.disconnect();
   }
 }

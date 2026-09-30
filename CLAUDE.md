@@ -321,8 +321,23 @@ also give a voice more than one take (`Voice` in `AudioEngine`), which the engin
 alternates rather than layers, so a beat that repeats all level is not the identical
 sample eleven times running.
 
-Music is one premixed stereo MP3 normalized to a 120 BPM, 60-bar loop
-(`docs/MUSIC.md`), encoded from the seven WAV masters by `npm run music:encode`.
+Music is two premixed stereo MP3s, each normalized at load to an exact whole-bar loop at
+120 BPM — the seven-stem workshop loop at 60 bars and the six-stem second track at 54 —
+encoded from the WAV masters in `bgm/` and `bgm/track-b/` by `npm run music:encode`
+(`docs/MUSIC.md`). **Both are authored at 120 BPM, and that is not a per-track value**:
+every level starts there and `setRate` is the level's BPM over it, so a track at another
+tempo would be pitch-shifted on every level. `GAMEPLAY_TRACKS` in `config/music.ts` holds
+what differs — bars, the measured lead-in window, the gain that matches the heard level —
+and `trackForLevel` (`game/musicSelection.ts`) takes the tracks in turn in chapters of
+`MUSIC.chapterLevels`, twenty-five, from the level alone, so nothing is stored. The shell
+plays the frontier's chapter. **One track is decoded at a time**: a loop is ~42 MB of float
+PCM, so `MusicSystem.load(id)` stops the source and drops the loaded loop before fetching
+another, and scenes select only at their boundaries — the menu's PLAY, a shell screen's
+create, a level's start — through `setMusicBed(..., { track })`, which fades the other
+chapter out before it starts the one asked for. The second premix carries 0.1 s of silence
+in front, written by the encoder: its masters start on the downbeat, and an MP3 whose first
+transient sits in the opening granule is where decoders disagree most about the encoder
+delay; the head puts its opening hit in the same detection regime as the first track's.
 **The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
 `bgm/theme/cozy-quest.mp3` on `MenuScene` and stops on every way out, with its own player
 rather than a mode inside `MusicSystem`, because every guarantee that system makes is
@@ -553,7 +568,7 @@ rather than working around it.
 | `npm test` | vitest, node environment, no config file |
 | `npm run build` | Type-check, then produce the production bundle in `dist/` |
 | `npm run preview` | Serve the built bundle on port 4173 |
-| `npm run music:encode` | Premix the WAV masters to the shipped MP3 |
+| `npm run music:encode` | Premix the WAV masters to the shipped MP3s; `--track a\|b` for one |
 | `npm run sfx:encode` | Encode the long one-shot masters in `sfx/masters/` to MP3 |
 | `npm run icons` | Cut every launcher and web icon from the 1024px master |
 | `npm run android:apk` | Build, sync and assemble a debug APK |
@@ -613,8 +628,8 @@ src/
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
-    MusicSystem.ts     The premixed loop: load, normalize, start, rate, gain
-    musicBed.ts        Shell, level or silent: which job the one loop is doing
+    MusicSystem.ts     One premixed loop at a time: load a track, normalize, start, rate, gain
+    musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
@@ -624,7 +639,7 @@ src/
   config/
     design.ts          Design resolution, layout metrics, depth ordering
     game.ts            Phaser game config (every non-default value is justified)
-    music.ts           Measured musical model of the shipped track
+    music.ts           Measured musical model of the shipped tracks, and the title theme
     progression.ts     The one difficulty curve and its knobs
     dailyTempo.ts      Whether the Daily Tempo mode exists; everything built for it reads this
     leaderboards.ts    Play Games leaderboard ids and the daily reset clock
@@ -664,6 +679,7 @@ src/
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
+    musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
