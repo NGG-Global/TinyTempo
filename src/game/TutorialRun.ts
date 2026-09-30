@@ -223,12 +223,28 @@ export function coach(run: Pick<TutorialRun, 'step' | 'plan' | 'verdict' | 'trie
 
 const KEY = 'small-acts.tutorial.v1';
 
+/** Passed, or *Let's play* taken: what a save code carries and Support reports. */
 export function tutorialComplete(storage: Pick<Storage, 'getItem'> | null = tutorialStorage()): boolean {
   try { return storage?.getItem(KEY) === 'complete'; } catch { return false; }
 }
 
 export function completeTutorial(storage: Pick<Storage, 'setItem'> | null = tutorialStorage()): void {
   try { storage?.setItem(KEY, 'complete'); } catch { /* Practice is still complete in this session. */ }
+}
+
+/**
+ * Whether a first Play should still open the lesson. Complete counts, and so does a
+ * skip: *Skip* is there throughout so nobody is held in the lesson, and a player who
+ * took it has said they know the game — the lesson is a button on the title screen
+ * after that, not a gate in front of every Play. A skip never overwrites `complete`,
+ * which is the stronger fact and the one a save code carries.
+ */
+export function tutorialSeen(storage: Pick<Storage, 'getItem'> | null = tutorialStorage()): boolean {
+  try { const value = storage?.getItem(KEY); return value === 'complete' || value === 'skipped'; } catch { return false; }
+}
+
+export function skipTutorial(storage: Pick<Storage, 'getItem' | 'setItem'> | null = tutorialStorage()): void {
+  try { if (storage?.getItem(KEY) !== 'complete') storage?.setItem(KEY, 'skipped'); } catch { /* Skipped for this session at least. */ }
 }
 
 function tutorialStorage(): Storage | null {

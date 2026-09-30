@@ -9,7 +9,7 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
-import { tutorialComplete } from '@/game/TutorialRun';
+import { tutorialSeen } from '@/game/TutorialRun';
 import { loadProgress, seenScrapbook } from '@/game/progress';
 import { ownedKeepsakes } from '@/game/scrapbook';
 import { MaterialKey } from '@/textures/materials';
@@ -393,7 +393,9 @@ export class MenuScene extends BaseScene {
       // which is long enough to decode 180 KB without anyone waiting on it.
       void samples.load(audio.context);
       this.playLabel.setText('Play');
-      const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || tutorialComplete());
+      // A first Play opens the lesson until it has been passed or skipped; after either it
+      // is the title screen's own button, never a gate in front of every Play.
+      const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || this.registry.get('tutorial-seen') || tutorialSeen());
       this.closeTheme();
       // Which door the lesson was entered by is the difference between a player who was
       // sent there and one who went looking; the tutorial's events carry it.

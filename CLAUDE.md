@@ -330,7 +330,9 @@ tempo would be pitch-shifted on every level. `GAMEPLAY_TRACKS` in `config/music.
 what differs — bars, the measured lead-in window, the gain that matches the heard level —
 and `trackForLevel` (`game/musicSelection.ts`) takes the tracks in turn in chapters of
 `MUSIC.chapterLevels`, twenty-five, from the level alone, so nothing is stored. The shell
-plays the frontier's chapter. **One track is decoded at a time**: a loop is ~42 MB of float
+plays the frontier's chapter. **`TRACK_CYCLE` is `['b']` for now**, so every level and the
+shell play the second track while it is heard on devices; restoring `['a', 'b']` is the
+whole change back. **One track is decoded at a time**: a loop is ~42 MB of float
 PCM, so `MusicSystem.load(id)` stops the source and drops the loaded loop before fetching
 another, and scenes select only at their boundaries — the menu's PLAY, a shell screen's
 create, a level's start — through `setMusicBed(..., { track })`, which fades the other
@@ -448,7 +450,10 @@ never evaluates, that handler is an inline `<script>` in `index.html` rather tha
 in the bundle. See `docs/SUPPORT.md`.
 
 The separate `TutorialScene` (`game/TutorialRun.ts`, the menu's "How to play", a first
-Play) exists alongside the first-run pass and teaches on the **same turn block** a level
+Play) opens on a first Play until it has been passed **or skipped** (`tutorialSeen`; a skip
+is stored as `skipped` and never overwrites `complete`, which is what a save code carries),
+because while only a pass counted, a player who took *Skip* met the lesson in front of
+every Play. It exists alongside the first-run pass and teaches on the **same turn block** a level
 draws, with the two things a level leaves out — a label on each row and a pointer that
 follows the token — and words. `coach` derives every heading from `momentOf`, which reads
 the same `handover` the block is drawn from, so *Get ready* is said when the baton starts

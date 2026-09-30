@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RHYTHM } from '../src/config/rhythm';
 import { handoverAt } from '../src/game/beatTrack';
-import { coach, completeTutorial, isPlayersWindow, momentOf, TUTORIAL, tutorialComplete, TutorialRun } from '../src/game/TutorialRun';
+import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, tutorialComplete, tutorialSeen, TutorialRun } from '../src/game/TutorialRun';
 import type { Judgement } from '../src/rhythm/judge';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 
@@ -193,6 +193,25 @@ describe('tutorial completion', () => {
     completeTutorial(storage);
     expect(tutorialComplete(storage)).toBe(true);
     expect(values.get('small-acts.progress.v1')).toBe('{"unlocked":8}');
+  });
+
+  it('counts a skip as seen for the first Play, without calling it complete', () => {
+    const values = new Map<string, string>();
+    const storage = { getItem: (key: string) => values.get(key) ?? null, setItem: (key: string, value: string) => { values.set(key, value); } };
+    expect(tutorialSeen(storage)).toBe(false);
+    skipTutorial(storage);
+    // The menu stops opening the lesson on every Play; a save code and Support still say it was not passed.
+    expect(tutorialSeen(storage)).toBe(true);
+    expect(tutorialComplete(storage)).toBe(false);
+    completeTutorial(storage);
+    expect(tutorialComplete(storage)).toBe(true);
+    // A later skip, from the title screen's own button, never demotes a pass.
+    skipTutorial(storage);
+    expect(tutorialComplete(storage)).toBe(true);
+    expect(tutorialSeen(storage)).toBe(true);
+    expect(tutorialSeen(null)).toBe(false);
+    expect(tutorialSeen({ getItem: () => { throw new Error('blocked'); } })).toBe(false);
+    expect(() => skipTutorial({ getItem: () => null, setItem: () => { throw new Error('blocked'); } })).not.toThrow();
   });
 
   it('tolerates missing, malformed and blocked storage', () => {

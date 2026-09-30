@@ -79,9 +79,13 @@ has already finished arriving; the word must not lag the beat it names.
 
 ## State
 
-`small-acts.tutorial.v1` is unchanged: `complete` on *Let's play*, read by the menu to
-decide whether a first Play opens the lesson, and carried in a save code as before. The
-lesson's own state is a `TutorialRun` per visit and is not stored.
+`small-acts.tutorial.v1` holds `complete` on *Let's play* and `skipped` on *Skip*, and a
+skip never overwrites `complete`. The menu reads either (`tutorialSeen`) to decide whether
+a first Play opens the lesson: a player who skipped it has said they know the game, and
+the lesson is *How to play* on the title screen after that rather than a gate in front of
+every Play — which is what it was while only `complete` counted. A save code carries
+`complete` alone (`tutorialComplete`), as before. The lesson's own state is a
+`TutorialRun` per visit and is not stored.
 
 ## Files
 
