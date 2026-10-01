@@ -18,14 +18,20 @@ vi.mock('../src/ui/backdrop', () => ({ Backdrop: class { open() {} layout() {} d
 
 describe('nose blowing and washing up', () => {
   it('opens a new era after two complete paintbrush laps and rotates every variation', () => {
-    expect(VIGNETTES).toHaveLength(31);
+    expect(VIGNETTES.slice(29, 31).map(v => v.id)).toEqual(['nose', 'dish']);
     for (let level = 107; level < 165; level++) {
       expect(levelSpec(level).vignette).toBe(VIGNETTES[(28 + level - 107) % 29]!.id);
     }
+    // Their era is two whole laps, 165–226; the prospector's era from 227 carries 32 acts,
+    // so their first two laps, and both keepsakes, stay where they were.
+    for (let level = 165; level < 227; level++) {
+      expect(levelSpec(level).vignette).toBe(VIGNETTES[(29 + level - 165) % 31]!.id);
+    }
     for (const [id, first, looks] of [['nose', 165, 4], ['dish', 166, 3]] as const) {
       for (let lap = 0; lap < looks; lap++) {
-        expect(actLevel(id, lap)).toBe(first + 31 * lap);
-        expect(levelSpec(first + 31 * lap)).toMatchObject({ vignette: id, lap });
+        const level = lap < 2 ? first + 31 * lap : first + 92 + 32 * (lap - 2);
+        expect(actLevel(id, lap)).toBe(level);
+        expect(levelSpec(level)).toMatchObject({ vignette: id, lap });
       }
       const definition = VIGNETTES.find(v => v.id === id)!;
       for (const bpm of [120, 136, 150]) {

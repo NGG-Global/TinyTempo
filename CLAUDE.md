@@ -86,11 +86,11 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Thirty-one vignettes rotate by registry order, **in eras**: `levelSpec` places a level
+Thirty-two vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
 did, from level 51 the first twenty-eight, from level 107 the first twenty-nine,
-and from level 165 all thirty-one,
+from level 165 the first thirty-one, and from level 227 all thirty-two,
 each era opening on the acts it added. The paintbrush is act 29: one stroke a
 beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
 or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
@@ -103,6 +103,14 @@ keepsake on 26–50. `LevelSpec.lap` is how many earlier levels the act played, 
 Nose blowing and washing up are acts 30–31, with four people and three dish types.
 Their era begins at 165 to preserve the paintbrush keepsake at 136. See
 `docs/NOSE_AND_DISHES.md` for sounds, progress, endings and preview levels.
+The prospector is act 32, from level 227 — two whole 31-act laps past 165, the first era
+boundary past the nose and dish keepsakes on 196 and 197. A pick blow a beat on a boulder;
+**only judged hits crack it**, and the coda's last blow splits it open in both endings,
+because finding nothing still means opening the stone: success shows the dig's gem — gold
+in a canyon, a diamond in a timbered mine, an emerald in a green cliff, by lap
+(`prospectorLooks.ts`), each with its own words and its own prospector — and failure an
+empty hollow and a puff of grit. Synthesized voices in `audio/prospectorSounds.ts`. See
+`docs/PROSPECTOR.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
