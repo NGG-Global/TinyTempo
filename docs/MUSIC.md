@@ -127,8 +127,8 @@ Track B is not played as its premix. The encoder writes each of its six stems as
 MP3 (`tiny-tempo-b-drums.mp3` to `tiny-tempo-b-risers.mp3`, 128 kb/s, 1.73 MB each), with
 the same 0.1 s head and the same scale as the premix, so the six played together are the
 premix to the sample. `GAMEPLAY_TRACKS.b.stems` lists them in the order a level brings
-them in — drums, bass, harmony, synth lead, orchestral colour, risers — and track A is the
-same shape with one stem, its premix.
+them in — drums, bass, harmony, orchestral colour, then the synth lead and risers that only
+the shell plays — and track A is the same shape with one stem, its premix.
 
 `MusicSystem` decodes every stem of the selected track, one after another, and starts one
 looping source per stem on the same sample under the same rate automation, so they cannot
@@ -138,14 +138,63 @@ stem's own first sound sits somewhere else in the bar (the bass at 25 ms, the sy
 Chromium, the drums' first crossing of −26 dBFS sits ~2 ms after the premix's, which is the
 kick's own rise; `fallbackSec` is 0.127 for that reason.
 
-A level starts on the first stem alone, with a metronome bar under it, and earns the rest
+A level starts on the first stem alone, with a metronome bar under it, and earns more
 (`game/musicLayers.ts`): a scored task at or above `MUSIC.layers.strong` (70%) adds the
 next stem, one below `MUSIC.layers.weak` (40%) takes the last one away, anything between
 holds, and the change lands on the next task's downbeat with the tempo change, faded over
 `MUSIC.layers.fadeSec`. The count is level-local, reset at every start, stored nowhere and
-read by nothing that judges, scores, paces, saves or unlocks. The shell on the map and
-Settings hears every stem and no metronome. A premix is a track that is always full: the
-same rule runs and hears nothing.
+read by nothing that judges, scores, paces, saves or unlocks. A premix is a track that is
+always full: the same rule runs and hears nothing.
+
+### The mix: the music is the room, not the subject
+
+The game is played by ear. What the player has to hold in their head is the phrase the act
+just demonstrated, and the foreground is that act's voice and the metronome; every stem is
+background to them. The first layered build played the stems as delivered and let a strong
+level reach all six, and it was tiring exactly when the synth lead entered. Measured on the
+24-bit masters:
+
+| Stem | Bars active | Onsets a bar | Off the beat and eighth grid | Energy under 250 Hz / 250–2k / above 2k |
+| --- | --- | --- | --- | --- |
+| Drums | 1–54 | 14.4 | 69% | 84% / 13% / 2% |
+| Bass | 1–26, 35–54 | 9.7 | 60% | 91% / 9% / 0% |
+| Harmony | 1–54 | 5.3 | 48% | 19% / 71% / 11% |
+| Synth lead | 11, 17–18, 22, 27–54 | 5.5 | 39% | 16% / 70% / 14% |
+| Orchestral | 7–12, 15–26 | 4.6 | 46% | 24% / 65% / 11% |
+| Risers | 27–51, every other bar | 14.9 | 43% | 8% / 55% / 37% |
+
+The lead is a melody with a rhythm of its own, in the same band as the act voices, so in a
+level it is a second phrase competing with the one being copied. The risers are tension
+sweeps, and a riser announces a downbeat event that in this game never comes. Neither can
+be fixed by level alone: a quieter melody is still a melody. So:
+
+- **A level can earn four stems** (`GAMEPLAY_TRACKS.b.levelStems`): drums, bass, harmony,
+  orchestral colour, in that order. The lead and risers play only on the map and in
+  Settings, where nothing is judged, and quieter even there.
+- **Each stem has a trim and, where it shares the act voices' band, a tone** — a 12 dB/oct
+  low-pass with no resonance, because a sound's attack and presence live above ~2 kHz and
+  that is what pulls the ear. The layer gain carries the trim, so a stem can never be heard
+  untrimmed:
+
+| Stem | Trim | Tone | In a level |
+| --- | --- | --- | --- |
+| Drums | 0 dB | — | always |
+| Bass | −2 dB | — | 2nd |
+| Harmony | −4 dB | 3.2 kHz | 3rd |
+| Orchestral | −5 dB | 3.5 kHz | 4th |
+| Synth lead | −9 dB | 1.8 kHz | never |
+| Risers | −10 dB | 2.5 kHz | never |
+
+Rendered from the masters over bars 23–38, at the game's bus gain with the metronome, the
+most a level can now reach sits 3.0 dB below what a strong level reached before, and 5.8 dB
+lower in the 250 Hz–2 kHz band. The trims and tones were chosen from these measurements and
+have been heard only through that render, not on a handset against an act; the one number
+to move if the lead is missed is `levelStems`, and it would enter at −9 dB behind its tone.
+
+The drums are the busiest stem — 14 onsets a bar, most of them sixteenths — and they are
+the floor, under the metronome from the first beat. That is the composer's groove and no
+mix can make it simpler; if it still reads as busy against the patterns being copied, the
+fix is a simpler drum part, not a quieter one.
 
 The metronome (`audio/metronomeSounds.ts`) is one synthesized bar at the source tempo — a
 click on every beat, the first accented by pitch and level — looped as one more source

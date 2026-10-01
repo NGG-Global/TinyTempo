@@ -39,6 +39,7 @@ function setup() {
       connect: vi.fn(), disconnect: vi.fn(),
     }),
     createBufferSource: () => { const source = makeSource(); nodes.push(source); return source; },
+    createBiquadFilter: () => ({ type: '', frequency: { value: 0 }, Q: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() }),
   };
   const fetcher = vi.fn(async (url: string) => { urls.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) }; });
   vi.stubGlobal('fetch', fetcher);

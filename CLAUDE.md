@@ -334,15 +334,19 @@ plays the frontier's chapter. **`TRACK_CYCLE` is `['b']` for now**, so every lev
 shell play the second track while it is heard on devices; restoring `['a', 'b']` is the
 whole change back. **Track B plays as its six stems, and a level earns them**:
 `GAMEPLAY_TRACKS.b.stems` are the stems in the order they join (drums, bass, harmony,
-lead, orchestral, risers), each an MP3 the encoder writes with the premix's head and scale
-so together they are the premix; `MusicSystem` starts one looping source per stem on the
+orchestral, then lead and risers), each an MP3 the encoder writes with the premix's head
+and scale so together they are the premix, and each with a `trimDb` and, where it shares
+the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — **the music is the room, not the
+subject**, so the act's voice and the metronome are the foreground. `levelStems` (4) is the
+most a level can earn: the synth lead is a second melody competing with the phrase being
+copied and the risers announce downbeats that never come, so both play only in the shell; `MusicSystem` starts one looping source per stem on the
 same sample under the same rate automation, detects the lead-in on the first stem and
 applies it to all, and `setLayers(count, at)` fades stems in or out on a bar line. A level
 starts on the first stem with a **metronome bar** under it (`audio/metronomeSounds.ts`,
 one synthesized bar looped from the same sample, beat 1 accented) and `advanceLayers`
 (`game/musicLayers.ts`) moves the count per scored task — strong adds a stem, weak takes
-one — applied on the next task's downbeat with the tempo; the shell hears every stem and no
-click; track A is one stem and hears nothing of it. **The cost is ~230 MB of decoded PCM
+one — applied on the next task's downbeat with the tempo; the shell hears every stem, trimmed,
+and no click; track A is one stem and hears nothing of it. **The cost is ~230 MB of decoded PCM
 and a 10.4 MB download** for track B, the cost the premix existed to avoid, accepted for a
 mix that answers the player; `docs/MUSIC.md` names the cheaper shape if a handset cannot
 carry it. **One track is decoded at a time**: `MusicSystem.load(id)` stops the sources
