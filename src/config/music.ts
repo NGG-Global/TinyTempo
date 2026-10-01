@@ -200,16 +200,35 @@ export const TRACK_CYCLE: readonly TrackId[] = ['b'];
  * player rather than a second mode inside `MusicSystem`, where every one of those
  * guarantees would have to be made optional.
  *
- * `gain` matches it to the gameplay track by measurement rather than by ear: the mix
- * sits at −18.2 dB RMS against the premix's −21.2 dB, so at 0.4 the two are heard at the
- * same level and the switch from the title screen into a level is not a jump.
+ * The theme is `bgm/theme/home-page.wav`, a seamless 64.000 s loop with music to its last
+ * sample, shipped as an MP3 the encoder writes with a 0.1 s head and the loop's opening
+ * 0.25 s copied after its end (scripts/encode-music.mjs). An MP3 cannot loop on its own
+ * ends — the encoder pads both and decoders disagree about trimming either — so the player
+ * finds the music's start in the decode and loops exactly `loopSec` from `seamSec` into it
+ * (`themeLoop`). Measured in Chromium at 44.1 and 48 kHz: the start lands 0.123 s in, the
+ * first 60 ms after the head carry the encoder's smear of the opening hit (up to −9 dB
+ * against the music), and from 0.1 s in the two copies either side of the seam differ by
+ * codec noise alone, −24 dB. So the loop restarts 0.1 s into the music, and only the first
+ * play, under the fade-in, starts on the opening itself.
+ *
+ * `gain` matches it, by measurement rather than by ear, to the music it hands over to: the
+ * shell bed on the map, track B's six stems at their trims, heard at −28.3 dB RMS against
+ * the theme's −23.2 dB, so 0.551 puts the two at one level and PLAY is not a jump.
  */
 export const THEME = {
-  gain: 0.4,
+  gain: 0.551,
   /** Long enough not to be a cut, short enough that leaving the menu feels immediate. */
   fadeInSec: 1.2,
   fadeOutSec: 0.45,
-  url: new URL('../../bgm/theme/cozy-quest.mp3', import.meta.url).href,
+  url: new URL('../../bgm/theme/home-page.mp3', import.meta.url).href,
+  /** The loop, as delivered: 3,072,000 frames at 48 kHz. */
+  loopSec: 64,
+  /** How far into the music the loop restarts: past the encoder's smear of the first frames. */
+  seamSec: 0.1,
+  /** Where the master's first sound crosses `leadIn.threshold`, after its sample 0. */
+  onsetSec: 0.002125,
+  /** The head is 0.1 s; Chromium leaves 23 ms of decoder delay on it, a trimming decoder none. */
+  leadIn: { threshold: 0.05, fallbackSec: 0.125, minSec: 0.05, maxSec: 0.25 },
 } as const;
 
 export const pickupSeconds = (bpm: number, beats: number): number => beats * 60 / bpm;

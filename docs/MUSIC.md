@@ -315,11 +315,16 @@ routing.
 
 ## The title theme
 
-A second track, `bgm/theme/cozy-quest.mp3`, plays on the title screen and nowhere else.
-Going to the map, into a level, or into Settings stops it. The premixed loop then
-continues as the shell bed on the map and settings (`audio/musicBed.ts`), and is
-still the only thing a level ever hears. Returning to the title hushes that loop
-so the two tracks cannot overlap.
+A second track, `bgm/theme/home-page.mp3`, plays on the title screen and nowhere else. Its
+master is `bgm/theme/home-page.wav`, kept unmodified, and `npm run music:encode -- --track
+theme` writes the MP3. Going to the map, into a level, or into Settings stops it. The
+gameplay loop then continues as the shell bed on the map and settings (`audio/musicBed.ts`),
+and is still the only thing a level ever hears. Returning to the title hushes that loop so
+the two tracks cannot overlap.
+
+It replaces `bgm/theme/cozy-quest.mp3`, which stays in the repository so the change can be
+undone by pointing `THEME.url` back at it. Nothing references it, so it no longer reaches
+the bundle.
 
 It has its own player, `audio/ThemeMusic.ts`, rather than a second mode inside
 `MusicSystem`. Everything that makes that system trustworthy is a promise about a beat
@@ -331,16 +336,41 @@ not be. The theme only has to start, loop and get out of the way.
 | | Track A | Track B | Title theme |
 | --- | --- | --- | --- |
 | Files | one premix | six stems, layered by performance | one file |
-| Length | 120.000 s, exactly 60 bars | 108.000 s, exactly 54 bars | 152.0 s, as delivered |
-| Loop | whole bars, lead-in detected and dropped | whole bars, lead-in detected and dropped | the file's own ends, which fade |
+| Length | 120.000 s, exactly 60 bars | 108.000 s, exactly 54 bars | 64.000 s, as delivered |
+| Loop | whole bars, lead-in detected and dropped | whole bars, lead-in detected and dropped | seamless, from loop points found in the decode |
 | Tempo | `setRate` per task | `setRate` per task | fixed |
-| Gain | 0.5632 | 0.3762 | 0.4 |
-| Size | 2.4 MB | 10.4 MB (six stems) | 3.5 MB |
+| Gain | 0.5632 | 0.3762 | 0.551 |
+| Size | 2.4 MB | 10.4 MB (six stems) | 1.3 MB |
 
-`THEME.gain` is measured rather than judged by ear: the theme sits at −18.2 dB RMS against
-the premix's −21.2 dB, so 0.4 against the premix's 0.5632 puts the two at the same heard
-level and the move from the title screen into a level is not a jump. Both hang off the
-music bus, so the player's music level and the mute cover the theme like the loop.
+### A seamless loop through an MP3
+
+The master is a seamless loop: 24-bit stereo at 48 kHz, exactly 3,072,000 frames, music to
+its last sample, and its last sample within 0.004 of its first. The theme it replaces faded
+at both ends, so looping the whole decoded file only ever dipped. This one would gap: an MP3
+encoder writes silence in front of the music and pads the end, and decoders disagree about
+trimming either, so a decoded MP3 looped on its own ends has a hole at the seam every 64 s.
+
+So the encoder writes the theme with a known 0.1 s head of silence and the loop's opening
+0.25 s copied again after its end, and `themeLoop` finds the music's start in the decode —
+the first crossing of −26 dBFS, the same detection `detectLeadIn` gives the gameplay track,
+less the 2.125 ms at which the master's first sound crosses it — and loops exactly
+`THEME.loopSec` from there. The seam then has music on both sides, and a start found a few
+milliseconds out shifts the loop without opening a gap in it.
+
+Measured in Chromium at 44.1 and 48 kHz: the start lands at 0.123 s, the waveform's step
+across the seam is the size of an ordinary sample-to-sample step, and the loop's RMS is
+−23.6 dB. The first 60 ms after the head are not clean: the encoder smears the opening hit
+across the frames that follow silence, and against the copy at the end they differ by up to
+−9 dB. From 0.1 s in, the two copies differ by −24 dB, which is the codec's own noise. So
+**the loop restarts `THEME.seamSec`, 0.1 s, into the music**, and only the first play, under
+the 1.2 s fade-in, starts on the opening itself. A decode that cannot hold the loop — the
+wrong file, a truncated download — falls back to looping the file on its own ends.
+
+`THEME.gain` is measured rather than judged by ear, and against what the theme hands over
+to: PLAY takes the player to the map, whose shell bed is track B's six stems at their trims,
+heard at −28.3 dB RMS. The theme's master sits at −23.2 dB, so 0.551 puts the two at one
+level and pressing PLAY is not a jump. Both hang off the music bus, so the player's music
+level and the mute cover the theme like the loop.
 
 **A browser will not play it until the page has been touched.** That is the autoplay
 policy and not something the code can route around: on a cold start the context is
@@ -350,15 +380,14 @@ engine already unlocked and starts immediately. Where a platform does allow play
 without a gesture, which a packaged WebView can, the attempt made when the menu opens
 succeeds on its own.
 
-The corollary is worth keeping: **the 3.5 MB is only spent by a player who hears it.**
+The corollary is worth keeping: **the 1.3 MB is only spent by a player who hears it.**
 Tapping straight through from a cold start to a level downloads the gameplay track and the
 recorded beats and not the theme. The trap on the way there was that a `resume()` left
 pending from the menu's own create resolves the instant PLAY grants the gesture credit it
 was waiting for — which is exactly when the player is leaving — so the wake path checks
 `busy` as well as `disposed` before it starts anything.
 
-Not settled here: the loop seam. The file neither starts nor ends in silence but does fade
-at both ends, so the join is a dip rather than a click, and at 152 s most players will
-never reach it. Whether that dip is acceptable, and whether 3.5 MB is the right price for
-a title loop — a shorter edit or a lower bitrate would cut it substantially — are both
-calls for the composer rather than for a headless browser.
+Driven in headless Chromium at 393×851: the theme starts on the first tap with the loop
+points above, fades to 0.551, and leaves on PLAY at the instant the shell bed starts, with
+no overlap and no gap. Not settled here: whether the seam is inaudible on a handset's own
+decoder, and the level match by ear.
