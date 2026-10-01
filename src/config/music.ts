@@ -143,13 +143,15 @@ export const GAMEPLAY_TRACKS = {
     //  - drums, as delivered: the floor, under the metronome from the first beat;
     //  - bass, −2 dB: 91% of its energy is under 250 Hz, clear of every act voice;
     //  - harmony, −4 dB and softened at 3.2 kHz: the chords, 71% in the act voices' band;
-    //  - orchestral colour, −5 dB at 3.5 kHz: plays bars 7–26 only, a lift, not a part.
-    // `levelStems` stops a level there. The lead is a melody — 39% of its notes off the
-    // beat and eighth grid, in the same 250 Hz–2 kHz band as the act voices — so in a
-    // level it is a second phrase competing with the one being copied, which is what made
-    // the track tiring the moment it entered. The risers fire every other bar from bar
-    // 27, and a riser announces a downbeat event that never comes. Both play only on the
-    // map and in Settings, and quieter even there.
+    //  - orchestral colour, −5 dB at 3.5 kHz: plays bars 7–26 only, a lift, not a part;
+    //  - the synth lead, −9 dB and softened at 1.8 kHz, **last**: it is a melody — 39% of
+    //    its notes off the beat and eighth grid, in the same 250 Hz–2 kHz band as the act
+    //    voices — so it is a second phrase beside the one being copied, which is what made
+    //    the track tiring the moment it entered. It is earned only after four strong
+    //    tasks in a row, by a player already in the pocket, and enters well behind them.
+    // `levelStems` stops a level there. The risers fire every other bar from bar 27, and a
+    // riser announces a downbeat event that never comes, so they play only on the map and
+    // in Settings, and quieter even there.
     stems: [
       { id: 'drums', url: new URL('../../bgm/mix/tiny-tempo-b-drums.mp3', import.meta.url).href },
       { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href, trimDb: -2 },
@@ -158,7 +160,7 @@ export const GAMEPLAY_TRACKS = {
       { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href, trimDb: -9, toneHz: 1800 },
       { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href, trimDb: -10, toneHz: 2500 },
     ],
-    levelStems: 4,
+    levelStems: 5,
     bars: 54,
     // The encoder writes 0.1 s of silence in front of every file of this track (see
     // scripts/encode-music.mjs): a transient in an MP3's first granule is where decoders

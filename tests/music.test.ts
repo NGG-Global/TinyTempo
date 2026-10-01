@@ -212,16 +212,22 @@ describe('the premixed music loop', () => {
       expect(filter.frequency.value).toBe(toned[k]!.toneHz);
       expect(filter.Q.value).toBeCloseTo(Math.SQRT1_2, 9);
     });
-    // The level's ladder: drums, bass, harmony, orchestral colour, and then it stops.
-    expect(B.stems.slice(0, B.levelStems).map(stem => stem.id)).toEqual(['drums', 'bass', 'harmony', 'orchestral']);
-    expect(B.stems.slice(B.levelStems).map(stem => stem.id)).toEqual(['lead', 'risers']);
+    // The level's ladder: drums, bass, harmony, orchestral colour, and the synth lead last.
+    expect(B.stems.slice(0, B.levelStems).map(stem => stem.id)).toEqual(['drums', 'bass', 'harmony', 'orchestral', 'lead']);
+    expect(B.stems.slice(B.levelStems).map(stem => stem.id)).toEqual(['risers']);
     // The drums are the floor and play as delivered; everything above them steps back.
     expect(B.stems[0]!.trimDb ?? 0).toBe(0);
     for (const stem of B.stems.slice(1)) expect(stem.trimDb ?? 0).toBeLessThan(0);
-    // The lead and risers are the quietest even in the shell, and never bright.
-    const quietest = Math.max(...B.stems.slice(0, B.levelStems).map(stem => -(stem.trimDb ?? 0)));
+    // The lead is the last a level earns, and it enters quieter and darker than everything
+    // it joins, so the melody sits behind the phrase being copied rather than beside it.
+    const lead = B.stems[B.levelStems - 1]!;
+    for (const stem of B.stems.slice(0, B.levelStems - 1)) {
+      expect(lead.trimDb!).toBeLessThan(stem.trimDb ?? 0);
+      expect(lead.toneHz!).toBeLessThan(stem.toneHz ?? Infinity);
+    }
+    // The risers never reach a level, and are the quietest even in the shell.
     for (const stem of B.stems.slice(B.levelStems)) {
-      expect(-(stem.trimDb ?? 0)).toBeGreaterThan(quietest);
+      expect(stem.trimDb!).toBeLessThan(lead.trimDb!);
       expect(stem.toneHz).toBeLessThanOrEqual(2500);
     }
     // A premix has nothing to trim or tone.

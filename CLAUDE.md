@@ -345,9 +345,11 @@ whole change back. **Track B plays as its six stems, and a level earns them**:
 orchestral, then lead and risers), each an MP3 the encoder writes with the premix's head
 and scale so together they are the premix, and each with a `trimDb` and, where it shares
 the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — **the music is the room, not the
-subject**, so the act's voice and the metronome are the foreground. `levelStems` (4) is the
-most a level can earn: the synth lead is a second melody competing with the phrase being
-copied and the risers announce downbeats that never come, so both play only in the shell; `MusicSystem` starts one looping source per stem on the
+subject**, so the act's voice and the metronome are the foreground. `levelStems` (5) is the
+most a level can earn, and the synth lead is its **last** rung — a second melody beside the
+phrase being copied, so it takes four strong tasks in a row and enters at −9 dB behind a
+1.8 kHz low-pass — while the risers, which announce downbeats that never come, play only in
+the shell; `MusicSystem` starts one looping source per stem on the
 same sample under the same rate automation, detects the lead-in on the first stem and
 applies it to all, and `setLayers(count, at)` fades stems in or out on a bar line. A level
 starts on the first stem with a **metronome bar** under it (`audio/metronomeSounds.ts`,

@@ -168,9 +168,12 @@ level it is a second phrase competing with the one being copied. The risers are 
 sweeps, and a riser announces a downbeat event that in this game never comes. Neither can
 be fixed by level alone: a quieter melody is still a melody. So:
 
-- **A level can earn four stems** (`GAMEPLAY_TRACKS.b.levelStems`): drums, bass, harmony,
-  orchestral colour, in that order. The lead and risers play only on the map and in
-  Settings, where nothing is judged, and quieter even there.
+- **A level can earn five stems** (`GAMEPLAY_TRACKS.b.levelStems`): drums, bass, harmony,
+  orchestral colour and, **last**, the synth lead. The lead takes four strong tasks in a row
+  from the drums alone and is the first thing a weak task takes away, so it is heard only by
+  a player already in the pocket, and it enters quieter and darker than every stem it joins.
+  The risers play only on the map and in Settings, where nothing is judged, and quieter even
+  there.
 - **Each stem has a trim and, where it shares the act voices' band, a tone** — a 12 dB/oct
   low-pass with no resonance, because a sound's attack and presence live above ~2 kHz and
   that is what pulls the ear. The layer gain carries the trim, so a stem can never be heard
@@ -182,14 +185,16 @@ be fixed by level alone: a quieter melody is still a melody. So:
 | Bass | −2 dB | — | 2nd |
 | Harmony | −4 dB | 3.2 kHz | 3rd |
 | Orchestral | −5 dB | 3.5 kHz | 4th |
-| Synth lead | −9 dB | 1.8 kHz | never |
+| Synth lead | −9 dB | 1.8 kHz | 5th, last |
 | Risers | −10 dB | 2.5 kHz | never |
 
-Rendered from the masters over bars 23–38, at the game's bus gain with the metronome, the
-most a level can now reach sits 3.0 dB below what a strong level reached before, and 5.8 dB
-lower in the 250 Hz–2 kHz band. The trims and tones were chosen from these measurements and
-have been heard only through that render, not on a handset against an act; the one number
-to move if the lead is missed is `levelStems`, and it would enter at −9 dB behind its tone.
+Rendered from the masters over bars 23–38, at the game's bus gain with the metronome, four
+stems sit 3.0 dB below what a strong level reached before, and 5.8 dB lower in the 250 Hz–2
+kHz band; the lead's arrival on top of them is the one step that adds a melody back, behind
+its trim and tone. The trims and tones were chosen from these measurements and have been
+heard only through that render, not on a handset against an act. A level of four tasks or
+fewer can never reach the lead, since it takes four strong tasks to earn and lands on the
+next one's downbeat; `levelStems` back to 4 takes it out of levels altogether.
 
 The drums are the busiest stem — 14 onsets a bar, most of them sixteenths — and they are
 the floor, under the metronome from the first beat. That is the composer's groove and no

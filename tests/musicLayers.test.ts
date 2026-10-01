@@ -22,9 +22,18 @@ describe('how a level earns a layered track', () => {
   it('reaches everything a level can earn inside a strong level of ordinary length, and no more', () => {
     const cap = GAMEPLAY_TRACKS.b.levelStems;
     let layers = OPENING_LAYERS;
+    // The synth lead is the last rung: it takes four strong tasks in a row from the drums
+    // alone, and a weak task takes it away again before anything else.
+    const lead = GAMEPLAY_TRACKS.b.stems.findIndex(stem => stem.id === 'lead') + 1;
+    expect(lead).toBe(cap);
+    for (let task = 0; task < 3; task++) layers = advanceLayers(layers, 90, cap);
+    expect(layers).toBeLessThan(lead);
+    layers = advanceLayers(layers, 90, cap);
+    expect(layers).toBe(lead);
+    expect(advanceLayers(layers, MUSIC.layers.weak - 1, cap)).toBe(lead - 1);
     for (let task = 0; task < 5; task++) layers = advanceLayers(layers, 90, cap);
     expect(layers).toBe(cap);
-    // The lead and risers are past the cap: no run, however strong, brings them into a level.
+    // The risers are past the cap: no run, however strong, brings them into a level.
     expect(GAMEPLAY_TRACKS.b.stems.length).toBeGreaterThan(cap);
   });
 });
