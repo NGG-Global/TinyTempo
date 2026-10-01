@@ -55,7 +55,18 @@ export const MUSIC = {
 export interface TrackStem {
   readonly id: string;
   readonly url: string;
+  /** Level against the other stems, in dB; 0 is as delivered. The mix, applied at runtime. */
+  readonly trimDb?: number;
+  /**
+   * A gentle low-pass (12 dB/oct, no resonance) at this frequency, for a stem that should
+   * sit behind the act's voices rather than beside them: the attack and presence of a
+   * sound live above ~2 kHz, and that is what draws the ear.
+   */
+  readonly toneHz?: number;
 }
+
+/** A stem's trim as a gain. */
+export const stemLevel = (stem: TrackStem): number => 10 ** ((stem.trimDb ?? 0) / 20);
 
 /** What `MusicSystem` needs to know about one gameplay track, measured, not tuned. */
 export interface GameplayTrack {
@@ -66,6 +77,11 @@ export interface GameplayTrack {
    * why a track is layered only where the game plays them one at a time.
    */
   readonly stems: readonly TrackStem[];
+  /**
+   * How many of `stems`, from the first, a level can ever earn; the rest play only in
+   * the shell, where nothing is judged. Absent, a level can earn them all.
+   */
+  readonly levelStems?: number;
   /** Whole bars at `MUSIC.sourceBpm`; the loop is copied to exactly this length at load. */
   readonly bars: number;
   /**
@@ -117,18 +133,34 @@ export const GAMEPLAY_TRACKS = {
    */
   b: {
     // The six stems, each encoded by the same pipeline as the premix with the same head
-    // and scale, so together they are the premix to the sample. The order is the order a
-    // level adds them: the drums are the floor, the bass and harmony the body, the lead
-    // and the colours the reward. Every one is genuinely stereo (the drums, the narrowest,
-    // carry −14.6 dB of side), so none ships mono.
+    // and scale, so together they are the premix to the sample. Every one is genuinely
+    // stereo (the drums, the narrowest, carry −14.6 dB of side), so none ships mono.
+    //
+    // **The mix is for a game played by ear, so the music is the room, not the subject.**
+    // The foreground is the act's voice — the phrase being demonstrated and copied — and
+    // the metronome; the stems sit behind them. The order is the order a level adds them,
+    // and the trims and tone are measured choices (docs/MUSIC.md):
+    //  - drums, as delivered: the floor, under the metronome from the first beat;
+    //  - bass, −2 dB: 91% of its energy is under 250 Hz, clear of every act voice;
+    //  - harmony, −4 dB and softened at 3.2 kHz: the chords, 71% in the act voices' band;
+    //  - orchestral colour, −5 dB at 3.5 kHz: plays bars 7–26 only, a lift, not a part;
+    //  - the synth lead, −9 dB and softened at 1.8 kHz, **last**: it is a melody — 39% of
+    //    its notes off the beat and eighth grid, in the same 250 Hz–2 kHz band as the act
+    //    voices — so it is a second phrase beside the one being copied, which is what made
+    //    the track tiring the moment it entered. It is earned only after four strong
+    //    tasks in a row, by a player already in the pocket, and enters well behind them.
+    // `levelStems` stops a level there. The risers fire every other bar from bar 27, and a
+    // riser announces a downbeat event that never comes, so they play only on the map and
+    // in Settings, and quieter even there.
     stems: [
       { id: 'drums', url: new URL('../../bgm/mix/tiny-tempo-b-drums.mp3', import.meta.url).href },
-      { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href },
-      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href },
-      { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href },
-      { id: 'orchestral', url: new URL('../../bgm/mix/tiny-tempo-b-orchestral.mp3', import.meta.url).href },
-      { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href },
+      { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href, trimDb: -2 },
+      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href, trimDb: -4, toneHz: 3200 },
+      { id: 'orchestral', url: new URL('../../bgm/mix/tiny-tempo-b-orchestral.mp3', import.meta.url).href, trimDb: -5, toneHz: 3500 },
+      { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href, trimDb: -9, toneHz: 1800 },
+      { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href, trimDb: -10, toneHz: 2500 },
     ],
+    levelStems: 5,
     bars: 54,
     // The encoder writes 0.1 s of silence in front of every file of this track (see
     // scripts/encode-music.mjs): a transient in an MP3's first granule is where decoders

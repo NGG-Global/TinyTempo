@@ -115,6 +115,9 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   { id: 'dish-sponge', vignette: 'dish', lap: 0, name: 'Golden sponge' },
   { id: 'nose-pocket-tissue', vignette: 'nose', lap: 1, name: 'Pocket tissues' },
   { id: 'dish-glass', vignette: 'dish', lap: 1, name: 'Sparkling glass' },
+  // The prospector joins at level 227, past every keepsake above; lap 0 digs gold, lap 1 a diamond.
+  { id: 'prospector-nugget', vignette: 'prospector', lap: 0, name: 'Gold nugget' },
+  { id: 'prospector-diamond', vignette: 'prospector', lap: 1, name: 'Rough diamond' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */

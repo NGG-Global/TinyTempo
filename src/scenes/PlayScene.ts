@@ -1827,7 +1827,8 @@ export class PlayScene extends BaseScene {
     this.levelRun?.task(this.taskIndex, result);
     // The arrangement answers the task: a strong one earns the next stem, a weak one loses
     // the last, and the change lands on the next task's downbeat with the tempo (below).
-    this.layers = advanceLayers(this.layers, result.accuracy, this.audio?.music.track.stems.length ?? 1);
+    const track = this.audio?.music.track;
+    this.layers = advanceLayers(this.layers, result.accuracy, track?.levelStems ?? track?.stems.length ?? 1);
     // The one place groove moves: a scored task's verdict. The introduction and the
     // first-run pass never reach here, so neither can move it. Level 1 is the flourish
     // above and nothing more; from 2 the room answers (`grooveStage`), and a milestone

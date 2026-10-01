@@ -70,6 +70,10 @@ import { DishCleaningVignette } from './DishCleaningVignette';
 import { DISH_LOOKS } from './dishLooks';
 import { createCleaningSounds } from '@/audio/cleaningSounds';
 import { CLEANING_REVEAL_SEC } from './cleaningMotion';
+import { ProspectorVignette } from './ProspectorVignette';
+import { PROSPECTOR_LOOKS } from './prospectorLooks';
+import { PROSPECTOR_REVEAL_SEC } from './prospectorMotion';
+import { createProspectorSounds } from '@/audio/prospectorSounds';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -281,6 +285,13 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new DishCleaningVignette(scene, lap), sounds: context => createCleaningSounds(context, 'dish'),
     looks: DISH_LOOKS.map(look => look.copy),
   },
+  {
+    id: 'prospector', title: 'Strike gold', intro: 'Swing for\nthe seam.', ink: HOME_INK,
+    success: ['Struck\ngold!', 'A nugget worth the dig.'], rough: ['Nothing\nbut rock.', 'Not a fleck in it.'],
+    endingSec: PROSPECTOR_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new ProspectorVignette(scene, lap), sounds: createProspectorSounds,
+    looks: PROSPECTOR_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
@@ -289,7 +300,9 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
  * toothbrush arrived — every keepsake earned on those levels stays put — and from level 51
  * the rotation carries the first twenty-eight. The paintbrush joins at level 107, past
  * every earlier keepsake, opening on the act it adds. Nose blowing and washing up join
- * at level 165, after the paintbrush's two keepsakes and two complete 29-act laps.
+ * at level 165, after the paintbrush's two keepsakes and two complete 29-act laps. The
+ * prospector joins at level 227, after two complete 31-act laps, which is the first such
+ * boundary past the nose and dish keepsakes on 196 and 197.
  *
  * **Appending an act means adding an era here**, at a level past every keepsake players
  * could hold: the tests fail on a registry the last era does not cover.
@@ -300,4 +313,6 @@ export const ROTATION: readonly RotationEra[] = [
   { fromLevel: 107, acts: 29 },
   // Two complete paintbrush-era laps preserve its second keepsake at level 136.
   { fromLevel: 165, acts: 31 },
+  // Two complete laps of that era preserve the nose and dish keepsakes at 196 and 197.
+  { fromLevel: 227, acts: 32 },
 ];

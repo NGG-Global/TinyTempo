@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { MusicSystem, detectLeadIn, normalizeLoop, validateLoopBuffer } from '../src/audio/MusicSystem';
-import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds } from '../src/config/music';
+import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds, stemLevel, type GameplayTrack } from '../src/config/music';
 
 // A 100 Hz "sample rate" keeps the fake buffers tiny while exercising real frame arithmetic.
 const RATE = 100;
 const FILE_FRAMES = 11993; // 119.93 s: 75 ms short of 60 bars, like the delivered master.
 const LEAD = 18; // the opening transient at 0.18 s in the decoded MP3
-const A = GAMEPLAY_TRACKS.a;
-const B = GAMEPLAY_TRACKS.b;
+// Read through the interface, as MusicSystem does, rather than the literal `as const` types.
+const A: GameplayTrack = GAMEPLAY_TRACKS.a;
+const B: GameplayTrack & { readonly levelStems: number } = GAMEPLAY_TRACKS.b;
 // Track B decodes to 108.144 s: the 0.1 s head, 54 whole bars, and the codec's padding.
 const B_FRAMES = 10814;
 const B_LEAD = 12;
@@ -23,6 +24,7 @@ afterEach(() => vi.unstubAllGlobals());
 function setup(empty = false) {
   const nodes: ReturnType<typeof makeSource>[] = [];
   const decodes: string[] = [];
+  const filters: { type: string; frequency: { value: number }; Q: { value: number }; connect: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn> }[] = [];
   const makeSource = () => ({ buffer: null as { length: number } | null, loop: false, loopStart: -1, loopEnd: -1, playbackRate: { value: 0, setValueAtTime: vi.fn() },
     start: vi.fn(), stop: vi.fn(), connect: vi.fn(), disconnect: vi.fn(), onended: null });
   const gains: { gain: { value: number; cancelScheduledValues: ReturnType<typeof vi.fn>; setValueAtTime: ReturnType<typeof vi.fn>; linearRampToValueAtTime: ReturnType<typeof vi.fn> }; disconnect: ReturnType<typeof vi.fn> }[] = [];
@@ -40,10 +42,11 @@ function setup(empty = false) {
       gains.push(node); return node;
     },
     createBufferSource: () => { const source = makeSource(); nodes.push(source); return source; },
+    createBiquadFilter: () => { const node = { type: '', frequency: { value: 0 }, Q: { value: 0 }, connect: vi.fn(), disconnect: vi.fn() }; filters.push(node); return node; },
   };
   const fetcher = vi.fn(async (url: string) => { decodes.push(url); return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) }; });
   vi.stubGlobal('fetch', fetcher);
-  return { system: new MusicSystem(context as unknown as AudioContext, {} as AudioNode), context, nodes, gains, fetcher };
+  return { system: new MusicSystem(context as unknown as AudioContext, {} as AudioNode), context, nodes, gains, fetcher, filters };
 }
 
 describe('the premixed music loop', () => {
@@ -54,7 +57,7 @@ describe('the premixed music loop', () => {
     expect(system.load('a')).toBe(first);
     await first;
     // One request and one decode: the seven-stem load cost seven of each and ~307 MiB of PCM.
-    expect(fetcher).toHaveBeenCalledExactlyOnceWith(A.stems[0].url, expect.anything());
+    expect(fetcher).toHaveBeenCalledExactlyOnceWith(A.stems[0]!.url, expect.anything());
     expect(system.trackId).toBe('a');
     expect(context.decodeAudioData).toHaveBeenCalledTimes(1);
     expect(system.start(12)).toBeCloseTo(12 + pickupSeconds(MUSIC.sourceBpm, MUSIC.pickupBeats), 9);
@@ -162,7 +165,7 @@ describe('the premixed music loop', () => {
     system.start(12, { layers: 1, metronome: true });
     // Every stem is started on the same sample; only the first is heard.
     expect(nodes).toHaveLength(B.stems.length + 1);
-    stemGains.forEach((gain, i) => expect(gain.gain.setValueAtTime).toHaveBeenLastCalledWith(i === 0 ? 1 : 0, context.currentTime));
+    stemGains.forEach((gain, i) => expect(gain.gain.setValueAtTime).toHaveBeenLastCalledWith(i === 0 ? stemLevel(B.stems[0]!) : 0, context.currentTime));
     expect(system.activeLayers).toBe(1);
     expect(system.metronome).toBe(true);
     // The click bar: one bar at the source tempo, started with the stems, rated with them.
@@ -175,7 +178,8 @@ describe('the premixed music loop', () => {
     system.setLayers(2, 24);
     expect(system.activeLayers).toBe(2);
     expect(stemGains[1]!.gain.setValueAtTime).toHaveBeenLastCalledWith(0, 24);
-    expect(stemGains[1]!.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(1, 24 + MUSIC.layers.fadeSec);
+    // A stem joins at its trim, never untrimmed: the mix and the arrangement are one gain.
+    expect(stemGains[1]!.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(stemLevel(B.stems[1]!), 24 + MUSIC.layers.fadeSec);
     // Unchanged stems are left alone: no ramp is scheduled on the drums.
     expect(stemGains[0]!.gain.linearRampToValueAtTime).not.toHaveBeenCalled();
     // A weak one takes it away again; more than the track has is all of it.
@@ -193,6 +197,41 @@ describe('the premixed music loop', () => {
     system.start(50);
     expect(system.activeLayers).toBe(B.stems.length);
     expect(system.metronome).toBe(false);
+  });
+  it('mixes track B for a game played by ear: trims and tone on the stems, and no lead or risers in a level', async () => {
+    const { system, gains, filters } = setup();
+    await system.load('b');
+    const stemGains = gains.slice(1);
+    // Every stem's layer gain rests at its trim; nothing is ever heard untrimmed.
+    B.stems.forEach((stem, i) => expect(stemGains[i]!.gain.value).toBeCloseTo(stemLevel(stem), 9));
+    // One gentle low-pass per stem that asks for one, at its frequency, with no resonance.
+    const toned = B.stems.filter(stem => stem.toneHz !== undefined);
+    expect(filters).toHaveLength(toned.length);
+    filters.forEach((filter, k) => {
+      expect(filter.type).toBe('lowpass');
+      expect(filter.frequency.value).toBe(toned[k]!.toneHz);
+      expect(filter.Q.value).toBeCloseTo(Math.SQRT1_2, 9);
+    });
+    // The level's ladder: drums, bass, harmony, orchestral colour, and the synth lead last.
+    expect(B.stems.slice(0, B.levelStems).map(stem => stem.id)).toEqual(['drums', 'bass', 'harmony', 'orchestral', 'lead']);
+    expect(B.stems.slice(B.levelStems).map(stem => stem.id)).toEqual(['risers']);
+    // The drums are the floor and play as delivered; everything above them steps back.
+    expect(B.stems[0]!.trimDb ?? 0).toBe(0);
+    for (const stem of B.stems.slice(1)) expect(stem.trimDb ?? 0).toBeLessThan(0);
+    // The lead is the last a level earns, and it enters quieter and darker than everything
+    // it joins, so the melody sits behind the phrase being copied rather than beside it.
+    const lead = B.stems[B.levelStems - 1]!;
+    for (const stem of B.stems.slice(0, B.levelStems - 1)) {
+      expect(lead.trimDb!).toBeLessThan(stem.trimDb ?? 0);
+      expect(lead.toneHz!).toBeLessThan(stem.toneHz ?? Infinity);
+    }
+    // The risers never reach a level, and are the quietest even in the shell.
+    for (const stem of B.stems.slice(B.levelStems)) {
+      expect(stem.trimDb!).toBeLessThan(lead.trimDb!);
+      expect(stem.toneHz).toBeLessThanOrEqual(2500);
+    }
+    // A premix has nothing to trim or tone.
+    expect(A.stems.every(stem => stem.trimDb === undefined && stem.toneHz === undefined)).toBe(true);
   });
   it('lets a later selection supersede a load still in flight', async () => {
     const { system, fetcher } = setup();

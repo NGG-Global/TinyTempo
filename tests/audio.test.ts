@@ -71,6 +71,9 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
       nodes.push(node);
       return node;
     }
+    createBiquadFilter() {
+      return { type: '', frequency: { value: 0 }, Q: { value: 0 }, connect: vi.fn((target: object) => target), disconnect: vi.fn() };
+    }
   });
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) })));
   const engine = new AudioEngine();

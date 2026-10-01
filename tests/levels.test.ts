@@ -60,11 +60,13 @@ describe('level progression', () => {
       expect(now.maxTier).toBeGreaterThanOrEqual(was.maxTier);
       expect(spec.clearAccuracy).toBeGreaterThanOrEqual(previous.clearAccuracy);
       // The first twenty-five acts twice, then the first twenty-eight from level 51, then
-      // twenty-nine from 107, then every act from 165, opening on the acts it added.
+      // twenty-nine from 107, thirty-one from 165, then every act from 227, each era
+      // opening on the acts it added.
       const act = level <= 50 ? (level - 1) % 25
         : level < 107 ? (level - 51 + 25) % 28
           : level < 165 ? (level - 107 + 28) % 29
-            : (level - 165 + 29) % VIGNETTES.length;
+            : level < 227 ? (level - 165 + 29) % 31
+              : (level - 227 + 31) % VIGNETTES.length;
       expect(spec.vignette).toBe(VIGNETTES[act]!.id);
       expect(spec.vignette).not.toBe(previous.vignette);
       // The lap counts the act's own earlier levels, which is what its looks are indexed by.

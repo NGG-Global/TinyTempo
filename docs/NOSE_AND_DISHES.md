@@ -1,8 +1,9 @@
 # Nose blowing and washing up
 
 Two acts join the rotation at levels 165 and 166, after two complete 29-act laps.
-Levels 1–164 and every existing keepsake retain their assignments. Later looks
-return every 31 levels: nose at 165/196/227/258, dishes at 166/197/228.
+Levels 1–164 and every existing keepsake retain their assignments. Their era is two
+whole 31-act laps, 165–226; the prospector's era from 227 carries 32 acts, so their third
+and later looks come every 32 levels: nose at 165/196/257/289, dishes at 166/197/258.
 Each act also has scrapbook keepsakes for its first and second appearances.
 
 `NoseBlowingVignette` has four people: swept hair, curls, silver hair with glasses,
@@ -22,5 +23,5 @@ slides. Their five-beat holds leave room for the 1.2-second endings. Drawing and
 synthesized ending sounds share the reveal timing in `cleaningMotion.ts`.
 
 Development previews: `?debug&level=165`, `?debug&level=166`, `?debug&level=197`,
-and `?debug&level=228`. Press the debug auto-play button for a clean round or leave
+and `?debug&level=258`. Press the debug auto-play button for a clean round or leave
 the response untapped for a failure.

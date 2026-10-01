@@ -715,6 +715,27 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       glint(p, 24, -10, 10);
     });
   },
+  // The level 227 dig's find, the lump the act draws in the stone's hollow.
+  'prospector-nugget': p => {
+    p.fill(0xf2c230).poly([[-36, 6], [-28, -20], [-6, -32], [20, -26], [38, -6], [33, 20], [9, 31], [-22, 27]]);
+    p.detail(() => {
+      p.fill(0xffe68c).poly([[-25, -6], [-16, -20], [2, -23], [-4, -9]], false);
+      p.fill(0xb6841a).poly([[7, 18], [27, 7], [27, 18], [11, 25]], false);
+      p.fill(0xb6841a).oval(-7, 9, 8, 8, false);
+      glint(p, 22, -20, 9);
+    });
+  },
+  // Level 259's: a brilliant still in the rough, pale blue with its table lit.
+  'prospector-diamond': p => {
+    p.fill(0xd6efff).poly([[-38, -8], [-23, -27], [23, -27], [38, -8], [0, 34]]);
+    p.detail(() => {
+      p.fill(0xffffff).poly([[-23, -27], [-9, -8], [9, -8], [23, -27]], false);
+      p.line([[-38, -8], [38, -8]], 2.4, 0x8cc1df);
+      p.line([[-9, -8], [0, 34], [9, -8]], 2.4, 0x8cc1df);
+      p.line([[-23, -8], [0, 34], [23, -8]], 2.4, 0x8cc1df);
+      glint(p, 26, -24, 9);
+    });
+  },
 };
 
 /** Whether a keepsake has a drawing. The test that asks this is what keeps a new entry honest. */

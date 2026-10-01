@@ -1,4 +1,4 @@
-import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds, type GameplayTrack, type TrackId } from '../config/music';
+import { GAMEPLAY_TRACKS, MUSIC, TRACK_CYCLE, loopSeconds, pickupSeconds, stemLevel, type GameplayTrack, type TrackId } from '../config/music';
 import { metronomeBar } from './metronomeSounds';
 
 export function validateLoopBuffer(buffer: AudioBuffer | null): number {
@@ -64,7 +64,12 @@ export class MusicSystem {
   private sources: AudioBufferSourceNode[] = [];
   private buffers: AudioBuffer[] = [];
   private stemGains: GainNode[] = [];
+  /** Where each stem's source enters its chain: the stem's tone filter, or its gain. */
+  private stemInputs: AudioNode[] = [];
+  /** The gain each stem's layer gain was last set to: its trim when heard, 0 when not. */
   private stemLevels: number[] = [];
+  /** Each stem's trim as a gain: the level it is heard at. */
+  private stemTrims: number[] = [];
   private layers = 0;
   private click: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private clickBar: AudioBuffer | null = null;
@@ -133,7 +138,7 @@ export class MusicSystem {
       this.stop();
       this.release();
     }
-    const track = GAMEPLAY_TRACKS[id];
+    const track: GameplayTrack = GAMEPLAY_TRACKS[id];
     const abort = new AbortController();
     this.abort = abort;
     this.pendingTrack = id;
@@ -158,13 +163,26 @@ export class MusicSystem {
       if (this.disposed || abort.signal.aborted) throw superseded();
       this.leadInFrames = lead;
       this.buffers = buffers;
-      this.stemGains = buffers.map(() => {
+      // Each stem's chain: source → tone (when it has one) → layer gain → bus. The layer
+      // gain carries the stem's trim when it is heard and 0 when it is not, so the mix and
+      // the arrangement are one parameter and nothing can play a stem untrimmed.
+      this.stemTrims = track.stems.map(stemLevel);
+      this.stemGains = track.stems.map((_, i) => {
         const gain = this.context.createGain();
-        gain.gain.value = 1;
+        gain.gain.value = this.stemTrims[i]!;
         gain.connect(this.bus);
         return gain;
       });
-      this.stemLevels = buffers.map(() => 1);
+      this.stemInputs = track.stems.map((stem, i) => {
+        if (stem.toneHz === undefined) return this.stemGains[i]!;
+        const tone = this.context.createBiquadFilter();
+        tone.type = 'lowpass';
+        tone.frequency.value = stem.toneHz;
+        tone.Q.value = Math.SQRT1_2;
+        tone.connect(this.stemGains[i]!);
+        return tone;
+      });
+      this.stemLevels = [...this.stemTrims];
       this.layers = buffers.length;
       this.loaded = id;
       // Nothing is playing — a change of track stopped the sources above — so the bus can
@@ -197,13 +215,13 @@ export class MusicSystem {
     try {
       this.rate = 1;
       this.buffers.forEach((buffer, i) => {
-        const source = this.loopSource(buffer, end, this.stemGains[i]!);
+        const source = this.loopSource(buffer, end, this.stemInputs[i]!);
         source.start(at, 0);
         this.sources.push(source);
       });
       this.layers = layers;
       this.stemGains.forEach((gain, i) => {
-        const level = i < layers ? 1 : 0;
+        const level = i < layers ? this.stemTrims[i]! : 0;
         gain.gain.cancelScheduledValues(this.context.currentTime);
         gain.gain.setValueAtTime(level, this.context.currentTime);
         this.stemLevels[i] = level;
@@ -245,7 +263,7 @@ export class MusicSystem {
     const layers = Math.min(this.buffers.length, count);
     const start = Math.max(at, this.context.currentTime);
     this.stemGains.forEach((gain, i) => {
-      const level = i < layers ? 1 : 0;
+      const level = i < layers ? this.stemTrims[i]! : 0;
       if (level === this.stemLevels[i]) return;
       gain.gain.cancelScheduledValues(start);
       gain.gain.setValueAtTime(this.stemLevels[i]!, start);
@@ -316,9 +334,12 @@ export class MusicSystem {
   /** Drops the loaded track's stems and their gains; the click bar is the context's and stays. */
   private release(): void {
     for (const gain of this.stemGains) gain.disconnect();
+    for (const input of this.stemInputs) input.disconnect();
     this.buffers = [];
     this.stemGains = [];
+    this.stemInputs = [];
     this.stemLevels = [];
+    this.stemTrims = [];
     this.layers = 0;
     this.loaded = null;
   }
