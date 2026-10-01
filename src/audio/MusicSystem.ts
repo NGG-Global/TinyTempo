@@ -70,6 +70,8 @@ export class MusicSystem {
   private stemLevels: number[] = [];
   /** Each stem's trim as a gain: the level it is heard at. */
   private stemTrims: number[] = [];
+  /** Every tone and low-cut filter the loaded track's stems pass through, for release. */
+  private stemFilters: BiquadFilterNode[] = [];
   private layers = 0;
   private click: { source: AudioBufferSourceNode; gain: GainNode } | null = null;
   private clickBar: AudioBuffer | null = null;
@@ -173,14 +175,20 @@ export class MusicSystem {
         gain.connect(this.bus);
         return gain;
       });
+      // Built from the gain back towards the source: low cut → tone → layer gain.
       this.stemInputs = track.stems.map((stem, i) => {
-        if (stem.toneHz === undefined) return this.stemGains[i]!;
-        const tone = this.context.createBiquadFilter();
-        tone.type = 'lowpass';
-        tone.frequency.value = stem.toneHz;
-        tone.Q.value = Math.SQRT1_2;
-        tone.connect(this.stemGains[i]!);
-        return tone;
+        let input: AudioNode = this.stemGains[i]!;
+        for (const [type, hz] of [['lowpass', stem.toneHz], ['highpass', stem.lowCutHz]] as const) {
+          if (hz === undefined) continue;
+          const filter = this.context.createBiquadFilter();
+          filter.type = type;
+          filter.frequency.value = hz;
+          filter.Q.value = Math.SQRT1_2;
+          filter.connect(input);
+          this.stemFilters.push(filter);
+          input = filter;
+        }
+        return input;
       });
       this.stemLevels = [...this.stemTrims];
       this.layers = buffers.length;
@@ -334,8 +342,9 @@ export class MusicSystem {
   /** Drops the loaded track's stems and their gains; the click bar is the context's and stays. */
   private release(): void {
     for (const gain of this.stemGains) gain.disconnect();
-    for (const input of this.stemInputs) input.disconnect();
+    for (const filter of this.stemFilters) filter.disconnect();
     this.buffers = [];
+    this.stemFilters = [];
     this.stemGains = [];
     this.stemInputs = [];
     this.stemLevels = [];

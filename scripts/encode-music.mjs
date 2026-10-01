@@ -61,7 +61,7 @@ const TRACKS = [
     mix: { Drums: 1, Bass: 1, Guitar: 1, Keyboard: 1, Percussion: 1, Synth: 1, Brass: 1 },
   },
   {
-    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.3762, layered: true,
+    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.52, layered: true,
     mix: { Drums: 1, Bass: 1, Harmony: 1, 'Synth Lead': 1, Orchestral: 1, Risers: 1 },
   },
 ];

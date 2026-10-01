@@ -63,6 +63,12 @@ export interface TrackStem {
    * sound live above ~2 kHz, and that is what draws the ear.
    */
   readonly toneHz?: number;
+  /**
+   * A gentle high-pass (12 dB/oct, no resonance) at this frequency, for a stem whose low
+   * end would double the bass and blur the kick: the pulse a player locks onto lives
+   * there, and two parts in that register read as one muddier one.
+   */
+  readonly lowCutHz?: number;
 }
 
 /** A stem's trim as a gain. */
@@ -142,7 +148,10 @@ export const GAMEPLAY_TRACKS = {
     // and the trims and tone are measured choices (docs/MUSIC.md):
     //  - drums, as delivered: the floor, under the metronome from the first beat;
     //  - bass, −2 dB: 91% of its energy is under 250 Hz, clear of every act voice;
-    //  - harmony, −4 dB and softened at 3.2 kHz: the chords, 71% in the act voices' band;
+    //  - harmony, −5.3 dB, cut below 120 Hz and softened at 3.2 kHz: the chords. The part
+    //    was redelivered as a lower, warmer one — 74% of its energy under 250 Hz, and as
+    //    much below 120 Hz as the bass stem itself — so it gives that register to the bass
+    //    and the kick, and its trim puts it at the loudness the first delivery had here;
     //  - orchestral colour, −5 dB at 3.5 kHz: plays bars 7–26 only, a lift, not a part;
     //  - the synth lead, −9 dB and softened at 1.8 kHz, **last**: it is a melody — 39% of
     //    its notes off the beat and eighth grid, in the same 250 Hz–2 kHz band as the act
@@ -155,7 +164,7 @@ export const GAMEPLAY_TRACKS = {
     stems: [
       { id: 'drums', url: new URL('../../bgm/mix/tiny-tempo-b-drums.mp3', import.meta.url).href },
       { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href, trimDb: -2 },
-      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href, trimDb: -4, toneHz: 3200 },
+      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href, trimDb: -5.3, toneHz: 3200, lowCutHz: 120 },
       { id: 'orchestral', url: new URL('../../bgm/mix/tiny-tempo-b-orchestral.mp3', import.meta.url).href, trimDb: -5, toneHz: 3500 },
       { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href, trimDb: -9, toneHz: 1800 },
       { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href, trimDb: -10, toneHz: 2500 },
@@ -173,13 +182,14 @@ export const GAMEPLAY_TRACKS = {
     // ~2 ms later. A decoder that trims the delay lands near 0.104 s; both sit inside
     // these bounds, and a file with no head does not.
     leadIn: { threshold: 0.05, fallbackSec: 0.127, minSec: 0.05, maxSec: 0.25 },
-    // Matched to track A by measurement, not by ear, the way the title theme is: decoded
-    // in Chromium, the premix sits at -17.66 dB RMS against A's -21.16 dB, and A is heard
-    // through 0.5632, so 0.376 puts the two at the same level and a chapter's change of
-    // track is not a jump. The encoder's estimate from the float sums agrees within 0.02 dB.
-    // The stems sum to the premix, so this is the level of the full mix; fewer stems are
-    // simply quieter, as a thinner arrangement is.
-    gain: 0.3762,
+    // Holds every stem at the level the mix was set at. Matched to track A by measurement
+    // when the stems were first delivered: the premix sat at -17.66 dB RMS against A's
+    // -21.16 dB, heard through 0.5632, which gave 0.3762. The redelivered harmony is low and
+    // loud, and with it the six sum to +2.55 dBFS, so the encoder now scales every stem by
+    // 0.7235 to keep the premix off full scale; this gives that back (0.3762 / 0.7235), so
+    // the drums, bass, orchestra, lead and risers are heard exactly as they were, and the
+    // harmony's own trim decides where it sits.
+    gain: 0.52,
   },
 } as const satisfies Record<string, GameplayTrack>;
 export type TrackId = keyof typeof GAMEPLAY_TRACKS;

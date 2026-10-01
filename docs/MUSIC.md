@@ -116,10 +116,12 @@ that trims the delay through the LAME header lands near 0.102 s. `GAMEPLAY_TRACK
 is therefore `{ threshold 0.05, fallback 0.125, min 0.05, max 0.25 }`, which admits both
 and rejects a premix encoded without its head.
 
-Loudness is matched to track A by measurement, as the title theme's is: the decoded premix
-sits at **−17.66 dB RMS** against A's **−21.16 dB**, and A is heard through 0.5632, so
-`gain` is **0.3762** and a chapter's change of track is not a jump. The encoder's estimate
-from the float sums (−17.23 against −20.71 dB) gives 0.3770, within 0.02 dB.
+Loudness was matched to track A by measurement when the stems were first delivered: the
+decoded premix sat at **−17.66 dB RMS** against A's **−21.16 dB**, and A is heard through
+0.5632, so `gain` was **0.3762**. The redelivered harmony (below) makes the six sum to
++2.55 dBFS, so the encoder now scales every stem by 0.7235 to keep the premix off full
+scale, and `gain` is **0.52** (0.3762 / 0.7235): every stem but the harmony is heard exactly
+as loud as before.
 
 ## Track B in layers, and the metronome
 
@@ -183,7 +185,7 @@ be fixed by level alone: a quieter melody is still a melody. So:
 | --- | --- | --- | --- |
 | Drums | 0 dB | — | always |
 | Bass | −2 dB | — | 2nd |
-| Harmony | −4 dB | 3.2 kHz | 3rd |
+| Harmony | −5.3 dB | 3.2 kHz, cut below 120 Hz | 3rd |
 | Orchestral | −5 dB | 3.5 kHz | 4th |
 | Synth lead | −9 dB | 1.8 kHz | 5th, last |
 | Risers | −10 dB | 2.5 kHz | never |
@@ -195,6 +197,30 @@ its trim and tone. The trims and tones were chosen from these measurements and h
 heard only through that render, not on a handset against an act. A level of four tasks or
 fewer can never reach the lead, since it takes four strong tasks to earn and lands on the
 next one's downbeat; `levelStems` back to 4 takes it out of levels altogether.
+
+### The redelivered harmony
+
+`bgm/track-b/2 Harmony.wav` was replaced by a second delivery, `HARMONY_ALTERNATIVE.wav`, and
+the first is kept as `bgm/track-b/replaced/2 Harmony (first delivery).wav` (the encoder reads
+only the folder's own WAVs). Same format, same 5,184,000 frames, the same first sound 1.77 ms
+in, and its chords still move on beats 1 and 3. But it is a different part:
+
+| | First delivery | Second delivery |
+| --- | --- | --- |
+| Peak / RMS | −6.7 dBFS / −23.5 dB | −2.3 dBFS / −19.4 dB |
+| Energy under 250 Hz / 250–2k / above 2k | 19% / 71% / 11% | 74% / 24% / 3% |
+| Below 60 Hz and 60–120 Hz, against its whole | −52 / −39 dB | −10 / −7 dB |
+
+The bass stem reads −9 and −6 dB in those two bands: below 120 Hz the new harmony carries as
+much as the bass itself. Played as delivered it doubles the bass's register and blurs the
+kick, which is the pulse a player locks onto, so it takes a **120 Hz low cut** (`lowCutHz`, a
+12 dB/oct high-pass ahead of its tone) and keeps its warmth from 120 Hz up. Its trim,
+**−5.3 dB**, is what puts it at the loudness the first delivery had in this mix, matched on an
+approximate K-weighting (BS.1770's shelf and high-pass, ungated) rather than on RMS, because
+a low part at equal RMS sounds quieter. Rendered over bars 23–38 with the five stems a level
+can earn and the metronome, the mix matches the old one within 0.1 dB overall, below 120 Hz
+and in 250 Hz–2 kHz; without the cut the low end would be 1.6 dB heavier. Not yet heard on a
+handset.
 
 The drums are the busiest stem — 14 onsets a bar, most of them sixteenths — and they are
 the floor, under the metronome from the first beat. That is the composer's groove and no
@@ -339,7 +365,7 @@ not be. The theme only has to start, loop and get out of the way.
 | Length | 120.000 s, exactly 60 bars | 108.000 s, exactly 54 bars | 64.000 s, as delivered |
 | Loop | whole bars, lead-in detected and dropped | whole bars, lead-in detected and dropped | seamless, from loop points found in the decode |
 | Tempo | `setRate` per task | `setRate` per task | fixed |
-| Gain | 0.5632 | 0.3762 | 0.551 |
+| Gain | 0.5632 | 0.52 | 0.551 |
 | Size | 2.4 MB | 10.4 MB (six stems) | 1.3 MB |
 
 ### A seamless loop through an MP3

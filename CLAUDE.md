@@ -344,7 +344,8 @@ whole change back. **Track B plays as its six stems, and a level earns them**:
 `GAMEPLAY_TRACKS.b.stems` are the stems in the order they join (drums, bass, harmony,
 orchestral, then lead and risers), each an MP3 the encoder writes with the premix's head
 and scale so together they are the premix, and each with a `trimDb` and, where it shares
-the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — **the music is the room, not the
+the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — the redelivered harmony also takes a
+120 Hz `lowCutHz`, since below 120 Hz it carries as much as the bass and would blur the kick — **the music is the room, not the
 subject**, so the act's voice and the metronome are the foreground. `levelStems` (5) is the
 most a level can earn, and the synth lead is its **last** rung — a second melody beside the
 phrase being copied, so it takes four strong tasks in a row and enters at −9 dB behind a
