@@ -8,6 +8,7 @@ import { setHaptics, vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { askForSaveCode } from '@/core/shell';
 import { loadProgress, mergeProgress, saveProgress } from '@/game/progress';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { decodeSaveCode, encodeSaveCode, type SaveCodeError, type SaveData } from '@/game/saveCode';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { completeTutorial, tutorialComplete } from '@/game/TutorialRun';
@@ -330,6 +331,8 @@ export class TransferScene extends BaseScene {
     applyMix(engine, loadSettings());
     setHaptics(data.settings.haptics);
     if (data.tutorialComplete) completeTutorial();
+    // A restored code is progression the signed-in player's cloud save does not have yet.
+    if (stored) queueCloudSave();
     if (!stored) return 'Restored for now, but this device wouldn’t save it.';
     const gained = merged.unlocked - before.unlocked;
     if (gained > 0) return `Restored — ${gained} more ${gained === 1 ? 'level' : 'levels'} open.`;

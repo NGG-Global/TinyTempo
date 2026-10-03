@@ -307,6 +307,29 @@ export function skipTutorial(storage: Pick<Storage, 'getItem' | 'setItem'> | nul
   try { if (storage?.getItem(KEY) !== 'complete') storage?.setItem(KEY, 'skipped'); } catch { /* Skipped for this session at least. */ }
 }
 
+/** The stored fact in one word, for the cloud save: passed, skipped, or neither. */
+export type TutorialState = 'complete' | 'skipped' | 'none';
+
+export function tutorialState(storage: Pick<Storage, 'getItem'> | null = tutorialStorage()): TutorialState {
+  try {
+    const value = storage?.getItem(KEY);
+    return value === 'complete' ? 'complete' : value === 'skipped' ? 'skipped' : 'none';
+  } catch { return 'none'; }
+}
+
+/**
+ * Set the stored fact exactly, `none` included. Only for the device changing hands
+ * between two Play Games players: a new player meets the lesson, whatever the last one
+ * did. Everywhere else the two one-way writes above are the right tool.
+ */
+export function setTutorialState(state: TutorialState, storage: Pick<Storage, 'setItem' | 'removeItem'> | null = tutorialStorage()): boolean {
+  try {
+    if (state === 'none') storage?.removeItem(KEY);
+    else storage?.setItem(KEY, state);
+    return storage !== null;
+  } catch { return false; }
+}
+
 function tutorialStorage(): Storage | null {
   try { return globalThis.localStorage ?? null; } catch { return null; }
 }

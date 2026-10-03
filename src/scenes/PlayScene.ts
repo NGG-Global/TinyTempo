@@ -30,6 +30,7 @@ import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
@@ -1920,6 +1921,8 @@ export class PlayScene extends BaseScene {
       // Play Games achievements follow the saved clears. Not when the save failed: an unlock
       // cannot be taken back, and the next launch would not find the clear that earned it.
       void syncAchievements(outcome.progress);
+      // And the cloud save, debounced: a clear is the one progression change a level makes.
+      if (outcome.cleared) queueCloudSave();
     }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);

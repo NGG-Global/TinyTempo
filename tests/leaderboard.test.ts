@@ -5,7 +5,7 @@ import {
   type LeaderboardDeps, type LeaderboardEvent,
 } from '../src/playgames/leaderboard';
 import {
-  NOT_SHOWN, NOT_SUBMITTED, SIGNED_OUT, createPlayGames, stubPlayGames,
+  NOT_SHOWN, NOT_SUBMITTED, SIGNED_OUT, SNAPSHOT_FAILED, createPlayGames, stubPlayGames,
   type PlayGames, type PlayGamesClient, type PlayGamesStatus, type ScoreSubmission,
 } from '../src/playgames/playGames';
 import { LEADERBOARDS, PGS_DAILY_RESET_UTC_OFFSET_HOURS } from '../src/config/leaderboards';
@@ -43,6 +43,9 @@ function client(over: Partial<PlayGamesClient> = {}) {
     showLeaderboard: async (_id, span) => { calls.show.push(span); return { shown: true, reason: 'shown' }; },
     unlockAchievement: async () => ({ sent: true, reason: 'sent' }),
     showAchievements: async () => ({ shown: true, reason: 'shown' }),
+    readSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    writeSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    resolveSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
     ...over,
   };
   return { native, calls };

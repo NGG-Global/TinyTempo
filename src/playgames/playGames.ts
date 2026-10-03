@@ -58,6 +58,49 @@ export const NOT_SUBMITTED = (reason: Exclude<SubmitReason, 'submitted'>): Score
 export const NOT_SHOWN = (reason: Exclude<LeaderboardReason, 'shown'>): LeaderboardView =>
   Object.freeze({ shown: false, reason });
 
+/**
+ * Saved Games, as three narrow calls. The native side opens one named snapshot with the
+ * manual conflict policy and relays bytes; it never decides what the bytes mean. A
+ * conflict — two devices that wrote while apart — comes back as both payloads, and the
+ * game answers it with `resolveSnapshot` and the merged bytes, which may itself come back
+ * as another conflict. The merge is Tiny Tempo's, in `playgames/cloudSave.ts`; the bridge
+ * does not know it exists.
+ *
+ * Payloads cross as text. The adapter's `data` fields are the snapshot's bytes decoded as
+ * UTF-8, or null for a snapshot that has never been written.
+ */
+export type SnapshotReason = 'signed_out' | 'offline' | 'timeout' | 'failed' | 'invalid' | 'unavailable';
+
+export interface SnapshotConflict {
+  readonly kind: 'conflict';
+  /** Play Games' handle for this conflict, passed back to resolve it. Opaque, never logged. */
+  readonly conflictId: string;
+  /** The server's version of the snapshot. */
+  readonly base: string | null;
+  /** The version that could not be applied over it. */
+  readonly other: string | null;
+}
+
+export interface SnapshotFailure {
+  readonly kind: 'failed';
+  readonly reason: SnapshotReason;
+}
+
+export type SnapshotRead = { readonly kind: 'data'; readonly data: string | null } | SnapshotConflict | SnapshotFailure;
+export type SnapshotWrite = { readonly kind: 'committed' } | SnapshotConflict | SnapshotFailure;
+export type SnapshotResolution = { readonly kind: 'resolved' } | SnapshotConflict | SnapshotFailure;
+
+/** What a write or a resolution carries: the bytes as text, and the metadata Play shows. */
+export interface SnapshotPayload {
+  readonly data: string;
+  /** Shown in Play Games' own saved-games UI. Never carries an id. */
+  readonly description: string;
+  /** Play's `progressValue`: the unlocked frontier, so its UI can order saves. */
+  readonly progress: number;
+}
+
+export const SNAPSHOT_FAILED = (reason: SnapshotReason): SnapshotFailure => Object.freeze({ kind: 'failed', reason });
+
 /** The calls the native plugin answers. Each resolves; none rejects. */
 export interface PlayGamesClient {
   isAuthenticated(): Promise<PlayGamesStatus>;
@@ -69,6 +112,12 @@ export interface PlayGamesClient {
   /** Hand one unlock to Play Games, which queues it offline and ignores a repeat. */
   unlockAchievement(achievementId: string): Promise<AchievementUnlock>;
   showAchievements(): Promise<LeaderboardView>;
+  /** Open the named snapshot, creating it if absent, and read it. A conflict is both payloads. */
+  readSnapshot(name: string): Promise<SnapshotRead>;
+  /** Open, replace the bytes and commit. A conflict is both payloads, and nothing was written. */
+  writeSnapshot(name: string, payload: SnapshotPayload): Promise<SnapshotWrite>;
+  /** Answer a conflict with the merged bytes. May reveal another conflict. */
+  resolveSnapshot(conflictId: string, payload: SnapshotPayload): Promise<SnapshotResolution>;
 }
 
 /**
@@ -100,6 +149,10 @@ export interface PlayGames {
   unlockAchievement(achievementId: string): Promise<AchievementUnlock>;
   /** Open Play Games' own achievements screen. Never rejects. */
   showAchievements(): Promise<LeaderboardView>;
+  /** The three Saved Games calls, each resolving to a failure rather than rejecting. */
+  readSnapshot(name: string): Promise<SnapshotRead>;
+  writeSnapshot(name: string, payload: SnapshotPayload): Promise<SnapshotWrite>;
+  resolveSnapshot(conflictId: string, payload: SnapshotPayload): Promise<SnapshotResolution>;
 }
 
 export const SIGNED_OUT: PlayGamesStatus = Object.freeze({
@@ -120,6 +173,9 @@ export const stubPlayGames: PlayGames = Object.freeze({
   showLeaderboard: () => Promise.resolve(NOT_SHOWN('unavailable')),
   unlockAchievement: () => Promise.resolve(NOT_UNLOCKED('unavailable')),
   showAchievements: () => Promise.resolve(NOT_SHOWN('unavailable')),
+  readSnapshot: () => Promise.resolve(SNAPSHOT_FAILED('unavailable')),
+  writeSnapshot: () => Promise.resolve(SNAPSHOT_FAILED('unavailable')),
+  resolveSnapshot: () => Promise.resolve(SNAPSHOT_FAILED('unavailable')),
 });
 
 export function createPlayGames(client: PlayGamesClient): PlayGames {
@@ -182,5 +238,20 @@ export function createPlayGames(client: PlayGamesClient): PlayGames {
         return NOT_SHOWN('failed');
       }
     },
+    readSnapshot: name => snapshotCall(() => client.readSnapshot(name)),
+    writeSnapshot: (name, payload) => snapshotCall(() => client.writeSnapshot(name, payload)),
+    resolveSnapshot: (conflictId, payload) => snapshotCall(() => client.resolveSnapshot(conflictId, payload)),
   };
+
+  /** A snapshot call that throws is a failure, and one answered "signed out" is news about the session. */
+  async function snapshotCall<T extends { readonly kind: string }>(call: () => Promise<T | SnapshotFailure>): Promise<T | SnapshotFailure> {
+    try {
+      const result = await call();
+      const failure = result.kind === 'failed' ? result as SnapshotFailure : null;
+      if (failure?.reason === 'signed_out') current = { ...SIGNED_OUT, reason: 'signed out' };
+      return result;
+    } catch {
+      return SNAPSHOT_FAILED('failed');
+    }
+  }
 }

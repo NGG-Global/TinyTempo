@@ -14,6 +14,7 @@ import { loadProgress } from '@/game/progress';
 import { encodeSaveCode } from '@/game/saveCode';
 import { loadSettings } from '@/game/settings';
 import { supportMailto, supportReport, type SupportFacts } from '@/game/supportReport';
+import { cloudStatusLine } from '@/playgames/cloudSync';
 import { tutorialComplete } from '@/game/TutorialRun';
 import { monetization } from '@/monetization';
 import { Backdrop } from '@/ui/backdrop';
@@ -163,6 +164,7 @@ export class SupportScene extends BaseScene {
       audio: describeAudio(this),
       crashReports: DIAGNOSTICS.dsn !== '',
       usageData: settings.analytics,
+      cloud: cloudStatusLine(),
       saveCode: encodeSaveCode({
         progress,
         settings: {

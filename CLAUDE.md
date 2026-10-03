@@ -274,10 +274,24 @@ of failing** on a missing token or a failed upload, which would ship a release w
 every trace is minified, so `vite.config.ts` throws on both and
 `scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
-Play Games Services is `playgames/`, on the same adapter split and **authentication only** —
-the SDK is initialized, v2 signs the player in itself, and the game can ask who they are. No
-snapshot is written; `docs/PLAY_GAMES.md` carries the Saved Games plan and the reason it is a
-plan. **Play Games is never required to play.** Every call resolves, so a device without it,
+Play Games Services is `playgames/`, on the same adapter split — the SDK is initialized, v2
+signs the player in itself, the game can ask who they are, and **progression follows the
+player through Saved Games** (`docs/CLOUD_SAVE.md`). One snapshot, `tiny-tempo-progress`,
+carries `CloudSaveV1`: `progress`, the tutorial state and four teach flags, and nothing a
+player owes or owns — no hearts, ledgers, Premium, consent, calibration or volume, which
+`tests/cloudSave.test.ts` asserts against the serialized text. The plugin opens it with
+`RESOLUTION_POLICY_MANUAL` and relays bytes; `playgames/cloudSave.ts` (pure) merges —
+highest frontier, highest accuracy per level, lessons OR-ed — and that merge is the only
+conflict strategy: both sides of a Play conflict are merged with the device's own save and
+sent back as the resolution, bounded at four rounds. A malformed cloud payload is never
+written over and a newer schema is left alone. **The device knows whose progress it holds**:
+`tiny-tempo.cloud.v1` binds it to a salted hash of the player id, anonymous progress is
+adopted by the first player, another player shelves the previous owner's progression and
+starts from their own shelf or empty, and switching back restores it; nothing is deleted and
+the raw id is stored nowhere. Syncs run at boot once signed in, on resume (throttled), after
+a cleared level and after a restored save code (debounced), never per tap or frame, and
+`local.write` merges with storage at write time so a level cleared mid-sync is kept.
+**Play Games is never required to play.** Every call resolves, so a device without it,
 a declined prompt and a plugin that rejects are one answer — signed out — and the browser
 keeps `stubPlayGames`, which *cannot* report anyone authenticated. That is a different object
 rather than a flag, which is what stops a development mock standing in for the real thing in a
@@ -732,6 +746,8 @@ src/
     ids.ts             Validates a Console leaderboard or achievement id
     achievements.ts    What a save has earned, and the idempotent sync; pure
     achievementSync.ts The achievements wired to config and the installed adapter
+    cloudSave.ts       Saved Games: the CloudSaveV1 schema, merge, account binding and sync; pure
+    cloudSync.ts       Saved Games wired to storage and the adapter: debounce, resume, support line
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling

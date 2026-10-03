@@ -1,8 +1,8 @@
 # Play Games Services
 
-Play Games Services v2 on the Android build. Authentication only: the SDK is initialized,
-the player is signed in where the platform allows it, and the web layer can ask who they
-are. Saved Games is **not** implemented — see the plan at the end.
+Play Games Services v2 on the Android build: the SDK is initialized, the player is signed
+in where the platform allows it, the web layer can ask who they are, and progression
+follows the player through Saved Games (`docs/CLOUD_SAVE.md`).
 
 **Play Games is never required to play Tiny Tempo.** A device with no Play Games app, no
 network, no Google account, or a player who declines, reaches the menu and plays exactly
@@ -91,13 +91,19 @@ await playGames().submitScore(id, score, tag)   // { submitted, newBest, reason 
 await playGames().showLeaderboard(id, 'daily')  // { shown, reason }; Play's own screen
 await playGames().unlockAchievement(id)         // { sent, reason }; queued offline, repeats harmless
 await playGames().showAchievements()            // { shown, reason }; Play's own screen
+await playGames().readSnapshot(name)            // { kind: 'data' | 'conflict' | 'failed', ... }
+await playGames().writeSnapshot(name, payload)  // { kind: 'committed' | 'conflict' | 'failed' }
+await playGames().resolveSnapshot(id, payload)  // { kind: 'resolved' | 'conflict' | 'failed' }
 ```
 
 The two leaderboard calls are v2's `LeaderboardsClient` (`submitScoreImmediate`,
 `getLeaderboardIntent`) and resolve like the rest, as do the achievement calls on
 `AchievementsClient` (`unlock`, `getAchievementsIntent`; see `docs/ACHIEVEMENTS.md`). Scenes do not call them directly: the
 Daily Tempo leaderboard goes through `playgames/dailyTempo.ts`, which owns the id, the best
-score and the retry. See `docs/LEADERBOARDS.md`.
+score and the retry (`docs/LEADERBOARDS.md`), and the three snapshot calls are made only by
+`playgames/cloudSave.ts`, which owns the payload, the merge and the account binding
+(`docs/CLOUD_SAVE.md`). The plugin opens snapshots with `RESOLUTION_POLICY_MANUAL` and
+relays bytes; it never chooses between two devices' saves.
 
 `bootPlayGames()` runs from `main.ts` beside `bootMonetization()`, unawaited. It gates on
 `Capacitor.isNativePlatform()` — the whole of the line between a browser and a device, as
@@ -129,82 +135,22 @@ carries `authenticated` and `reason` only.
 
 No client secret or service-account JSON is in the app, and none is needed for this.
 
-## Saved Games: the plan, not the implementation
+## Saved Games
 
-Saved Games is enabled in the Play Console and `SnapshotsClient` is present in the SDK, but
-**nothing writes a snapshot yet.** This was left deliberately: getting conflict resolution
-wrong corrupts saves, and the existing system has no undo.
-
-The good news is that the payload already exists and is already the right shape.
-
-### What would travel
-
-`game/saveCode.ts` already defines the portable set, because a save code has exactly the
-same problem:
-
-```ts
-interface SaveData {
-  progress: Progress;                 // unlocked + best accuracy per level
-  settings: PortableSettings;         // calibrationMs, muted, music, sfx, haptics
-  tutorialComplete: boolean;
-}
-```
-
-That is what a snapshot should carry — as the same bytes `encodeSaveCode` already
-produces, so one encoding is tested once and a snapshot and a save code cannot disagree.
-
-### What must not travel, and why
-
-| Storage key | Cloud? | Reason |
-| --- | --- | --- |
-| `small-acts.progress.v1` | yes | earned, and merges |
-| `tiny-tempo.settings.v1` | yes (the portable three) | preferences |
-| `small-acts.tutorial.v1`, `small-acts.teach.v1` | yes | preferences |
-| `tiny-tempo.health.v1` | **no** | hearts restore as an exploit |
-| `tiny-tempo.fills.v1`, `tiny-tempo.daily-heart.v1` | **no** | consumable ledgers; replaying them re-grants |
-| `tiny-tempo.premium.v1` | **no** | a *cache*, not the truth |
-
-**`tinytempo_premium` stays authoritative through Google Play Billing.** The premium cache
-already carries a `checkedAt` and expires precisely so a restored Android backup cannot
-grant Premium forever; a cloud save that carried it would reintroduce exactly that, with a
-wider reach. Consumable purchase state must not be restored through Saved Games either —
-`redeemFill` is idempotent per claim id, and a snapshot that replayed a spent claim would
-either re-grant it or silently swallow a real one.
-
-`saveCode.ts` already refuses to carry hearts, the ledgers, the premium cache and the
-analytics consent flag, and its `PortableSettings` type makes that a compile error rather
-than a convention. A Snapshots implementation should reuse that type for the same reason.
-
-### Conflict resolution
-
-`mergeProgress` is the answer and already exists: it takes the higher frontier and the
-higher accuracy per level, so a merge can only ever add. That is what makes conflict
-resolution safe here — two devices' snapshots merge without either losing, and there is no
-"which one wins" question to get wrong.
-
-The shape would be:
-
-1. `PlayGames.getSnapshotsClient(activity)` on the native side, behind the same bridge.
-2. Open with a fixed snapshot name and
-   `SnapshotsClient.RESOLUTION_POLICY_MOST_RECENTLY_MODIFIED` as a floor, then merge the
-   two payloads with `mergeProgress` rather than trusting the policy's pick.
-3. Write on the events that already mean "progress changed" — `recordResult` and a level's
-   summary — debounced, never per frame.
-4. Read once, after `refresh()` reports authenticated, and merge into local. Never replace.
-5. `Player.getPlayerId()` keys whose snapshot it is, so switching accounts cannot silently
-   merge two people's progress.
-
-### What is left to decide
-
-Whether a first sign-in on a device that already has local progress should merge silently.
-`mergeProgress` makes it safe, but "safe" and "expected" are different questions, and the
-save code's own answer — merge, because a restore that can only add needs no confirmation a
-player cannot answer well — is probably the right precedent.
+Implemented — see `docs/CLOUD_SAVE.md` for the payload, the merge, conflict handling,
+account isolation, the lifecycle, the manual Console steps and the device test matrix.
+The shape the earlier plan here described is what was built, with two deliberate changes:
+the payload is its own versioned JSON schema (`CloudSaveV1`) rather than the save code's
+bytes, because a snapshot and a code answer different questions (a code must be typed; a
+snapshot must be able to grow), and **settings are not in it** — calibration is a fact
+about one device's audio route, and a volume is a preference about one room — so the
+cloud carries earned progression and one-time lessons only.
 
 ## Not settled here
 
 Everything about this needs a device with a Play Games account; a headless browser and a
 Gradle build can only show that it compiles, links and is configured. Specifically
 unverified: that authentication actually succeeds against project `863268283344`, that
-Play's own sign-in UI appears where expected, and how the flow behaves for a player who
-has Play Games but declines. See the testing steps in the handover notes.
+Play's own sign-in UI appears where expected, how the flow behaves for a player who has
+Play Games but declines, and that a snapshot written on one device arrives on another —
+the matrix in `docs/CLOUD_SAVE.md` is that check.

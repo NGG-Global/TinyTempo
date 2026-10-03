@@ -10,7 +10,7 @@ import {
 } from '../src/playgames/achievements';
 import { playGamesId } from '../src/playgames/ids';
 import {
-  NOT_SHOWN, NOT_UNLOCKED, SIGNED_OUT, createPlayGames, stubPlayGames,
+  NOT_SHOWN, NOT_UNLOCKED, SIGNED_OUT, SNAPSHOT_FAILED, createPlayGames, stubPlayGames,
   type AchievementUnlock, type PlayGames, type PlayGamesClient, type PlayGamesStatus,
 } from '../src/playgames/playGames';
 
@@ -37,6 +37,9 @@ function client(over: Partial<PlayGamesClient> = {}) {
     showLeaderboard: async () => ({ shown: true, reason: 'shown' }),
     unlockAchievement: async id => { calls.unlock.push(id); return { sent: true, reason: 'sent' }; },
     showAchievements: async () => { calls.show++; return { shown: true, reason: 'shown' }; },
+    readSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    writeSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    resolveSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
     ...over,
   };
   return { native, calls };

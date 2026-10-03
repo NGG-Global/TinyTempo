@@ -2,16 +2,18 @@
 
 Progress lived in one place: the WebView's local storage on one handset. Clear the app
 data, lose the phone, or move to another device, and it was gone with no route back. This
-is the two answers to that, because neither is sufficient alone.
+is the three answers to that, because none is sufficient alone.
 
 | | Covers | Player effort |
 | --- | --- | --- |
 | Android Auto Backup | A new phone, a reinstall | None — it just happens |
-| Save code | Cleared data, a lost device, support, leaving Android | Keep a string somewhere |
+| Play Games Saved Games | A second device, a reinstall, the same Google Play Games player | Be signed into Play Games |
+| Save code | Cleared data, a lost device, support, leaving Android, no Play Games | Keep a string somewhere |
 
-Neither is an account. The game has no server, no sign-in and nothing to sign in to, and
-adding one for this would be a disproportionate answer to a problem two declarative files
-and one pure module solve.
+None is a Tiny Tempo account. The game has no server of its own; Saved Games rides on the
+Play Games sign-in the Android build already had, carries earned progression and one-time
+lessons only, and merges the way a save code does (`docs/CLOUD_SAVE.md`). The code is still
+the route that needs no Google account and works off Android.
 
 ## Auto Backup
 
@@ -103,7 +105,8 @@ restore happen on one tap instead of behind a confirmation dialog a player has n
 to answer: there is nothing to warn about, because nothing can be lost.
 
 Settings and the tutorial flag are preferences rather than achievements, so they come
-across whole.
+across whole. A restored code is also progression the signed-in player's cloud save does
+not have yet, so `TransferScene` queues a cloud sync after writing it.
 
 ## What rides along without being written
 
@@ -115,6 +118,8 @@ version bump.
 The daily objectives and their stamps (`tiny-tempo.objectives.v1`, `docs/OBJECTIVES.md`)
 do **not** travel in a code: a day's set belongs to the device's local date, and stamps are
 a per-device record of play. Auto Backup carries the key with the rest of the WebView store.
+Nor does `tiny-tempo.cloud.v1`, the device's note of which Play Games player its
+progression belongs to — a fact about the device, not the save.
 
 ## The screen
 

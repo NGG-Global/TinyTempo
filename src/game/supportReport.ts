@@ -33,6 +33,8 @@ export interface SupportFacts {
   readonly audio: string;
   readonly crashReports: boolean;
   readonly usageData: boolean;
+  /** Whether Saved Games last synced, and if not, why — never an id. */
+  readonly cloud: string;
   readonly saveCode: string;
 }
 
@@ -114,6 +116,7 @@ export function supportReport(facts: SupportFacts): string {
     line('Premium', facts.premium ? 'yes' : 'no'),
     line('Hearts', facts.hearts),
     line('Reporting', reporting),
+    line('Cloud save', facts.cloud),
     // Last, and labelled, because it is the longest line and the one a player may want to
     // keep out. It is also the only thing that can restore a lost save, which is the
     // ticket this screen exists for more than any other.

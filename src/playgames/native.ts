@@ -1,10 +1,13 @@
 import { registerPlugin } from '@capacitor/core';
 
 import {
-  NOT_SHOWN, NOT_SUBMITTED, NOT_UNLOCKED, SIGNED_OUT,
+  NOT_SHOWN, NOT_SUBMITTED, NOT_UNLOCKED, SIGNED_OUT, SNAPSHOT_FAILED,
   type AchievementUnlock, type LeaderboardReason, type LeaderboardView, type PlayGamesClient, type PlayGamesStatus, type ScoreSubmission,
-  type SubmitReason,
+  type SnapshotConflict, type SnapshotPayload, type SnapshotRead, type SnapshotReason, type SnapshotResolution, type SnapshotWrite, type SubmitReason,
 } from './playGames';
+
+/** A snapshot's bytes cross the bridge as base64; the plugin never sees the text. */
+interface SnapshotOptions { data: string; description: string; progress: number }
 
 interface PlayGamesPlugin {
   isAuthenticated(): Promise<unknown>;
@@ -14,6 +17,9 @@ interface PlayGamesPlugin {
   showLeaderboard(options: { leaderboardId: string; span: string }): Promise<unknown>;
   unlockAchievement(options: { achievementId: string }): Promise<unknown>;
   showAchievements(): Promise<unknown>;
+  readSnapshot(options: { name: string }): Promise<unknown>;
+  writeSnapshot(options: { name: string } & SnapshotOptions): Promise<unknown>;
+  resolveSnapshot(options: { conflictId: string } & SnapshotOptions): Promise<unknown>;
 }
 
 /**
@@ -79,6 +85,66 @@ export function toUnlock(value: unknown): AchievementUnlock {
   return NOT_UNLOCKED(reason === undefined || reason === 'sent' ? 'failed' : reason);
 }
 
+const SNAPSHOT_REASONS: readonly SnapshotReason[] = ['signed_out', 'offline', 'timeout', 'failed', 'invalid', 'unavailable'];
+
+/** Snapshot bytes as the plugin sends them, base64 of UTF-8, back to text. Null for anything that is not that. */
+export function textFromBase64(value: unknown): string | null {
+  if (typeof value !== 'string' || value === '') return null;
+  try {
+    const binary = atob(value);
+    const bytes = Uint8Array.from(binary, character => character.charCodeAt(0));
+    return new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  } catch {
+    return null;
+  }
+}
+
+export function base64FromText(text: string): string {
+  let binary = '';
+  for (const byte of new TextEncoder().encode(text)) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+/** A conflict as the bridge reports it, or null when it is not one. Payload text that will not decode is a missing side. */
+function toConflict(record: { kind?: unknown; conflictId?: unknown; base?: unknown; other?: unknown }): SnapshotConflict | null {
+  if (record.kind !== 'conflict' || typeof record.conflictId !== 'string' || record.conflictId === '') return null;
+  return { kind: 'conflict', conflictId: record.conflictId, base: textFromBase64(record.base), other: textFromBase64(record.other) };
+}
+
+function toSnapshotFailure(record: { reason?: unknown }) {
+  const reason = SNAPSHOT_REASONS.find(r => r === record.reason);
+  return SNAPSHOT_FAILED(reason ?? 'failed');
+}
+
+/**
+ * A snapshot read from the bridge, validated. `data` absent or empty is a snapshot that
+ * has never been written. Anything else malformed reads as a failure, which costs this
+ * sync and nothing more.
+ */
+export function toSnapshotRead(value: unknown): SnapshotRead {
+  if (typeof value !== 'object' || value === null) return SNAPSHOT_FAILED('failed');
+  const record = value as { kind?: unknown; data?: unknown; conflictId?: unknown; base?: unknown; other?: unknown; reason?: unknown };
+  if (record.kind === 'data') return { kind: 'data', data: textFromBase64(record.data) };
+  return toConflict(record) ?? toSnapshotFailure(record);
+}
+
+export function toSnapshotWrite(value: unknown): SnapshotWrite {
+  if (typeof value !== 'object' || value === null) return SNAPSHOT_FAILED('failed');
+  const record = value as { kind?: unknown; conflictId?: unknown; base?: unknown; other?: unknown; reason?: unknown };
+  if (record.kind === 'committed') return { kind: 'committed' };
+  return toConflict(record) ?? toSnapshotFailure(record);
+}
+
+export function toSnapshotResolution(value: unknown): SnapshotResolution {
+  if (typeof value !== 'object' || value === null) return SNAPSHOT_FAILED('failed');
+  const record = value as { kind?: unknown; conflictId?: unknown; base?: unknown; other?: unknown; reason?: unknown };
+  if (record.kind === 'resolved') return { kind: 'resolved' };
+  return toConflict(record) ?? toSnapshotFailure(record);
+}
+
+const snapshotOptions = (payload: SnapshotPayload): SnapshotOptions =>
+  ({ data: base64FromText(payload.data), description: payload.description, progress: payload.progress });
+
 export function nativePlayGamesClient(): PlayGamesClient {
   return {
     isAuthenticated: async () => toStatus(await PlayGamesNative.isAuthenticated()),
@@ -88,5 +154,8 @@ export function nativePlayGamesClient(): PlayGamesClient {
     showLeaderboard: async (leaderboardId, span) => toView(await PlayGamesNative.showLeaderboard({ leaderboardId, span })),
     unlockAchievement: async achievementId => toUnlock(await PlayGamesNative.unlockAchievement({ achievementId })),
     showAchievements: async () => toView(await PlayGamesNative.showAchievements()),
+    readSnapshot: async name => toSnapshotRead(await PlayGamesNative.readSnapshot({ name })),
+    writeSnapshot: async (name, payload) => toSnapshotWrite(await PlayGamesNative.writeSnapshot({ name, ...snapshotOptions(payload) })),
+    resolveSnapshot: async (conflictId, payload) => toSnapshotResolution(await PlayGamesNative.resolveSnapshot({ conflictId, ...snapshotOptions(payload) })),
   };
 }
