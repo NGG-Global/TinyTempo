@@ -14,7 +14,8 @@ showResult            PlayScene           one scored task's verdict → advanceG
   ui/groove.ts        pure f(t)           the room's pose, the beat's breath, the mastery payoff
   ui/grooveStage.ts   Phaser              one warm Image, one brass stroke on the block
   audio/grooveSounds.ts                   three synthesized accents, on grid times
-  playAnalytics.ts    LevelRun.groove / finish(..., mastered)
+  game/mastery.ts     pure                which levels a save holds mastered; first or repeat
+  playAnalytics.ts    LevelRun.groove / finish(..., mastery)
 ```
 
 `tests/groove.test.ts` reads the sources of the judge, the scorer, the scheduler, the
@@ -89,6 +90,13 @@ Area complete is the bigger thing and goes first; mastery follows at
 `MASTERY.finaleDelay` (1.9 s) as the smaller supporting one, and never crosses the ribbon.
 A keepsake earned by the same clear waits `MASTERY.keepsakeLag` behind the label.
 
+**The reveal is a level's first mastery, and only its first.** Mastery is kept: a level
+whose saved best is 100 is mastered, and the map marks its stop (`docs/MASTERY.md`). A
+flawless replay of a level the save already had mastered is `repeat` (`masteryResult`):
+its plate still arrives, reading **IN THE POCKET AGAIN**, because the run was flawless and
+deserves saying so, but the ring, the glint, the knock, the chord, the buzz and the sparks
+are the reveal's and do not play a second time (`masteryPose(age, still, repeat)`).
+
 ## Reduced motion
 
 The pool and the rim hold their level's value and nothing breathes, flares or blends; the
@@ -100,7 +108,8 @@ room warm, the brass come up and the plate arrive.
 
 Two events, on the gameplay bus: `groove_reached` the first time a run reaches 2 and the
 first time it reaches 3 (`LevelRun.groove`, once each per attempt however many climbs),
-with the scored task that reached it; and `level_mastered` once beside `level_completed`.
+with the scored task that reached it; and `level_mastered` beside `level_completed` on a
+level's first mastery only — never on a flawless replay of a level already mastered.
 Nothing hit by hit.
 
 ## For an act

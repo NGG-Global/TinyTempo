@@ -202,8 +202,10 @@ mid-frame. Everything below needs hardware and none of it has been done.
       tutorial, finales, Scrapbook, objectives), plus device, app and app-instance
       information, with the Settings switch named as the user control. Leaderboard
       events are not sent while Daily Tempo is off
-    - Play Games — player id and display name when signed in, and achievement unlocks.
-      No cloud save
+    - Play Games — player id and display name when signed in, achievement unlocks, and
+      the saved game: unlocked levels, best accuracy per level and one-time lesson flags,
+      stored in the player's Play Games account (`docs/CLOUD_SAVE.md`). Not hearts,
+      purchases, settings or calibration
     - Game saves leave the device through Android's own backup, to the player's own
       Google account, and through a save code the player chooses to copy
 30. 👤 **Target audience.** The cartoon workshop look will read as child-appealing to a
@@ -244,11 +246,14 @@ So you do not spend time re-doing it:
 - Analytics, wired to Firebase behind a consent switch, covering commerce and gameplay,
   with every shipped event checked against Firebase's own limits. DebugView has not been
   watched on a device (step 19).
-- Play Games Services v2: optional sign-in, five achievements derived from the save, and
-  a Daily Tempo leaderboard that stays dark while that mode is off. Saved Games is still
-  the plan in `docs/PLAY_GAMES.md`, not a feature.
-- Cloud save, two ways: Android Auto Backup declared explicitly, and a checksummed save
-  code the player can carry. Neither is an account.
+- Play Games Services v2: optional sign-in, five achievements derived from the save, a
+  Daily Tempo leaderboard that stays dark while that mode is off, and Saved Games — one
+  snapshot per player, merged never replaced, with account isolation on a shared device
+  (`docs/CLOUD_SAVE.md`). Code complete and tested; **not yet exercised between two real
+  devices**, and Saved Games must be on and published in the Console (see that doc).
+- Cloud save, three ways: Play Games Saved Games for the signed-in player, Android Auto
+  Backup declared explicitly, and a checksummed save code the player can carry. None is a
+  Tiny Tempo account.
 - An in-app support route, with the details a reply would otherwise have to ask for — and
   the address on the boot-failure panel, for the player who cannot reach Settings.
 - Legal pages naming Dor Vadai and describing ads, Play Billing, Play Games, crash

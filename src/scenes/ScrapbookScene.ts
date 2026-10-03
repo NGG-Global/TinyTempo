@@ -19,12 +19,15 @@ import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { drawStar, drawStarSeat, STAR_PRIZE } from '@/ui/star';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /**
  * Design-unit metrics. A page per act, two to a spread: a sheet of kraft with its
  * keepsakes mounted on it, wrapping onto a second row once an act has more than fit.
  */
+/** How far past the card a keepsake's name may run and still be squeezed onto one line. */
+const CAPTION_SQUEEZE = 1.18;
+
 const BOOK = {
   width: 644,
   pageGap: 22,
@@ -254,7 +257,12 @@ export class ScrapbookScene extends BaseScene {
         const caption = this.captions[slot]!;
         if (entry.owned) resize(caption, 19 * s, PALETTE.ink, STYLE.current, false);
         else resize(caption, 18 * s, PALETTE.muted, STYLE.current, false);
-        caption.setWordWrapWidth((BOOK.card + BOOK.cardGap - 4) * s, false);
+        // One line where a name is only a little long for the card ("Plum beetle pin" left
+        // "pin" alone on a second line); a longer name wraps into two even lines instead.
+        const room = (BOOK.card + BOOK.cardGap - 4) * s;
+        caption.setWordWrapWidth(0, false).setScale(1);
+        if (caption.width <= room * CAPTION_SQUEEZE) caption.setScale(Math.min(1, room / caption.width));
+        else balanceWrap(caption, room);
         caption.setPosition(entry.rect.centerX, entry.rect.bottom + 8 * s);
         slot++;
       });

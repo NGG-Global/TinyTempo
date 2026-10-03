@@ -173,8 +173,35 @@ export function markScrapbookSeen(storage: Storage | null = safeStorage()): bool
 }
 
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
-const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook'] as const;
-type Teach = { readonly [K in typeof TEACH_FLAGS[number]]?: unknown };
+export const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook'] as const;
+export type TeachFlag = typeof TEACH_FLAGS[number];
+type Teach = { readonly [K in TeachFlag]?: unknown };
+
+/** Every teach flag at once, as booleans, for the cloud save to carry. */
+export function readTeachFlags(storage: Storage | null = safeStorage()): Readonly<Record<TeachFlag, boolean>> {
+  const teach = readTeach(storage);
+  const flags = {} as Record<TeachFlag, boolean>;
+  for (const flag of TEACH_FLAGS) flags[flag] = teach[flag] === true;
+  return flags;
+}
+
+/**
+ * Set teach flags exactly — a `false` clears one, which no `mark*` call can do. For the
+ * one moment that needs it: the device changing hands between two Play Games players,
+ * when the flags stop being this player's. Flags left out of the patch are untouched.
+ */
+export function setTeachFlags(patch: Partial<Readonly<Record<TeachFlag, boolean>>>, storage: Storage | null = safeStorage()): boolean {
+  try {
+    const current = readTeach(storage);
+    const next: Record<string, true> = {};
+    for (const flag of TEACH_FLAGS) {
+      const value = flag in patch ? patch[flag] === true : current[flag] === true;
+      if (value) next[flag] = true;
+    }
+    storage?.setItem(TEACH_KEY, JSON.stringify(next));
+    return storage !== null;
+  } catch { return false; }
+}
 
 function readTeach(storage: Storage | null): Teach {
   try {

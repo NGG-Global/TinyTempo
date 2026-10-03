@@ -81,7 +81,7 @@
             <li>Level progress, settings, hearts, a short-lived Premium cache, the tutorial, a few one-time prompts and the day’s objectives are saved on the device, and are included in Android’s backup to your own Google account.</li>
             <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
             <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google Play Billing. We never see your full payment card details. There is no separate billing company in between.</li>
-            <li>On Android the app can sign you into Google Play Games. That is optional: the game plays the same if you decline. While you are signed in, Google holds your Play Games player id and display name, and we ask Google to unlock achievements you have earned. We do not copy that id into analytics or crash reports.</li>
+            <li>On Android the app can sign you into Google Play Games. That is optional: the game plays the same if you decline. While you are signed in, Google holds your Play Games player id and display name, we ask Google to unlock achievements you have earned, and your progression (levels, best accuracies and which one-time lessons you have seen) is stored in your Play Games account as a saved game so it follows you to another device. Hearts, purchases, settings and calibration are not part of it. We do not copy that id into analytics or crash reports.</li>
             <li>If the app hits an error, a crash report is sent to
             <a href="https://sentry.io/">Sentry</a> so we can fix it. It contains the
             technical fault and what you were doing in the game, not who you are.</li>
@@ -220,10 +220,24 @@
             submitted and no leaderboard button is shown.
           </p>
           <p>
+            While you are signed in, the app also keeps a <strong>saved game</strong>
+            in your Play Games account through Google’s Saved Games service: the
+            levels you have unlocked, your best accuracy on each, and which
+            one-time lessons the game has shown you. That is all it holds. It
+            does not hold hearts, purchases, Premium, settings, the tap-offset
+            calibration, consent choices or anything about your device. When you
+            sign in on another device with the same Play Games account, that
+            progression is merged with what is on the device — a merge only ever
+            adds — and a different Play Games account on the same device does not
+            receive it. You can stop this by signing out of Play Games; the
+            progress on your device is unchanged, and you can delete the saved
+            game from your Google account through Google’s own tools.
+          </p>
+          <p>
             The player id is not written into a crash report, an analytics
-            event, or a log. We do not operate Saved Games: Play Games does not
-            hold a copy of your progress. Google’s handling of Play Games is
-            described in
+            event, a log, or the app’s own storage — the app keeps only a hashed
+            marker of which Play Games account the device’s progress belongs to.
+            Google’s handling of Play Games is described in
             <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>.
           </p>
 

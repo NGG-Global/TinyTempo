@@ -1,10 +1,12 @@
 import {
   track, type AnalyticsEvent, type AnalyticsPayloads, type AttemptMode, type FinaleParams, type Flag, type GridName, type LevelParams,
+  type RestartCost, type RestartParams, type RestartSheet,
 } from '../monetization/analytics';
 import { finaleTreatment } from './finale';
 import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
 import { isCleared } from './health';
 import type { LevelSpec } from './levels';
+import type { MasteryResult } from './mastery';
 import type { LevelOutcome, Progress } from './progress';
 import type { RoundResult } from './scoring';
 import { areaIndexOf, gateFor, levelStars, totalStars } from './stars';
@@ -99,6 +101,10 @@ export function taskParams(
   };
 }
 
+function restartParams(level: number, hearts: number, premium: boolean): RestartParams {
+  return { level, area: areaNumber(level), placement: 'restart', hearts, premium: flag(premium) };
+}
+
 /** What an area finale's events share, from the level's own parameters. */
 export function finaleParams(spec: LevelSpec, params: LevelParams): FinaleParams {
   return { level: spec.level, area: params.area, treatment: finaleTreatment(spec.level).id, mode: params.mode };
@@ -186,10 +192,12 @@ export class LevelRun {
   /**
    * The level was scored. Exactly one of `level_completed` and `level_failed`, however
    * often the scene reaches its own record step, followed by what the result changed.
-   * `mastered` is a cleared level every scored task of which was flawless, reported once
-   * beside the completion.
+   * `mastery` says whether the run was flawless on every scored task and, if so, whether the
+   * save already had the level mastered (`game/mastery.ts`). `level_mastered` is the first
+   * only: a replay of a mastered level is not a new mastery, and a dashboard counting
+   * masteries per level must not count one player's encores.
    */
-  public finish(outcome: LevelOutcome, accuracy: number, mastered = false): void {
+  public finish(outcome: LevelOutcome, accuracy: number, mastery: MasteryResult = 'none'): void {
     guard(undefined, () => {
       if (this.closed) return;
       this.closed = true;
@@ -205,7 +213,7 @@ export class LevelRun {
       };
       if (outcome.cleared) this.ledger.emit('level_completed', { ...result, stars: outcome.stars });
       else this.ledger.emit('level_failed', result);
-      if (outcome.cleared && mastered) {
+      if (outcome.cleared && mastery === 'first') {
         this.ledger.emit('level_mastered', {
           level: this.spec.level, area: this.params.area, vignette: this.spec.vignette, mode: this.params.mode,
           task_count: this.spec.tasks.length, accuracy: result.accuracy, stars: outcome.stars,
@@ -516,6 +524,26 @@ export class PlayAnalytics {
         vignette: keepsake.vignette, collectible: keepsake.id, level: keepsake.level, first: flag(first), owned,
       });
     });
+  }
+
+  /** The restart puck reached the restart flow (`docs/RESTART.md`). */
+  public restartRequested(level: number, sheet: RestartSheet, hearts: number, premium: boolean): void {
+    guard(undefined, () => this.emit('restart_requested', { ...restartParams(level, hearts, premium), sheet }));
+  }
+
+  /** A restart is going ahead. One per restart: the scene calls this from the one place a restart commits. */
+  public restartConfirmed(level: number, cost: RestartCost, hearts: number, premium: boolean): void {
+    guard(undefined, () => this.emit('restart_confirmed', { ...restartParams(level, hearts, premium), cost }));
+  }
+
+  public restartCancelled(
+    level: number, sheet: Exclude<RestartSheet, 'none'>, reason: AnalyticsPayloads['restart_cancelled']['reason'], hearts: number, premium: boolean,
+  ): void {
+    guard(undefined, () => this.emit('restart_cancelled', { ...restartParams(level, hearts, premium), sheet, reason }));
+  }
+
+  public rewardedRestartFailed(level: number, reason: AnalyticsPayloads['rewarded_restart_failed']['reason']): void {
+    guard(undefined, () => this.emit('rewarded_restart_failed', { level, area: areaNumber(level), placement: 'restart', reason }));
   }
 
   public beginPractice(level: number): PracticeRun | null {

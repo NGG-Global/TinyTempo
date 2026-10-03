@@ -8,6 +8,7 @@ import { breadcrumb, reportError } from '@/core/errors';
 import { showBootError } from '@/core/shell';
 import { installDiagnostics } from '@/diagnostics/boot';
 import { bootMonetization } from '@/monetization/boot';
+import { bootAudioRoute } from '@/audio/routeBoot';
 import { bootPlayGames } from '@/playgames/boot';
 import { bootAppReview } from '@/review/boot';
 import { bootUpdates } from '@/updates/boot';
@@ -44,6 +45,8 @@ function start(): void {
     // Nothing waits on this: Play Games is an enhancement, and a device without it plays
     // the game exactly as before.
     void bootPlayGames();
+    // The audio output route, so the Tap offset follows the speaker, wired audio or Bluetooth.
+    void bootAudioRoute();
     // The same line: a review milestone's flow is prepared on its result screen, never here.
     void bootAppReview();
     // After `installDiagnostics`, which puts the crash-breadcrumb wrapper on the event

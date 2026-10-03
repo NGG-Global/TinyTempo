@@ -33,6 +33,15 @@ export async function bootPlayGames(): Promise<void> {
     const status = await adapter.refresh();
     // The status, never the player id: a breadcrumb rides along on crash reports.
     breadcrumb('play games', { authenticated: status.authenticated, reason: status.reason });
+    // Saved Games: reconcile now if signed in, and again on every return to the
+    // foreground — the watcher is installed whether or not sign-in has happened yet, since
+    // a player who signs in later from Settings is owed their cloud on the next resume.
+    // Its own try: a cloud problem must never cost a sign-in that already succeeded.
+    try {
+      const { reconcileCloud, watchCloudResume } = await import('./cloudSync');
+      watchCloudResume();
+      if (status.authenticated) void reconcileCloud();
+    } catch { /* local progress is the progress; the next launch tries again */ }
     // A Daily Tempo best that could not be sent earlier — offline, or before sign-in —
     // goes now. Loaded lazily and never awaited by anything: it cannot slow the boot.
     // Its own try: the outer catch puts the stub back, and a leaderboard problem must never

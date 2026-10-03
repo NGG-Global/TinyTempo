@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { currentAudio, ensureShellMusic } from '@/audio/sharedAudio';
+import { activeCalibration, activeOffset, currentRoute } from '@/audio/audioRoute';
+import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { DIAGNOSTICS } from '@/config/diagnostics';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -14,6 +16,7 @@ import { loadProgress } from '@/game/progress';
 import { encodeSaveCode } from '@/game/saveCode';
 import { loadSettings } from '@/game/settings';
 import { supportMailto, supportReport, type SupportFacts } from '@/game/supportReport';
+import { cloudStatusLine } from '@/playgames/cloudSync';
 import { tutorialComplete } from '@/game/TutorialRun';
 import { monetization } from '@/monetization';
 import { Backdrop } from '@/ui/backdrop';
@@ -22,7 +25,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /**
  * How the clock is tracking output, what the device says its lag is, and what the player
@@ -36,8 +39,11 @@ import { body, display, label, resize } from '@/ui/type';
 function describeAudio(scene: Phaser.Scene): string {
   const engine = currentAudio(scene);
   if (engine === null) return 'not started this session';
-  const offset = loadSettings().calibrationMs;
-  return `${engine.clock.mode} clock · device reports ${engine.clock.reportedLagMs} ms · offset ${offset} ms`;
+  // The route and whether it was measured: "offset 0 ms" on Bluetooth reads very
+  // differently once support can see that nobody ever calibrated Bluetooth.
+  const measured = activeCalibration();
+  const offset = measured === null ? 'not calibrated' : `offset ${measured} ms`;
+  return `${engine.clock.mode} clock · ${ROUTE_LABELS[currentRoute()].toLowerCase()} · device reports ${engine.clock.reportedLagMs} ms · ${offset}`;
 }
 
 /** Design-unit metrics for the block of detail this screen exists to show. */
@@ -163,10 +169,11 @@ export class SupportScene extends BaseScene {
       audio: describeAudio(this),
       crashReports: DIAGNOSTICS.dsn !== '',
       usageData: settings.analytics,
+      cloud: cloudStatusLine(),
       saveCode: encodeSaveCode({
         progress,
         settings: {
-          calibrationMs: settings.calibrationMs, muted: settings.muted,
+          calibrationMs: activeOffset(), muted: settings.muted,
           music: settings.music, sfx: settings.sfx, haptics: settings.haptics,
         },
         tutorialComplete: tutorialComplete(),
@@ -195,8 +202,8 @@ export class SupportScene extends BaseScene {
     this.buttons.copy.rect.setTo(left, footerBottom - quietH, width, quietH);
     this.buttons.email.rect.setTo(left, this.buttons.copy.rect.y - 16 * s - heroH, width, heroH);
 
-    this.intro.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.intro, 27 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.intro, Math.min(560 * s, width));
     this.intro.setPosition(safe.centerX, safe.top + 132 * s);
     resize(this.address, 32 * s, PALETTE.ink);
     this.address.setPosition(safe.centerX, this.intro.y + this.intro.height + 34 * s);
@@ -262,7 +269,9 @@ export class SupportScene extends BaseScene {
   }
 
   private refreshCopy(): void {
-    this.reportText.setText(this.report);
+    // A number keeps its unit on a wrap ("42 / ms" read as two facts). On screen only, with
+    // a no-break space that looks the same; what is copied and sent is the report as written.
+    this.reportText.setText(this.report.replace(/(\d) (ms)\b/g, '$1\u00a0$2'));
     this.notice.setText(this.message);
     this.notice.setVisible(this.message !== '');
     this.drawControls(0);

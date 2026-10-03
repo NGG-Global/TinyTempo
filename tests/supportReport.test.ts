@@ -16,6 +16,7 @@ const facts = (over: Partial<SupportFacts> = {}): SupportFacts => ({
   hearts: '5/5',
   crashReports: true,
   usageData: false,
+  cloud: 'signed out',
   saveCode: '04BG1-NQZ0S-E4WS0',
   ...over,
 });

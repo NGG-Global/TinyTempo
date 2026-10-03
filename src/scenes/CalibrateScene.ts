@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { applyCalibration, currentAudio, hushMusic, sharedAudio } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, hushMusic, resetCalibration, sharedAudio } from '@/audio/sharedAudio';
+import { activeCalibration, currentRoute, onRouteChange, syncClockCalibration } from '@/audio/audioRoute';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -7,7 +8,8 @@ import { BaseScene } from '@/core/BaseScene';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { CalibrationRun, CALIBRATION } from '@/game/CalibrationRun';
-import { CALIBRATION_TAPS, loadSettings } from '@/game/settings';
+import { ROUTE_LABELS } from '@/game/routeCalibration';
+import { CALIBRATION_TAPS } from '@/game/settings';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
@@ -17,7 +19,7 @@ import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 /**
@@ -50,7 +52,7 @@ interface Button { readonly rect: Phaser.Geom.Rectangle; readonly text: Phaser.G
  * the game that needs the screen to itself, so it has it, and Settings keeps the result.
  *
  * The measurement is a *residual* against the offset already in force, so running it twice
- * refines the first result rather than starting over. Reset writes zero without a second
+ * refines the first result rather than starting over. Reset returns the active route to uncalibrated without a second
  * run, which is the only way back to an uncalibrated clock short of measuring the inverse.
  * Music is silent here so the metronome is the only beat. `CalibrationRun` owns the maths;
  * this scene owns the screen and the audio.
@@ -79,7 +81,11 @@ export class CalibrateScene extends BaseScene {
   private curtain!: SceneCurtain;
   private uiScale = 1;
   private phase: Phase = 'idle';
+  /** The active route's own measurement, or null: that route has never been calibrated. */
+  private calibrated: number | null = null;
+  /** What the clock subtracts on the active route: its measurement, or 0. Runs are residuals against it. */
   private calibrationMs = 0;
+  private stopWatchingRoute: (() => void) | null = null;
   private measuredMs: number | null = null;
   private run: CalibrationRun | null = null;
   private pressedAt = -Infinity;
@@ -97,7 +103,10 @@ export class CalibrateScene extends BaseScene {
     this.measuredMs = null;
     this.pressed = null;
     this.pressedAt = -Infinity;
-    this.calibrationMs = loadSettings().calibrationMs;
+    this.readRoute();
+    // A run measures one route. If the route changes mid-run, or between a run and Keep,
+    // the measurement belongs to the old one, so it is dropped rather than filed under the new.
+    this.stopWatchingRoute = onRouteChange(() => this.routeChanged());
     this.enteredAt = performance.now() / 1000;
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.2 }, glowAlpha: 0.6 });
     this.plates = this.add.graphics();
@@ -129,6 +138,23 @@ export class CalibrateScene extends BaseScene {
     // The metronome is the only pulse on this screen: leftover shell or level music
     // would be a second beat, and the measurement would chase it.
     hushMusic(this);
+  }
+
+  /** The active route's offset, and the live clock put on it: this screen judges nothing, so any time is a boundary. */
+  private readRoute(): void {
+    this.calibrated = activeCalibration();
+    this.calibrationMs = this.calibrated ?? 0;
+    const audio = currentAudio(this);
+    if (audio) syncClockCalibration(audio.clock);
+  }
+
+  private routeChanged(): void {
+    if (this.phase === 'counting') currentAudio(this)?.cancel();
+    this.run = null;
+    this.measuredMs = null;
+    this.phase = 'idle';
+    this.readRoute();
+    this.refreshCopy();
   }
 
   private button(caption: string, hero: boolean, size: number): Button {
@@ -166,8 +192,8 @@ export class CalibrateScene extends BaseScene {
     const bandTop = safe.top + 132 * s;
     const bandBottom = footerBottom - Math.max(heroH, resultH) - 32 * s;
     const centre = (bandTop + bandBottom) / 2;
-    this.instruction.setWordWrapWidth(Math.min(520 * s, width), false);
     resize(this.instruction, 30 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.instruction, Math.min(520 * s, width));
     this.instruction.setPosition(safe.centerX, bandTop);
     this.beadRow = {
       x: safe.centerX - 1.5 * TUNE.beadGap * s, y: centre - TUNE.countHeight * s / 2 - 44 * s,
@@ -241,7 +267,7 @@ export class CalibrateScene extends BaseScene {
     }
     for (const [name, button] of Object.entries(this.buttons)) {
       const shown = name === 'run' ? !measured
-        : name === 'reset' ? this.phase === 'idle' && this.calibrationMs !== 0
+        : name === 'reset' ? this.phase === 'idle' && this.calibrated !== null
         : measured && (name === 'retry' || this.phase === 'measured');
       button.text.setVisible(shown);
       if (!shown) continue;
@@ -263,9 +289,11 @@ export class CalibrateScene extends BaseScene {
     this.counted.setText(String(this.run?.count ?? (measured ? CALIBRATION_TAPS : 0)));
     this.countedNote.setText(this.phase === 'counting' ? 'Taps landed' : 'Tap on the beat');
     const reported = currentAudio(this)?.clock.reportedLagMs ?? 0;
-    this.current.setText(reported >= WORTH_MENTIONING_MS
-      ? `Currently ${formatOffset(this.calibrationMs)} · your device adds about ${reported} ms`
-      : `Currently ${formatOffset(this.calibrationMs)}`);
+    // Which route this measures, because a run calibrates that route and no other.
+    const route = currentRoute();
+    const now = this.calibrated === null ? 'not calibrated yet' : `currently ${formatOffset(this.calibrated)}`;
+    const named = route === 'unknown' ? `${now.charAt(0).toUpperCase()}${now.slice(1)}` : `${ROUTE_LABELS[route]} · ${now}`;
+    this.current.setText(reported >= WORTH_MENTIONING_MS ? `${named} · your device adds about ${reported} ms` : named);
     this.buttons.run.text.setText(this.phase === 'counting' ? 'Stop' : 'Start');
     this.resultNote.setText(this.phase === 'failed' ? 'Measurement unclear' : 'After eight taps');
     this.resultValue.setText(this.phase === 'failed' ? 'Try it again' : formatOffset(this.measuredMs ?? this.calibrationMs));
@@ -364,6 +392,8 @@ export class CalibrateScene extends BaseScene {
       return;
     }
     audio.clock.refresh();
+    // The run's residuals are against what the clock subtracts, so the two must agree.
+    this.readRoute();
     this.phase = 'counting';
     this.measuredMs = null;
     this.run = new CalibrationRun(audio.context.currentTime + CALIBRATION.startLeadSec, this.calibrationMs);
@@ -395,8 +425,9 @@ export class CalibrateScene extends BaseScene {
 
   private keep(): void {
     if (this.measuredMs === null) return;
-    this.calibrationMs = this.measuredMs;
+    // The active route only; every other route keeps its own measurement.
     applyCalibration(sharedAudio(this), this.measuredMs);
+    this.readRoute();
     vibrate('stamp');
     this.measuredMs = null;
     this.phase = 'idle';
@@ -417,8 +448,8 @@ export class CalibrateScene extends BaseScene {
    * of a number the player just threw away.
    */
   private resetOffset(): void {
-    applyCalibration(currentAudio(this), 0);
-    this.calibrationMs = 0;
+    resetCalibration(currentAudio(this));
+    this.readRoute();
     this.measuredMs = null;
     this.phase = 'idle';
     this.refreshCopy();
@@ -427,6 +458,9 @@ export class CalibrateScene extends BaseScene {
   private leave(): void {
     if (this.curtain.active) return;
     currentAudio(this)?.cancel();
+    // Opened from the map's route note, the way back is the map; from Settings, Settings.
+    const data = this.sys.settings.data as { returnTo?: string } | undefined;
+    if (data?.returnTo === SceneKey.Map) { this.curtain.cover(() => this.scene.start(SceneKey.Map)); return; }
     this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: this.enteredFrom() }));
   }
 
@@ -439,6 +473,8 @@ export class CalibrateScene extends BaseScene {
   private shutdown(): void {
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
+    this.stopWatchingRoute?.();
+    this.stopWatchingRoute = null;
     currentAudio(this)?.cancel();
     this.taps.dispose();
     this.backdrop.destroy();

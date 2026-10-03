@@ -80,6 +80,12 @@ if (!mainActivity.includes('registerPlugin(PlayReviewPlugin.class)')) {
     + '    Add registerPlugin(PlayReviewPlugin.class) before super.onCreate.');
 }
 
+if (!mainActivity.includes('registerPlugin(AudioRoutePlugin.class)')) {
+  notes.push('MainActivity.java does not register AudioRoutePlugin, so every device reads as one\n'
+    + '    audio route and the Tap offset measured on Bluetooth is used on the speaker too.\n'
+    + '    Add registerPlugin(AudioRoutePlugin.class) before super.onCreate. See docs/AUDIO_ROUTES.md.');
+}
+
 const appGradle = read('android/app/build.gradle') ?? '';
 if (!appGradle.includes('com.android.billingclient:billing')) {
   notes.push('android/app/build.gradle has no com.android.billingclient:billing dependency,\n'
@@ -168,6 +174,27 @@ if (!appGradle.includes('com.google.android.gms:play-services-games-v2')) {
   notes.push('android/app/build.gradle has no play-services-games-v2 dependency, so the Play\n'
     + '    Games classes cannot compile. See docs/PLAY_GAMES.md.');
 }
+/*
+ * Saved Games crosses the bridge as three calls that two files name independently: the
+ * web layer's `native.ts` and the plugin's `@PluginMethod`s. A method renamed on one side
+ * compiles on both and fails on device as "failed", which the game reads as a cloud that
+ * is simply unavailable. The bridge file is the source: every snapshot call it makes must
+ * exist in the plugin.
+ */
+const playGamesPlugin = read('android/app/src/main/java/com/tinytempo/app/PlayGamesPlugin.java') ?? '';
+const playGamesBridge = read('src/playgames/native.ts') ?? '';
+for (const [, method] of playGamesBridge.matchAll(/PlayGamesNative\.(\w+Snapshot)\(/g)) {
+  if (!new RegExp(`@PluginMethod\\s+public void ${method}\\(`).test(playGamesPlugin)) {
+    notes.push(`src/playgames/native.ts calls PlayGamesNative.${method}, which PlayGamesPlugin.java does not\n`
+      + '    declare as a @PluginMethod. Every cloud save would fail as "unavailable". See docs/CLOUD_SAVE.md.');
+  }
+}
+if (!playGamesPlugin.includes('RESOLUTION_POLICY_MANUAL')) {
+  notes.push('PlayGamesPlugin.java does not open snapshots with RESOLUTION_POLICY_MANUAL, so Play would\n'
+    + '    pick a conflict winner itself and the game\'s merge would never see the losing device\'s\n'
+    + '    progress. See docs/CLOUD_SAVE.md.');
+}
+
 // Declarations only: the file's own comments name the v1 coordinate in order to warn
 // against it, and a check that cannot tell those apart cries wolf on every build.
 const declaresGamesV1 = appGradle

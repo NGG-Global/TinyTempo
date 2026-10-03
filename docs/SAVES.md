@@ -2,16 +2,18 @@
 
 Progress lived in one place: the WebView's local storage on one handset. Clear the app
 data, lose the phone, or move to another device, and it was gone with no route back. This
-is the two answers to that, because neither is sufficient alone.
+is the three answers to that, because none is sufficient alone.
 
 | | Covers | Player effort |
 | --- | --- | --- |
 | Android Auto Backup | A new phone, a reinstall | None — it just happens |
-| Save code | Cleared data, a lost device, support, leaving Android | Keep a string somewhere |
+| Play Games Saved Games | A second device, a reinstall, the same Google Play Games player | Be signed into Play Games |
+| Save code | Cleared data, a lost device, support, leaving Android, no Play Games | Keep a string somewhere |
 
-Neither is an account. The game has no server, no sign-in and nothing to sign in to, and
-adding one for this would be a disproportionate answer to a problem two declarative files
-and one pure module solve.
+None is a Tiny Tempo account. The game has no server of its own; Saved Games rides on the
+Play Games sign-in the Android build already had, carries earned progression and one-time
+lessons only, and merges the way a save code does (`docs/CLOUD_SAVE.md`). The code is still
+the route that needs no Google account and works off Android.
 
 ## Auto Backup
 
@@ -54,18 +56,31 @@ the mute is the mute, and both levels come back full.
 | --- | --- |
 | 0 | Format version. 1 is the original record; 2 adds the two levels. A newer version is refused, not guessed at. |
 | 1–2 | Highest unlocked level |
-| 3–4 | Calibration offset, signed |
+| 3–4 | Calibration offset, signed. Written with the active route's offset; this build does not restore it (`docs/AUDIO_ROUTES.md`) |
 | 5 | Muted, haptics, tutorial complete |
 | 6–7 | Version 2 only: music and effects, each a whole percent, 0–100. A version 1 code reads both as full. |
-| 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. |
+| 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. A flawless level (best exactly 100) is written as **101** and anything short of it as at most 99, so mastery survives a code (below). |
 | n | Checksum: the sum of every preceding byte |
+
+**Why 101.** Mastery is derived from a best of exactly 100 (`docs/MASTERY.md`), and a
+whole-percent byte could not carry that: a 99.6 rounded to 100 and came back mastered. The
+encoder now writes a flawless level as 101 and caps everything else at 99, which costs no
+star because every threshold is a whole percent at or under 93. No version bump was needed:
+an older build reads 101 through its own `Math.min(100, value)` and restores exactly what it
+always did. A byte of 100 can only come from a code written before this, where it means
+anywhere from 99.5 to 100; it is read as 99.5 — three stars kept, no mastery claimed that
+the code cannot prove. A player in that position gets the mark back from the device that
+still holds the exact best (merging takes the higher) or from one flawless run.
 
 One byte per level sounds wasteful and is not: a level nobody cleared costs a zero byte,
 which base32 and the run of zeros between clears compress into very little to read. A
 300-level save is under 600 characters, and a typical one is under 60.
 
 **What travels is what the player earned, never what they owe or own.** Levels, best
-accuracies, calibration, the mute, the two levels, the haptics switch, the tutorial flag.
+accuracies, the mute, the two levels, the haptics switch, the tutorial flag. The code still
+has a calibration field, written with the active route's offset for older builds, but this
+build does not restore it: the Tap offset is per audio route and device-local
+(`docs/AUDIO_ROUTES.md`).
 Not hearts, not the refill ledger, not the daily-heart ledger, not the premium cache —
 restoring any of those is
 either an exploit or an incoherence, and a purchase comes back through the store's own
@@ -103,7 +118,8 @@ restore happen on one tap instead of behind a confirmation dialog a player has n
 to answer: there is nothing to warn about, because nothing can be lost.
 
 Settings and the tutorial flag are preferences rather than achievements, so they come
-across whole.
+across whole. A restored code is also progression the signed-in player's cloud save does
+not have yet, so `TransferScene` queues a cloud sync after writing it.
 
 ## What rides along without being written
 
@@ -115,6 +131,8 @@ version bump.
 The daily objectives and their stamps (`tiny-tempo.objectives.v1`, `docs/OBJECTIVES.md`)
 do **not** travel in a code: a day's set belongs to the device's local date, and stamps are
 a per-device record of play. Auto Backup carries the key with the rest of the WebView store.
+Nor does `tiny-tempo.cloud.v1`, the device's note of which Play Games player its
+progression belongs to — a fact about the device, not the save.
 
 ## The screen
 

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { applyCalibration, applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { activeOffset } from '@/audio/audioRoute';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -8,6 +9,7 @@ import { setHaptics, vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { askForSaveCode } from '@/core/shell';
 import { loadProgress, mergeProgress, saveProgress } from '@/game/progress';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { decodeSaveCode, encodeSaveCode, type SaveCodeError, type SaveData } from '@/game/saveCode';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { completeTutorial, tutorialComplete } from '@/game/TutorialRun';
@@ -17,7 +19,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one long string this screen exists to show. */
 const TRANSFER = {
@@ -149,8 +151,8 @@ export class TransferScene extends BaseScene {
     this.buttons.enter.rect.setTo(left, footerBottom - quietH, width, quietH);
     this.buttons.copy.rect.setTo(left, this.buttons.enter.rect.y - 16 * s - heroH, width, heroH);
 
-    this.intro.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.intro, 27 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.intro, Math.min(560 * s, width));
     this.intro.setPosition(safe.centerX, safe.top + 132 * s);
 
     // Laid out from the bottom up, so that on a short 16:9 screen the card gives way and
@@ -160,8 +162,8 @@ export class TransferScene extends BaseScene {
     this.notice.setWordWrapWidth(width - 20 * s, false);
     resize(this.notice, 24 * s, PALETTE.coral, STYLE.current, false);
     this.notice.setPosition(safe.centerX, this.buttons.copy.rect.y - 22 * s);
-    this.scope.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.scope, 24 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.scope, Math.min(560 * s, width));
     const scopeBottom = this.buttons.copy.rect.y - 84 * s;
     this.scope.setPosition(safe.centerX, scopeBottom);
 
@@ -221,9 +223,12 @@ export class TransferScene extends BaseScene {
 
   /** The code as it stands. Re-read after a restore, because the save has changed. */
   private refreshCode(): void {
+    const settings = loadSettings();
     this.code = encodeSaveCode({
       progress: loadProgress(),
-      settings: loadSettings(),
+      // The format still has room for one offset, so an older build restoring this code
+      // gets the active route's. This build restores none: the offset is device-local.
+      settings: { calibrationMs: activeOffset(), muted: settings.muted, music: settings.music, sfx: settings.sfx, haptics: settings.haptics },
       tutorialComplete: tutorialComplete(),
     });
   }
@@ -322,14 +327,18 @@ export class TransferScene extends BaseScene {
     const before = loadProgress();
     const merged = mergeProgress(before, data.progress);
     const stored = saveProgress(merged);
-    saveSettings({ ...loadSettings(), ...data.settings });
+    // Not the code's calibration: an offset is a fact about one device's audio route, and a
+    // code is how progress moves *between* devices. The rest of its settings come across.
+    const { muted, music, sfx, haptics } = data.settings;
+    saveSettings({ ...loadSettings(), muted, music, sfx, haptics });
     const engine = sharedAudio(this);
-    applyCalibration(engine, data.settings.calibrationMs);
     // Levels as well as the mute. An engine that already existed did not re-read the save
     // when `sharedAudio` returned it, and a mute flip on its own would have left the old mix.
     applyMix(engine, loadSettings());
     setHaptics(data.settings.haptics);
     if (data.tutorialComplete) completeTutorial();
+    // A restored code is progression the signed-in player's cloud save does not have yet.
+    if (stored) queueCloudSave();
     if (!stored) return 'Restored for now, but this device wouldn’t save it.';
     const gained = merged.unlocked - before.unlocked;
     if (gained > 0) return `Restored — ${gained} more ${gained === 1 ? 'level' : 'levels'} open.`;

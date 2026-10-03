@@ -5,6 +5,7 @@ import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { trackForLevel } from '@/game/musicSelection';
@@ -18,6 +19,7 @@ import { wrongOrientation } from '@/core/shell';
 import { RoundController, pauseShouldShowSummary, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
+import { addRound, EMPTY_TIMING, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
@@ -25,11 +27,18 @@ import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLa
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
+import { masteryResult, type MasteryResult } from '@/game/mastery';
+import {
+  attemptForStart, liveSheet, releaseAttempt, restartKind, scoredResponseBegins, sheetFor, ticketStillApplies, watchForHeart,
+  type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
+} from '@/game/restart';
+import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
@@ -38,7 +47,7 @@ import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
 import {
   guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, markSubdivisionSeen, recordResult, saveProgress,
   markScrapbookSeen, seenDemonstration, seenReplayTip, seenScrapbook, seenSubdivisions, type LevelOutcome, type Progress,
@@ -63,8 +72,7 @@ import { arrive, settle, squash } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
-  chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, trayRect, type ResultPlan,
-} from '@/ui/resultLayout';
+  chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, TIMING_TRAY, trayRect, type ResultPlan } from '@/ui/resultLayout';
 import { nextGateChip, nextStarCopy, offersReplay, replayCopy, thresholdLabels, type GateChip } from '@/game/resultCopy';
 import { dashes } from '@/ui/path';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
@@ -163,6 +171,18 @@ export class PlayScene extends BaseScene {
   private attemptId: string | null = null;
   /** The analytics side of the same attempt: started once, finished or abandoned once. */
   private levelRun: LevelRun | null = null;
+  /**
+   * The attempt has entered its first scored response: the controller reached `respond`,
+   * or judged a tap, on a task that counts. Never the first-run pass, an introduction or
+   * the DEV rehearsal. Per attempt: a new attempt starts it false, and Resume keeps it,
+   * because the attempt it continues has already been played. It is what turns the
+   * restart puck from a free reset into the end of the attempt (`game/restart.ts`).
+   */
+  private scoredResponseBegun = false;
+  /** The restart puck's sheet, over the running level (`ui/restartSheet.ts`). */
+  private restartSheet!: RestartSheet;
+  /** Last wall second the open sheet re-read hearts and Premium. */
+  private restartPollAt = 0;
   private heartRefunded = false;
   private emptyTracked = false;
   /** Whether this screen has decided if it is the player's first empty bar, and what it decided. */
@@ -177,7 +197,19 @@ export class PlayScene extends BaseScene {
   }
   private stars!: Phaser.GameObjects.Graphics;
   private scoreValue!: Phaser.GameObjects.Text;
+  /** "TIMING DETAILS" when the level judged any beat, else the old "On the beat" caption. */
   private scoreNote!: Phaser.GameObjects.Text;
+  /** The finishing pass's timing, summed over its scored tasks (`game/timingReport.ts`). */
+  private timing: TimingTally = EMPTY_TIMING;
+  private timingReport: TimingReport | null = null;
+  /** Whether the tray shows the timing details instead of the medals. Closed on every summary. */
+  private timingOpen = false;
+  private timingRect = new Phaser.Geom.Rectangle();
+  private timingCounts!: Phaser.GameObjects.Text;
+  private timingLean!: Phaser.GameObjects.Text;
+  private timingAdvice!: Phaser.GameObjects.Text;
+  private timingEarly!: Phaser.GameObjects.Text;
+  private timingLate!: Phaser.GameObjects.Text;
   /** Ceiling anchor the plaque and its ropes swing about; local (0,0) of `stars`. */
   private plaqueAt = { x: 0, y: 0 };
   private headline!: Phaser.GameObjects.Text;
@@ -274,6 +306,11 @@ export class PlayScene extends BaseScene {
   private grooveVoices: GrooveVoices | null = null;
   /** The pass that finished was flawless on every scored task: the result's mastery payoff. */
   private mastered = false;
+  /**
+   * Whether that flawless pass is the level's first (`first`, the full reveal) or a level
+   * the save already had mastered (`repeat`, acknowledged without the one-time effects).
+   */
+  private mastery: MasteryResult = 'none';
   /** When the mastery payoff is due on the audio clock; -Infinity when there is none. */
   private masteryAt = -Infinity;
   private masteryStruck = false;
@@ -412,11 +449,39 @@ export class PlayScene extends BaseScene {
     // second visit inherited the last visit's attempt id, and a Resume id from a level the
     // player had already walked away from is exactly the duplicate analytics must not see.
     this.attemptId = null;
+    this.scoredResponseBegun = false;
     this.outcome = null;
     this.continuation = null;
     this.levelRun = null;
     this.intro = null;
     this.keepsake = null;
+    // The last visit's run, and above all its result. `startRound` resets these too, but a
+    // start the hearts refuse never reaches that reset, and the empty-hearts screen then
+    // drew the previous level's plaque behind its offer — empty medals, "On the beat",
+    // "Heart kept" and a blank star strip under "No hearts". And while the audio loads,
+    // `layout()` would draw it for every visit.
+    this.summaryShown = false;
+    this.summaryAt = -Infinity;
+    this.summaryStars = 0;
+    this.levelCleared = false;
+    this.saveFailed = false;
+    this.heartRefunded = false;
+    this.replayOffered = false;
+    this.finaleCleared = false;
+    this.results = [];
+    this.taskIndex = 0;
+    this.tally = { perfect: 0, flawless: 0 };
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
+    this.resultPlan = null;
+    this.starsLanded = 0;
+    this.keepsakeFirst = false;
+    this.actionCaption = '';
+    this.teach = null;
+    this.transition = null;
+    this.replay = null;
+    this.replayOffset = null;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -432,6 +497,7 @@ export class PlayScene extends BaseScene {
     this.previewResult = this.grooveStudy = this.grooveHandoff = false;
     this.grooveVoices = null;
     this.mastered = false;
+    this.mastery = 'none';
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
     const ink = this.definition.ink;
@@ -444,6 +510,16 @@ export class PlayScene extends BaseScene {
     this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreValue = display(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreNote = label(this, 'On the beat', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    // The timing details' words, in the tray. Assigned on every entry, like every plaque Text.
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
+    this.timingRect = new Phaser.Geom.Rectangle();
+    this.timingCounts = body(this, '', { size: TIMING_TRAY.countsSize, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.timingLean = body(this, '', { size: TIMING_TRAY.leanSize, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.timingAdvice = body(this, '', { size: TIMING_TRAY.adviceSize, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5, 0).setDepth(11).setVisible(false);
+    this.timingEarly = label(this, 'EARLY', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.timingLate = label(this, 'LATE', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
     this.actionRoot = this.add.container(0, 0).setDepth(10);
     this.action = this.add.graphics();
@@ -490,6 +566,8 @@ export class PlayScene extends BaseScene {
     this.finalePlate = this.add.graphics().setDepth(9).setVisible(false);
     this.masteryPlate = this.add.graphics().setDepth(9).setVisible(false);
     this.masteryLabel = label(this, 'IN THE POCKET', { size: 24, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    // Over everything a level draws, under the curtain.
+    this.restartSheet = new RestartSheet(this, 40);
     this.nextStar = body(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCount = display(this, '', { size: 48, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCountLabel = label(this, 'Stars', { size: 20, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -525,7 +603,7 @@ export class PlayScene extends BaseScene {
     // Reveal the illustration before starting the four-beat preparation. Navigation
     // motion must never obscure a musical cue or move an already-running rhythm grid.
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => {
-      if (data?.autoStart) void this.startRound();
+      if (data?.autoStart) void this.startRound('resume');
     }));
   }
   private text(value: string, size: number, fontFamily: string): Phaser.GameObjects.Text {
@@ -570,6 +648,8 @@ export class PlayScene extends BaseScene {
     this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    // Above the verdict's line, so the rows the player is answering on stay in sight.
+    this.restartSheet.layout(safe.centerX, this.verdictY - 34 * s, safe.width - 40 * s, s, this.controlSize);
     // The flawless word takes the verdict's line: it is the verdict on the whole task.
     this.flawless.setPosition(safe.centerX, this.verdictY);
     resize(this.flawless, 54 * s, PALETTE.coral);
@@ -795,20 +875,36 @@ export class PlayScene extends BaseScene {
   private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
-  private async startRound(study = false): Promise<void> {
+  /**
+   * Start the level from its first task. `mode` says what happens to the attempt in hand,
+   * explicitly (`attemptForStart`): Resume and a free restart continue it, a paid restart and
+   * Try again end it and begin another. Never inferred from whether a result exists alone.
+   */
+  private async startRound(mode: StartMode, study = false): Promise<void> {
     const rehearsal = import.meta.env.DEV && study;
     const health = loadHealth();
     const progress = loadProgress();
     const premium = monetization().premium();
-    // An unfinished try that already spent keeps its heart: Resume and the restart puck
-    // are the same attempt. Try-again after the plaque is a new one (`outcome` is set).
-    const resumeId = this.outcome === null ? this.attemptId : null;
+    const handover = attemptForStart(mode, this.attemptId, this.outcome !== null);
+    const resumeId = handover.keep;
     // Gate before tearing anything down: a denied restart must not kill a paid run.
     if (!rehearsal && !canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
       if (this.controller?.active) return;
       this.showNoHearts();
       return;
     }
+    // A sheet still open is answered by this start: Resume from a pause is keeping on.
+    this.closeRestartSheet('keep_playing');
+    // The attempt this start ends is ended here, once, before anything can fail: the heart
+    // it spent stays spent and it holds nothing, so the new id's `beginAttempt` spends
+    // exactly one. If the audio below then fails, no attempt holds a heart and the player
+    // has it to spend on Retry.
+    if (handover.abandon !== null) {
+      saveHealth(releaseAttempt(loadHealth(), handover));
+      this.levelRun?.abandon();
+      this.levelRun = null;
+    }
+    if (resumeId === null) this.scoredResponseBegun = false;
     const request = ++this.startRequest;
     breadcrumb('level started', { level: this.spec.level, act: this.spec.vignette, attempt: this.attempts + 1 });
     this.replay = null;
@@ -834,10 +930,14 @@ export class PlayScene extends BaseScene {
     this.grooveStudy = false;
     this.grooveHandoff = false;
     this.mastered = false;
+    this.mastery = 'none';
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
     // A restart is a new pass: only the pass that finishes is counted.
     this.tally = { perfect: 0, flawless: 0 };
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -1124,6 +1224,10 @@ export class PlayScene extends BaseScene {
   }
 
   private beginPlan(pattern: Pattern, bpm: number, startAt: number, leadBeats: number): void {
+    // The active route's Tap offset, taken here and nowhere mid-task: a route that changed
+    // during the last phrase reaches the judge on this one, never retroactively. Placement
+    // follows the previous task's result, so nothing still being judged can see it move.
+    syncClockCalibration(this.audio!.clock);
     this.attempts++;
     this.demoCount = 0;
     this.finishUnlock = Infinity;
@@ -1157,19 +1261,31 @@ export class PlayScene extends BaseScene {
     // one. Every control is inert until the map, so a second tap cannot launch a second
     // sheet, and the pucks cannot start a restart the map would land on top of.
     if (this.blocked() || this.curtain.active || this.continuation?.busy) return;
+    // The sheet answers its own taps; one off the card is the player's beat, and the level
+    // goes on taking it, since the run is still running behind the sheet.
+    const sheetTap = this.restartSheet.tap(tap.x, tap.y, performance.now() / 1000);
+    if (sheetTap !== null) { this.onRestartSheet(sheetTap); return; }
     const near = (at: { x: number; y: number }) => Math.abs(tap.x - at.x) < this.controlSize / 2 && Math.abs(tap.y - at.y) < this.controlSize / 2;
     if (near(this.muteAt)) {
       this.pressPuck('mute');
       if (this.audio) { toggleMute(this.audio); this.muted = this.audio.silent; }
       return;
     }
-    if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }
-    if (near(this.mapAt)) { this.pressPuck('map'); this.leaveForMap(); return; }
+    if (near(this.restartAt)) { this.pressPuck('restart'); this.requestRestart(); return; }
+    if (near(this.mapAt)) { this.pressPuck('map'); this.closeRestartSheet('left'); this.leaveForMap(); return; }
+    // The line under the score opens the timing details in the tray, and closes them again.
+    // Before the summary's own tap-anywhere, which would otherwise take it as Continue.
+    if (this.summaryShown && this.timingReport && Phaser.Geom.Rectangle.Contains(this.timingRect, tap.x, tap.y)) {
+      this.timingOpen = !this.timingOpen;
+      vibrate('tap');
+      this.drawStars();
+      return;
+    }
     // The wood block over Continue plays the same level again, by the restart puck's path.
     if (this.summaryShown && this.replayOffered && Phaser.Geom.Rectangle.Contains(this.replayRect, tap.x, tap.y)) {
       this.replayPressedAt = performance.now() / 1000;
       this.replayPressDirty = true;
-      void this.startRound();
+      void this.startRound('new_attempt');
       return;
     }
     if (this.offeringHeart() && Phaser.Geom.Rectangle.Contains(this.refillRect, tap.x, tap.y)) {
@@ -1204,12 +1320,12 @@ export class PlayScene extends BaseScene {
         if (!this.summaryShown) this.showSummary();
         return;
       }
-      if (!this.starting) void this.startRound();
+      if (!this.starting) void this.startRound('resume');
       return;
     }
     if (phase === 'result') {
       // Cleared: back to the road, centred on what just opened. Failed: straight into another go.
-      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound(); }
+      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound('new_attempt'); }
       return;
     }
     if (!this.audio || !this.controller?.active) return;
@@ -1294,7 +1410,7 @@ export class PlayScene extends BaseScene {
       button.addEventListener('click', action);
       previews.appendChild(button);
     };
-    add('Loop room study', () => { void this.startRound(true); });
+    add('Loop room study', () => { void this.startRound('resume', true); });
     for (const level of [0, 1, 2, 3] as const) add(`Room ${level}`, () => {
       if (this.groovePreview === level || this.teach || this.intro) return;
       this.groovePreview = level;
@@ -1316,7 +1432,9 @@ export class PlayScene extends BaseScene {
       this.teach = null;
       this.intro = null;
       this.results = this.spec.tasks.map(() => 100);
-      this.outcome = recordResult(loadProgress(), this.spec.level, 100);
+      const before = loadProgress();
+      this.outcome = recordResult(before, this.spec.level, 100);
+      this.mastery = masteryResult(before, this.outcome, this.spec.level, true);
       this.mastered = true;
       this.levelCleared = true;
       this.saveFailed = false;
@@ -1331,7 +1449,7 @@ export class PlayScene extends BaseScene {
   }
   private async runReplay(offsetSec: number): Promise<void> {
     const request = this.startRequest + 1;
-    await this.startRound();
+    await this.startRound('resume');
     if (request !== this.startRequest || !this.controller?.active || !this.controller.plan) return;
     const plan = this.controller.plan;
     this.replayOffset = offsetSec;
@@ -1407,6 +1525,12 @@ export class PlayScene extends BaseScene {
       this.replayPressDirty = replayPress > 0.001;
     }
     if (this.offeringHeart()) this.premiumSheen.update(wall, !monetization().premium());
+    // Hearts regenerate and Premium can arrive while the sheet is open; a heart read every
+    // frame was the profile's localStorage cost before, so half a second is the cadence.
+    if (this.restartSheet.open && wall - this.restartPollAt >= 0.5) {
+      this.restartPollAt = wall;
+      this.refreshRestartSheet();
+    }
     if (this.actionCaption !== '') {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(wall - this.actionShownAt, 0.5);
       this.actionRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
@@ -1427,7 +1551,7 @@ export class PlayScene extends BaseScene {
           !this.starting && !this.commerceBusy
           && canBeginAttempt(health, loadProgress(), this.spec.level, wall, monetization().premium())
         ) {
-          void this.startRound();
+          void this.startRound('resume');
           return;
         }
         const copy = this.waitCopy(health);
@@ -1504,6 +1628,7 @@ export class PlayScene extends BaseScene {
     if (phase === 'demonstrate' && !introducing) this.changeHeadline('');
     if (phase !== 'prepare') this.setRestWords(null);
     if (phase === 'respond') {
+      this.noteScoredResponse('respond');
       this.changeHeadline('');
       this.setIntroCaption('');
       this.setAction('');
@@ -1512,8 +1637,21 @@ export class PlayScene extends BaseScene {
       this.struckAt = this.extraAt = -Infinity;
     }
   }
+  /**
+   * The attempt's scored part has begun, if this phase or judgement belongs to a task that
+   * counts. A tap the judge takes in the early window before `respond` counts too: the
+   * response has begun when the first beat of it is judged, whatever the phase says.
+   */
+  private noteScoredResponse(event: 'respond' | 'judged'): void {
+    if (this.scoredResponseBegun) return;
+    if (!scoredResponseBegins(event, { teaching: this.teach !== null, introducing: this.intro !== null, rehearsal: this.grooveStudy })) return;
+    this.scoredResponseBegun = true;
+    // A free sheet open over the demonstration becomes the paid one now, and says so.
+    this.refreshRestartSheet();
+  }
   private showJudgement(result: Judgement): void {
     this.lastJudgement = `${result.kind} ${result.grade} ${result.deltaMs?.toFixed(0) ?? '—'} ms`;
+    this.noteScoredResponse('judged');
     // A missed beat on the level's very first task says nothing: no mark on the socket,
     // no judder, no Miss. The player cannot lose the loop before they have understood
     // it, and on this level nothing was spent to attempt it either — `protectedThrough`
@@ -1814,6 +1952,7 @@ export class PlayScene extends BaseScene {
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
     this.tally.perfect += result.perfect;
+    this.timing = addRound(this.timing, result);
     const flawless = isFlawless(this.outcomes) && result.extras === 0;
     if (flawless) {
       this.tally.flawless++;
@@ -1882,16 +2021,22 @@ export class PlayScene extends BaseScene {
   /** Idempotent: the level is scored and saved once, however often this is reached. */
   private recordOutcome(): void {
     if (this.outcome) return;
+    // The run reached its result: the sheet's restart no longer has a run to end, and the
+    // result's own Try again is the way back in.
+    this.closeRestartSheet('run_ended');
     const accuracy = meanAccuracy(this.results);
     const before = loadProgress();
     const outcome = recordResult(before, this.spec.level, accuracy);
     this.outcome = outcome;
     // Every scored task flawless, on a cleared level: the result's one extra payoff. It
     // changes no star, threshold, heart or unlock; the scorer above never saw the groove.
-    this.mastered = isMastered(this.groove, this.spec.tasks.length, outcome.cleared);
+    // Whether it is the level's first is read from the save as it stood (`game/mastery.ts`):
+    // the reveal and `level_mastered` belong to the first, and a repeat is acknowledged.
+    this.mastery = masteryResult(before, outcome, this.spec.level, isMastered(this.groove, this.spec.tasks.length, outcome.cleared));
+    this.mastered = this.mastery !== 'none';
     // Beside the save, not the summary: this is the one step every finished run passes
     // exactly once, including the one a notification interrupts during its coda.
-    this.levelRun?.finish(outcome, accuracy, this.mastered);
+    this.levelRun?.finish(outcome, accuracy, this.mastery);
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
     // The player is told, but nobody else was: a device whose storage is blocked loses
@@ -1920,6 +2065,8 @@ export class PlayScene extends BaseScene {
       // Play Games achievements follow the saved clears. Not when the save failed: an unlock
       // cannot be taken back, and the next launch would not find the clear that earned it.
       void syncAchievements(outcome.progress);
+      // And the cloud save, debounced: a clear is the one progression change a level makes.
+      if (outcome.cleared) queueCloudSave();
     }
     if (this.attemptId !== null) {
       const finished = finishAttempt(loadHealth(), this.attemptId, outcome.stars);
@@ -1950,7 +2097,9 @@ export class PlayScene extends BaseScene {
     // Area complete is the bigger thing and goes first; this follows as the smaller one.
     this.masteryAt = this.mastered ? this.summaryAt + (this.finaleCleared ? MASTERY.finaleDelay : MASTERY.delay) : -Infinity;
     this.masteryStruck = false;
-    if (this.mastered && this.audio) {
+    this.masteryLabel.setText(this.mastery === 'repeat' ? 'IN THE POCKET AGAIN' : 'IN THE POCKET');
+    // The sting is the reveal's: a level already mastered gets its plate, not a second unveiling.
+    if (this.mastery === 'first' && this.audio) {
       const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
       this.audio.playStinger(this.masteryAt, voices.sting, this.finaleCleared ? 0.28 : 0.36);
     }
@@ -1965,6 +2114,15 @@ export class PlayScene extends BaseScene {
     }
     this.scoreValue.setText(`${Math.round(accuracy)}%`);
     this.accuracy.setText('');
+    // The details are what the scorer already counted; the line under the score opens them.
+    // A preview result judged nothing, so it keeps the old caption and offers nothing.
+    this.timingReport = timingReport(this.timing);
+    this.timingOpen = false;
+    const report = this.timingReport;
+    this.scoreNote.setText(report ? 'TIMING DETAILS' : 'On the beat');
+    this.timingCounts.setText(report?.counts ?? '');
+    this.timingLean.setText(report?.lean ?? '');
+    this.timingAdvice.setText(report?.advice ?? '');
     this.kept.setVisible(this.heartRefunded);
     this.summaryStars = starsFor(accuracy, this.spec);
     this.replayOffered = offersReplay(outcome.cleared, this.summaryStars);
@@ -2018,6 +2176,13 @@ export class PlayScene extends BaseScene {
     });
     this.resultPlan = plan;
     this.plaqueAt = { x: safe.centerX, y: plan.anchorY };
+    // The details' toggle, where the line under the score rests once the plaque has settled.
+    // At least a thumb tall: the line itself is a caption's height.
+    const ks = s * plan.k;
+    const toggleW = Math.max(TIMING_TRAY.toggleWidth * ks, this.scoreNote.width + 80 * ks);
+    const toggleH = Math.max(this.controlSize, 64 * ks);
+    const noteY = plan.anchorY + plan.rope + PLATE.noteY * ks;
+    this.timingRect.setTo(safe.centerX - toggleW / 2, noteY - toggleH / 2, toggleW, toggleH);
     const card = plan.rows.find(row => row.kind === 'keepsake');
     if (card) this.keepsakeRect.setTo(safe.centerX - cardW / 2, card.y, cardW, card.height);
     this.keepsakeSettled = false;
@@ -2068,7 +2233,9 @@ export class PlayScene extends BaseScene {
   private dressResult(): void {
     const s = this.uiScale, k = this.resultPlan?.k ?? 1;
     resize(this.scoreValue, PLATE.scoreSize * s * k, PALETTE.ink);
-    resize(this.scoreNote, PLATE.noteSize * s * k, PALETTE.muted, STYLE.current, false);
+    // An ink line when it opens something, the muted caption when it is only a caption.
+    resize(this.scoreNote, PLATE.noteSize * s * k, this.timingReport ? PALETTE.ink : PALETTE.muted, STYLE.current, false);
+    this.dressTiming(s * k);
     resize(this.kept, 22 * s * k, shade(BRASS, -0.62), STYLE.current, false);
     for (const chip of this.chipLabels) resize(chip, PLATE.chip.text * s * k, PALETTE.ink, STYLE.current, false);
     this.chipEarned = [null, null, null];
@@ -2204,7 +2371,9 @@ export class PlayScene extends BaseScene {
     this.kept.setVisible(shown && this.heartRefunded);
     this.scoreValue.setVisible(shown);
     this.scoreNote.setVisible(shown);
-    for (const chip of this.chipLabels) chip.setVisible(shown);
+    const details = shown && this.timingOpen && this.timingReport !== null;
+    for (const chip of this.chipLabels) chip.setVisible(shown && !details);
+    for (const text of this.timingTexts()) text.setVisible(details);
     this.replayRoot.setVisible(shown && this.replayOffered);
     if (!shown || !this.resultPlan) {
       for (const plate of [this.nextStarPlate, this.finalePlate, this.masteryPlate]) plate.clear().setVisible(false);
@@ -2218,7 +2387,7 @@ export class PlayScene extends BaseScene {
     const earned = this.summaryStars;
     const exaggeration = STYLE.current.exaggeration;
     const pose = plaquePose(age, still);
-    const mastery = masteryPose(this.now() - this.masteryAt, still);
+    const mastery = masteryPose(this.now() - this.masteryAt, still, this.mastery === 'repeat');
     const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration) + (mastery?.knock ?? 0);
     const plaqueH = plan.plaqueHeight;
     const drop = (pose.drop + jolt) * plaqueH;
@@ -2265,7 +2434,8 @@ export class PlayScene extends BaseScene {
     g.fillStyle(0xffffff, 0.4).fillRoundedRect(tx + tr, ty + th - 5 * s, tw - tr * 2, 3 * s, 1.5 * s);
 
     const empty = starColour(false, this.definition.ink, SHELL.cream);
-    for (let k = 0; k < 3; k++) {
+    if (details) this.drawTimingDetails(s, top, pose.tilt, drop, pose.alpha);
+    else for (let k = 0; k < 3; k++) {
       const seat = medalSeat(k as 0 | 1 | 2);
       const at = { x: seat.x * s, y: top + seat.y * s }, radius = seat.radius * s;
       // An empty seat is a hollow, never a duller star: brass reads against hollow at any tone.
@@ -2288,15 +2458,87 @@ export class PlayScene extends BaseScene {
 
     this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
     this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
+    if (this.timingReport) this.drawTimingChevron(s, top);
     if (this.heartRefunded) {
       // A refunded heart is brass on brass: a small struck plate, not a coral caption.
       const keptW = PLATE.keptWidth * s, keptH = PLATE.keptTall * s, keptY = top + PLATE.keptY * s;
       drawPanel(g, new Rect(-keptW / 2, keptY - keptH / 2, keptW, keptH), s, { fill: BRASS, depth: 5, radius: 18 });
-      drawHeart(g, -keptW / 2 + 42 * s, keptY, 17 * s, PALETTE.coral);
-      this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
+      // The heart and the words centred as one group, not each on its own guess.
+      const heartR = 17 * s, gapX = 14 * s;
+      const groupW = heartR * 2 + gapX + this.kept.displayWidth;
+      drawHeart(g, -groupW / 2 + heartR, keptY, heartR, PALETTE.coral);
+      this.hangText(this.kept, -groupW / 2 + heartR * 2 + gapX + this.kept.displayWidth / 2, keptY, pose.tilt, drop, pose.alpha);
     }
     this.drawResultRows(age, still);
     this.drawMasteryRow(mastery, still);
+  }
+
+  /** The details' Texts: hidden together, as the plaque's other Texts are. */
+  private timingTexts(): readonly Phaser.GameObjects.Text[] {
+    return [this.timingCounts, this.timingLean, this.timingAdvice, this.timingEarly, this.timingLate];
+  }
+
+  /** Sizes, and a scale-down for a counts line too wide for the tray. Set on layout, never per frame. */
+  private dressTiming(ks: number): void {
+    const room = (PLATE.width - 2 * PLATE.tray.inset - 2 * TIMING_TRAY.pad) * ks;
+    resize(this.timingCounts, TIMING_TRAY.countsSize * ks, PALETTE.ink, STYLE.current, false);
+    this.timingCounts.setScale(this.timingCounts.width > room ? room / this.timingCounts.width : 1);
+    resize(this.timingLean, TIMING_TRAY.leanSize * ks, PALETTE.muted, STYLE.current, false);
+    this.timingLean.setScale(this.timingLean.width > room ? room / this.timingLean.width : 1);
+    resize(this.timingAdvice, TIMING_TRAY.adviceSize * ks, PALETTE.ink, STYLE.current, false);
+    this.timingAdvice.setWordWrapWidth(room, false);
+    resize(this.timingEarly, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
+    resize(this.timingLate, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
+  }
+
+  /**
+   * The timing details, in the tray where the medals sit: the counts, a hit-error bar — one
+   * tick per judged hit between Early and Late, the Perfect window as a lighter band, and a
+   * coral marker on the lean — then the lean in words and the one thing to change. Local to
+   * the plaque, so it swings with it like everything else on it.
+   */
+  private drawTimingDetails(s: number, top: number, tilt: number, drop: number, alpha: number): void {
+    const report = this.timingReport;
+    if (!report) return;
+    const g = this.stars, tray = trayRect();
+    const ty = top + tray.y * s, halfTray = (tray.width * s) / 2;
+    this.hangText(this.timingCounts, 0, ty + TIMING_TRAY.countsY * s, tilt, drop, alpha);
+
+    const barY = ty + TIMING_TRAY.barY * s;
+    const half = halfTray - TIMING_TRAY.barInset * s;
+    const bar = TIMING_TRAY.barHeight * s, band = TIMING_TRAY.bandHeight * s;
+    g.fillStyle(shade(SHELL.bench, -0.22), 1).fillRoundedRect(-half, barY - bar / 2, half * 2, bar, bar / 2);
+    const bandW = half * 2 * report.perfectBand;
+    g.fillStyle(mix(SHELL.bench, SHELL.cream, 0.7), 1).fillRoundedRect(-bandW / 2, barY - band / 2, bandW, band, 6 * s);
+    g.lineStyle(2.5 * s, PALETTE.ink, 0.8).lineBetween(0, barY - band / 2 - 4 * s, 0, barY + band / 2 + 4 * s);
+    const mark = TIMING_TRAY.markHeight * s;
+    // Many hits overlap, so each tick is faint and a crowd of them is what reads as dark.
+    const tickAlpha = Math.max(0.18, Math.min(0.7, 6 / Math.max(1, report.marks.length)));
+    for (const m of report.marks) {
+      const x = m * half;
+      const inBand = Math.abs(m) <= report.perfectBand;
+      g.lineStyle(3 * s, inBand ? PALETTE.ink : shade(PALETTE.muted, -0.2), tickAlpha).lineBetween(x, barY - mark / 2, x, barY + mark / 2);
+    }
+    if (report.offsetMs !== null) {
+      const x = Math.max(-1, Math.min(1, report.offsetMs / RHYTHM.goodMs)) * half;
+      const tipY = barY - band / 2 - 2 * s, size = 10 * s;
+      g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillTriangle(x, tipY + 2 * s, x - size, tipY - size * 1.4 + 2 * s, x + size, tipY - size * 1.4 + 2 * s);
+      g.fillStyle(PALETTE.coral, 1).fillTriangle(x, tipY, x - size, tipY - size * 1.4, x + size, tipY - size * 1.4);
+      g.lineStyle(3 * s, PALETTE.coral, 1).lineBetween(x, barY - band / 2, x, barY + band / 2);
+    }
+    this.hangText(this.timingEarly, -halfTray + TIMING_TRAY.pad * s, barY, tilt, drop, alpha);
+    this.hangText(this.timingLate, halfTray - TIMING_TRAY.pad * s, barY, tilt, drop, alpha);
+    this.hangText(this.timingLean, 0, ty + TIMING_TRAY.leanY * s, tilt, drop, alpha);
+    this.hangText(this.timingAdvice, 0, ty + TIMING_TRAY.adviceY * s, tilt, drop, alpha);
+  }
+
+  /** A drawn chevron beside the toggle: pointing on when closed, down when open. No symbol fonts. */
+  private drawTimingChevron(s: number, top: number): void {
+    const g = this.stars, size = TIMING_TRAY.toggleChevron * s;
+    const x = this.scoreNote.width / 2 + 14 * s + size / 2, y = top + PLATE.noteY * s;
+    g.lineStyle(3 * s, PALETTE.ink, 1);
+    if (this.timingOpen) g.lineBetween(x - size, y - size / 2, x, y + size / 2).lineBetween(x, y + size / 2, x + size, y - size / 2);
+    else g.lineBetween(x - size / 2, y - size, x + size / 2, y).lineBetween(x + size / 2, y, x - size / 2, y + size);
   }
 
   /**
@@ -2326,7 +2568,8 @@ export class PlayScene extends BaseScene {
   /**
    * The mastery plate under the plaque: brass, like a refunded heart's, with the words
    * and a star at each end. It stands on the frame, not on the ropes, and arrives with
-   * the ring. Null pose means not yet, or never.
+   * the ring. Null pose means not yet, or never. A level already mastered gets the same
+   * plate, reading IN THE POCKET AGAIN, and arrives without the ring (`masteryPose`).
    */
   private drawMasteryRow(mastery: ReturnType<typeof masteryPose>, still: boolean): void {
     const row = this.resultPlan?.rows.find(r => r.kind === 'mastery');
@@ -2354,6 +2597,10 @@ export class PlayScene extends BaseScene {
         g.lineBetween(nx, cy - h, nx, cy + h);
       }
     }
+    // "Again" is the longer label: it shrinks to stay inside the notches rather than run over them.
+    const room = w - 2 * 58 * s;
+    this.masteryLabel.setScale(1);
+    if (this.masteryLabel.width > room) this.masteryLabel.setScale(room / this.masteryLabel.width);
     this.masteryLabel.setPosition(this.viewport.safe.centerX, cy).setAlpha(alpha).setVisible(true);
   }
 
@@ -2405,14 +2652,14 @@ export class PlayScene extends BaseScene {
     const still = this.reducedMotion;
     const summaryAge = now - this.summaryAt;
     const pose = plaquePose(summaryAge, still);
-    const mastery = masteryPose(now - this.masteryAt, still);
+    const mastery = masteryPose(now - this.masteryAt, still, this.mastery === 'repeat');
     const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration) + (mastery?.knock ?? 0)))
       * (this.resultPlan?.plaqueHeight ?? 0);
     // Mastery's one strike: the sting, a pulse and sparks over the plaque, as the ring opens.
     if (mastery && !this.masteryStruck) {
       this.masteryStruck = true;
-      vibrate('stamp');
-      if (!still) {
+      if (this.mastery === 'first') vibrate('stamp');
+      if (!still && this.mastery === 'first') {
         const crest = this.hangAt(0, (this.resultPlan?.rope ?? 0) + (this.resultPlan?.plaqueHeight ?? 0) * 0.45, pose.tilt, drop);
         this.starFx.burst('sparks', crest.x, crest.y, [BRASS, 0xffe7a0, SHELL.cream], this.finaleCleared ? 6 : 10);
       }
@@ -2422,7 +2669,8 @@ export class PlayScene extends BaseScene {
       const medal = starPose(age, k < earned, STYLE.current.exaggeration);
       if (!medal.landed || k < this.starsLanded) continue;
       this.starsLanded = k + 1;
-      if (k >= earned || still) continue;
+      // Open details have taken the tray: a burst would land on the words, not on a medal.
+      if (k >= earned || still || this.timingOpen) continue;
       // The burst leaves from where the medal actually struck, which on a swinging
       // plaque is not where it was laid out.
       const local = this.medalLocal(k);
@@ -2531,7 +2779,7 @@ export class PlayScene extends BaseScene {
         this.accuracy.setText(HEALTH_COPY.playNote);
         return;
       }
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2542,14 +2790,13 @@ export class PlayScene extends BaseScene {
     this.commerceBusy = true;
     const claimId = `play:${++this.watchClaims}`;
     try {
-      const result = await monetization().showRewarded();
-      if (result.ok) redeemHeart(claimId);
+      const watch = await watchForHeart(() => monetization().showRewarded(), redeemHeart, claimId);
       if (this.disposed) return;
-      if (!result.ok) {
-        this.accuracy.setText(rewardedFeedback(result.reason));
+      if (watch.kind === 'failed') {
+        this.accuracy.setText(rewardedFeedback(watch.reason));
         return;
       }
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2573,7 +2820,7 @@ export class PlayScene extends BaseScene {
         return;
       }
       if (this.disposed) return;
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2596,14 +2843,227 @@ export class PlayScene extends BaseScene {
         return;
       }
       vibrate('stamp');
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
   }
 
+  // ---- Restart -----------------------------------------------------------------------
+  // One heart is one real attempt at an unfinished frontier level (`docs/RESTART.md`).
+
+  private restartFacts(): RestartFacts {
+    return {
+      level: this.spec.level, progress: loadProgress(), health: loadHealth(), now: Date.now(),
+      premium: monetization().premium(), attemptId: this.attemptId,
+      outcomeRecorded: this.outcome !== null, scoredResponseBegun: this.scoredResponseBegun,
+    };
+  }
+
+  private heartsNow(facts: RestartFacts): number {
+    return viewHealth(facts.health, facts.now).hearts;
+  }
+
+  /**
+   * The restart puck. A recorded result is the result's own Try again; a free level, Premium
+   * or a start not yet on its first downbeat restarts at once; an unfinished frontier
+   * attempt asks first, saying whether a heart is used, and nothing is spent by asking.
+   */
+  private requestRestart(): void {
+    // A second tap on the puck while the sheet is up, or while a purchase is out, is the
+    // same request: the sheet is already its answer.
+    if (this.restartSheet.open || this.commerceBusy) return;
+    const facts = this.restartFacts();
+    const kind = restartKind(facts);
+    if (kind === 'try_again') { void this.startRound('new_attempt'); return; }
+    // No attempt yet — the first start still loading, or the empty-hearts screen — means
+    // no run to restart: the puck is a start, gated and reported like any other.
+    if (facts.attemptId === null) { void this.startRound('resume'); return; }
+    const hearts = this.heartsNow(facts);
+    if (kind === 'immediate') {
+      // Nothing is charged on a finished or protected level, under Premium, or before the
+      // first downbeat, so the restart is the free reset of the same attempt, as it was.
+      playAnalytics.restartRequested(this.spec.level, 'none', hearts, facts.premium);
+      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
+      void this.startRound('free_restart');
+      return;
+    }
+    const sheet = sheetFor(kind)!;
+    playAnalytics.restartRequested(this.spec.level, sheet, hearts, facts.premium);
+    this.openRestartSheet(sheet);
+  }
+
+  private openRestartSheet(kind: RestartSheetKind): void {
+    const previous = this.restartSheet.kind;
+    const store = monetization();
+    const purchases = store.purchasesAvailable();
+    const premium = store.premium();
+    this.restartSheet.show(kind, performance.now() / 1000, {
+      refill: purchases,
+      premium: purchases && !premium,
+      refillPrice: store.productPrice(PRODUCT.heartRefill),
+      premiumPrice: store.productPrice(PRODUCT.premium),
+    });
+    // The offers are reported when the empty sheet is what the player is looking at, once
+    // per showing of it, never for the paid sheet: an ad is never offered beside a heart.
+    if (kind === 'empty' && previous !== 'empty') {
+      track('rewarded_offer_shown', { placement: 'restart' });
+      if (purchases) track('purchase_offer_shown', { product: PRODUCT.heartRefill });
+    }
+  }
+
+  /**
+   * Re-read the run under an open sheet. It never acts: it only makes the sheet say what
+   * a tap would now do, and a sheet that changes ignores taps for a moment
+   * (`RESTART_SHEET_ARM_SEC`), so no one lands on a button they did not read.
+   */
+  private refreshRestartSheet(): void {
+    if (!this.restartSheet.open || this.restartSheet.busy) return;
+    const next = liveSheet(this.restartFacts());
+    if (next === null) { this.closeRestartSheet('run_ended'); return; }
+    this.openRestartSheet(next);
+  }
+
+  /** Close without restarting. Reported once; a sheet waiting on an ad or a purchase is reported by that path instead. */
+  private closeRestartSheet(reason: 'keep_playing' | 'run_ended' | 'paused' | 'left'): void {
+    const kind = this.restartSheet.kind;
+    if (kind === null) return;
+    if (!this.restartSheet.busy) {
+      const facts = this.restartFacts();
+      playAnalytics.restartCancelled(this.spec.level, kind, reason, this.heartsNow(facts), facts.premium);
+    }
+    this.restartSheet.hide();
+  }
+
+  private onRestartSheet(choice: RestartSheetTap): void {
+    if (choice === 'swallow') return;
+    vibrate('tap');
+    if (choice === 'keep') { this.closeRestartSheet('keep_playing'); return; }
+    if (choice === 'refill') { void this.buyToRestart(PRODUCT.heartRefill); return; }
+    if (choice === 'premium') { void this.buyToRestart(PRODUCT.premium); return; }
+    // Confirm: only what the sheet said. If the run has moved under it — the response has
+    // begun, a heart came back, Premium arrived — the sheet changes and asks again.
+    const facts = this.restartFacts();
+    const shown = this.restartSheet.kind;
+    if (liveSheet(facts) !== shown) { this.refreshRestartSheet(); return; }
+    const kind = restartKind(facts);
+    const hearts = this.heartsNow(facts);
+    if (shown === 'free') {
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
+      // A free sheet is either a frontier attempt before its scored part, or a run that no
+      // longer costs anything (Premium arrived): both are the same attempt again.
+      void this.startRound(kind === 'confirm_free' || kind === 'immediate' ? 'free_restart' : 'new_attempt');
+      return;
+    }
+    if (shown === 'paid') {
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, 'heart', hearts, facts.premium);
+      void this.startRound('new_attempt');
+      return;
+    }
+    void this.watchToRestart();
+  }
+
+  /** The ticket an asynchronous restart is checked against when it comes back. */
+  private restartTicket(): RestartTicket {
+    return { attemptId: this.attemptId, startRequest: this.startRequest };
+  }
+
+  private ticketHolds(ticket: RestartTicket): boolean {
+    return ticketStillApplies(ticket, {
+      disposed: this.disposed, attemptId: this.attemptId, startRequest: this.startRequest, outcomeRecorded: this.outcome !== null,
+    });
+  }
+
+  /**
+   * Watch ad & Restart: the same rewarded video and the same one-heart grant the play
+   * screen's Watch uses (`watchForHeart`, `redeemHeart`, a fresh claim id). Only once the
+   * reward is confirmed does the run end and the next begin, and the next attempt's
+   * `beginAttempt` spends the heart the ad just gave. A failed, closed or unavailable ad
+   * ends nothing and spends nothing: the run is still running behind the sheet.
+   */
+  private async watchToRestart(): Promise<void> {
+    if (this.commerceBusy || this.curtain.active) return;
+    this.commerceBusy = true;
+    const ticket = this.restartTicket();
+    const level = this.spec.level;
+    this.restartSheet.setBusy(RESTART_COPY.watching);
+    try {
+      const watch = await watchForHeart(() => monetization().showRewarded(), redeemHeart, `restart:${++this.watchClaims}`);
+      // The heart, if granted, is already in the ledger; a dead scene restarts nothing.
+      if (this.disposed) {
+        playAnalytics.rewardedRestartFailed(level, watch.kind === 'failed' ? watch.reason : 'run_ended');
+        return;
+      }
+      this.restartSheet.setBusy(null);
+      if (watch.kind === 'failed') {
+        playAnalytics.rewardedRestartFailed(level, watch.reason);
+        this.restartSheet.say(rewardedFeedback(watch.reason));
+        return;
+      }
+      if (!this.ticketHolds(ticket)) {
+        // The run finished, paused or was replaced while the ad played. The heart is kept
+        // for the player's next attempt; nothing restarts into a run that is not there.
+        playAnalytics.rewardedRestartFailed(level, 'run_ended');
+        this.restartSheet.hide();
+        return;
+      }
+      const facts = this.restartFacts();
+      if (this.heartsNow(facts) <= 0) {
+        playAnalytics.rewardedRestartFailed(level, 'no_heart');
+        this.restartSheet.say(rewardedFeedback('failed'));
+        return;
+      }
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(level, 'rewarded', this.heartsNow(facts), facts.premium);
+      void this.startRound('new_attempt');
+    } finally {
+      this.commerceBusy = false;
+      if (!this.disposed) this.restartSheet.setBusy(null);
+    }
+  }
+
+  /**
+   * Refill or Premium from the empty sheet, through the same purchase and the same fill
+   * the play screen's offers use. A successful refill restarts on one of the five hearts;
+   * Premium restarts on none.
+   */
+  private async buyToRestart(product: ProductId): Promise<void> {
+    if (this.commerceBusy || this.curtain.active) return;
+    if (product === PRODUCT.premium && monetization().premium()) { this.refreshRestartSheet(); return; }
+    this.commerceBusy = true;
+    const ticket = this.restartTicket();
+    this.restartSheet.setBusy(RESTART_COPY.buying);
+    if (product === PRODUCT.premium) track('purchase_offer_shown', { product });
+    try {
+      const result = await monetization().purchase(product);
+      // A refill is the player's the moment the store confirms it, scene or no scene.
+      const filled = result.ok && product === PRODUCT.heartRefill ? redeemFill(result.claimId) : null;
+      if (this.disposed) return;
+      this.restartSheet.setBusy(null);
+      if (!result.ok) { this.restartSheet.say(purchaseFeedback(result.reason)); return; }
+      if (!this.ticketHolds(ticket)) { this.restartSheet.hide(); return; }
+      const facts = this.restartFacts();
+      if (filled !== null && !facts.premium && this.heartsNow(facts) <= 0) {
+        this.restartSheet.say(purchaseFeedback('failed'));
+        return;
+      }
+      if (product === PRODUCT.premium) vibrate('stamp');
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, product === PRODUCT.premium ? 'premium' : 'refill', this.heartsNow(facts), facts.premium);
+      void this.startRound('new_attempt');
+    } finally {
+      this.commerceBusy = false;
+      if (!this.disposed) this.restartSheet.setBusy(null);
+    }
+  }
+
   private showPause(): void {
     if (this.disposed) return;
+    // The controller can pause itself on a stall without passing through `interrupt`:
+    // Resume is then the way on, and the sheet closes for the same reason.
+    this.closeRestartSheet('paused');
     this.vignette.pause();
     this.setIntroCaption('');
     this.changeHeadline('Paused');
@@ -2614,6 +3074,9 @@ export class PlayScene extends BaseScene {
     // both are on the same snapshot — so this can be entered after shutdown has already
     // destroyed the act and the text. Touching them here is a throw on the way out.
     if (this.disposed) return;
+    // Paused: Resume is the way on, and it is the same attempt. A purchase or an ad still
+    // out sees the start request move and does not restart into the paused run.
+    this.closeRestartSheet('paused');
     this.grooveHandoff = false;
     ++this.startRequest;
     this.replay = null;
@@ -2665,6 +3128,7 @@ export class PlayScene extends BaseScene {
     if (this.pump !== null) clearInterval(this.pump);
     this.pump = null;
     this.persistAbandonedAttempt();
+    this.restartSheet.hide();
     this.taps.dispose();
     this.replayPanel?.remove();
     this.replayPanel = null;

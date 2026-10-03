@@ -1,6 +1,7 @@
 package com.tinytempo.app;
 
 import android.app.Activity;
+import android.util.Base64;
 import android.util.Log;
 
 import androidx.activity.result.ActivityResult;
@@ -19,8 +20,21 @@ import com.google.android.gms.games.GamesClientStatusCodes;
 import com.google.android.gms.games.GamesSignInClient;
 import com.google.android.gms.games.PlayGames;
 import com.google.android.gms.games.Player;
+import com.google.android.gms.games.SnapshotsClient;
 import com.google.android.gms.games.leaderboard.LeaderboardVariant;
 import com.google.android.gms.games.leaderboard.ScoreSubmissionData;
+import com.google.android.gms.games.snapshot.Snapshot;
+import com.google.android.gms.games.snapshot.SnapshotContents;
+import com.google.android.gms.games.snapshot.SnapshotMetadataChange;
+import com.google.android.gms.tasks.Task;
+import com.google.android.gms.tasks.Tasks;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 
 /**
  * Play Games Services v2, exposed to the web layer.
@@ -46,12 +60,20 @@ import com.google.android.gms.games.leaderboard.ScoreSubmissionData;
  * {@code LeaderboardsClient} and {@code AchievementsClient}. None prompts; the web layer
  * offers sign-in only when the player taps a leaderboard or achievements button.
  *
+ * <p><b>Saved Games relays bytes and decides nothing.</b> {@link #readSnapshot},
+ * {@link #writeSnapshot} and {@link #resolveSnapshot} use v2's {@link SnapshotsClient} with
+ * {@link SnapshotsClient#RESOLUTION_POLICY_MANUAL}: a conflict between two devices comes back
+ * to the web layer as both payloads, and the web layer answers with the merged bytes. The
+ * merge is the game's (playgames/cloudSave.ts) — a timestamp, a play time and a "most
+ * recent" policy all choose a loser, and this game's progression has no losers to choose.
+ *
  * <p><b>Nothing sensitive is logged.</b> There are no tokens here to leak —
  * {@code requestServerSideAccess} is the only call that returns one and this plugin does
  * not make it — and the player id is treated as identifying, so it crosses the bridge but
- * is never written to logcat.
+ * is never written to logcat. Snapshot contents and conflict ids never reach a log either.
  *
  * @see <a href="https://developer.android.com/games/pgs/android/android-signin">Play Games Services v2 sign-in</a>
+ * @see <a href="https://developer.android.com/games/pgs/android/saved-games">Saved Games on Android</a>
  */
 @CapacitorPlugin(name = "PlayGames")
 public class PlayGamesPlugin extends Plugin {
@@ -59,6 +81,25 @@ public class PlayGamesPlugin extends Plugin {
     private static final String TAG = "TinyTempoPGS";
     /** The highest score the game ever sends: 100% in thousandths (see playgames/leaderboard.ts). */
     private static final long MAX_SCORE = 100_000L;
+    /** Play's own rule for a snapshot name: 1–100 of the non-URL-reserved characters. */
+    private static final Pattern SNAPSHOT_NAME = Pattern.compile("^[A-Za-z0-9._~-]{1,100}$");
+    /** Far above the few kilobytes a Tiny Tempo save is, far below Play's 3 MB ceiling. */
+    private static final int MAX_SNAPSHOT_BYTES = 1_000_000;
+    /** Play's description field is short; anything longer is cut rather than refused. */
+    private static final int MAX_DESCRIPTION = 100;
+    private static final long SNAPSHOT_TIMEOUT_SECONDS = 30L;
+    /**
+     * Snapshot work runs here, one call at a time, off the main thread: {@code readFully}
+     * is file I/O and {@link Tasks#await} must not block the UI. One thread also means the
+     * pending conflict below is only ever touched sequentially.
+     */
+    private final ExecutorService snapshotWorker = Executors.newSingleThreadExecutor();
+    /**
+     * The conflict the web layer has been told about and has not yet answered. Held because
+     * resolving one needs the conflict's own resolution contents, which cannot be re-fetched.
+     * Replaced, and its snapshots closed, when another conflict is reported.
+     */
+    private SnapshotsClient.SnapshotConflict pendingConflict;
 
     /**
      * Whether Play Games has already signed this player in.
@@ -308,6 +349,244 @@ public class PlayGamesPlugin extends Plugin {
                 resolveView(call, false, "unavailable");
             }
         });
+    }
+
+    /**
+     * Open the named snapshot — creating an empty one if the player has none — and hand its
+     * bytes to the web layer, base64-encoded. Resolves {@code kind: "data"} with the bytes,
+     * or no {@code data} at all for a snapshot never written; {@code kind: "conflict"} with
+     * both payloads when two devices wrote while apart; {@code kind: "failed"} with a reason
+     * from a closed set otherwise. Never rejects, never prompts, never logs the bytes.
+     */
+    @PluginMethod
+    public void readSnapshot(final PluginCall call) {
+        final String name = call.getString("name", "");
+        if (name == null || !SNAPSHOT_NAME.matcher(name).matches()) {
+            resolveSnapshotFailure(call, "invalid");
+            return;
+        }
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveSnapshotFailure(call, "unavailable");
+            return;
+        }
+        snapshotWorker.execute(() -> {
+            try {
+                SnapshotsClient client = PlayGames.getSnapshotsClient(activity);
+                SnapshotsClient.DataOrConflict<Snapshot> opened =
+                        await(client.open(name, true, SnapshotsClient.RESOLUTION_POLICY_MANUAL));
+                if (opened.isConflict()) {
+                    resolveConflict(call, hold(opened.getConflict()));
+                    return;
+                }
+                Snapshot snapshot = opened.getData();
+                byte[] bytes = snapshot.getSnapshotContents().readFully();
+                await(client.discardAndClose(snapshot));
+                JSObject payload = new JSObject();
+                payload.put("kind", "data");
+                if (bytes != null && bytes.length > 0) {
+                    payload.put("data", Base64.encodeToString(bytes, Base64.NO_WRAP));
+                }
+                call.resolve(payload);
+            } catch (Throwable error) {
+                String reason = snapshotFailure(error);
+                Log.i(TAG, "Snapshot read failed: " + reason);
+                resolveSnapshotFailure(call, reason);
+            }
+        });
+    }
+
+    /**
+     * Replace the named snapshot's bytes and commit. The same open as {@link #readSnapshot},
+     * so a conflict is reported the same way and nothing is written until it is answered.
+     */
+    @PluginMethod
+    public void writeSnapshot(final PluginCall call) {
+        final String name = call.getString("name", "");
+        final byte[] bytes = snapshotBytes(call);
+        if (name == null || !SNAPSHOT_NAME.matcher(name).matches() || bytes == null) {
+            resolveSnapshotFailure(call, "invalid");
+            return;
+        }
+        final SnapshotMetadataChange change = metadataChange(call);
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveSnapshotFailure(call, "unavailable");
+            return;
+        }
+        snapshotWorker.execute(() -> {
+            try {
+                SnapshotsClient client = PlayGames.getSnapshotsClient(activity);
+                SnapshotsClient.DataOrConflict<Snapshot> opened =
+                        await(client.open(name, true, SnapshotsClient.RESOLUTION_POLICY_MANUAL));
+                if (opened.isConflict()) {
+                    resolveConflict(call, hold(opened.getConflict()));
+                    return;
+                }
+                Snapshot snapshot = opened.getData();
+                if (!snapshot.getSnapshotContents().writeBytes(bytes)) {
+                    await(client.discardAndClose(snapshot));
+                    resolveSnapshotFailure(call, "failed");
+                    return;
+                }
+                await(client.commitAndClose(snapshot, change));
+                JSObject payload = new JSObject();
+                payload.put("kind", "committed");
+                call.resolve(payload);
+            } catch (Throwable error) {
+                String reason = snapshotFailure(error);
+                Log.i(TAG, "Snapshot write failed: " + reason);
+                resolveSnapshotFailure(call, reason);
+            }
+        });
+    }
+
+    /**
+     * Answer the conflict last reported, with the merged bytes the web layer worked out.
+     *
+     * Play's own guide resolves and then treats the returned snapshot as freshly opened, so
+     * the merged bytes are written into it and committed as well: whatever the server kept
+     * from the resolution, what is committed is the merge. Resolving can itself reveal a
+     * further conflict, which is reported the same way for the web layer to answer again;
+     * the web layer bounds how many times it will. A conflict id that is not the pending one
+     * is stale — the web layer re-reads and is told the current one.
+     */
+    @PluginMethod
+    public void resolveSnapshot(final PluginCall call) {
+        final String conflictId = call.getString("conflictId", "");
+        final byte[] bytes = snapshotBytes(call);
+        if (conflictId == null || conflictId.isEmpty() || bytes == null) {
+            resolveSnapshotFailure(call, "invalid");
+            return;
+        }
+        final SnapshotMetadataChange change = metadataChange(call);
+        final Activity activity = getActivity();
+        if (activity == null) {
+            resolveSnapshotFailure(call, "unavailable");
+            return;
+        }
+        snapshotWorker.execute(() -> {
+            try {
+                SnapshotsClient.SnapshotConflict conflict = pendingConflict;
+                if (conflict == null || !conflictId.equals(conflict.getConflictId())) {
+                    resolveSnapshotFailure(call, "failed");
+                    return;
+                }
+                pendingConflict = null;
+                SnapshotsClient client = PlayGames.getSnapshotsClient(activity);
+                SnapshotsClient.DataOrConflict<Snapshot> result;
+                SnapshotContents resolution = conflict.getResolutionSnapshotContents();
+                if (resolution != null && resolution.writeBytes(bytes)) {
+                    result = await(client.resolveConflict(
+                            conflictId, conflict.getSnapshot().getMetadata().getSnapshotId(), change, resolution));
+                } else {
+                    // No resolution contents: resolve with the server's snapshot carrying the merge.
+                    Snapshot base = conflict.getSnapshot();
+                    if (!base.getSnapshotContents().writeBytes(bytes)) {
+                        resolveSnapshotFailure(call, "failed");
+                        return;
+                    }
+                    result = await(client.resolveConflict(conflictId, base));
+                }
+                if (result.isConflict()) {
+                    resolveConflict(call, hold(result.getConflict()));
+                    return;
+                }
+                Snapshot resolved = result.getData();
+                if (resolved.getSnapshotContents().writeBytes(bytes)) {
+                    await(client.commitAndClose(resolved, change));
+                } else {
+                    await(client.discardAndClose(resolved));
+                }
+                JSObject payload = new JSObject();
+                payload.put("kind", "resolved");
+                call.resolve(payload);
+            } catch (Throwable error) {
+                String reason = snapshotFailure(error);
+                Log.i(TAG, "Snapshot conflict resolution failed: " + reason);
+                resolveSnapshotFailure(call, reason);
+            }
+        });
+    }
+
+    /** Remember a conflict for {@link #resolveSnapshot}, closing whatever an earlier unanswered one left open. */
+    private SnapshotsClient.SnapshotConflict hold(SnapshotsClient.SnapshotConflict conflict) {
+        SnapshotsClient.SnapshotConflict stale = pendingConflict;
+        pendingConflict = conflict;
+        if (stale != null) {
+            Activity activity = getActivity();
+            if (activity != null) {
+                try {
+                    SnapshotsClient client = PlayGames.getSnapshotsClient(activity);
+                    client.discardAndClose(stale.getSnapshot());
+                    client.discardAndClose(stale.getConflictingSnapshot());
+                } catch (Throwable ignored) {
+                    // Best effort: the snapshots are closed when the process ends regardless.
+                }
+            }
+        }
+        return conflict;
+    }
+
+    /** Both sides of a conflict, as the web layer merges them. Neither side is logged. */
+    private void resolveConflict(PluginCall call, SnapshotsClient.SnapshotConflict conflict) {
+        JSObject payload = new JSObject();
+        payload.put("kind", "conflict");
+        payload.put("conflictId", conflict.getConflictId());
+        putBytes(payload, "base", conflict.getSnapshot());
+        putBytes(payload, "other", conflict.getConflictingSnapshot());
+        call.resolve(payload);
+    }
+
+    private static void putBytes(JSObject payload, String key, Snapshot snapshot) {
+        try {
+            byte[] bytes = snapshot == null ? null : snapshot.getSnapshotContents().readFully();
+            if (bytes != null && bytes.length > 0) payload.put(key, Base64.encodeToString(bytes, Base64.NO_WRAP));
+        } catch (Throwable error) {
+            // An unreadable side is reported as absent; the web layer keeps the other.
+            Log.i(TAG, "A conflicting snapshot could not be read: " + error.getClass().getSimpleName());
+        }
+    }
+
+    /** The payload's bytes, or null when they are missing, not base64, or too large to be a save. */
+    private static byte[] snapshotBytes(PluginCall call) {
+        String data = call.getString("data", "");
+        if (data == null || data.isEmpty()) return null;
+        try {
+            byte[] bytes = Base64.decode(data, Base64.DEFAULT);
+            return bytes.length == 0 || bytes.length > MAX_SNAPSHOT_BYTES ? null : bytes;
+        } catch (IllegalArgumentException error) {
+            return null;
+        }
+    }
+
+    private static SnapshotMetadataChange metadataChange(PluginCall call) {
+        String description = call.getString("description", "");
+        if (description == null) description = "";
+        if (description.length() > MAX_DESCRIPTION) description = description.substring(0, MAX_DESCRIPTION);
+        Long progress = call.getLong("progress");
+        SnapshotMetadataChange.Builder builder = new SnapshotMetadataChange.Builder().setDescription(description);
+        if (progress != null && progress >= 0) builder.setProgressValue(progress);
+        return builder.build();
+    }
+
+    private static <T> T await(Task<T> task) throws ExecutionException, InterruptedException, TimeoutException {
+        return Tasks.await(task, SNAPSHOT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+    }
+
+    /** The closed set the web layer knows, from whatever a snapshot call threw. Never the message. */
+    private static String snapshotFailure(Throwable error) {
+        if (error instanceof TimeoutException) return "timeout";
+        Throwable cause = error instanceof ExecutionException && error.getCause() != null ? error.getCause() : error;
+        if (cause instanceof Exception) return failureReason((Exception) cause);
+        return "failed";
+    }
+
+    private void resolveSnapshotFailure(PluginCall call, String reason) {
+        JSObject payload = new JSObject();
+        payload.put("kind", "failed");
+        payload.put("reason", reason);
+        call.resolve(payload);
     }
 
     /** The achievements screen closed. */

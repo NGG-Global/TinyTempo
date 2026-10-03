@@ -84,14 +84,17 @@ cheaper than it looks.
 the scene that draws it. `android:supportsRtl="true"` is set but nothing is
 authored RTL. Hebrew is an obvious first candidate given where this is written.
 
-**7. ~~No Play Games Services.~~ Sign-in and achievements are in; Saved Games is still a plan.**
+**7. ~~No Play Games Services.~~ Sign-in, achievements and Saved Games are in; two-device behaviour needs hardware.**
 Play Games Services v2 authenticates on Android and is never required to play.
 Five achievements unlock from clearing levels 10–50 and are derived from the
 save, so an old save is owed them on the first signed-in launch. One leaderboard
 id exists for a Daily Tempo that does not: `DAILY_TEMPO_AVAILABLE` is false, so
-nothing is submitted and no button shows. Saved Games is deliberately not
-written — see the plan in `docs/PLAY_GAMES.md`. The player id crosses the bridge
-and reaches no log, crash report or analytics event.
+nothing is submitted and no button shows. Saved Games carries earned progression
+and one-time lessons in one snapshot per player, merges rather than replaces,
+resolves Play's conflicts with the same merge, and keeps two Play Games accounts
+on one device apart (`docs/CLOUD_SAVE.md`). The player id crosses the bridge and
+reaches no log, crash report, analytics event or storage key. What is left needs
+hardware and the Console: section D2 and the matrix in that doc.
 
 **8. No rate prompt, no share, no "what's new".** Nothing asks a happy player to
 review, which is what drives early ranking.
@@ -318,6 +321,24 @@ these is a blocker — but none has been run on a device.
       sheet appears at its discretion and the map follows either way. A replay of
       level 10 and a clear of level 20 must show nothing. See `docs/IN_APP_REVIEW.md`.
 
+### D2. Saved Games — Console and two devices
+
+The code is in and tested (`tests/cloudSave.test.ts`); the Java bridge compiles against
+the pinned SDK. None of this has run between two real devices.
+
+- [ ] **Confirm Saved Games is On** under Play Games Services → Setup and management →
+      Configuration, then **Review and publish** the Games configuration. An unpublished
+      change serves nobody, and a tester account is the only kind that can sync before it.
+- [ ] **Check the OAuth consent scopes** the Saved Games guide currently lists (`games`,
+      `games_lite`, `drive.appdata`) are on the project's consent configuration *(verify —
+      this moves)*. The app adds no runtime permission prompt for any of it.
+- [ ] **Run the device matrix** in `docs/CLOUD_SAVE.md`: A plays 1–10; B restores them,
+      improves 4 and plays 11–13; A sees both; an offline conflict on 7 and 8 keeps both;
+      a profile switch A→B→A inherits nothing and loses nothing; different Tap offsets on
+      the two devices stay different.
+- [ ] Watch the Play Games app's own Saved Games list: one entry, "Level N, M cleared".
+- [ ] Re-publish the legal pages: privacy and terms now say Play Games holds a saved game.
+
 ### E. Store listing assets — none of these exist in the repo
 
 - [ ] App icon, 512×512 PNG. `npm run icons` cuts the launcher and web sizes from
@@ -344,10 +365,12 @@ these is a blocker — but none has been run on a device.
       App activity and Diagnostics, and note the Settings switch as the user
       control. Leaderboard events are not sent while Daily Tempo is off. **Play
       Games** receives the player id and display name when the player is signed
-      in, and achievement unlocks; it does not receive a cloud save. The game's own
-      save data leaves the device only through Android's own backup, to the
-      player's Google account, and through a save code the player chooses to copy.
-      The privacy policy says so.
+      in, achievement unlocks, and **the saved game**: unlocked levels, best accuracy
+      per level and one-time lesson flags, stored in the player's Play Games account
+      (`docs/CLOUD_SAVE.md`) — never hearts, purchases, settings, calibration or consent.
+      The game's own save data otherwise leaves the device only through Android's own
+      backup, to the player's Google account, and through a save code the player
+      chooses to copy. The privacy policy says so.
 - [ ] **Content rating questionnaire.** Disclose ads and in-app purchases.
 - [ ] **Target audience and content.** The cartoon workshop look will read as
       child-appealing to a reviewer. If you select a child audience you enter the
@@ -397,8 +420,8 @@ these is a blocker — but none has been run on a device.
 
 - [x] Add crash reporting (gap 1) — code done; account steps in section B.
 - [ ] ~~Attach an analytics provider to the existing sink~~ — done, `docs/ANALYTICS.md`.
-- [ ] ~~Decide on cloud save~~ — done: Auto Backup plus a save code, `docs/SAVES.md`
-      (gap 2).
+- [x] ~~Decide on cloud save~~ — done: Play Games Saved Games, Auto Backup and a save
+      code, `docs/SAVES.md`, `docs/CLOUD_SAVE.md` (gaps 2 and 7).
 - [x] ~~Settle the application ID~~ — `com.tinytempo.app`, renamed before first
       publish because it is permanent afterwards (gap 12).
 - [x] ~~Align `versionName`, `versionCode` and `package.json`.~~ Done —

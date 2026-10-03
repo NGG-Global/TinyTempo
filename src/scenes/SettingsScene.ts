@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { setAnalyticsConsent } from '@/analytics/boot';
-import { applyCalibration, currentAudio, ensureShellMusic, setBusVolume } from '@/audio/sharedAudio';
+import { currentAudio, ensureShellMusic, resetCalibration, setBusVolume } from '@/audio/sharedAudio';
+import { activeCalibration, currentRoute, onRouteChange } from '@/audio/audioRoute';
+import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -122,6 +124,7 @@ export class SettingsScene extends BaseScene {
   private switchedAt = { haptics: -Infinity, analytics: -Infinity };
   private lastSfxTick = 0;
   private disposed = false;
+  private stopWatchingRoute: (() => void) | null = null;
   private get reducedMotion(): boolean { return reducedMotion(); }
 
   public constructor() { super(SceneKey.Settings); }
@@ -171,6 +174,8 @@ export class SettingsScene extends BaseScene {
     this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']
       .map(caption => this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     this.buildTexts();
+    // Earbuds in or out while Settings is open: the timing row names the new route and its value.
+    this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) { this.refreshCopy(); this.layout(); } });
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);
     this.input.on(Phaser.Input.Events.POINTER_MOVE, this.pointerMove, this);
     this.input.on(Phaser.Input.Events.POINTER_UP, this.pointerUp, this);
@@ -257,7 +262,7 @@ export class SettingsScene extends BaseScene {
       notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
     this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
-    this.texts.version = body(this, `v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
+    this.texts.version = body(this, `· v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
   }
 
@@ -314,7 +319,8 @@ export class SettingsScene extends BaseScene {
     resize(this.texts.version!, 24 * s, PALETTE.muted, STYLE.current, false);
     // Privacy · Terms · vX, laid out from the measured widths so the dots sit evenly.
     const legal = this.texts.legal!, version = this.texts.version!;
-    const gap = 14 * s;
+    // A word space, so "Terms · v1" spaces its dot as "Privacy · Terms" does.
+    const gap = 6 * s;
     const total = legal.width + gap + version.width;
     legal.setPosition(safe.centerX - total / 2 + legal.width / 2, legalY);
     version.setPosition(legal.x + legal.width / 2 + gap, legalY);
@@ -414,8 +420,8 @@ export class SettingsScene extends BaseScene {
     const tuneRect = new Phaser.Geom.Rectangle(timing.right - 24 * s - tuneW, timing.centerY - control / 2, tuneW, control);
     this.rows.tune = tuneRect;
     this.texts.tune!.setPosition(tuneRect.centerX - 16 * s, tuneRect.centerY);
-    const offset = loadSettings().calibrationMs;
-    if (offset !== 0) {
+    // Reset only where the active route has a measurement to drop.
+    if (activeCalibration() !== null) {
       const resetW = Math.max(132 * s, control);
       const resetRect = new Phaser.Geom.Rectangle(tuneRect.x - 12 * s - resetW, tuneRect.y, resetW, control);
       this.rows.offsetReset = resetRect;
@@ -432,6 +438,12 @@ export class SettingsScene extends BaseScene {
     this.texts.offsetNote!.setPosition(
       left + 28 * s + this.texts.offsetValue!.width + 12 * s, timing.centerY + 22 * s,
     );
+    // The route's name shrinks rather than running under Reset or Tune on a narrow handset:
+    // "+142 ms · Bluetooth audio" beside both buttons is wider than a 393-point row.
+    const note = this.texts.offsetNote!;
+    note.setScale(1);
+    const room = (this.rows.offsetReset ?? tuneRect).x - 12 * s - note.x;
+    if (note.width > room) note.setScale(Math.max(0.55, room / note.width));
     this.hits.push({ name: 'tune', rect: tuneRect, pinned: false });
 
     // HEARTS — the status, not an offer. The offers are the section below.
@@ -765,7 +777,11 @@ export class SettingsScene extends BaseScene {
     const view = viewHealth(loadHealth());
     const entitled = monetization().premium();
     const canBuzz = hapticsSupported();
-    this.texts.offsetValue!.setText(formatOffset(loadSettings().calibrationMs));
+    // The active route's own value, named by route: a measurement belongs to one of them.
+    const measured = activeCalibration();
+    const route = currentRoute();
+    this.texts.offsetValue!.setText(measured === null ? 'Not calibrated' : formatOffset(measured));
+    this.texts.offsetNote!.setText(route === 'unknown' ? '· Measured on this device' : `· ${ROUTE_LABELS[route]}`);
     this.texts.hapticsNote!.setVisible(!canBuzz);
     this.texts.heartCount!.setText(entitled ? '∞' : `${view.hearts}/${view.maxHearts}`);
     this.texts.heartCount!.setVisible(!entitled);
@@ -790,7 +806,8 @@ export class SettingsScene extends BaseScene {
     const area = areaOf(progress.unlocked);
     this.texts.level!.setText(`Level ${progress.unlocked}`);
     this.texts.levelNote!.setText(`· ${area.name}`);
-    this.texts.reset!.setText(this.resetArmed ? 'Confirm' : 'Reset');
+    // `label` uppercases on creation only; a later setText must match the other chips itself.
+    this.texts.reset!.setText(this.resetArmed ? 'CONFIRM' : 'RESET');
     this.texts.notice!.setText(this.notice).setVisible(this.notice !== '');
   }
 
@@ -1106,9 +1123,9 @@ export class SettingsScene extends BaseScene {
     }
   }
 
-  /** Back to an uncalibrated clock. Unlike progress reset, this is one tap: Tune can put it back. */
+  /** The active route back to uncalibrated. Unlike progress reset, this is one tap: Tune can put it back. */
   private resetOffset(): void {
-    applyCalibration(currentAudio(this), 0);
+    resetCalibration(currentAudio(this));
     this.refreshCopy();
     this.layout();
   }
@@ -1161,6 +1178,8 @@ export class SettingsScene extends BaseScene {
 
   private shutdown(): void {
     this.disposed = true;
+    this.stopWatchingRoute?.();
+    this.stopWatchingRoute = null;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);

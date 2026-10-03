@@ -181,9 +181,19 @@ export interface MasteryPose {
   readonly label: { readonly rise: number; readonly alpha: number };
 }
 
-/** Null before the payoff is due. Once it has played, the label stays and the rest is at rest. */
-export function masteryPose(age: number, still = false): MasteryPose | null {
+/**
+ * Null before the payoff is due. Once it has played, the label stays and the rest is at rest.
+ *
+ * `repeat` is a flawless run of a level the save already had mastered (`game/mastery.ts`):
+ * the run is acknowledged, so the plate still arrives, but the ring, the medals' glint and
+ * the knock are the reveal's and are not played a second time.
+ */
+export function masteryPose(age: number, still = false, repeat = false): MasteryPose | null {
   if (!Number.isFinite(age) || age < 0) return null;
+  if (repeat) {
+    const arrive = still ? 1 : clamp01((age - 0.15) / 0.45);
+    return { ring: { spread: 0, alpha: 0 }, flash: 0, knock: 0, label: { rise: 1 - overshoot(arrive, 0.12), alpha: easeOut(Math.min(1, arrive * 1.6)) } };
+  }
   if (still) return { ring: { spread: 1, alpha: age < MASTERY.hold ? 0.35 * (1 - age / MASTERY.hold) : 0 }, flash: 0, knock: 0, label: { rise: 0, alpha: 1 } };
   const M = MASTERY;
   const p = clamp01(age / M.ring);

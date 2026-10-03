@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { MUSIC } from '@/config/music';
 import { currentAudio, ensureShellMusic, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentRoute, dismissRouteNotice, onRouteChange, routeNoticeWanted } from '@/audio/audioRoute';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -17,6 +19,8 @@ import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, 
 import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
+import { mapMastered } from '@/game/mastery';
+import { watchForHeart } from '@/game/restart';
 import { MaterialKey } from '@/textures/materials';
 import { mix, relativeLuminance, shade, starColour } from '@/ui/colour';
 import { fillContour, traceContour } from '@/ui/illustration';
@@ -25,7 +29,7 @@ import { FxKey } from '@/ui/feedback';
 import { dashes, pathIndexAt, pathXAt, smoothPath, type Point } from '@/ui/path';
 import {
   beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE,
-  gatePlateTop, mapWindow, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
+  gatePlateTop, mapWindow, masteryGroove, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
 } from '@/ui/roadLayout';
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
@@ -38,11 +42,15 @@ import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize } from '@/ui/type';
+import { RouteNotice } from '@/ui/routeNotice';
 import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap } from '@/vignettes/Vignette';
+
+/** How opaque the header's haze is at the very top of the frame; it eases to nothing under the pucks. */
+const HAZE_ALPHA = 0.88;
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
 const MAP = {
@@ -258,6 +266,9 @@ export class MapScene extends BaseScene {
   private objectivesAt = { x: 0, y: 0 };
   private objectives!: ObjectivesState;
   private objectivesCard!: ObjectivesCard;
+  /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
+  private routeNotice!: RouteNotice;
+  private stopWatchingRoute: (() => void) | null = null;
   private muted = false;
   private numbers: Phaser.GameObjects.Text[] = [];
   private areaTitles: Phaser.GameObjects.Text[] = [];
@@ -267,6 +278,9 @@ export class MapScene extends BaseScene {
   private controlSize = 96;
   private worldHeight = 0;
   private hudHeight = 0;
+  /** The header's backdrop, and what it was last drawn for: the area's colour and the frame. */
+  private haze!: Phaser.GameObjects.Graphics;
+  private hazeKey = '';
   private scrollY = 0;
   private velocity = 0;
   private drag: { id: number; scrollable: boolean; lastY: number; lastAt: number; startX: number; startY: number; moved: boolean } | null = null;
@@ -345,6 +359,9 @@ export class MapScene extends BaseScene {
     // The pool of light stays put while the ground scrolls under it: a lamp over a table.
     this.glow = this.add.image(0, 0, FxKey.glow).setScrollFactor(0).setDepth(6).setAlpha(0.22);
     this.fibre = this.add.tileSprite(0, 0, 1, 1, MaterialKey.paper).setOrigin(0).setScrollFactor(0).setDepth(6).setAlpha(0.32 * STYLE.current.grain);
+    // Under the header, over the road: see `drawHaze`.
+    this.haze = this.add.graphics().setScrollFactor(0).setDepth(7);
+    this.hazeKey = '';
     this.signBack = this.add.graphics().setScrollFactor(0).setDepth(10);
     this.signSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7).setScrollFactor(0).setDepth(10);
     this.status = display(this, '', { size: 40, colour: SHELL.cream }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
@@ -357,6 +374,9 @@ export class MapScene extends BaseScene {
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
     this.objectivesCard = new ObjectivesCard(this, 30);
+    // Under the objectives card and the rest sheet, over the road. Assigned on every entry.
+    this.routeNotice = new RouteNotice(this, 12);
+    this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) this.refreshRouteNotice(); });
     this.objectives = loadObjectives(Date.now(), objectiveContext(this.progress));
     this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 28, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
@@ -455,10 +475,14 @@ export class MapScene extends BaseScene {
     this.glow.setPosition(full.x + full.width * 0.38, full.y + full.height * 0.34).setDisplaySize(size, size)
       .setTint(mix(0xf6e6bc, areaOf(this.progress.unlocked).area.sky, 0.4));
     this.fibre.setPosition(full.x, full.y).setSize(full.width, full.height);
+    this.hazeKey = '';
+    this.drawHaze();
     this.drawSign(s, 0, 0);
     this.drawPucks(s, 0);
     this.drawDock(s, 0);
     this.drawRest(s, 0);
+    this.routeNotice.layout(safe.centerX, this.footerTop, safe.width - 32 * s, s, this.controlSize);
+    this.refreshRouteNotice();
     this.pressDirty = this.puckDirty = this.restPressDirty = true;
     this.cameras.main.setBounds(0, 0, full.width, this.worldHeight);
     if (!this.centered) { this.centered = true; this.scrollTo(this.focus); }
@@ -506,6 +530,7 @@ export class MapScene extends BaseScene {
       this.drawTerrain(strip.ground.clear(), s, strip);
       const g = strip.detail.clear();
       this.drawRoad(g, s, strip);
+      this.drawOpenGates(g, s, strip);
       this.drawScenery(g, s, strip);
       this.drawPlaques(g, s, strip);
       this.drawNodes(g, s, strip);
@@ -965,6 +990,12 @@ export class MapScene extends BaseScene {
         : STYLE.current.outline;
     const t = outline === STYLE.current.outline ? STYLE.current : { ...STYLE.current, outline };
     drawDisc(g, node.x, node.y - lift, p.r, this.uiScale, { fill: p.fill, depth: p.depth }, t);
+    // IN THE POCKET, kept: derived from the save's best (`game/mastery.ts`), never stored.
+    if (mapMastered(this.progress, this.first + i)) {
+      const groove = masteryGroove(p.r, this.uiScale, BRASS);
+      g.lineStyle(groove.channel, groove.shadow, 0.9).strokeCircle(node.x, node.y - lift, groove.radius);
+      g.lineStyle(groove.inlay, groove.brass, 1).strokeCircle(node.x, node.y - lift, groove.radius);
+    }
     const look = this.finaleLook(i);
     if (!look) return;
     // Two brass rings ride with the puck, so the frontier's hop carries them.
@@ -1169,6 +1200,23 @@ export class MapScene extends BaseScene {
   }
 
   /**
+   * The posts of every gate the player has passed, standing as the area's threshold. Laid
+   * with the road, under the stops: an open gate stands half a step below its area's first
+   * level, and its posts reach up into that level's star plate, so drawn over the stops
+   * they cut through the plate's middle star. Under them, the plate covers the post tops.
+   * The live gate is `update()`'s while its bar lifts and is left alone here.
+   */
+  private drawOpenGates(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
+    for (let k = 0; k < this.gateTexts.length; k++) {
+      const area = this.firstBand + k;
+      if (area < 1 || area === this.liveGate || !areaOpen(area, this.stars)) continue;
+      const y = this.boundaryY(area);
+      if (y === null || y < strip.top || y >= strip.bottom) continue;
+      this.drawBarrier(g, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 1, 0, null);
+    }
+  }
+
+  /**
    * A barrier at the foot of every closed area in the window, with the stars it wants
    * on a sign under the bar. The one the collection is working toward is not baked: it
    * is `liveGate`, drawn every frame so its sign can count the landings and its bar
@@ -1187,10 +1235,9 @@ export class MapScene extends BaseScene {
       const strip = y === null ? undefined : this.strips.find(candidate => y >= candidate.top && y < candidate.bottom);
       if (y === null || !strip) { sign.setText('').setVisible(false); goal.setText('').setVisible(false); continue; }
       if (!closed) {
-        // A gate the player has passed stands open: its posts stay as the area's threshold.
+        // A gate the player has passed stands open; its posts are `drawOpenGates`', under the stops.
         sign.setText('').setVisible(false);
         goal.setText('').setVisible(false);
-        if (!live) this.drawBarrier(strip.detail, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 1, 0, null);
         continue;
       }
       this.placeGateSign(k, this.roadXAt(y), y, s, live ? this.tallyShown : null, starsRequired(area));
@@ -1756,6 +1803,7 @@ export class MapScene extends BaseScene {
     if (monetization().premium()) return;
     const first = !this.restShown;
     this.restShown = true;
+    this.refreshRouteNotice();
     this.restDailyOpen = canClaimDailyHeart(this.health);
     // The tip stays on the sheet for the whole visit once it has opened, and is marked
     // seen on the first showing, so it is said once — not once per sheet.
@@ -1781,6 +1829,7 @@ export class MapScene extends BaseScene {
   private hideRest(): void {
     if (!this.restShown) return;
     this.restShown = false;
+    this.refreshRouteNotice();
     this.restDailyOpen = false;
     this.restTipOpen = false;
     this.restPressed = null;
@@ -1808,11 +1857,15 @@ export class MapScene extends BaseScene {
     this.restPressDirty = true;
     const claimId = `map:${++this.watchClaims}`;
     try {
-      const result = await monetization().showRewarded();
-      if (result.ok) this.health = redeemHeart(claimId).health;
+      // The one rewarded path the play screen's Watch and its restart sheet also take.
+      const watch = await watchForHeart(() => monetization().showRewarded(), id => {
+        const grant = redeemHeart(id);
+        this.health = grant.health;
+        return grant;
+      }, claimId);
       if (this.disposed) return;
-      if (!result.ok) {
-        this.restNote = rewardedFeedback(result.reason);
+      if (watch.kind === 'failed') {
+        this.restNote = rewardedFeedback(watch.reason);
         this.drawRest(this.uiScale, 0);
         return;
       }
@@ -1935,6 +1988,37 @@ export class MapScene extends BaseScene {
     const max = Math.max(0, this.worldHeight - this.viewport.full.height);
     this.scrollY = Math.max(0, Math.min(max, this.scrollY));
     this.cameras.main.setScroll(0, this.scrollY);
+    this.drawHaze();
+  }
+
+  /**
+   * A soft fade at the top of the frame, behind the sign and the pucks, in the colour of
+   * whatever the road is crossing up there. Without it a stop, a lamp post or the next area's
+   * name board slid under the header and read as part of it — a "9" between Back and the
+   * gear, a "Sand" board behind "Dusk". Bands rather than a gradient fill, so it is the same
+   * on the canvas renderer; redrawn only when the area under the header or the frame changes.
+   */
+  private drawHaze(): void {
+    const { full, safe } = this.viewport;
+    const s = this.uiScale;
+    const top = this.scrollY + this.hudHeight;
+    // Nodes climb as the level rises, so the first at or above the header's foot is the one there.
+    const index = this.nodes.findIndex(node => node.y <= top);
+    const level = this.first + (index < 0 ? this.shown - 1 : index);
+    const { area } = areaOf(Math.max(1, level));
+    // Over the crest the frame's top is sky, and the haze is the sky's.
+    const colour = this.atEnd && this.crestTop > this.scrollY + safe.top ? area.sky : area.ground;
+    const bottom = safe.top + ROAD.pucks * s;
+    const key = `${colour}:${full.width}:${bottom}`;
+    if (key === this.hazeKey) return;
+    this.hazeKey = key;
+    const g = this.haze.clear();
+    const bands = 18;
+    for (let b = 0; b < bands; b++) {
+      const t = b / bands;
+      // Full under the inset and the sign, easing out by the objectives puck's foot.
+      g.fillStyle(colour, HAZE_ALPHA * (1 - t) ** 2).fillRect(full.x, full.y + (bottom - full.y) * t, full.width, (bottom - full.y) / bands + 1);
+    }
   }
 
   public override update(_time: number, delta: number): void {
@@ -2146,6 +2230,16 @@ export class MapScene extends BaseScene {
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
       return;
     }
+    // The route note sits over the road, so it is asked before a node or a drag can take the tap.
+    if (!this.restShown) {
+      const notice = this.routeNotice.tap(x, y);
+      if (notice === 'close') { vibrate('tap'); dismissRouteNotice(); this.refreshRouteNotice(); return; }
+      if (notice === 'tune') {
+        vibrate('tap');
+        this.curtain.cover(() => this.scene.start(SceneKey.Calibrate, { from: SceneKey.Map, returnTo: SceneKey.Map }));
+        return;
+      }
+    }
     if (near(this.muteAt)) {
       toggleMute(sharedAudio(this));
       this.muted = outputSilent(this);
@@ -2227,9 +2321,16 @@ export class MapScene extends BaseScene {
     hushMusic(this, MUSIC.bedFadeSec);
     this.curtain.cover(() => this.scene.start(SceneKey.Play, { level, autoStart: true }));
   }
+  /** The route note: shown when the active route wants calibrating, never over the rest sheet. */
+  private refreshRouteNotice(): void {
+    this.routeNotice.show(!this.restShown && routeNoticeWanted() ? currentRoute() : null);
+  }
+
   private shutdown(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.stopWatchingRoute?.();
+    this.stopWatchingRoute = null;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);

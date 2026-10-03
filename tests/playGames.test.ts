@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  createPlayGames, NOT_SHOWN, NOT_SUBMITTED, SIGNED_OUT, stubPlayGames, type PlayGamesClient, type PlayGamesStatus,
+  createPlayGames, NOT_SHOWN, NOT_SUBMITTED, SIGNED_OUT, SNAPSHOT_FAILED, stubPlayGames, type PlayGamesClient, type PlayGamesStatus,
 } from '../src/playgames/playGames';
 
 const signedIn = (player = { playerId: 'p-1', displayName: 'Ada' }): PlayGamesStatus =>
@@ -15,6 +15,9 @@ function client(overrides: Partial<PlayGamesClient> = {}): PlayGamesClient {
     showLeaderboard: async () => NOT_SHOWN('signed_out'),
     unlockAchievement: async () => ({ sent: false, reason: 'signed_out' }),
     showAchievements: async () => NOT_SHOWN('signed_out'),
+    readSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    writeSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
+    resolveSnapshot: async () => SNAPSHOT_FAILED('signed_out'),
     ...overrides,
   };
 }

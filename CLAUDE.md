@@ -14,7 +14,7 @@ each a fraction of its own mix, full when a save has neither — and the speaker
 master mute that silences both without discarding them. Progress leaves the device two ways, neither of them an
 account: Android's Auto Backup, and the save code on `TransferScene` — a checksummed
 Crockford base32 string carrying levels, accuracies and settings, never hearts or
-purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
+purchases, and whose one calibration field this build writes but no longer restores. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
 The tiers stop at the eighth note; **triplets and sixteenths are a second stage on the
@@ -67,7 +67,10 @@ badge (`finaleStopLook`, `ui/roadLayout.ts`). **A finale takes more road than a 
 `ROAD.finaleRoom`, because every area's gate stands half a step under its first level,
 directly over the previous finale — so node y is no longer linear in the level: a seam is
 `seamBelow` the stop above it, and the road's x at a y is `pathXAt`, never a division by the
-step. The dock's trail ends in a flag. See `docs/FINALES.md`.
+step. The dock's trail ends in a flag. See `docs/FINALES.md`. An **open** gate's posts are
+laid with the road, under the stops (`drawOpenGates`), since they reach into the first
+level's star plate; and a haze in the top area's colour sits behind the header
+(`drawHaze`), so nothing on the road reads as part of the sign or the pucks.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -223,6 +226,17 @@ keepsake's card, which is as tall as its words; a clear short of three stars add
 **Replay level N** block over Continue, by the restart puck's path — coral stays on
 Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
 shrinks the plaque, never below `minScale`.
+**The line under the score is a toggle, not a caption.** *TIMING DETAILS* swaps the tray's
+medals for what the scorer already measured — the counts, a hit-error bar with the Perfect
+band and a coral marker on the lean, the lean in milliseconds and one line of advice
+(`game/timingReport.ts`, pure). The lean is the **median** signed error (`RoundResult.deltasMs`,
+negative early), so one flubbed tap cannot flip it; spread is the mean distance from it, so a
+centred scatter is told "uneven" rather than sent chasing a lean; a large, steady lean is
+pointed at the Tap offset, since the errors are measured after it. It opens in the tray, never
+as a row under the plaque, because a row would re-plan the stack under the thumb and has no
+room on 16:9 beside a finale's card and the next star. It starts closed on every result, the
+toggle is checked before the summary's tap-anywhere Continue, and every advice line fits one
+line at the tray's width. See `docs/TIMING_DETAILS.md`.
 **A plaque is a Graphics *and* its Text.** `stars.clear()` empties the drawing and leaves
 every `Text` on it untouched, which left the score and its "On the beat" caption hanging
 over the middle of the act for a whole round after the summary closed. `drawStars` is the
@@ -233,6 +247,13 @@ Two version traps live there. **Phaser 4 dropped WebGL geometry masks** — `set
 and no-ops off the canvas renderer — so a clipped region is a second camera's viewport,
 never a mask. And a control inside a scrolling list fires on the pointer *release*:
 `TapInput` reports the press, which is right only where the press is the musical event.
+
+**A dressed letter carries no horizontal padding** (`dressPad`, one unit): Phaser already
+counts the stroke into a line and draws half a stroke in, and the old stroke-wide inset put
+every left-aligned headline a stroke right of the body text under it. **A centred caption
+that wraps goes through `balanceWrap`** (`ui/type.ts`), so no word is left alone on its last
+line; hand-broken copy ("Make it\nstick.") keeps its breaks, because those are the voice. See
+`docs/VISUAL_AUDIT.md`, which also records why the canvas still renders at its logical size.
 
 **A dressed letter only takes an outline its own fill can carry.** `typeStroke` returns
 `null` below `OUTLINE_CONTRAST`, and `ui/type.ts` then draws no stroke and lifts the letter
@@ -253,7 +274,7 @@ with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` 
 it deliberately does not travel in a save code; the adapter also refuses to hand an event
 to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
 through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
-attempt on PlayScene's heart attempt id, so Resume and the restart puck continue a run
+attempt on PlayScene's heart attempt id, so Resume and a free restart continue a run
 instead of starting a second one, `level_completed`/`level_failed` fire once from
 `recordOutcome`, and a finished id is never reopened. Its session state (retries, the gate
 dedupe) is in memory and stores nothing. See `docs/ANALYTICS.md`.
@@ -274,10 +295,24 @@ of failing** on a missing token or a failed upload, which would ship a release w
 every trace is minified, so `vite.config.ts` throws on both and
 `scripts/check-no-sourcemaps.mjs` fails the build if a `.map` survives.
 
-Play Games Services is `playgames/`, on the same adapter split and **authentication only** —
-the SDK is initialized, v2 signs the player in itself, and the game can ask who they are. No
-snapshot is written; `docs/PLAY_GAMES.md` carries the Saved Games plan and the reason it is a
-plan. **Play Games is never required to play.** Every call resolves, so a device without it,
+Play Games Services is `playgames/`, on the same adapter split — the SDK is initialized, v2
+signs the player in itself, the game can ask who they are, and **progression follows the
+player through Saved Games** (`docs/CLOUD_SAVE.md`). One snapshot, `tiny-tempo-progress`,
+carries `CloudSaveV1`: `progress`, the tutorial state and four teach flags, and nothing a
+player owes or owns — no hearts, ledgers, Premium, consent, calibration or volume, which
+`tests/cloudSave.test.ts` asserts against the serialized text. The plugin opens it with
+`RESOLUTION_POLICY_MANUAL` and relays bytes; `playgames/cloudSave.ts` (pure) merges —
+highest frontier, highest accuracy per level, lessons OR-ed — and that merge is the only
+conflict strategy: both sides of a Play conflict are merged with the device's own save and
+sent back as the resolution, bounded at four rounds. A malformed cloud payload is never
+written over and a newer schema is left alone. **The device knows whose progress it holds**:
+`tiny-tempo.cloud.v1` binds it to a salted hash of the player id, anonymous progress is
+adopted by the first player, another player shelves the previous owner's progression and
+starts from their own shelf or empty, and switching back restores it; nothing is deleted and
+the raw id is stored nowhere. Syncs run at boot once signed in, on resume (throttled), after
+a cleared level and after a restored save code (debounced), never per tap or frame, and
+`local.write` merges with storage at write time so a level cleared mid-sync is kept.
+**Play Games is never required to play.** Every call resolves, so a device without it,
 a declined prompt and a plugin that rejects are one answer — signed out — and the browser
 keeps `stubPlayGames`, which *cannot* report anyone authenticated. That is a different object
 rather than a flag, which is what stops a development mock standing in for the real thing in a
@@ -397,6 +432,21 @@ a fifth of a second. `AudioClock.calibrationMs` is then the correction on top fo
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
 when it is large enough to be the reason a player is failing levels.
+**The Tap offset is per audio route** (`game/routeCalibration.ts`, `audio/audioRoute.ts`,
+`docs/AUDIO_ROUTES.md`): `speaker`, `wired`, `bluetooth` and `unknown`, each with its own
+value in `Settings.calibration` (settings version 2), because one phone differs by a fifth of
+a second between its speaker and Bluetooth. `AudioRoutePlugin.java` classifies the connected
+outputs with `AudioManager`/`AudioDeviceInfo`, Bluetooth before wired before speaker, and
+follows `AudioDeviceCallback`; the browser has no plugin and stays `unknown`, which is the old
+single offset. **A route change never writes the clock**: `syncClockCalibration` does, only
+where a plan is placed — `PlayScene.beginPlan`, a tutorial pass, the calibration screen, a new
+engine — so a phrase in flight is judged on the offset it started with. An uncalibrated route
+is 0, never a neighbour's value. A version-1 save's single offset becomes `legacy`, used by
+`unknown` and adopted once by the first real route a device reports (`adoptLegacy`).
+Calibration and Reset touch the active route only. The map's `RouteNotice` card suggests
+calibrating an uncalibrated Bluetooth route, or any uncalibrated route once another has been
+calibrated, and a close silences it for that route for the session. It is device-local: in
+no cloud save, and not restored from a save code.
 
 **A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
 is the context time of the sample the player is hearing, so every phase, judgement and
@@ -446,7 +496,16 @@ synthesized (`audio/grooveSounds.ts`) and placed on grid times through `playStin
 level every scored task of which was flawless is **mastered** (`isMastered`): after the
 medals' chorus a brass ring opens behind the plaque, the medals glint once and an
 **IN THE POCKET** plate takes a row under it (`planResult`'s `mastery`), after a finale's
-card and before a keepsake — nothing is added to the score. `Vignette.onGroove?` is an
+card and before a keepsake — nothing is added to the score. **Mastery is kept, and derived,
+never stored**: a level is mastered exactly when its saved best is 100 (`game/mastery.ts`,
+`isLevelMastered`/`masteredCount` — never a `best === 100` at a call site), which is the same
+fact as `isMastered`, since a task scores 100 only with every target Perfect and no extra,
+and `tests/mastery.test.ts` checks that through the real judge. The map inlays a thin brass
+groove inside a mastered cleared puck (`mapMastered`, `masteryGroove`); a flawless replay of a
+mastered level is `repeat` — its plate reads IN THE POCKET AGAIN without the ring, chord,
+buzz or sparks — and `level_mastered` fires on the first only. **The save code writes a
+flawless level as 101 and caps the rest at 99**, because a rounded 99.6 came back as a
+mastered 100; an older code's 100 reads as 99.5. See `docs/MASTERY.md`. `Vignette.onGroove?` is an
 optional hook for an act's own reaction; none implements it. See `docs/GROOVE.md`.
 The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
@@ -523,6 +582,22 @@ the finishing pass's Perfects and flawless tasks, which is also what keeps
 completed day — no currency, no streak to lose, nothing to buy. Every stored field is
 validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
 tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
+
+**One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
+`ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
+that paid. The restart puck is free before the attempt's first scored response
+(`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
+an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
+first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
+heart*, or at zero hearts *Out of hearts* with Watch ad & Restart, the refill, Premium and
+Keep playing. A finished, protected or Premium level restarts at once and free. Opening a
+sheet spends and ends nothing, and the sheet re-reads the run and re-arms before it acts.
+**`startRound(mode)` names what happens to the attempt** — `resume`, `free_restart`,
+`new_attempt` (`attemptForStart`), never inferred from whether a result exists — and a new
+attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
+id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
+same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
+and it restarts only if its `RestartTicket` still holds.
 
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
@@ -669,6 +744,9 @@ src/
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
+    audioRoute.ts      The live output route, and the active route's offset onto the clock at a boundary
+    routeNative.ts     The AudioRoute plugin bridge; validates every answer
+    routeBoot.ts       Native-only route watch; the browser stays `unknown`
     MusicSystem.ts     One track at a time, a source per stem: load, normalize, start, layers, rate, gain
     metronomeSounds.ts The metronome bar: a click a beat, the first accented, as samples
     musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
@@ -719,7 +797,11 @@ src/
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
+    mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
+    timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
+    restart.ts         The restart puck: free, paid or out of hearts; start modes, the handover, the rewarded heart; pure
+    routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
     musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
@@ -737,6 +819,8 @@ src/
     ids.ts             Validates a Console leaderboard or achievement id
     achievements.ts    What a save has earned, and the idempotent sync; pure
     achievementSync.ts The achievements wired to config and the installed adapter
+    cloudSave.ts       Saved Games: the CloudSaveV1 schema, merge, account binding and sync; pure
+    cloudSync.ts       Saved Games wired to storage and the adapter: debounce, resume, support line
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling
@@ -772,6 +856,8 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
+    restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
+    routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure
     sheen.ts           The light crossing a brass panel; still under reduced motion
@@ -1035,7 +1121,10 @@ reports the facts of a finished level to `offer`, and the cleared result's Conti
 and goes to the map on every branch. Play does not say whether it showed a dialog, so a
 completed launch means "attempted" and nothing more, and the one stored bit
 (`tiny-tempo.review.v1`) is written when a launch is tried, not when one is offered. See
-`docs/IN_APP_REVIEW.md`. Beyond those, the game
+`docs/IN_APP_REVIEW.md`. The audio route is the seventh: `AudioRoutePlugin.java` reads
+`AudioManager.getDevices` and `AudioDeviceCallback` and relays a category, never a device name,
+registered beside the others in `MainActivity` and checked by `check-android-config.mjs`. See
+`docs/AUDIO_ROUTES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately
