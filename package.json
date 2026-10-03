@@ -1,6 +1,6 @@
 {
   "name": "tiny-tempo",
-  "version": "0.1.10",
+  "version": "0.1.16",
   "private": true,
   "description": "Mobile-first Phaser 4 game project (portrait, touch-first, Android as target platform)",
   "type": "module",
@@ -18,9 +18,10 @@
     "sfx:encode": "node scripts/encode-sfx.mjs",
     "icons": "node scripts/generate-icons.mjs",
     "android:sync": "npm run build && NODE_OPTIONS='--experimental-strip-types' npx cap sync android && node scripts/check-android-config.mjs",
-    "android:sync:release": "npm run build:release && NODE_OPTIONS='--experimental-strip-types' npx cap sync android && node scripts/check-android-config.mjs --release",
+    "android:sync:release": "node scripts/release-check.mjs source && npm run build:release && node scripts/release-check.mjs contents && NODE_OPTIONS='--experimental-strip-types' npx cap sync android && node scripts/check-android-config.mjs --release",
     "android:apk": "npm run android:sync && node scripts/build-android.mjs assembleDebug",
-    "android:bundle": "npm run android:sync:release && node scripts/build-android.mjs bundleRelease"
+    "android:bundle": "npm run android:sync:release && node scripts/build-android.mjs bundleRelease",
+    "release:check": "node scripts/release-check.mjs source"
   },
   "engines": {
     "node": "^20.19.0 || >=22.12.0"

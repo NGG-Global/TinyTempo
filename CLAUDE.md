@@ -226,6 +226,8 @@ keepsake's card, which is as tall as its words; a clear short of three stars add
 **Replay level N** block over Continue, by the restart puck's path — coral stays on
 Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
 shrinks the plaque, never below `minScale`.
+**The score is rounded down** (`scoreLabel`): every threshold is a whole percent and stars read the
+unrounded accuracy, so rounding to nearest put "79%" over an unlit 79% star.
 **The line under the score is a toggle, not a caption.** *TIMING DETAILS* swaps the tray's
 medals for what the scorer already measured — the counts, a hit-error bar with the Perfect
 band and a coral marker on the lean, the lean in milliseconds and one line of advice
@@ -403,10 +405,17 @@ chapter out before it starts the one asked for. The second premix carries 0.1 s 
 in front, written by the encoder: its masters start on the downbeat, and an MP3 whose first
 transient sits in the opening granule is where decoders disagree most about the encoder
 delay; the head puts its opening hit in the same detection regime as the first track's.
-**The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
-`bgm/theme/home-page.mp3` on `MenuScene` and stops on every way out, with its own player
-rather than a mode inside `MusicSystem`, because every guarantee that system makes is
-about a beat grid a level is judged against and the menu is judged against nothing. A
+**The title screen has a second track, and the screens it opens keep it.** `audio/ThemeMusic.ts`
+plays `bgm/theme/home-page.mp3` on `MenuScene`, with its own player rather than a mode inside
+`MusicSystem`, because every guarantee that system makes is about a beat grid a level is
+judged against and the menu is judged against nothing. **Settings, the Scrapbook and the pages
+under Settings play the music of the screen that opened them** (`ensureScreenMusic`, by their
+`from`): the title theme from the title screen — carried on, never restarted, since the menu
+sets `keepTheme` and `ThemeMusic.enter` leaves a running source alone — and the gameplay loop
+from the map, whose `ensureShellMusic` stops any theme. Tap offset stops both for its
+metronome, and every other way off the title screen stops the theme. `startTheme`/`stopTheme`
+share one request counter, so a start still waiting on a resume never brings the theme up
+under a screen the player has already left. A
 browser will not sound it until the page has been touched, so it fetches nothing on a cold
 start and every tap that leaves the player on the title screen asks again. **It is a
 seamless 64 s loop, and an MP3 cannot loop on its own ends** — the encoder pads both — so
@@ -627,6 +636,18 @@ is under the road and the far ridge and sky are painted over it down to the cres
 past the line, a prop that would poke over it is not planted, and the signpost appears only
 when the window reaches the road's own end.
 
+**Every arc is drawn with the points its size needs** (`ui/arcDetail.ts`, installed on the
+Graphics prototype in `main.ts` before the game is built). Phaser's WebGL renderer turned each
+`arc` into a fixed hundred points on every frame, so a 2-unit highlight cost what a sun did and
+a rounded card was 404 points: the map and the arc-heavy acts spent 30–58% of their frame on
+that. The replacement keeps every chord within 0.1 unit of the circle, never above Phaser's
+hundred, and runs the sweep exactly as the renderer does. A curve that looks faceted is a
+Graphics scaled well past its drawn size, not a reason to raise the count everywhere. And
+`resize` in `ui/type.ts` writes a text's look in one go (`restyle`): Phaser's `setColor`,
+`setShadow` and `setPadding` each redraw and re-upload the text even when nothing changed, and
+`resize` runs on the frame of every tap's verdict and every count-in strike. See
+`docs/PERFORMANCE.md`.
+
 **`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
 work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
 frame's *height* and nothing else, and `uiScale` is `min(safe.width / 720, safe.height / 1150)`,
@@ -846,6 +867,7 @@ src/
     light.ts           The one key light: cast shadows and lit/shade/rim faces
     panel.ts           Slabs and pucks with thickness, dressed per treatment
     path.ts            Catmull-Rom smoothing, dash spacing, x at a y on a climbing road
+    arcDetail.ts       Graphics arcs with as many points as their radius needs; pure, installed in main.ts
     roadLayout.ts      The map's stops, seams, finale room and stage, gate plate and crest; pure
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph
@@ -1090,7 +1112,12 @@ version verbatim and `versionCode` is derived from it (1.4.2 → 10402), because
 string already feeds `__APP_VERSION__` — the Settings footer, the support subject and every
 Sentry release tag — and a hardcoded Gradle version filed each crash under a release no
 Play track matched. Release signing reads the untracked `android/keystore.properties` and
-applies only when it exists, so a machine with no upload key still builds a debug APK. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
+applies only when it exists, so a machine with no upload key still builds a debug APK. **A release build checks its own
+source** (`scripts/release-check.mjs`, run by `android:sync:release`): before building, that the
+checkout holds every commit on `origin/main` and that `package.json`'s version is committed;
+after, that the bundle carries the text of every shipped feature in `RELEASE_MARKERS`. 0.1.15
+reached Play from a checkout behind main, without the timing details or anything merged with
+them, and nothing said so. A shipped feature adds its marker; the test keeps each one in `src/`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
 is generated by `cap sync` and is not committed. Two native Capacitor plugins are used — AdMob and Firebase
 Analytics — each behind an adapter that is dynamically imported on a native platform only,

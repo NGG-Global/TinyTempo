@@ -73,7 +73,7 @@ import { body, display, label, resize } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
   chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, TIMING_TRAY, trayRect, type ResultPlan } from '@/ui/resultLayout';
-import { nextGateChip, nextStarCopy, offersReplay, replayCopy, thresholdLabels, type GateChip } from '@/game/resultCopy';
+import { nextGateChip, nextStarCopy, offersReplay, replayCopy, scoreLabel, thresholdLabels, type GateChip } from '@/game/resultCopy';
 import { dashes } from '@/ui/path';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -2112,7 +2112,7 @@ export class PlayScene extends BaseScene {
       // same number: a sound placed at T is heard when `now()` reads T.
       if (this.audio) this.audio.playStinger(at, createFinaleSound(this.audio.context, 'fanfare'), FINALE_PAYOFF.fanfareGain);
     }
-    this.scoreValue.setText(`${Math.round(accuracy)}%`);
+    this.scoreValue.setText(scoreLabel(accuracy));
     this.accuracy.setText('');
     // The details are what the scorer already counted; the line under the score opens them.
     // A preview result judged nothing, so it keeps the old caption and offers nothing.

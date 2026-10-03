@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setMusicBed } from '@/audio/musicBed';
-import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, stopTheme, toggleMute } from '@/audio/sharedAudio';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
@@ -84,12 +84,15 @@ export class MenuScene extends BaseScene {
   private muted = false;
   private busy = false;
   private disposed = false;
+  /** Leaving for a screen that plays the theme on, so shutting down must not stop it. */
+  private keepTheme = false;
   private request = 0;
 
   public constructor() { super(SceneKey.Menu); }
 
   protected override build(): void {
     this.disposed = false;
+    this.keepTheme = false;
     this.busy = false;
     this.pressedAt = this.puckPressedAt = -Infinity;
     this.puckPressed = null;
@@ -295,7 +298,8 @@ export class MenuScene extends BaseScene {
       this.puckPressed = 'setup';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
-      this.closeTheme();
+      // Settings opened from here keeps the title theme: it plays on, uninterrupted.
+      this.keepTheme = true;
       this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: SceneKey.Menu }));
       return;
     }
@@ -303,7 +307,8 @@ export class MenuScene extends BaseScene {
       this.puckPressed = 'book';
       this.puckPressedAt = performance.now() / 1000;
       this.puckDirty = true;
-      this.closeTheme();
+      // So does the Scrapbook.
+      this.keepTheme = true;
       this.curtain.cover(() => this.scene.start(SceneKey.Scrapbook, { from: SceneKey.Menu }));
       return;
     }
@@ -366,9 +371,12 @@ export class MenuScene extends BaseScene {
     await audio.theme.enter();
   }
 
-  /** The title screen is the only place the theme plays, so every way out stops it. */
+  /**
+   * Every way out stops the theme except the two that keep it: Settings and the Scrapbook
+   * opened from here play it on (`ensureScreenMusic`), and the screen they open decides.
+   */
   private closeTheme(): void {
-    currentAudio(this)?.theme.leave();
+    stopTheme(currentAudio(this));
   }
 
   private async play(tutorial = false): Promise<void> {
@@ -414,7 +422,7 @@ export class MenuScene extends BaseScene {
     ++this.request;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
-    this.closeTheme();
+    if (!this.keepTheme) this.closeTheme();
     this.taps.dispose();
     this.illustration.destroy();
   }

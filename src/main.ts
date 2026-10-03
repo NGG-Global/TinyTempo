@@ -12,6 +12,7 @@ import { bootAudioRoute } from '@/audio/routeBoot';
 import { bootPlayGames } from '@/playgames/boot';
 import { bootAppReview } from '@/review/boot';
 import { bootUpdates } from '@/updates/boot';
+import { installArcDetail } from '@/ui/arcDetail';
 
 declare global {
   interface Window {
@@ -53,6 +54,8 @@ function start(): void {
     // bus: the provider composes with whatever is installed, so the later it attaches
     // the more it inherits, and attaching first would leave it to be wrapped instead.
     void installAnalyticsProvider();
+    // Before the first Graphics draws: every arc in the game goes through it (`ui/arcDetail.ts`).
+    installArcDetail(Phaser.GameObjects.Graphics.prototype);
     const game = new Phaser.Game(createGameConfig());
     // After the game exists so the adapter can ask which scene is up. A Play
     // sheet over a level would cost the round; chrome screens are the wait.

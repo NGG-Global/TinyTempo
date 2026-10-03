@@ -341,12 +341,25 @@ routing.
 
 ## The title theme
 
-A second track, `bgm/theme/home-page.mp3`, plays on the title screen and nowhere else. Its
-master is `bgm/theme/home-page.wav`, kept unmodified, and `npm run music:encode -- --track
-theme` writes the MP3. Going to the map, into a level, or into Settings stops it. The
-gameplay loop then continues as the shell bed on the map and settings (`audio/musicBed.ts`),
-and is still the only thing a level ever hears. Returning to the title hushes that loop so
-the two tracks cannot overlap.
+A second track, `bgm/theme/home-page.mp3`, plays on the title screen and on the screens the
+title screen opens. Its master is `bgm/theme/home-page.wav`, kept unmodified, and `npm run
+music:encode -- --track theme` writes the MP3.
+
+**A screen off the title or off the road plays the music of the screen that opened it**
+(`ensureScreenMusic` in `audio/sharedAudio.ts`, keyed on the scene's `from`):
+
+| Opened from | Settings, Scrapbook, Save code, Help | Tap offset |
+| --- | --- | --- |
+| The title screen | The title theme, **carried on** — the same source, never restarted | Silent: the metronome alone |
+| The map | The gameplay loop, the shell bed (`audio/musicBed.ts`) | Silent |
+
+The theme is carried rather than restarted because the title screen sets `keepTheme` on its way
+to Settings or the Scrapbook, so its shutdown does not stop the theme, and `ThemeMusic.enter`
+leaves a running source alone. Coming back from Tap offset starts it again from its opening.
+Going to the map, into a level or into the tutorial stops it, and the gameplay loop is still
+the only thing a level ever hears. Returning to the title hushes that loop so the two tracks
+cannot overlap. `startTheme` and `stopTheme` share a request counter, so a start still waiting
+on the context's resume gives up if the player has moved on — to Tap offset, say — meanwhile.
 
 It replaces `bgm/theme/cozy-quest.mp3`, which stays in the repository so the change can be
 undone by pointing `THEME.url` back at it. Nothing references it, so it no longer reaches

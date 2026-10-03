@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { setAnalyticsConsent } from '@/analytics/boot';
-import { currentAudio, ensureShellMusic, resetCalibration, setBusVolume } from '@/audio/sharedAudio';
+import { currentAudio, ensureScreenMusic, resetCalibration, setBusVolume } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, onRouteChange } from '@/audio/audioRoute';
 import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { SceneKey } from '@/config/scenes';
@@ -188,7 +188,8 @@ export class SettingsScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
-    ensureShellMusic(this);
+    // The title theme when the title screen opened Settings, the road's loop when the map did.
+    ensureScreenMusic(this, this.from === SceneKey.Menu);
   }
 
   /** Every text inside the scrolling band belongs to the container, not the camera. */

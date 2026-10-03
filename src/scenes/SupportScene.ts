@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { currentAudio, ensureShellMusic } from '@/audio/sharedAudio';
+import { currentAudio, ensureScreenMusic } from '@/audio/sharedAudio';
 import { activeCalibration, activeOffset, currentRoute } from '@/audio/audioRoute';
 import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { DIAGNOSTICS } from '@/config/diagnostics';
@@ -136,7 +136,7 @@ export class SupportScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
-    ensureShellMusic(this);
+    ensureScreenMusic(this, this.enteredFrom() === SceneKey.Menu);
   }
 
   private button(caption: string, hero: boolean, size: number): Button {

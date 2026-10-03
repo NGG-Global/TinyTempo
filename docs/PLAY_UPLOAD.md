@@ -120,7 +120,12 @@ than building an unsigned bundle Play would reject on upload.
 11. ✅ ~~**Add a release `signingConfig`.**~~ Done — it reads `android/keystore.properties`
     and is applied only when that file exists, so a machine without the key still builds a
     debug APK.
-12. ✅ ~~**Add an `android:bundle` script.**~~ Done — it runs `build:release` (so Sentry
+12. ✅ ~~**Add an `android:bundle` script.**~~ Done. **It now refuses a stale checkout**:
+    `scripts/release-check.mjs` stops the build if the checkout is behind `origin/main` or the
+    version in `package.json` is not committed, and stops it after the web build if the bundle
+    is missing a shipped feature's text (`RELEASE_MARKERS`). 0.1.15 went up built from a
+    checkout behind main and nothing noticed. `npm run release:check` runs the first half alone.
+    It runs `build:release` (so Sentry
     gets the sourcemaps), syncs, and runs `bundleRelease`. New apps must publish as an App
     Bundle, which is why there is no release APK path.
 13. ✅ ~~**Align the version numbers.**~~ Done — `package.json` is the one source.
