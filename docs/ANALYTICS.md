@@ -254,7 +254,7 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have`, `unlocked`. When this session already sent `star_gate_reached` for that gate: `replays`, `improvements`, `stars_gained` — the ledger's own events in between, not a stored session |
 | `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
 | `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
-| `tutorial_skipped` | *Skip* | `step` (`watch` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
+| `tutorial_skipped` | *Skip* | `step` (`watch` \| `along` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
 | `subdivision_intro_shown` | A finer grid's introduction begins (`docs/SUBDIVISIONS.md`). Shown again if the player leaves before a try is judged | `grid` (`triplet` \| `sixteenth`), `level`, `mode` |
 | `subdivision_intro_completed` | The introduction hands over to the level. Once per showing | `grid`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `scrapbook_opened` | The Scrapbook opens (`docs/SCRAPBOOK.md`) | `source` (`menu` \| `map`), `owned`, `total` |

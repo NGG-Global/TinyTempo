@@ -8,9 +8,9 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
 import { RoundController, type Phase } from '@/game/RoundController';
-import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach } from '@/game/TutorialRun';
+import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach, type JudgedStep } from '@/game/TutorialRun';
 import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
 import { TapInput, type Tap } from '@/input/TapInput';
 import type { Judgement } from '@/rhythm/judge';
@@ -30,15 +30,21 @@ import { VIGNETTES } from '@/vignettes/registry';
 /** The words beside the two rows. The level shows none; the lesson is where they belong. */
 const ROW_LABELS = { theirs: 'THE HAMMER', yours: 'YOU' } as const;
 
+/** The step line over the sign, per step. */
+const STEP_LABELS = { watch: '1 / 3 · WATCH', along: '2 / 3 · TAP ALONG', try: '3 / 3 · ON YOUR OWN', done: 'READY' } as const;
+
 /**
  * A lesson on the same stage, the same audio clock and the same turn block as a level.
  *
  * The block is what says whose turn it is on every level, so it is what the lesson
- * teaches: the same two rows, the same token, drawn by the same `drawBlock`, with a
- * label on each row and a pointer that follows the token — and a sign above that names
- * the moment in words, from the same handover the block is drawn from. The tried pass
- * is judged by the level's own `RoundController`, so what passes here is what passes
- * there. Nothing is scored and nothing is spent.
+ * teaches: the same two rows, the same token and the same struck count, drawn by the
+ * same `drawBlock` and the same `turnCountPose`, with a label on each row and a pointer
+ * that follows the token — and a sign above that names the moment in words, from the
+ * same plan the block is drawn from. The two judged passes run on the level's own
+ * `RoundController`, so what passes here is what passes there: tapping along has the
+ * answer voiced on the grid (`gridAction`, the same thing a laggy output route turns on
+ * for every act), and the pass on their own has nothing voiced for them. Nothing is
+ * scored and nothing is spent.
  */
 export class TutorialScene extends BaseScene {
   private run = new TutorialRun();
@@ -61,6 +67,10 @@ export class TutorialScene extends BaseScene {
   private skipLabel!: Phaser.GameObjects.Text;
   private theirsLabel!: Phaser.GameObjects.Text;
   private yoursLabel!: Phaser.GameObjects.Text;
+  /** The count under the face, "3", "2", "1", "Go!", exactly as a level strikes it. */
+  private turnCall!: Phaser.GameObjects.Text;
+  private turnCallY = 0;
+  private turnCalled: number | null = null;
   private sign = new Phaser.Geom.Rectangle();
   private action = new Phaser.Geom.Rectangle();
   private replay = new Phaser.Geom.Rectangle();
@@ -100,6 +110,7 @@ export class TutorialScene extends BaseScene {
     this.lastCopy = '';
     this.pressedAt = this.struckAt = this.rattleAt = -Infinity;
     this.struckIndex = -1;
+    this.turnCalled = null;
     this.illustration = new HammerNailVignette(this, true);
     this.audio = sharedAudio(this);
     hushMusic(this);
@@ -115,8 +126,12 @@ export class TutorialScene extends BaseScene {
     this.actionLabel = display(this, '', { size: 38, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(12);
     this.replayLabel = body(this, 'Watch again', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(12);
     this.skipLabel = body(this, 'Skip', { size: 28, colour: PALETTE.ink }).setOrigin(0.5).setDepth(12);
-    this.theirsLabel = label(this, ROW_LABELS.theirs, { size: 21, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(13);
-    this.yoursLabel = label(this, ROW_LABELS.yours, { size: 21, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(13);
+    // Each label sits beside the owner glyph it names — over the hammer slot, under the
+    // tap slot — which leaves the band under the face's centre for the count, where a
+    // level puts it.
+    this.theirsLabel = label(this, ROW_LABELS.theirs, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
+    this.yoursLabel = label(this, ROW_LABELS.yours, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
+    this.turnCall = display(this, '', { size: 46, colour: VIGNETTES[0]!.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(13);
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.curtain = new SceneCurtain(this);
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => { void this.startWatch(); }));
@@ -155,6 +170,11 @@ export class TutorialScene extends BaseScene {
     this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
     resize(this.theirsLabel, 21 * s, PALETTE.ink, STYLE.current, false);
     resize(this.yoursLabel, 21 * s, PALETTE.ink, STYLE.current, false);
+    // The same offset under the face a level uses, so the count is met here where it
+    // will be met there. The size is set per numeral in `drawTurnCall`.
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCall.setPosition(safe.centerX, this.turnCallY);
+    this.turnCalled = null;
     this.action.setTo(safe.centerX - 280 * s, safe.bottom - 194 * s, 560 * s, Math.max(100 * s, this.target));
     this.replay.setTo(safe.centerX - 180 * s, safe.bottom - this.target, 360 * s, this.target);
     this.replayLabel.setPosition(this.replay.centerX, this.replay.centerY);
@@ -165,7 +185,10 @@ export class TutorialScene extends BaseScene {
 
   private now(): number { this.audio.clock.refresh(); return this.audio.clock.now(); }
   private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
-  private get trying(): boolean { return this.run.step === 'try' && this.run.verdict === null && this.controller !== null; }
+  /** A judged pass is on: tapping along or on their own, and no verdict yet. */
+  private get trying(): boolean {
+    return (this.run.step === 'along' || this.run.step === 'try') && this.run.verdict === null && this.controller !== null;
+  }
 
   /** The watched pass: the game plays the hammer's half and then answers its own call. */
   private async startWatch(): Promise<void> {
@@ -196,8 +219,13 @@ export class TutorialScene extends BaseScene {
     }
   }
 
-  /** The tried pass, judged by the level's own controller. */
-  private async startTry(resumed = false): Promise<void> {
+  /**
+   * A judged pass, on the level's own controller. Tapping along voices every target on
+   * the grid, so the player taps with the answer rather than for it; on their own, the
+   * targets are voiced only where a level would voice them — on a route that would
+   * otherwise sound the tap late.
+   */
+  private async startJudged(step: JudgedStep, resumed = false): Promise<void> {
     const request = ++this.request;
     this.busy = true;
     this.stop();
@@ -222,15 +250,13 @@ export class TutorialScene extends BaseScene {
       });
       const contextNow = this.audio.context.currentTime;
       const startAt = Math.max(this.now(), contextNow) + TUTORIAL.leadSec;
-      // Same rule as a level: on a route that delays sound past a tap's own judgement the
-      // answered beats are sounded on the grid, or the lesson's own strike would sound late.
       this.controller.start(
         TUTORIAL.pattern, TUTORIAL.bpm, contextNow, performance.now(), startAt, TUTORIAL.leadBeats,
-        this.audio.clock.tapVoiceLate,
+        step === 'along' || this.audio.clock.tapVoiceLate,
       );
       const plan = this.controller.plan!;
       if (resumed) this.run.tries--;
-      this.run.try(plan);
+      this.run.begin(step, plan);
       this.resetMarks(plan);
       this.illustration.reset(plan);
       this.lastFrame = performance.now();
@@ -245,6 +271,7 @@ export class TutorialScene extends BaseScene {
     this.marks = plan.pattern.hits.map(() => 'pending');
     this.struckIndex = -1;
     this.struckAt = this.rattleAt = -Infinity;
+    this.turnCalled = null;
   }
 
   /** Silence whatever pass is running. The lesson's own state is left for the caller. */
@@ -267,7 +294,7 @@ export class TutorialScene extends BaseScene {
   private completeTry(): void {
     const verdict = this.run.complete();
     const now = this.now();
-    // The hammer closes the try the way a level closes a task: struck home on a pass,
+    // The hammer closes the pass the way a level closes a task: struck home on a pass,
     // bent on a miss. Contact is a moment ahead so the swing has room to wind up.
     const contact = now + 0.28;
     this.illustration.finish(verdict === 'clear', contact);
@@ -323,7 +350,7 @@ export class TutorialScene extends BaseScene {
     const s = this.s;
     let words: Coach = coach(this.run, now);
     if (this.paused) {
-      words = { heading: 'Take your time', copy: 'The lesson is paused.\nTap below to pick it up where it was.', action: 'Resume', side: 'none' };
+      words = { heading: 'Take your time', copy: 'Paused. Tap below to pick it up where it was.', action: 'Resume', next: null, side: 'none' };
     } else if (this.busy || !this.started) {
       words = { ...words, action: 'Getting ready…' };
     }
@@ -333,7 +360,7 @@ export class TutorialScene extends BaseScene {
       this.heading.setText(words.heading);
       this.copy.setText(words.copy);
       this.actionLabel.setText(words.action ?? '');
-      this.stepLabel.setText(this.run.step === 'watch' ? '1 / 2 · WATCH' : this.run.step === 'try' ? '2 / 2 · YOUR TRY' : 'READY');
+      this.stepLabel.setText(STEP_LABELS[this.run.step]);
     }
     const g = this.panels.clear();
     // The sign takes the side's colour: timber for the hammer's turn, coral for yours,
@@ -397,9 +424,12 @@ export class TutorialScene extends BaseScene {
     });
     const lift = faceLift(turn, still);
     const theirsAlpha = 1 - 0.5 * turn.yours;
-    this.theirsLabel.setPosition(geo.shelf.centerX + rattle, geo.shelf.y - 22 * s).setAlpha(theirsAlpha);
+    // Each label starts at its slot's left edge and reads toward the columns.
+    const slotEdge = TRACK.ownerSlotRadius * s;
+    this.theirsLabel.setPosition(geo.shelfSlot.x - slotEdge + rattle, geo.shelf.y - 22 * s).setAlpha(theirsAlpha);
     // Below the plate's thickness, which grows with the lift, not just below its face.
-    this.yoursLabel.setPosition(geo.face.centerX + rattle, geo.face.y + geo.face.height + (TRACK.plateDepth + 20) * s);
+    this.yoursLabel.setPosition(geo.faceSlot.x - slotEdge + rattle, geo.face.y + geo.face.height + (TRACK.plateDepth + 20) * s);
+    this.drawTurnCall(live ? plan : null, now, still);
     // The count-in, above the shelf's word: the opening bar is not dead air.
     const pips = live ? countIn(plan, now) : null;
     if (pips !== null) {
@@ -425,6 +455,36 @@ export class TutorialScene extends BaseScene {
     // During the watched answer, the finger is the one tapping; the player sees a hand
     // where theirs will be.
     if (this.run.step === 'watch' && words.side === 'yours') this.drawHand(now, px + pr * 2.2, geo.faceCentreY - lift);
+  }
+
+  /**
+   * The count a level strikes under the face — "3", "2", "1" on the last beats of the
+   * hammer's bar and "Go!" on the downbeat — drawn here exactly as `PlayScene` draws it,
+   * from the same `turnCount` and the same pose. The first lesson left it out so as not
+   * to crowd the words; but the count *is* the answer to when, and a player who meets it
+   * here with the words "tap on Go!" beside it meets nothing new on level 1.
+   */
+  private drawTurnCall(plan: RoundPlan | null, now: number, still: boolean): void {
+    const call = plan && turnCount(plan, now);
+    if (!plan || !call) {
+      if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
+      return;
+    }
+    const s = this.s;
+    const go = call.count === 0;
+    const pose = turnCountPose(call, 60 / plan.bpm, still);
+    const ink = mix(VIGNETTES[0]!.ink, PALETTE.coral, pose.heat);
+    if (call.count !== this.turnCalled) {
+      this.turnCalled = call.count;
+      this.turnCall.setText(go ? 'Go!' : String(call.count));
+      resize(this.turnCall, (36 + 18 * call.weight) * s, ink);
+    }
+    this.turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
+    if (pose.ring.alpha > 0.01) {
+      const reach = (30 + 70 * pose.ring.spread) * s;
+      this.block.lineStyle((5 - 3.5 * pose.ring.spread) * s, ink, pose.ring.alpha)
+        .strokeCircle(this.viewport.safe.centerX, this.turnCallY, reach);
+    }
   }
 
   /** The guiding ring level 1 shows, on the next beat still ahead of the player. */
@@ -470,21 +530,21 @@ export class TutorialScene extends BaseScene {
       const plan = this.controller!.plan;
       const input = this.audio.clock.input(tap.timestamp);
       const result = this.controller!.tap(input, this.audio.context.currentTime, performance.now());
-      if (result === null && !isPlayersWindow(plan, input)) { this.run.earlyTap(); this.rattleAt = now; }
+      if (result === null && !isPlayersWindow(plan, input)) { this.run.earlyTap(now); this.rattleAt = now; }
       return;
     }
     const words = coach(this.run, now);
-    if (words.action === null) return;
+    if (words.next === null) return;
     if (this.replayLabel.visible && contains(this.replay)) { void this.startWatch(); return; }
     if (!contains(this.action)) return;
     this.pressedAt = now;
-    if (words.action === 'Let’s play') this.leave(true);
-    else void this.startTry();
+    if (words.next === 'play') this.leave(true);
+    else void this.startJudged(words.next);
   }
 
   private async resume(): Promise<void> {
     if (!this.started || (this.run.step === 'watch' && momentOf(this.run.plan, this.now()) !== 'after')) { await this.startWatch(); return; }
-    if (this.run.step === 'try' && this.run.verdict === null) { await this.startTry(true); return; }
+    if ((this.run.step === 'along' || this.run.step === 'try') && this.run.verdict === null) { await this.startJudged(this.run.step, true); return; }
     // Between passes there is nothing to restart: the words and the block are still up.
     this.paused = false;
     this.illustration.onPhase('idle', this.now());

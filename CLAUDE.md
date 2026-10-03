@@ -481,14 +481,18 @@ Play) opens on a first Play until it has been passed **or skipped** (`tutorialSe
 is stored as `skipped` and never overwrites `complete`, which is what a save code carries),
 because while only a pass counted, a player who took *Skip* met the lesson in front of
 every Play. It exists alongside the first-run pass and teaches on the **same turn block** a level
-draws, with the two things a level leaves out — a label on each row and a pointer that
-follows the token — and words. `coach` derives every heading from `momentOf`, which reads
-the same `handover` the block is drawn from, so *Get ready* is said when the baton starts
-to cross and *Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins
-that order. The tried pass is judged by the level's own `RoundController`, and a miss is
-named — *Too early* for taps in the hammer's turn, *That was your turn* for a bar that
-went by — rather than scored. Nothing in it waits for a tap: the loop's whole lesson is
-that it does not. See `docs/TUTORIAL.md`.
+draws — **the struck count included**, since "3, 2, 1, Go!" is the game's answer to *when*
+and a lesson that left it out sent the player to meet it unexplained on level 1 — with the
+two things a level leaves out, a label beside each owner slot and a pointer that follows the
+token, and one line of words. `coach` derives every heading from `momentOf`, which reads the
+same plan the block is drawn from, so *Count down* is said on the beat the "3" strikes and
+*Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins that order. Three
+passes: watched; **tapped along**, with the answer voiced on the grid (`gridAction`) so the
+downbeat is felt before it has to be found; then on their own, with nothing voiced. Both
+judged passes run on the level's own `RoundController`, a tap in the hammer's turn gets *Not
+yet* the instant it lands, and a miss is named — *Too early*, *That was your turn* — rather
+than scored. Nothing in it waits for a tap: the loop's whole lesson is that it does not. See
+`docs/TUTORIAL.md`.
 
 **Three stars on a designated level earns a keepsake, and ownership is never stored.**
 `game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
