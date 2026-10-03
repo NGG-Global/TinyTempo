@@ -18,14 +18,15 @@ carries a keepsake.
 | --- | --- | --- | --- | --- |
 | 0 | 227 | Gold, a sandstone canyon | Strike gold | Gold nugget |
 | 1 | 259 | Diamond, a timbered mine by lantern | Dig for diamonds | Rough diamond |
-| 2 | 291 | Emerald, a mossy green cliff | Emerald seam | — |
+| 2 | 323 | Emerald, a mossy green cliff | Emerald seam | — |
 
-Laps then repeat every 32 levels. Each dig has its own prospector — beard, shirt, overalls,
+Its era, 227–290, is two whole 32-act laps; ice cream's era from 291 carries 33 acts, so
+the emerald arrives on 323 and laps then repeat every 33 levels. Each dig has its own prospector — beard, shirt, overalls,
 hat — so the second visit is a different place and not a recolour. The gem changes what the
 act is, so it changes the words too (`VignetteDefinition.looks`): the map and the intro
 never announce gold over a diamond. Every failure reads *Nothing but rock.*
 
-Development previews: `?debug&level=227`, `?debug&level=259`, `?debug&level=291`. A fresh
+Development previews: `?debug&level=227`, `?debug&level=259`, `?debug&level=323`. A fresh
 save meets the one-time triplet introduction on the same act first.
 
 ## The beat and the stone

@@ -1,7 +1,7 @@
 # Recorded beats
 
-Six acts take a recorded beat instead of a synthesized one. Everything else in the
-game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these six
+Seven acts take a recorded beat instead of a synthesized one. Everything else in the
+game still comes out of `src/audio/*Sounds.ts` as maths, and every one of these seven
 keeps its synthesized voice as the fallback.
 
 | Act | File | Voice |
@@ -12,6 +12,7 @@ keeps its synthesized voice as the fallback.
 | Scissors & paper | `sfx/scissors.wav` | one take |
 | Trombone | `sfx/trombone-1.mp3`, `sfx/trombone-2.mp3` | two takes, alternated |
 | Clapping hands | `sfx/clap.wav` | one take |
+| Ice cream | `sfx/lick.wav` | one take, edited from the delivered slurp |
 
 Only the **beat** changes for the first four: success, rough, scrape and judder are still
 synthesized, so a level's reactions are unchanged. The trombone is the exception on that
@@ -70,6 +71,7 @@ A recorded one-shot carries whatever silence sat in front of the take. As delive
 | `trombone-success.mp3` | 0.0 ms |
 | `trombone-fail.mp3` | 0.0 ms |
 | `clap.wav` | 0.00 ms |
+| `lick.wav` | 0.0 ms, after the edit below |
 | `clap-success` master | 27.9 ms |
 | `clap-fail` master | 70.7 ms |
 | `clap-partial` master | 114.5 ms |
@@ -93,6 +95,23 @@ alignment, not a mix decision, and it is the same thing `MusicSystem` already do
 track. `attackFrame` is pure and tested: it scans every channel, takes the first frame over
 `ATTACK_THRESHOLD`, and returns 0 rather than swallowing a sample it cannot find a start
 in.
+
+### The lick is edited, not just trimmed
+
+`sfx/lick.wav` is the one recorded beat that does not ship as delivered. The delivered file,
+kept as `sfx/masters/slurp-delivered.mp3` (0.43 s, 24 kHz stereo MP3), opens with 46 ms of
+silence, then 22 ms of soft lead-in (peaks near 0.1) before its main transient at 72.3 ms
+(peak 0.77), with a second accent at 182 ms. `trimToAttack` would have cut at the lead-in,
+leaving the transient the ear takes as the beat about 26 ms behind the grid — the lateness
+this section exists to prevent. Its energy also sat 9 dB in the right channel, where every
+other beat is centred dual-mono.
+
+So it was decoded once (ffmpeg) and edited to what ships: cut 0.17 ms before the main
+transient, with a 1 ms fade-in; summed to mono (the channels correlate at −0.17, so the sum
+loses about 0.5 dB rather than cancelling); ended at 300 ms of the original with a 30 ms
+fade, past which the tail is 50 dB down; kept at 24 kHz, since resampling adds nothing.
+228 ms, 11 KB, peak 0.77 — the level the shoe and nose already play at. Both accents of the
+slurp are kept. A redelivered take should be edited the same way, from the master.
 
 ## Two takes
 

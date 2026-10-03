@@ -74,6 +74,10 @@ import { ProspectorVignette } from './ProspectorVignette';
 import { PROSPECTOR_LOOKS } from './prospectorLooks';
 import { PROSPECTOR_REVEAL_SEC } from './prospectorMotion';
 import { createProspectorSounds } from '@/audio/prospectorSounds';
+import { IceCreamVignette } from './IceCreamVignette';
+import { ICE_CREAM_LOOKS } from './iceCreamLooks';
+import { ICE_CREAM_REVEAL_SEC } from './iceCreamMotion';
+import { createIceCreamSounds } from '@/audio/iceCreamSounds';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -292,6 +296,14 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new ProspectorVignette(scene, lap), sounds: createProspectorSounds,
     looks: PROSPECTOR_LOOKS.map(look => look.copy),
   },
+  // Act 33, appended at request. It joins at level 291 (`ROTATION`), past every keepsake.
+  {
+    id: 'icecream', title: 'Ice cream', intro: 'Lick by\nlick.', ink: HOME_INK,
+    success: ['Licked\nclean!', 'Not a drop wasted.'], rough: ['Dropped\nit!', 'The scoop hit the floor.'],
+    endingSec: ICE_CREAM_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new IceCreamVignette(scene, lap), sounds: createIceCreamSounds,
+    looks: ICE_CREAM_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
@@ -302,7 +314,9 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
  * every earlier keepsake, opening on the act it adds. Nose blowing and washing up join
  * at level 165, after the paintbrush's two keepsakes and two complete 29-act laps. The
  * prospector joins at level 227, after two complete 31-act laps, which is the first such
- * boundary past the nose and dish keepsakes on 196 and 197.
+ * boundary past the nose and dish keepsakes on 196 and 197. Ice cream joins at level 291,
+ * after two complete 32-act laps, the first such boundary past the prospector's keepsakes
+ * on 227 and 259.
  *
  * **Appending an act means adding an era here**, at a level past every keepsake players
  * could hold: the tests fail on a registry the last era does not cover.
@@ -315,4 +329,6 @@ export const ROTATION: readonly RotationEra[] = [
   { fromLevel: 165, acts: 31 },
   // Two complete laps of that era preserve the nose and dish keepsakes at 196 and 197.
   { fromLevel: 227, acts: 32 },
+  // Two complete laps of that era preserve the prospector's keepsakes at 227 and 259.
+  { fromLevel: 291, acts: 33 },
 ];
