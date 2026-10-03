@@ -262,7 +262,7 @@ export class SettingsScene extends BaseScene {
       notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
     this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
-    this.texts.version = body(this, `v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
+    this.texts.version = body(this, `· v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
   }
 
@@ -319,7 +319,8 @@ export class SettingsScene extends BaseScene {
     resize(this.texts.version!, 24 * s, PALETTE.muted, STYLE.current, false);
     // Privacy · Terms · vX, laid out from the measured widths so the dots sit evenly.
     const legal = this.texts.legal!, version = this.texts.version!;
-    const gap = 14 * s;
+    // A word space, so "Terms · v1" spaces its dot as "Privacy · Terms" does.
+    const gap = 6 * s;
     const total = legal.width + gap + version.width;
     legal.setPosition(safe.centerX - total / 2 + legal.width / 2, legalY);
     version.setPosition(legal.x + legal.width / 2 + gap, legalY);
@@ -805,7 +806,8 @@ export class SettingsScene extends BaseScene {
     const area = areaOf(progress.unlocked);
     this.texts.level!.setText(`Level ${progress.unlocked}`);
     this.texts.levelNote!.setText(`· ${area.name}`);
-    this.texts.reset!.setText(this.resetArmed ? 'Confirm' : 'Reset');
+    // `label` uppercases on creation only; a later setText must match the other chips itself.
+    this.texts.reset!.setText(this.resetArmed ? 'CONFIRM' : 'RESET');
     this.texts.notice!.setText(this.notice).setVisible(this.notice !== '');
   }
 

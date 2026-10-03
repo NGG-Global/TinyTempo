@@ -455,6 +455,33 @@ export class PlayScene extends BaseScene {
     this.levelRun = null;
     this.intro = null;
     this.keepsake = null;
+    // The last visit's run, and above all its result. `startRound` resets these too, but a
+    // start the hearts refuse never reaches that reset, and the empty-hearts screen then
+    // drew the previous level's plaque behind its offer — empty medals, "On the beat",
+    // "Heart kept" and a blank star strip under "No hearts". And while the audio loads,
+    // `layout()` would draw it for every visit.
+    this.summaryShown = false;
+    this.summaryAt = -Infinity;
+    this.summaryStars = 0;
+    this.levelCleared = false;
+    this.saveFailed = false;
+    this.heartRefunded = false;
+    this.replayOffered = false;
+    this.finaleCleared = false;
+    this.results = [];
+    this.taskIndex = 0;
+    this.tally = { perfect: 0, flawless: 0 };
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
+    this.resultPlan = null;
+    this.starsLanded = 0;
+    this.keepsakeFirst = false;
+    this.actionCaption = '';
+    this.teach = null;
+    this.transition = null;
+    this.replay = null;
+    this.replayOffset = null;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -2436,8 +2463,11 @@ export class PlayScene extends BaseScene {
       // A refunded heart is brass on brass: a small struck plate, not a coral caption.
       const keptW = PLATE.keptWidth * s, keptH = PLATE.keptTall * s, keptY = top + PLATE.keptY * s;
       drawPanel(g, new Rect(-keptW / 2, keptY - keptH / 2, keptW, keptH), s, { fill: BRASS, depth: 5, radius: 18 });
-      drawHeart(g, -keptW / 2 + 42 * s, keptY, 17 * s, PALETTE.coral);
-      this.hangText(this.kept, 14 * s, keptY, pose.tilt, drop, pose.alpha);
+      // The heart and the words centred as one group, not each on its own guess.
+      const heartR = 17 * s, gapX = 14 * s;
+      const groupW = heartR * 2 + gapX + this.kept.displayWidth;
+      drawHeart(g, -groupW / 2 + heartR, keptY, heartR, PALETTE.coral);
+      this.hangText(this.kept, -groupW / 2 + heartR * 2 + gapX + this.kept.displayWidth / 2, keptY, pose.tilt, drop, pose.alpha);
     }
     this.drawResultRows(age, still);
     this.drawMasteryRow(mastery, still);

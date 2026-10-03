@@ -18,6 +18,9 @@ import { hammerLook, type HammerLook } from './hammerLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
+/** How far above the bench the hammer's raised head reaches, in stage units, with a little air. */
+const HAMMER_REACH = 520;
+
 export const WORKSHOP = {
   paper: 0xeee8d8, ink: 0x243e35, muted: 0x788074, sun: 0xdfc37f,
   wood: 0xc99460, woodDark: 0x936542, red: 0xcf5134, cream: 0xfff9e8,
@@ -134,14 +137,21 @@ export class HammerNailVignette implements Vignette {
     this.hammer.add(g);
   }
 
-  public layout(viewport: Viewport, benchY?: number): void {
+  /**
+   * `headroom` is the highest y the raised hammer may reach: the title sign's foot on the
+   * menu, the lesson's caption in the tutorial. Where the frame is short for its width — a
+   * 4:3 tablet — the tool scales down to stand under it, instead of the hammer's head
+   * landing on the sign or across the caption's words.
+   */
+  public layout(viewport: Viewport, benchY?: number, headroom?: number): void {
     const { safe } = viewport;
     const t = STYLE.current;
-    // The cover reserves the sign above the tool; gameplay retains its large pose.
-    this.scale = this.cover ? Math.min(safe.width / 720, safe.height / 1550) : Math.min(safe.width / 650, safe.height / 1000);
-    this.baseX = safe.centerX - 350 * this.scale;
     // The tutorial reserves space below the tool for its labelled rhythm beads.
     this.baseY = benchY ?? safe.top + safe.height * 0.68;
+    // The cover reserves the sign above the tool; gameplay retains its large pose.
+    const scale = this.cover ? Math.min(safe.width / 720, safe.height / 1550) : Math.min(safe.width / 650, safe.height / 1000);
+    this.scale = headroom === undefined ? scale : Math.max(0.3, Math.min(scale, (this.baseY - headroom) / HAMMER_REACH));
+    this.baseX = safe.centerX - 350 * this.scale;
     this.stage.setPosition(this.baseX, this.baseY).setScale(this.scale);
     this.backdrop.layout(viewport);
     const wood = faces(this.look.wood);

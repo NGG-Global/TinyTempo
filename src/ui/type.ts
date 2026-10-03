@@ -59,13 +59,22 @@ function strokeFor(t: Treatment, size: number, colour: number, override?: number
   return Math.max(1.5, size * 0.02 * t.outline * taper);
 }
 
-/** Room for the outline and the drop shadow, so a dressed glyph is not clipped on one side. */
-function dressPad(size: number, stroke: number): { left: number; right: number; top: number; bottom: number } {
+/**
+ * Room for the drop shadow, so a dressed glyph is not clipped below.
+ *
+ * Only vertical. Phaser already counts the stroke into a line's width and draws each line
+ * half a stroke in, so the outline has its room without any padding; a horizontal inset
+ * on top of that was blank space inside the texture, which put every left-aligned display
+ * word a stroke and a pixel to the right of the body copy under it (Settings' "Premium"
+ * over its terms, the map's "Watch" over "30 seconds"). One unit stays, for antialiasing
+ * on a round glyph's outermost edge.
+ */
+export function dressPad(size: number, stroke: number): { left: number; right: number; top: number; bottom: number } {
   const inset = Math.ceil(stroke + 1);
   const drop = Math.max(1, Math.ceil(size * 0.07));
   // Equal on opposite sides so origin 0.5 is the letter, not a point shifted by the drop.
   const y = inset + drop;
-  return { left: inset, right: inset, top: y, bottom: y };
+  return { left: 1, right: 1, top: y, bottom: y };
 }
 
 export interface TypeSpec {
@@ -133,4 +142,35 @@ export function resize(text: Phaser.GameObjects.Text, size: number, colour: numb
   const sh = shadowFor(colour, size);
   text.setShadow(sh.offsetX, sh.offsetY, sh.color, sh.blur, sh.stroke, sh.fill);
   text.setPadding(dressPad(size, stroke));
+}
+
+/**
+ * Wrap `text` within `maxWidth`, then narrow the wrap to the least width that keeps the
+ * same number of lines, so a centred paragraph's lines come out near equal instead of
+ * leaving one word on the last ("…knows your / device."). It never adds a line and never
+ * widens past `maxWidth`. The trials only measure — `getWrappedText` reads the style and
+ * draws nothing — so a layout pays for one render, not eleven.
+ *
+ * Copy that is broken by hand ("Make it\nstick.") keeps its breaks: those are the voice,
+ * and a hard break is never moved.
+ */
+export function balanceWrap(text: Phaser.GameObjects.Text, maxWidth: number): void {
+  const style = text.style;
+  style.wordWrapWidth = maxWidth;
+  style.wordWrapUseAdvanced = false;
+  const lines = text.getWrappedText().length;
+  let width = maxWidth;
+  if (lines > 1) {
+    let lo = maxWidth * 0.4;
+    let hi = maxWidth;
+    for (let i = 0; i < 10; i++) {
+      const mid = (lo + hi) / 2;
+      style.wordWrapWidth = mid;
+      if (text.getWrappedText().length > lines) lo = mid;
+      else hi = mid;
+    }
+    // A pixel of slack: the search lands on the edge, and a re-measure must not tip a word over.
+    width = Math.min(maxWidth, Math.ceil(hi) + 1);
+  }
+  text.setWordWrapWidth(width, false);
 }

@@ -19,7 +19,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one long string this screen exists to show. */
 const TRANSFER = {
@@ -151,8 +151,8 @@ export class TransferScene extends BaseScene {
     this.buttons.enter.rect.setTo(left, footerBottom - quietH, width, quietH);
     this.buttons.copy.rect.setTo(left, this.buttons.enter.rect.y - 16 * s - heroH, width, heroH);
 
-    this.intro.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.intro, 27 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.intro, Math.min(560 * s, width));
     this.intro.setPosition(safe.centerX, safe.top + 132 * s);
 
     // Laid out from the bottom up, so that on a short 16:9 screen the card gives way and
@@ -162,8 +162,8 @@ export class TransferScene extends BaseScene {
     this.notice.setWordWrapWidth(width - 20 * s, false);
     resize(this.notice, 24 * s, PALETTE.coral, STYLE.current, false);
     this.notice.setPosition(safe.centerX, this.buttons.copy.rect.y - 22 * s);
-    this.scope.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.scope, 24 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.scope, Math.min(560 * s, width));
     const scopeBottom = this.buttons.copy.rect.y - 84 * s;
     this.scope.setPosition(safe.centerX, scopeBottom);
 

@@ -26,7 +26,6 @@ import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive, settle } from '@/ui/spring';
 import { display, resize } from '@/ui/type';
 import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
-import type { Vignette } from '@/vignettes/Vignette';
 
 const MENU = {
   sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
@@ -43,7 +42,7 @@ const MENU = {
  * the bench, and the two utility controls are pucks. Nothing here is a column of text.
  */
 export class MenuScene extends BaseScene {
-  private illustration!: Vignette;
+  private illustration!: HammerNailVignette;
   private sign!: Phaser.GameObjects.Container;
   private ropes!: Phaser.GameObjects.Graphics;
   private board!: Phaser.GameObjects.Graphics;
@@ -131,8 +130,9 @@ export class MenuScene extends BaseScene {
 
   protected override layout(): void {
     const { safe, full } = this.viewport;
-    this.illustration.layout(this.viewport);
     const s = this.uiScale = Math.min(safe.width / 720, safe.height / 1150);
+    // The raised hammer stays under the sign's foot, with room for the sign to swing.
+    this.illustration.layout(this.viewport, undefined, safe.top + (MENU.sign.top + MENU.sign.height + 36) * s);
 
     // The sign. Local space has its origin at the ceiling anchor so the whole object
     // swings about the point it hangs from.

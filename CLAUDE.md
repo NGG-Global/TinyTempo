@@ -67,7 +67,10 @@ badge (`finaleStopLook`, `ui/roadLayout.ts`). **A finale takes more road than a 
 `ROAD.finaleRoom`, because every area's gate stands half a step under its first level,
 directly over the previous finale — so node y is no longer linear in the level: a seam is
 `seamBelow` the stop above it, and the road's x at a y is `pathXAt`, never a division by the
-step. The dock's trail ends in a flag. See `docs/FINALES.md`.
+step. The dock's trail ends in a flag. See `docs/FINALES.md`. An **open** gate's posts are
+laid with the road, under the stops (`drawOpenGates`), since they reach into the first
+level's star plate; and a haze in the top area's colour sits behind the header
+(`drawHaze`), so nothing on the road reads as part of the sign or the pucks.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -244,6 +247,13 @@ Two version traps live there. **Phaser 4 dropped WebGL geometry masks** — `set
 and no-ops off the canvas renderer — so a clipped region is a second camera's viewport,
 never a mask. And a control inside a scrolling list fires on the pointer *release*:
 `TapInput` reports the press, which is right only where the press is the musical event.
+
+**A dressed letter carries no horizontal padding** (`dressPad`, one unit): Phaser already
+counts the stroke into a line and draws half a stroke in, and the old stroke-wide inset put
+every left-aligned headline a stroke right of the body text under it. **A centred caption
+that wraps goes through `balanceWrap`** (`ui/type.ts`), so no word is left alone on its last
+line; hand-broken copy ("Make it\nstick.") keeps its breaks, because those are the voice. See
+`docs/VISUAL_AUDIT.md`, which also records why the canvas still renders at its logical size.
 
 **A dressed letter only takes an outline its own fill can carry.** `typeStroke` returns
 `null` below `OUTLINE_CONTRAST`, and `ui/type.ts` then draws no stroke and lifts the letter

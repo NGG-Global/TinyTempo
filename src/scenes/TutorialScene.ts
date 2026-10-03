@@ -152,13 +152,14 @@ export class TutorialScene extends BaseScene {
     this.target = Math.max(88 * s, 48 * this.viewport.unitScale);
     // The block needs the band the old bead row had and the shelf's above it, so the
     // bench sits higher than a level's; the act is smaller here and reads fine there.
-    this.illustration.layout(this.viewport, Math.min(safe.top + safe.height * 0.6, safe.bottom - 520 * s));
     this.sign.setTo(safe.centerX - 250 * s, safe.top + 134 * s, 500 * s, 108 * s);
     this.heading.setPosition(this.sign.centerX, this.sign.centerY);
     resize(this.heading, 56 * s, SHELL.cream);
     this.copy.setPosition(safe.centerX, safe.top + 268 * s);
     resize(this.copy, 30 * s, PALETTE.ink, STYLE.current, false);
     this.copy.setWordWrapWidth(680 * s);
+    // Under two lines of the caption at most, which is what the copy runs to.
+    this.illustration.layout(this.viewport, Math.min(safe.top + safe.height * 0.6, safe.bottom - 520 * s), safe.top + (268 + 2 * 42 + 12) * s);
     this.stepLabel.setPosition(safe.centerX, safe.top + 66 * s);
     resize(this.stepLabel, 25 * s, PALETTE.muted, STYLE.current, false);
     this.skip.setTo(safe.left + 12 * s, safe.top + 66 * s - this.target / 2, this.target, this.target);

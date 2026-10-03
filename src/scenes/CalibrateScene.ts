@@ -19,7 +19,7 @@ import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 /**
@@ -192,8 +192,8 @@ export class CalibrateScene extends BaseScene {
     const bandTop = safe.top + 132 * s;
     const bandBottom = footerBottom - Math.max(heroH, resultH) - 32 * s;
     const centre = (bandTop + bandBottom) / 2;
-    this.instruction.setWordWrapWidth(Math.min(520 * s, width), false);
     resize(this.instruction, 30 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.instruction, Math.min(520 * s, width));
     this.instruction.setPosition(safe.centerX, bandTop);
     this.beadRow = {
       x: safe.centerX - 1.5 * TUNE.beadGap * s, y: centre - TUNE.countHeight * s / 2 - 44 * s,

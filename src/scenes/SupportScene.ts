@@ -25,7 +25,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize } from '@/ui/type';
 
 /**
  * How the clock is tracking output, what the device says its lag is, and what the player
@@ -202,8 +202,8 @@ export class SupportScene extends BaseScene {
     this.buttons.copy.rect.setTo(left, footerBottom - quietH, width, quietH);
     this.buttons.email.rect.setTo(left, this.buttons.copy.rect.y - 16 * s - heroH, width, heroH);
 
-    this.intro.setWordWrapWidth(Math.min(560 * s, width), false);
     resize(this.intro, 27 * s, PALETTE.muted, STYLE.current, false);
+    balanceWrap(this.intro, Math.min(560 * s, width));
     this.intro.setPosition(safe.centerX, safe.top + 132 * s);
     resize(this.address, 32 * s, PALETTE.ink);
     this.address.setPosition(safe.centerX, this.intro.y + this.intro.height + 34 * s);
@@ -269,7 +269,9 @@ export class SupportScene extends BaseScene {
   }
 
   private refreshCopy(): void {
-    this.reportText.setText(this.report);
+    // A number keeps its unit on a wrap ("42 / ms" read as two facts). On screen only, with
+    // a no-break space that looks the same; what is copied and sent is the report as written.
+    this.reportText.setText(this.report.replace(/(\d) (ms)\b/g, '$1\u00a0$2'));
     this.notice.setText(this.message);
     this.notice.setVisible(this.message !== '');
     this.drawControls(0);
