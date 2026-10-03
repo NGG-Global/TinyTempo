@@ -3,7 +3,7 @@ import { AudioEngine } from './AudioEngine';
 import { loadSettings, saveSettings, withVolume, type Settings, type VolumeBus } from '../game/settings';
 import { clearActiveCalibration, saveActiveCalibration, syncClockCalibration } from './audioRoute';
 import { setMusicBed } from './musicBed';
-import type { TrackId } from '../config/music';
+import { MUSIC, type TrackId } from '../config/music';
 import { loadProgress } from '../game/progress';
 import { trackForLevel } from '../game/musicSelection';
 
@@ -102,8 +102,57 @@ export function resetCalibration(engine: AudioEngine | null): boolean {
  */
 export function ensureShellMusic(scene: Phaser.Scene): void {
   const audio = currentAudio(scene);
+  // The road's screens never play the title theme: one that was carried from the title
+  // screen into Settings fades out here, and a start still loading is cancelled.
+  stopTheme(audio);
   if (!audio || audio.context.state !== 'running') return;
   void setMusicBed(audio, 'shell', { track: shellTrack() });
+}
+
+/**
+ * The music a screen off the title screen or off the road plays: whichever it was opened
+ * from. Settings, the Scrapbook and the pages under Settings keep the title theme when the
+ * title screen opened them, and the gameplay loop when the road did — so the music says
+ * where Back will take the player, and a trip into Settings from either never swaps one
+ * track for the other and back again.
+ */
+export function ensureScreenMusic(scene: Phaser.Scene, openedFromTitle: boolean): void {
+  if (openedFromTitle) void startTheme(sharedAudio(scene));
+  else ensureShellMusic(scene);
+}
+
+/**
+ * Bumped by every start and stop, so a start that is still waiting — on a resume, or on
+ * the gameplay loop fading out under it — gives up if anything has asked for the theme to
+ * stop meanwhile. Without it, opening Tap offset straight after Settings let Settings'
+ * late start bring the theme up under the metronome.
+ */
+let themeRequest = 0;
+
+export type ThemeHost = Pick<AudioEngine, 'theme' | 'context' | 'music'>;
+
+/**
+ * Play the title theme, carrying it on if it is already playing: `ThemeMusic.enter` does
+ * nothing to a source that is running, which is what keeps the title screen's theme going,
+ * uninterrupted, into Settings and the Scrapbook and back. The gameplay loop goes quiet
+ * under it first, so the two never sound together.
+ */
+export async function startTheme(engine: ThemeHost): Promise<void> {
+  const mine = ++themeRequest;
+  if (engine.context.state !== 'running') {
+    // Settled once the page has had a gesture, which the tap that opened this screen was.
+    try { await engine.context.resume(); } catch { return; }
+  }
+  if (mine !== themeRequest || engine.context.state !== 'running') return;
+  await setMusicBed(engine, 'silent', { fadeSec: MUSIC.bedFadeSec });
+  if (mine !== themeRequest) return;
+  await engine.theme.enter();
+}
+
+/** Fade the title theme out, and cancel a start that has not happened yet. */
+export function stopTheme(engine: Pick<AudioEngine, 'theme'> | null): void {
+  themeRequest++;
+  engine?.theme.leave();
 }
 
 /** The gameplay track the shell plays: the frontier level's. */

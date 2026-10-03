@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyCalibration, currentAudio, hushMusic, resetCalibration, sharedAudio } from '@/audio/sharedAudio';
+import { applyCalibration, currentAudio, hushMusic, resetCalibration, sharedAudio, stopTheme } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, onRouteChange, syncClockCalibration } from '@/audio/audioRoute';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -136,7 +136,9 @@ export class CalibrateScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
     // The metronome is the only pulse on this screen: leftover shell or level music
-    // would be a second beat, and the measurement would chase it.
+    // would be a second beat, and the measurement would chase it. The title theme too,
+    // which Settings now carries when the title screen opened it.
+    stopTheme(currentAudio(this));
     hushMusic(this);
   }
 

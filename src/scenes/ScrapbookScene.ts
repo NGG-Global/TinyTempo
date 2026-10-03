@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { ensureShellMusic } from '@/audio/sharedAudio';
+import { ensureScreenMusic } from '@/audio/sharedAudio';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -170,7 +170,7 @@ export class ScrapbookScene extends BaseScene {
     // no longer needs its longer note, and the title screen's puck loses its dot.
     markScrapbookSeen();
     playAnalytics.scrapbookOpened(this.from === SceneKey.Map ? 'map' : 'menu', count.owned, count.total);
-    ensureShellMusic(this);
+    ensureScreenMusic(this, this.from === SceneKey.Menu);
   }
 
   protected override layout(): void {

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { applyMix, currentAudio, ensureScreenMusic, sharedAudio } from '@/audio/sharedAudio';
 import { activeOffset } from '@/audio/audioRoute';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -120,7 +120,8 @@ export class TransferScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
-    ensureShellMusic(this);
+    // Under Settings, so whatever Settings was playing: the title's theme or the road's loop.
+    ensureScreenMusic(this, this.enteredFrom() === SceneKey.Menu);
   }
 
   private button(caption: string, hero: boolean, size: number): Button {
