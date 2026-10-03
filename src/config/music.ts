@@ -63,6 +63,12 @@ export interface TrackStem {
    * sound live above ~2 kHz, and that is what draws the ear.
    */
   readonly toneHz?: number;
+  /**
+   * A gentle high-pass (12 dB/oct, no resonance) at this frequency, for a stem whose low
+   * end would double the bass and blur the kick: the pulse a player locks onto lives
+   * there, and two parts in that register read as one muddier one.
+   */
+  readonly lowCutHz?: number;
 }
 
 /** A stem's trim as a gain. */
@@ -142,7 +148,10 @@ export const GAMEPLAY_TRACKS = {
     // and the trims and tone are measured choices (docs/MUSIC.md):
     //  - drums, as delivered: the floor, under the metronome from the first beat;
     //  - bass, −2 dB: 91% of its energy is under 250 Hz, clear of every act voice;
-    //  - harmony, −4 dB and softened at 3.2 kHz: the chords, 71% in the act voices' band;
+    //  - harmony, −5.3 dB, cut below 120 Hz and softened at 3.2 kHz: the chords. The part
+    //    was redelivered as a lower, warmer one — 74% of its energy under 250 Hz, and as
+    //    much below 120 Hz as the bass stem itself — so it gives that register to the bass
+    //    and the kick, and its trim puts it at the loudness the first delivery had here;
     //  - orchestral colour, −5 dB at 3.5 kHz: plays bars 7–26 only, a lift, not a part;
     //  - the synth lead, −9 dB and softened at 1.8 kHz, **last**: it is a melody — 39% of
     //    its notes off the beat and eighth grid, in the same 250 Hz–2 kHz band as the act
@@ -155,7 +164,7 @@ export const GAMEPLAY_TRACKS = {
     stems: [
       { id: 'drums', url: new URL('../../bgm/mix/tiny-tempo-b-drums.mp3', import.meta.url).href },
       { id: 'bass', url: new URL('../../bgm/mix/tiny-tempo-b-bass.mp3', import.meta.url).href, trimDb: -2 },
-      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href, trimDb: -4, toneHz: 3200 },
+      { id: 'harmony', url: new URL('../../bgm/mix/tiny-tempo-b-harmony.mp3', import.meta.url).href, trimDb: -5.3, toneHz: 3200, lowCutHz: 120 },
       { id: 'orchestral', url: new URL('../../bgm/mix/tiny-tempo-b-orchestral.mp3', import.meta.url).href, trimDb: -5, toneHz: 3500 },
       { id: 'lead', url: new URL('../../bgm/mix/tiny-tempo-b-synth-lead.mp3', import.meta.url).href, trimDb: -9, toneHz: 1800 },
       { id: 'risers', url: new URL('../../bgm/mix/tiny-tempo-b-risers.mp3', import.meta.url).href, trimDb: -10, toneHz: 2500 },
@@ -173,13 +182,14 @@ export const GAMEPLAY_TRACKS = {
     // ~2 ms later. A decoder that trims the delay lands near 0.104 s; both sit inside
     // these bounds, and a file with no head does not.
     leadIn: { threshold: 0.05, fallbackSec: 0.127, minSec: 0.05, maxSec: 0.25 },
-    // Matched to track A by measurement, not by ear, the way the title theme is: decoded
-    // in Chromium, the premix sits at -17.66 dB RMS against A's -21.16 dB, and A is heard
-    // through 0.5632, so 0.376 puts the two at the same level and a chapter's change of
-    // track is not a jump. The encoder's estimate from the float sums agrees within 0.02 dB.
-    // The stems sum to the premix, so this is the level of the full mix; fewer stems are
-    // simply quieter, as a thinner arrangement is.
-    gain: 0.3762,
+    // Holds every stem at the level the mix was set at. Matched to track A by measurement
+    // when the stems were first delivered: the premix sat at -17.66 dB RMS against A's
+    // -21.16 dB, heard through 0.5632, which gave 0.3762. The redelivered harmony is low and
+    // loud, and with it the six sum to +2.55 dBFS, so the encoder now scales every stem by
+    // 0.7235 to keep the premix off full scale; this gives that back (0.3762 / 0.7235), so
+    // the drums, bass, orchestra, lead and risers are heard exactly as they were, and the
+    // harmony's own trim decides where it sits.
+    gain: 0.52,
   },
 } as const satisfies Record<string, GameplayTrack>;
 export type TrackId = keyof typeof GAMEPLAY_TRACKS;
@@ -200,16 +210,35 @@ export const TRACK_CYCLE: readonly TrackId[] = ['b'];
  * player rather than a second mode inside `MusicSystem`, where every one of those
  * guarantees would have to be made optional.
  *
- * `gain` matches it to the gameplay track by measurement rather than by ear: the mix
- * sits at −18.2 dB RMS against the premix's −21.2 dB, so at 0.4 the two are heard at the
- * same level and the switch from the title screen into a level is not a jump.
+ * The theme is `bgm/theme/home-page.wav`, a seamless 64.000 s loop with music to its last
+ * sample, shipped as an MP3 the encoder writes with a 0.1 s head and the loop's opening
+ * 0.25 s copied after its end (scripts/encode-music.mjs). An MP3 cannot loop on its own
+ * ends — the encoder pads both and decoders disagree about trimming either — so the player
+ * finds the music's start in the decode and loops exactly `loopSec` from `seamSec` into it
+ * (`themeLoop`). Measured in Chromium at 44.1 and 48 kHz: the start lands 0.123 s in, the
+ * first 60 ms after the head carry the encoder's smear of the opening hit (up to −9 dB
+ * against the music), and from 0.1 s in the two copies either side of the seam differ by
+ * codec noise alone, −24 dB. So the loop restarts 0.1 s into the music, and only the first
+ * play, under the fade-in, starts on the opening itself.
+ *
+ * `gain` matches it, by measurement rather than by ear, to the music it hands over to: the
+ * shell bed on the map, track B's six stems at their trims, heard at −28.3 dB RMS against
+ * the theme's −23.2 dB, so 0.551 puts the two at one level and PLAY is not a jump.
  */
 export const THEME = {
-  gain: 0.4,
+  gain: 0.551,
   /** Long enough not to be a cut, short enough that leaving the menu feels immediate. */
   fadeInSec: 1.2,
   fadeOutSec: 0.45,
-  url: new URL('../../bgm/theme/cozy-quest.mp3', import.meta.url).href,
+  url: new URL('../../bgm/theme/home-page.mp3', import.meta.url).href,
+  /** The loop, as delivered: 3,072,000 frames at 48 kHz. */
+  loopSec: 64,
+  /** How far into the music the loop restarts: past the encoder's smear of the first frames. */
+  seamSec: 0.1,
+  /** Where the master's first sound crosses `leadIn.threshold`, after its sample 0. */
+  onsetSec: 0.002125,
+  /** The head is 0.1 s; Chromium leaves 23 ms of decoder delay on it, a trimming decoder none. */
+  leadIn: { threshold: 0.05, fallbackSec: 0.125, minSec: 0.05, maxSec: 0.25 },
 } as const;
 
 export const pickupSeconds = (bpm: number, beats: number): number => beats * 60 / bpm;

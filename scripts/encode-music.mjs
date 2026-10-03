@@ -9,7 +9,9 @@
  * native encoder is required. Re-run after replacing a stem, then measure the decoded
  * lead-in again (see docs/MUSIC.md).
  *
- *   node scripts/encode-music.mjs [kbps] [--stems] [--track a|b]
+ *   node scripts/encode-music.mjs [kbps] [--stems] [--track a|b|theme]
+ *
+ * `--track theme` encodes the title theme alone (see `THEME_MASTER` below).
  *
  * A track marked `layered` also gets one MP3 per stem in bgm/mix/, at `LAYER_KBPS`, each
  * with the same head and the same scale as the premix, so the stems played together are
@@ -59,7 +61,7 @@ const TRACKS = [
     mix: { Drums: 1, Bass: 1, Guitar: 1, Keyboard: 1, Percussion: 1, Synth: 1, Brass: 1 },
   },
   {
-    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.3762, layered: true,
+    id: 'b', directory: join(ROOT, 'track-b'), output: 'tiny-tempo-b.mp3', bars: 54, headSec: 0.1, gain: 0.52, layered: true,
     mix: { Drums: 1, Bass: 1, Harmony: 1, 'Synth Lead': 1, Orchestral: 1, Risers: 1 },
   },
 ];
@@ -157,8 +159,39 @@ function premix(track) {
   return { rms, scale };
 }
 
+/**
+ * The title theme, `bgm/theme/home-page.wav`: a seamless 64.000 s loop, music to its last
+ * sample. An MP3 cannot loop seamlessly on its own — the encoder writes silence in front of
+ * the music and pads the end, and decoders disagree about trimming either — so the theme is
+ * encoded with a known head of silence, for `ThemeMusic` to find the music's start the way
+ * `detectLeadIn` finds the gameplay track's downbeat, and with the loop's own opening
+ * written again after its end. The player loops exactly `THEME.loopSec` from the start it
+ * finds, so the seam it jumps across is music on both sides, and a start found a few
+ * milliseconds out shifts the loop without opening a gap in it.
+ */
+const THEME_MASTER = { path: join(ROOT, 'theme', 'home-page.wav'), output: join(ROOT, 'theme', 'home-page.mp3'), headSec: 0.1, tailSec: 0.25 };
+
+function encodeTheme() {
+  const wav = readWav(THEME_MASTER.path);
+  const head = Math.round(THEME_MASTER.headSec * wav.sampleRate), tail = Math.round(THEME_MASTER.tailSec * wav.sampleRate);
+  if (tail >= wav.frames) throw new Error('The theme is shorter than its seam copy.');
+  const frames = head + wav.frames + tail;
+  const left = new Float32Array(frames), right = new Float32Array(frames);
+  left.set(wav.left, head); right.set(wav.right, head);
+  left.set(wav.left.subarray(0, tail), head + wav.frames); right.set(wav.right.subarray(0, tail), head + wav.frames);
+  let peak = 0, energy = 0;
+  for (let i = 0; i < wav.frames; i++) { peak = Math.max(peak, Math.abs(wav.left[i]), Math.abs(wav.right[i])); energy += wav.left[i] ** 2 + wav.right[i] ** 2; }
+  // As delivered: the theme peaks well under full scale, so it is not normalised, and its
+  // level against the game is the player's bus gain (`THEME.gain`), not a change here.
+  const size = encode(toPcm16(left, 1), toPcm16(right, 1), wav.sampleRate, THEME_MASTER.output);
+  console.log(`theme: ${basename(THEME_MASTER.path)} -> ${basename(THEME_MASTER.output)} ${(size / 1e6).toFixed(2)} MB, ${wav.frames} frames at ${wav.sampleRate} Hz = ${(wav.frames / wav.sampleRate).toFixed(6)} s, ${THEME_MASTER.headSec} s head, ${THEME_MASTER.tailSec} s of the opening after the end`);
+  console.log(`  peak ${peak.toFixed(4)} (${dB(peak)} dBFS), RMS ${dB(Math.sqrt(energy / (2 * wav.frames)))} dBFS`);
+}
+
+if (ONLY === 'theme' || ONLY === null) encodeTheme();
 const selected = TRACKS.filter(t => ONLY === null || t.id === ONLY);
-if (!selected.length) throw new Error(`No track "${ONLY}". Tracks: ${TRACKS.map(t => t.id).join(', ')}.`);
+if (ONLY === 'theme') process.exit(0);
+if (!selected.length) throw new Error(`No track "${ONLY}". Tracks: ${TRACKS.map(t => t.id).join(', ')}, theme.`);
 const results = new Map(selected.map(track => [track.id, premix(track)]));
 
 // Loudness is matched by measurement, not by ear. Track A's gain gives back what its

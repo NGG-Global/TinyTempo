@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ThemeMusic } from '../src/audio/ThemeMusic';
+import { ThemeMusic, themeLoop } from '../src/audio/ThemeMusic';
 import { THEME } from '../src/config/music';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -9,7 +9,7 @@ interface Ramp { readonly to: number; readonly at: number }
 /** Enough of a context to see what the theme asks for, and nothing more. */
 function stub(state: 'running' | 'suspended' = 'running') {
   const ramps: Ramp[] = [];
-  const sources: { loop: boolean; started: boolean; stoppedAt: number | null; buffer: unknown; disconnect: ReturnType<typeof vi.fn> }[] = [];
+  const sources: { loop: boolean; loopStart: number; loopEnd: number; started: boolean; stoppedAt: number | null; buffer: unknown; disconnect: ReturnType<typeof vi.fn>; start: ReturnType<typeof vi.fn> }[] = [];
   const gain = {
     value: 0,
     cancelScheduledValues: vi.fn(),
@@ -22,7 +22,7 @@ function stub(state: 'running' | 'suspended' = 'running') {
     createGain: () => ({ gain, connect: vi.fn(), disconnect: vi.fn() }),
     createBufferSource() {
       const node = {
-        loop: false, buffer: null as unknown, started: false, stoppedAt: null as number | null,
+        loop: false, loopStart: 0, loopEnd: 0, buffer: null as unknown, started: false, stoppedAt: null as number | null,
         connect: vi.fn(), disconnect: vi.fn(), onended: null as (() => void) | null,
         start: vi.fn(() => { node.started = true; }),
         stop: vi.fn((at?: number) => { node.stoppedAt = at ?? 0; }),
@@ -36,6 +36,52 @@ function stub(state: 'running' | 'suspended' = 'running') {
 }
 
 const ok = () => vi.fn(async () => ({ ok: true, arrayBuffer: async () => new ArrayBuffer(8) }));
+
+/** A decoded theme: `seconds` long, silent but for one hit `hitSec` in, like the shipped MP3. */
+function decoded(seconds: number, hitSec: number, rate = 1000) {
+  const length = Math.round(seconds * rate), data = new Float32Array(length);
+  if (hitSec * rate < length) data[Math.round(hitSec * rate)] = 0.4;
+  return { length, duration: length / rate, sampleRate: rate, numberOfChannels: 1, getChannelData: () => data } as unknown as AudioBuffer;
+}
+
+describe('the theme\'s seamless loop', () => {
+  it('finds the music\'s start from its opening hit and loops exactly the delivered length past the encoder\'s smear', () => {
+    // As decoded in Chromium: the 0.1 s head, 23 ms of decoder delay, and the hit 2.1 ms into the music.
+    const loop = themeLoop(decoded(64.392, 0.125))!;
+    expect(loop.offset).toBeCloseTo(0.125 - THEME.onsetSec, 3);
+    expect(loop.start).toBeCloseTo(loop.offset + THEME.seamSec, 9);
+    expect(loop.end - loop.start).toBeCloseTo(THEME.loopSec, 9);
+    expect(THEME.loopSec).toBe(64);
+    // The span after the loop's end is the opening copied by the encoder: it must hold it.
+    expect(loop.end).toBeLessThanOrEqual(64.392);
+    // A decoder that trims the delay finds the start 23 ms earlier; the loop is the same length.
+    const trimmed = themeLoop(decoded(64.37, 0.102))!;
+    expect(trimmed.end - trimmed.start).toBeCloseTo(THEME.loopSec, 9);
+    expect(trimmed.offset).toBeCloseTo(0.102 - THEME.onsetSec, 3);
+  });
+  it('falls back to the file\'s own ends rather than looping something that is not the theme', () => {
+    // Too short to hold the loop: the wrong file, or a truncated download.
+    expect(themeLoop(decoded(30, 0.125))).toBeNull();
+    // Nothing readable at all.
+    expect(themeLoop({ length: 1000, duration: 152, sampleRate: 44100, numberOfChannels: 2 } as unknown as AudioBuffer)).toBeNull();
+    // No hit in the window: the measured fallback start, still a whole loop.
+    const silent = themeLoop(decoded(64.392, 10))!;
+    expect(silent.offset).toBeCloseTo(THEME.leadIn.fallbackSec - THEME.onsetSec, 3);
+  });
+  it('starts on the opening and loops between the points it found', async () => {
+    vi.stubGlobal('fetch', ok());
+    const { context, sources, raw } = stub();
+    raw.decodeAudioData = vi.fn(async () => decoded(64.392, 0.125));
+    const theme = new ThemeMusic(context, {} as AudioNode);
+    await theme.enter();
+    const source = sources[0]!;
+    const loop = themeLoop(decoded(64.392, 0.125))!;
+    expect(source.loop).toBe(true);
+    expect(source.loopStart).toBeCloseTo(loop.start, 9);
+    expect(source.loopEnd).toBeCloseTo(loop.end, 9);
+    expect(source.start).toHaveBeenCalledWith(0, loop.offset);
+  });
+});
 
 describe('the title theme', () => {
   it('fetches nothing at all while audio is not allowed to sound', async () => {

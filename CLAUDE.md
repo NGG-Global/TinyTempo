@@ -344,7 +344,8 @@ whole change back. **Track B plays as its six stems, and a level earns them**:
 `GAMEPLAY_TRACKS.b.stems` are the stems in the order they join (drums, bass, harmony,
 orchestral, then lead and risers), each an MP3 the encoder writes with the premix's head
 and scale so together they are the premix, and each with a `trimDb` and, where it shares
-the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — **the music is the room, not the
+the act voices' 250 Hz–2 kHz band, a `toneHz` low-pass — the redelivered harmony also takes a
+120 Hz `lowCutHz`, since below 120 Hz it carries as much as the bass and would blur the kick — **the music is the room, not the
 subject**, so the act's voice and the metronome are the foreground. `levelStems` (5) is the
 most a level can earn, and the synth lead is its **last** rung — a second melody beside the
 phrase being copied, so it takes four strong tasks in a row and enters at −9 dB behind a
@@ -368,11 +369,15 @@ in front, written by the encoder: its masters start on the downbeat, and an MP3 
 transient sits in the opening granule is where decoders disagree most about the encoder
 delay; the head puts its opening hit in the same detection regime as the first track's.
 **The title screen has a second track and nothing else does.** `audio/ThemeMusic.ts` plays
-`bgm/theme/cozy-quest.mp3` on `MenuScene` and stops on every way out, with its own player
+`bgm/theme/home-page.mp3` on `MenuScene` and stops on every way out, with its own player
 rather than a mode inside `MusicSystem`, because every guarantee that system makes is
 about a beat grid a level is judged against and the menu is judged against nothing. A
 browser will not sound it until the page has been touched, so it fetches nothing on a cold
-start and every tap that leaves the player on the title screen asks again.
+start and every tap that leaves the player on the title screen asks again. **It is a
+seamless 64 s loop, and an MP3 cannot loop on its own ends** — the encoder pads both — so
+the encoder writes it with a 0.1 s head and the loop's opening copied after its end, and
+`themeLoop` finds the music's start in the decode and loops exactly `THEME.loopSec` from
+`THEME.seamSec` (0.1 s) into it, past the encoder's smear of the first frames.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
 menu's PLAY tap. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens

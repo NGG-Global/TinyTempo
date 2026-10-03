@@ -1,4 +1,34 @@
 import { THEME } from '../config/music';
+import { detectLeadIn } from './MusicSystem';
+
+/** Where in the decode the theme starts, and the exact span it loops. */
+export interface ThemeLoop {
+  /** Where the music begins: the first play starts here, on the opening itself. */
+  readonly offset: number;
+  readonly start: number;
+  readonly end: number;
+}
+
+/**
+ * The theme's loop points in a decoded buffer, or null to loop the file on its own ends.
+ * The music's start is found from its opening hit, the way `detectLeadIn` finds a gameplay
+ * downbeat, less the hit's own offset in the master; the loop is then exactly
+ * `THEME.loopSec` long, from `THEME.seamSec` past that start. A buffer that cannot hold the
+ * loop — the wrong file, or a decode too short — gets null, and a theme that loops with a
+ * gap is still better than a menu that throws.
+ */
+export function themeLoop(buffer: AudioBuffer): ThemeLoop | null {
+  try {
+    const { threshold, fallbackSec, minSec, maxSec } = THEME.leadIn;
+    const lead = detectLeadIn(buffer, threshold, fallbackSec, minSec, maxSec) / buffer.sampleRate;
+    const offset = Math.max(0, lead - THEME.onsetSec);
+    const start = offset + THEME.seamSec;
+    const end = start + THEME.loopSec;
+    return Number.isFinite(end) && end <= buffer.duration ? { offset, start, end } : null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * The title screen's theme: one long loop, faded in when the menu is on screen and out
@@ -16,6 +46,7 @@ import { THEME } from '../config/music';
 export class ThemeMusic {
   private readonly bus: GainNode;
   private buffer: AudioBuffer | null = null;
+  private loop: ThemeLoop | null = null;
   private source: AudioBufferSourceNode | null = null;
   /**
    * A source `leave()` has already told to stop at the end of its fade. It is still
@@ -43,7 +74,7 @@ export class ThemeMusic {
    *
    * Audio cannot start before the platform says it may, so this is a no-op while the
    * context is suspended — the menu calls it again from the first gesture that unlocks
-   * one. Nothing is fetched until something could actually be heard, which keeps 3.5 MB
+   * one. Nothing is fetched until something could actually be heard, which keeps 1.3 MB
    * off the first run of a player who taps straight through to a level.
    */
   public async enter(): Promise<void> {
@@ -51,7 +82,11 @@ export class ThemeMusic {
     this.wanted = true;
     if (this.context.state !== 'running') return;
     try {
-      this.buffer ??= await this.fetchTrack();
+      if (!this.buffer) {
+        const buffer = await this.fetchTrack();
+        this.loop = themeLoop(buffer);
+        this.buffer = buffer;
+      }
     } catch (error) {
       console.warn('The title theme is unavailable; the menu stays quiet.', error);
       return;
@@ -90,6 +125,7 @@ export class ThemeMusic {
     this.fading = null;
     this.bus.disconnect();
     this.buffer = null;
+    this.loop = null;
   }
 
   /**
@@ -128,10 +164,17 @@ export class ThemeMusic {
     const source = this.context.createBufferSource();
     source.buffer = this.buffer;
     source.loop = true;
+    // The seamless loop when the decode holds one: the first play starts on the opening, and
+    // every later pass restarts past the encoder's smear of it. Otherwise the file's own ends.
+    const loop = this.loop;
+    if (loop) {
+      source.loopStart = loop.start;
+      source.loopEnd = loop.end;
+    }
     source.connect(this.bus);
     source.onended = () => { source.disconnect(); if (this.source === source) this.source = null; };
     try {
-      source.start();
+      source.start(0, loop?.offset ?? 0);
     } catch {
       // A route that rejects a start costs the theme, never the menu it is playing under.
       source.disconnect();

@@ -204,14 +204,19 @@ describe('the premixed music loop', () => {
     const stemGains = gains.slice(1);
     // Every stem's layer gain rests at its trim; nothing is ever heard untrimmed.
     B.stems.forEach((stem, i) => expect(stemGains[i]!.gain.value).toBeCloseTo(stemLevel(stem), 9));
-    // One gentle low-pass per stem that asks for one, at its frequency, with no resonance.
-    const toned = B.stems.filter(stem => stem.toneHz !== undefined);
-    expect(filters).toHaveLength(toned.length);
-    filters.forEach((filter, k) => {
-      expect(filter.type).toBe('lowpass');
-      expect(filter.frequency.value).toBe(toned[k]!.toneHz);
-      expect(filter.Q.value).toBeCloseTo(Math.SQRT1_2, 9);
-    });
+    // One gentle filter per tone and per low cut a stem asks for, at its frequency, with no
+    // resonance: the tone nearer the gain, the low cut ahead of it.
+    const wanted = B.stems.flatMap(stem => [
+      ...(stem.toneHz === undefined ? [] : [['lowpass', stem.toneHz] as const]),
+      ...(stem.lowCutHz === undefined ? [] : [['highpass', stem.lowCutHz] as const]),
+    ]);
+    expect(filters.map(filter => [filter.type, filter.frequency.value])).toEqual(wanted);
+    for (const filter of filters) expect(filter.Q.value).toBeCloseTo(Math.SQRT1_2, 9);
+    // The redelivered harmony carries as much below 120 Hz as the bass: it gives that
+    // register to the bass and the kick, and nothing else in the level is cut there.
+    const harmony = B.stems.find(stem => stem.id === 'harmony')!;
+    expect(harmony.lowCutHz).toBe(120);
+    expect(B.stems.filter(stem => stem.lowCutHz !== undefined).map(stem => stem.id)).toEqual(['harmony']);
     // The level's ladder: drums, bass, harmony, orchestral colour, and the synth lead last.
     expect(B.stems.slice(0, B.levelStems).map(stem => stem.id)).toEqual(['drums', 'bass', 'harmony', 'orchestral', 'lead']);
     expect(B.stems.slice(B.levelStems).map(stem => stem.id)).toEqual(['risers']);
