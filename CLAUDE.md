@@ -226,6 +226,8 @@ keepsake's card, which is as tall as its words; a clear short of three stars add
 **Replay level N** block over Continue, by the restart puck's path — coral stays on
 Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
 shrinks the plaque, never below `minScale`.
+**The score is rounded down** (`scoreLabel`): every threshold is a whole percent and stars read the
+unrounded accuracy, so rounding to nearest put "79%" over an unlit 79% star.
 **The line under the score is a toggle, not a caption.** *TIMING DETAILS* swaps the tray's
 medals for what the scorer already measured — the counts, a hit-error bar with the Perfect
 band and a coral marker on the lean, the lean in milliseconds and one line of advice

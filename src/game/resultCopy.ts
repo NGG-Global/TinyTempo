@@ -14,6 +14,18 @@ export function thresholdLabels(spec: Pick<LevelSpec, 'starAccuracy'>): readonly
   return [`${one}%`, `${two}%`, `${three}%`];
 }
 
+/**
+ * The score under the medals, as a whole percent, **rounded down**. Every threshold is a
+ * whole percent and `starsFor` compares the unrounded accuracy, so rounding to nearest
+ * showed "79%" over an unlit 79% star for a 78.6 — the number said the star was earned and
+ * the medal said it was not. Rounded down, the score reaches a chip's number exactly when
+ * the star is lit, and only a flawless 100 reads 100%.
+ */
+export function scoreLabel(accuracy: number): string {
+  const shown = Number.isFinite(accuracy) ? Math.max(0, Math.min(100, Math.floor(accuracy))) : 0;
+  return `${shown}%`;
+}
+
 const ORDINALS = ['First', 'Second', 'Third'] as const;
 
 /**
