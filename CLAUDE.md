@@ -636,6 +636,18 @@ is under the road and the far ridge and sky are painted over it down to the cres
 past the line, a prop that would poke over it is not planted, and the signpost appears only
 when the window reaches the road's own end.
 
+**Every arc is drawn with the points its size needs** (`ui/arcDetail.ts`, installed on the
+Graphics prototype in `main.ts` before the game is built). Phaser's WebGL renderer turned each
+`arc` into a fixed hundred points on every frame, so a 2-unit highlight cost what a sun did and
+a rounded card was 404 points: the map and the arc-heavy acts spent 30–58% of their frame on
+that. The replacement keeps every chord within 0.1 unit of the circle, never above Phaser's
+hundred, and runs the sweep exactly as the renderer does. A curve that looks faceted is a
+Graphics scaled well past its drawn size, not a reason to raise the count everywhere. And
+`resize` in `ui/type.ts` writes a text's look in one go (`restyle`): Phaser's `setColor`,
+`setShadow` and `setPadding` each redraw and re-upload the text even when nothing changed, and
+`resize` runs on the frame of every tap's verdict and every count-in strike. See
+`docs/PERFORMANCE.md`.
+
 **`layout()` runs once per frame of an Android URL-bar collapse**, so expensive layout
 work needs a reason to run, not just a resize. Chrome collapsing its URL bar changes the
 frame's *height* and nothing else, and `uiScale` is `min(safe.width / 720, safe.height / 1150)`,
@@ -855,6 +867,7 @@ src/
     light.ts           The one key light: cast shadows and lit/shade/rim faces
     panel.ts           Slabs and pucks with thickness, dressed per treatment
     path.ts            Catmull-Rom smoothing, dash spacing, x at a y on a climbing road
+    arcDetail.ts       Graphics arcs with as many points as their radius needs; pure, installed in main.ts
     roadLayout.ts      The map's stops, seams, finale room and stage, gate plate and crest; pure
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph

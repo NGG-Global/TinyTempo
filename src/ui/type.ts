@@ -126,22 +126,74 @@ export function label(scene: Phaser.Scene, text: string, spec: TypeSpec, t = STY
  * and shadow at the old size's proportions.
  */
 export function resize(text: Phaser.GameObjects.Text, size: number, colour: number, t = STYLE.current, dress = true): void {
-  text.setFontSize(size);
-  // Fill used to stay on whatever the text was created with, so "Your turn" kept the
-  // vignette ink while only its outline shifted — the colour argument was a no-op.
-  text.setColor(hex(colour));
-  if (!dress) {
+  // Written straight onto the style and rendered once. Phaser's `setColor`, `setShadow` and
+  // `setPadding` each redraw the canvas and re-upload its texture whether or not anything
+  // changed, so the setter-per-field version cost three to five rasters a call — on the
+  // frame of every judged tap and every count-in strike, where the frame matters most.
+  const look = restyle(dress
+    ? (() => {
+      const stroke = strokeFor(t, size, colour);
+      const sh = shadowFor(colour, size);
+      return {
+        // Fill used to stay on whatever the text was created with, so "Your turn" kept the
+        // vignette ink while only its outline shifted — the colour argument was a no-op.
+        fontSize: `${size}px`, color: hex(colour),
+        stroke: hex(typeStroke(colour) ?? PALETTE.ink), strokeThickness: stroke,
+        // Phaser's own `setShadow` defaults, for any field the shadow leaves out.
+        shadow: [sh.offsetX ?? 0, sh.offsetY ?? 0, sh.color ?? '#000', sh.blur ?? 0, sh.stroke ?? false, sh.fill ?? true] as const,
+        padding: dressPad(size, stroke),
+      };
+    })()
     // A previous dressed size would otherwise leave a headline stroke on a caption.
-    text.setStroke('#000000', 0);
-    text.setShadow(0, 0, '#000000', 0, false, false);
-    text.setPadding(0);
-    return;
+    : { fontSize: `${size}px`, color: hex(colour), stroke: '#000000', strokeThickness: 0, shadow: [0, 0, '#000000', 0, false, false] as const, padding: { left: 0, right: 0, top: 0, bottom: 0 } },
+  text.style, text.padding);
+  if (look === 'metrics') text.style.update(true);
+  else if (look === 'texture') text.updateText();
+}
+
+/** The dressed look of one text: what `resize` writes. */
+export interface TextLook {
+  fontSize: string;
+  color: string;
+  stroke: string;
+  strokeThickness: number;
+  shadow: readonly [number, number, string, number, boolean, boolean];
+  padding: { left: number; right: number; top: number; bottom: number };
+}
+
+/** The style fields `restyle` reads and writes, a subset of Phaser's `TextStyle`. */
+export interface RestyleTarget {
+  fontSize: string | number; color: string | CanvasGradient | CanvasPattern;
+  stroke: string | CanvasGradient | CanvasPattern; strokeThickness: number;
+  shadowOffsetX: number; shadowOffsetY: number; shadowColor: string; shadowBlur: number;
+  shadowStroke: boolean; shadowFill: boolean;
+}
+
+/**
+ * Write `look` onto a text's style and padding, and say what must be redrawn: `'metrics'`
+ * when the font or its stroke changed (the line height moves with both, which is why
+ * Phaser's own `setFontSize` and `setStroke` re-measure), `'texture'` when only the paint
+ * changed, `'none'` when the text already looks like this. Pure, so the count is tested.
+ */
+export function restyle(look: TextLook, style: RestyleTarget, padding: Partial<TextLook['padding']>): 'metrics' | 'texture' | 'none' {
+  let metrics = false;
+  let texture = false;
+  if (style.fontSize !== look.fontSize) { style.fontSize = look.fontSize; metrics = true; }
+  if (style.stroke !== look.stroke || style.strokeThickness !== look.strokeThickness) {
+    style.stroke = look.stroke; style.strokeThickness = look.strokeThickness; metrics = true;
   }
-  const stroke = strokeFor(t, size, colour);
-  text.setStroke(hex(typeStroke(colour) ?? PALETTE.ink), stroke);
-  const sh = shadowFor(colour, size);
-  text.setShadow(sh.offsetX, sh.offsetY, sh.color, sh.blur, sh.stroke, sh.fill);
-  text.setPadding(dressPad(size, stroke));
+  if (style.color !== look.color) { style.color = look.color; texture = true; }
+  const [x, y, colour, blur, onStroke, onFill] = look.shadow;
+  if (style.shadowOffsetX !== x || style.shadowOffsetY !== y || style.shadowColor !== colour
+    || style.shadowBlur !== blur || style.shadowStroke !== onStroke || style.shadowFill !== onFill) {
+    style.shadowOffsetX = x; style.shadowOffsetY = y; style.shadowColor = colour;
+    style.shadowBlur = blur; style.shadowStroke = onStroke; style.shadowFill = onFill;
+    texture = true;
+  }
+  for (const side of ['left', 'right', 'top', 'bottom'] as const) {
+    if (padding[side] !== look.padding[side]) { padding[side] = look.padding[side]; texture = true; }
+  }
+  return metrics ? 'metrics' : texture ? 'texture' : 'none';
 }
 
 /**
