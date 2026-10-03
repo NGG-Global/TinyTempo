@@ -481,7 +481,16 @@ synthesized (`audio/grooveSounds.ts`) and placed on grid times through `playStin
 level every scored task of which was flawless is **mastered** (`isMastered`): after the
 medals' chorus a brass ring opens behind the plaque, the medals glint once and an
 **IN THE POCKET** plate takes a row under it (`planResult`'s `mastery`), after a finale's
-card and before a keepsake — nothing is added to the score. `Vignette.onGroove?` is an
+card and before a keepsake — nothing is added to the score. **Mastery is kept, and derived,
+never stored**: a level is mastered exactly when its saved best is 100 (`game/mastery.ts`,
+`isLevelMastered`/`masteredCount` — never a `best === 100` at a call site), which is the same
+fact as `isMastered`, since a task scores 100 only with every target Perfect and no extra,
+and `tests/mastery.test.ts` checks that through the real judge. The map inlays a thin brass
+groove inside a mastered cleared puck (`mapMastered`, `masteryGroove`); a flawless replay of a
+mastered level is `repeat` — its plate reads IN THE POCKET AGAIN without the ring, chord,
+buzz or sparks — and `level_mastered` fires on the first only. **The save code writes a
+flawless level as 101 and caps the rest at 99**, because a rounded 99.6 came back as a
+mastered 100; an older code's 100 reads as 99.5. See `docs/MASTERY.md`. `Vignette.onGroove?` is an
 optional hook for an act's own reaction; none implements it. See `docs/GROOVE.md`.
 The first run adds one 0.75×
 demonstration pass before level 1's first task and a guiding ring on that level's sockets —
@@ -757,6 +766,7 @@ src/
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
+    mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure

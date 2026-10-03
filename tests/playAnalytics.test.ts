@@ -5,6 +5,7 @@ import {
   PlayAnalytics, areaNumber, attemptMode, levelGrid, taskParams, weakestTask, type LevelStart,
 } from '../src/game/playAnalytics';
 import { recordResult, type Progress } from '../src/game/progress';
+import { masteryResult } from '../src/game/mastery';
 import type { RoundResult } from '../src/game/scoring';
 import { GAMEPLAY_EVENTS, type AnalyticsEvent } from '../src/monetization/analytics';
 import { applyReport, type ObjectivesState } from '../src/game/objectives';
@@ -422,7 +423,7 @@ describe('every gameplay event, as the game actually fires it', () => {
     const locked = start(2, road(1, 3));
     const pocket = ledger.beginLevel(locked)!;
     locked.spec.tasks.forEach((_, i) => { pocket.task(i, task(100, { good: 0 })); if (i === 1) pocket.groove(2, i); if (i === 2) pocket.groove(3, i); });
-    pocket.finish(recordResult(road(1, 3), 2, 100), 100, true);
+    pocket.finish(recordResult(road(1, 3), 2, 100), 100, 'first');
     // A day of objectives: progress, a completion each, and the stamp.
     let day: ObjectivesState = {
       day: '2026-09-23', stampedDays: [], stamps: 0, seen: 0,
@@ -532,8 +533,8 @@ describe('what groove reports', () => {
     const run = ledger.beginLevel(begin)!;
     begin.spec.tasks.forEach((_, i) => run.task(i, task(100, { good: 0 })));
     const outcome = recordResult(EMPTY, 3, 100);
-    run.finish(outcome, 100, true);
-    run.finish(outcome, 100, true);
+    run.finish(outcome, 100, 'first');
+    run.finish(outcome, 100, 'first');
     expect(only('level_mastered')).toHaveLength(1);
     expect(only('level_mastered')[0]).toMatchObject({ level: 3, stars: 3, accuracy: 100, task_count: begin.spec.tasks.length });
     expect(names().indexOf('level_completed')).toBeLessThan(names().indexOf('level_mastered'));
@@ -543,8 +544,23 @@ describe('what groove reports', () => {
     expect(only('level_mastered')).toHaveLength(0);
     fresh();
     const failed = ledger.beginLevel(start(3, EMPTY))!;
-    failed.finish(recordResult(EMPTY, 3, 10), 10, true);
+    failed.finish(recordResult(EMPTY, 3, 10), 10, 'first');
     expect(only('level_mastered')).toHaveLength(0);
     expect(only('level_failed')).toHaveLength(1);
+  });
+
+  it('reports a level mastered on its first flawless run only, never on a flawless replay', () => {
+    // The scene decides first or repeat from the save (`masteryResult`); the ledger reports the first.
+    const before = recordResult(road(2, 3), 3, 100).progress;
+    const first = recordResult(road(2, 3), 3, 100);
+    const opening = ledger.beginLevel(start(3, road(2, 3)))!;
+    opening.finish(first, 100, masteryResult(road(2, 3), first, 3, true));
+    expect(only('level_mastered')).toHaveLength(1);
+
+    const encore = recordResult(before, 3, 100);
+    const replay = ledger.beginLevel(start(3, before))!;
+    replay.finish(encore, 100, masteryResult(before, encore, 3, true));
+    expect(only('level_mastered')).toHaveLength(1);
+    expect(only('level_completed')).toHaveLength(2);
   });
 });

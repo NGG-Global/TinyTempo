@@ -243,7 +243,7 @@ export interface AnalyticsPayloads {
     readonly task_index: number;
     readonly task_count: number;
   };
-  /** Every scored task flawless on a cleared level. Once per finished attempt, beside `level_completed`. */
+  /** A level's first IN THE POCKET run (`game/mastery.ts`), beside `level_completed`. Never on a replay of a level already mastered. */
   readonly level_mastered: {
     readonly level: number;
     readonly area: number;

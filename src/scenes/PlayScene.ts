@@ -27,6 +27,7 @@ import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLa
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
+import { masteryResult, type MasteryResult } from '@/game/mastery';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
@@ -288,6 +289,11 @@ export class PlayScene extends BaseScene {
   private grooveVoices: GrooveVoices | null = null;
   /** The pass that finished was flawless on every scored task: the result's mastery payoff. */
   private mastered = false;
+  /**
+   * Whether that flawless pass is the level's first (`first`, the full reveal) or a level
+   * the save already had mastered (`repeat`, acknowledged without the one-time effects).
+   */
+  private mastery: MasteryResult = 'none';
   /** When the mastery payoff is due on the audio clock; -Infinity when there is none. */
   private masteryAt = -Infinity;
   private masteryStruck = false;
@@ -446,6 +452,7 @@ export class PlayScene extends BaseScene {
     this.previewResult = this.grooveStudy = this.grooveHandoff = false;
     this.grooveVoices = null;
     this.mastered = false;
+    this.mastery = 'none';
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
     const ink = this.definition.ink;
@@ -858,6 +865,7 @@ export class PlayScene extends BaseScene {
     this.grooveStudy = false;
     this.grooveHandoff = false;
     this.mastered = false;
+    this.mastery = 'none';
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
     // A restart is a new pass: only the pass that finishes is counted.
@@ -1355,7 +1363,9 @@ export class PlayScene extends BaseScene {
       this.teach = null;
       this.intro = null;
       this.results = this.spec.tasks.map(() => 100);
-      this.outcome = recordResult(loadProgress(), this.spec.level, 100);
+      const before = loadProgress();
+      this.outcome = recordResult(before, this.spec.level, 100);
+      this.mastery = masteryResult(before, this.outcome, this.spec.level, true);
       this.mastered = true;
       this.levelCleared = true;
       this.saveFailed = false;
@@ -1928,10 +1938,13 @@ export class PlayScene extends BaseScene {
     this.outcome = outcome;
     // Every scored task flawless, on a cleared level: the result's one extra payoff. It
     // changes no star, threshold, heart or unlock; the scorer above never saw the groove.
-    this.mastered = isMastered(this.groove, this.spec.tasks.length, outcome.cleared);
+    // Whether it is the level's first is read from the save as it stood (`game/mastery.ts`):
+    // the reveal and `level_mastered` belong to the first, and a repeat is acknowledged.
+    this.mastery = masteryResult(before, outcome, this.spec.level, isMastered(this.groove, this.spec.tasks.length, outcome.cleared));
+    this.mastered = this.mastery !== 'none';
     // Beside the save, not the summary: this is the one step every finished run passes
     // exactly once, including the one a notification interrupts during its coda.
-    this.levelRun?.finish(outcome, accuracy, this.mastered);
+    this.levelRun?.finish(outcome, accuracy, this.mastery);
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
     // The player is told, but nobody else was: a device whose storage is blocked loses
@@ -1992,7 +2005,9 @@ export class PlayScene extends BaseScene {
     // Area complete is the bigger thing and goes first; this follows as the smaller one.
     this.masteryAt = this.mastered ? this.summaryAt + (this.finaleCleared ? MASTERY.finaleDelay : MASTERY.delay) : -Infinity;
     this.masteryStruck = false;
-    if (this.mastered && this.audio) {
+    this.masteryLabel.setText(this.mastery === 'repeat' ? 'IN THE POCKET AGAIN' : 'IN THE POCKET');
+    // The sting is the reveal's: a level already mastered gets its plate, not a second unveiling.
+    if (this.mastery === 'first' && this.audio) {
       const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
       this.audio.playStinger(this.masteryAt, voices.sting, this.finaleCleared ? 0.28 : 0.36);
     }
@@ -2280,7 +2295,7 @@ export class PlayScene extends BaseScene {
     const earned = this.summaryStars;
     const exaggeration = STYLE.current.exaggeration;
     const pose = plaquePose(age, still);
-    const mastery = masteryPose(this.now() - this.masteryAt, still);
+    const mastery = masteryPose(this.now() - this.masteryAt, still, this.mastery === 'repeat');
     const jolt = still ? 0 : plaqueJolt(age, earned, exaggeration) + (mastery?.knock ?? 0);
     const plaqueH = plan.plaqueHeight;
     const drop = (pose.drop + jolt) * plaqueH;
@@ -2458,7 +2473,8 @@ export class PlayScene extends BaseScene {
   /**
    * The mastery plate under the plaque: brass, like a refunded heart's, with the words
    * and a star at each end. It stands on the frame, not on the ropes, and arrives with
-   * the ring. Null pose means not yet, or never.
+   * the ring. Null pose means not yet, or never. A level already mastered gets the same
+   * plate, reading IN THE POCKET AGAIN, and arrives without the ring (`masteryPose`).
    */
   private drawMasteryRow(mastery: ReturnType<typeof masteryPose>, still: boolean): void {
     const row = this.resultPlan?.rows.find(r => r.kind === 'mastery');
@@ -2486,6 +2502,10 @@ export class PlayScene extends BaseScene {
         g.lineBetween(nx, cy - h, nx, cy + h);
       }
     }
+    // "Again" is the longer label: it shrinks to stay inside the notches rather than run over them.
+    const room = w - 2 * 58 * s;
+    this.masteryLabel.setScale(1);
+    if (this.masteryLabel.width > room) this.masteryLabel.setScale(room / this.masteryLabel.width);
     this.masteryLabel.setPosition(this.viewport.safe.centerX, cy).setAlpha(alpha).setVisible(true);
   }
 
@@ -2537,14 +2557,14 @@ export class PlayScene extends BaseScene {
     const still = this.reducedMotion;
     const summaryAge = now - this.summaryAt;
     const pose = plaquePose(summaryAge, still);
-    const mastery = masteryPose(now - this.masteryAt, still);
+    const mastery = masteryPose(now - this.masteryAt, still, this.mastery === 'repeat');
     const drop = (pose.drop + (still ? 0 : plaqueJolt(summaryAge, earned, STYLE.current.exaggeration) + (mastery?.knock ?? 0)))
       * (this.resultPlan?.plaqueHeight ?? 0);
     // Mastery's one strike: the sting, a pulse and sparks over the plaque, as the ring opens.
     if (mastery && !this.masteryStruck) {
       this.masteryStruck = true;
-      vibrate('stamp');
-      if (!still) {
+      if (this.mastery === 'first') vibrate('stamp');
+      if (!still && this.mastery === 'first') {
         const crest = this.hangAt(0, (this.resultPlan?.rope ?? 0) + (this.resultPlan?.plaqueHeight ?? 0) * 0.45, pose.tilt, drop);
         this.starFx.burst('sparks', crest.x, crest.y, [BRASS, 0xffe7a0, SHELL.cream], this.finaleCleared ? 6 : 10);
       }

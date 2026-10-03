@@ -59,8 +59,18 @@ the mute is the mute, and both levels come back full.
 | 3–4 | Calibration offset, signed. Written with the active route's offset; this build does not restore it (`docs/AUDIO_ROUTES.md`) |
 | 5 | Muted, haptics, tutorial complete |
 | 6–7 | Version 2 only: music and effects, each a whole percent, 0–100. A version 1 code reads both as full. |
-| 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. |
+| 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. A flawless level (best exactly 100) is written as **101** and anything short of it as at most 99, so mastery survives a code (below). |
 | n | Checksum: the sum of every preceding byte |
+
+**Why 101.** Mastery is derived from a best of exactly 100 (`docs/MASTERY.md`), and a
+whole-percent byte could not carry that: a 99.6 rounded to 100 and came back mastered. The
+encoder now writes a flawless level as 101 and caps everything else at 99, which costs no
+star because every threshold is a whole percent at or under 93. No version bump was needed:
+an older build reads 101 through its own `Math.min(100, value)` and restores exactly what it
+always did. A byte of 100 can only come from a code written before this, where it means
+anywhere from 99.5 to 100; it is read as 99.5 — three stars kept, no mastery claimed that
+the code cannot prove. A player in that position gets the mark back from the device that
+still holds the exact best (merging takes the higher) or from one flawless run.
 
 One byte per level sounds wasteful and is not: a level nobody cleared costs a zero byte,
 which base32 and the run of zeros between clears compress into very little to read. A

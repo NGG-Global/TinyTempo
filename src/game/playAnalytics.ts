@@ -5,6 +5,7 @@ import { finaleTreatment } from './finale';
 import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
 import { isCleared } from './health';
 import type { LevelSpec } from './levels';
+import type { MasteryResult } from './mastery';
 import type { LevelOutcome, Progress } from './progress';
 import type { RoundResult } from './scoring';
 import { areaIndexOf, gateFor, levelStars, totalStars } from './stars';
@@ -186,10 +187,12 @@ export class LevelRun {
   /**
    * The level was scored. Exactly one of `level_completed` and `level_failed`, however
    * often the scene reaches its own record step, followed by what the result changed.
-   * `mastered` is a cleared level every scored task of which was flawless, reported once
-   * beside the completion.
+   * `mastery` says whether the run was flawless on every scored task and, if so, whether the
+   * save already had the level mastered (`game/mastery.ts`). `level_mastered` is the first
+   * only: a replay of a mastered level is not a new mastery, and a dashboard counting
+   * masteries per level must not count one player's encores.
    */
-  public finish(outcome: LevelOutcome, accuracy: number, mastered = false): void {
+  public finish(outcome: LevelOutcome, accuracy: number, mastery: MasteryResult = 'none'): void {
     guard(undefined, () => {
       if (this.closed) return;
       this.closed = true;
@@ -205,7 +208,7 @@ export class LevelRun {
       };
       if (outcome.cleared) this.ledger.emit('level_completed', { ...result, stars: outcome.stars });
       else this.ledger.emit('level_failed', result);
-      if (outcome.cleared && mastered) {
+      if (outcome.cleared && mastery === 'first') {
         this.ledger.emit('level_mastered', {
           level: this.spec.level, area: this.params.area, vignette: this.spec.vignette, mode: this.params.mode,
           task_count: this.spec.tasks.length, accuracy: result.accuracy, stars: outcome.stars,

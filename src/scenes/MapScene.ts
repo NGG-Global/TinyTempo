@@ -19,6 +19,7 @@ import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, 
 import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
+import { mapMastered } from '@/game/mastery';
 import { MaterialKey } from '@/textures/materials';
 import { mix, relativeLuminance, shade, starColour } from '@/ui/colour';
 import { fillContour, traceContour } from '@/ui/illustration';
@@ -27,7 +28,7 @@ import { FxKey } from '@/ui/feedback';
 import { dashes, pathIndexAt, pathXAt, smoothPath, type Point } from '@/ui/path';
 import {
   beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE,
-  gatePlateTop, mapWindow, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
+  gatePlateTop, mapWindow, masteryGroove, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
 } from '@/ui/roadLayout';
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
@@ -976,6 +977,12 @@ export class MapScene extends BaseScene {
         : STYLE.current.outline;
     const t = outline === STYLE.current.outline ? STYLE.current : { ...STYLE.current, outline };
     drawDisc(g, node.x, node.y - lift, p.r, this.uiScale, { fill: p.fill, depth: p.depth }, t);
+    // IN THE POCKET, kept: derived from the save's best (`game/mastery.ts`), never stored.
+    if (mapMastered(this.progress, this.first + i)) {
+      const groove = masteryGroove(p.r, this.uiScale, BRASS);
+      g.lineStyle(groove.channel, groove.shadow, 0.9).strokeCircle(node.x, node.y - lift, groove.radius);
+      g.lineStyle(groove.inlay, groove.brass, 1).strokeCircle(node.x, node.y - lift, groove.radius);
+    }
     const look = this.finaleLook(i);
     if (!look) return;
     // Two brass rings ride with the puck, so the frontier's hop carries them.

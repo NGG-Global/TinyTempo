@@ -1,3 +1,4 @@
+import { MASTERED_ACCURACY } from './mastery';
 import type { Progress } from './progress';
 import { clampVolume, type Settings } from './settings';
 
@@ -82,6 +83,10 @@ const FLAG_TUTORIAL = 4;
  */
 const HEADER_V1 = 6;
 const HEADER_V2 = 8;
+/** A level played flawless: the only byte that restores as mastered. */
+const FLAWLESS_BYTE = 101;
+/** What an older code's ambiguous 100 restores as: the lowest best that rounds to it. */
+const AMBIGUOUS_HUNDRED = 99.5;
 
 /** Sum of every preceding byte. Catches a truncated paste and most single-character slips. */
 function checksum(bytes: Uint8Array, end: number): number {
@@ -97,7 +102,7 @@ function clampLevel(value: number): number {
 
 export function encodeSaveCode(data: SaveData): string {
   const unlocked = clampLevel(data.progress.unlocked);
-  // One byte per level from 1, holding a rounded accuracy. Empty levels are zero, which
+  // One byte per level from 1, holding a rounded accuracy (`accuracyByte`). Empty levels are zero, which
   // is what makes a 300-level save a few hundred characters instead of a few thousand.
   const cleared = Object.keys(data.progress.best)
     .map(Number)
@@ -119,12 +124,7 @@ export function encodeSaveCode(data: SaveData): string {
   // the device it came from cannot disagree by a step.
   bytes[6] = Math.round(clampVolume(data.settings.music) * 100);
   bytes[7] = Math.round(clampVolume(data.settings.sfx) * 100);
-  for (let level = 1; level <= top; level++) {
-    const best = data.progress.best[level];
-    bytes[HEADER_V2 - 1 + level] = typeof best === 'number' && Number.isFinite(best)
-      ? Math.max(0, Math.min(100, Math.round(best)))
-      : 0;
-  }
+  for (let level = 1; level <= top; level++) bytes[HEADER_V2 - 1 + level] = accuracyByte(data.progress.best[level]);
   bytes[bytes.length - 1] = checksum(bytes, bytes.length - 1);
   return group(toBase32(bytes));
 }
@@ -156,7 +156,7 @@ export function decodeSaveCode(code: string): SaveCodeResult {
   const levels = bytes.length - header - 1;
   for (let level = 1; level <= levels; level++) {
     const value = bytes[header - 1 + level] ?? 0;
-    if (value > 0) best[level] = Math.min(100, value);
+    if (value > 0) best[level] = accuracyFromByte(value);
   }
   return {
     ok: true,
@@ -173,6 +173,30 @@ export function decodeSaveCode(code: string): SaveCodeResult {
       tutorialComplete: (flags & FLAG_TUTORIAL) !== 0,
     },
   };
+}
+
+/**
+ * A level's best as one byte. Whole percent, except that 100 is never written: a flawless
+ * level is `FLAWLESS_BYTE` and anything short of it is at most 99, because rounding a 99.6
+ * up to 100 used to restore as a mastered level (`game/mastery.ts`). Every star threshold
+ * is a whole percent at or under 93, so capping at 99 costs no star. An older build reads
+ * 101 with `Math.min(100, value)`, so its restore of a newer code is what it always was.
+ */
+function accuracyByte(best: number | undefined): number {
+  if (typeof best !== 'number' || !Number.isFinite(best)) return 0;
+  if (best >= MASTERED_ACCURACY) return FLAWLESS_BYTE;
+  return Math.max(0, Math.min(MASTERED_ACCURACY - 1, Math.round(best)));
+}
+
+/**
+ * The inverse. A byte of exactly 100 comes only from a code written before the flawless
+ * byte existed, where it means somewhere from 99.5 to 100: it is read as the bottom of that
+ * range, which keeps the level's three stars and claims no mastery the code cannot prove.
+ * A byte above 101 is written by nothing and is read the same cautious way.
+ */
+function accuracyFromByte(value: number): number {
+  if (value === FLAWLESS_BYTE) return MASTERED_ACCURACY;
+  return value >= MASTERED_ACCURACY ? AMBIGUOUS_HUNDRED : value;
 }
 
 /** Dashes every few characters. Purely so a long code can be read and checked by eye. */

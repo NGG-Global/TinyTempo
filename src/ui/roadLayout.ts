@@ -248,6 +248,40 @@ export function finaleStopLook(state: MapLevelState): FinaleStopLook {
   return { lit: false, padlock: true, ringAlpha: 0.5, puck: state };
 }
 
+/**
+ * A mastered stop's mark: a thin brass groove inlaid just inside the puck's rim, on an
+ * ordinary stop and a finale's alike. Inside, because a finale's two brass rings already
+ * stand outside its puck and a third outside would read as one more of them; thin, because
+ * the stars on the plate under the puck are the reward and the groove only says how it was
+ * played. The inlay sits in a dark channel, which is what carries it on Dusk, whose cleared
+ * pucks are cream: brass alone is under 1.9:1 there and the channel clears 3:1, while on
+ * the four dark pucks the brass clears it itself.
+ */
+export const MASTERY_GROOVE = {
+  /** In from the puck's edge, to the groove's centre line. */
+  inset: 7,
+  inlay: 2.4,
+  channel: 5.2,
+} as const;
+
+export interface MasteryGrooveLook {
+  readonly radius: number;
+  readonly inlay: number;
+  readonly channel: number;
+  readonly brass: number;
+  readonly shadow: number;
+}
+
+export function masteryGroove(puckRadius: number, s: number, brass: number): MasteryGrooveLook {
+  return {
+    radius: puckRadius - MASTERY_GROOVE.inset * s,
+    inlay: MASTERY_GROOVE.inlay * s,
+    channel: MASTERY_GROOVE.channel * s,
+    brass,
+    shadow: shade(brass, -0.62),
+  };
+}
+
 /** The star gate at an area's foot: two posts, a bar, and a cream plate hanging under it. */
 export const GATE = {
   post: 14, height: 62, reach: 18, bar: 15,
