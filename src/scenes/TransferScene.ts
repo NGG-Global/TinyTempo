@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { applyCalibration, applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { applyMix, currentAudio, ensureShellMusic, sharedAudio } from '@/audio/sharedAudio';
+import { activeOffset } from '@/audio/audioRoute';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -222,9 +223,12 @@ export class TransferScene extends BaseScene {
 
   /** The code as it stands. Re-read after a restore, because the save has changed. */
   private refreshCode(): void {
+    const settings = loadSettings();
     this.code = encodeSaveCode({
       progress: loadProgress(),
-      settings: loadSettings(),
+      // The format still has room for one offset, so an older build restoring this code
+      // gets the active route's. This build restores none: the offset is device-local.
+      settings: { calibrationMs: activeOffset(), muted: settings.muted, music: settings.music, sfx: settings.sfx, haptics: settings.haptics },
       tutorialComplete: tutorialComplete(),
     });
   }
@@ -323,9 +327,11 @@ export class TransferScene extends BaseScene {
     const before = loadProgress();
     const merged = mergeProgress(before, data.progress);
     const stored = saveProgress(merged);
-    saveSettings({ ...loadSettings(), ...data.settings });
+    // Not the code's calibration: an offset is a fact about one device's audio route, and a
+    // code is how progress moves *between* devices. The rest of its settings come across.
+    const { muted, music, sfx, haptics } = data.settings;
+    saveSettings({ ...loadSettings(), muted, music, sfx, haptics });
     const engine = sharedAudio(this);
-    applyCalibration(engine, data.settings.calibrationMs);
     // Levels as well as the mute. An engine that already existed did not re-read the save
     // when `sharedAudio` returned it, and a mute flip on its own would have left the old mix.
     applyMix(engine, loadSettings());

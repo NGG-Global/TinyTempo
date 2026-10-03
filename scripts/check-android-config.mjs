@@ -80,6 +80,12 @@ if (!mainActivity.includes('registerPlugin(PlayReviewPlugin.class)')) {
     + '    Add registerPlugin(PlayReviewPlugin.class) before super.onCreate.');
 }
 
+if (!mainActivity.includes('registerPlugin(AudioRoutePlugin.class)')) {
+  notes.push('MainActivity.java does not register AudioRoutePlugin, so every device reads as one\n'
+    + '    audio route and the Tap offset measured on Bluetooth is used on the speaker too.\n'
+    + '    Add registerPlugin(AudioRoutePlugin.class) before super.onCreate. See docs/AUDIO_ROUTES.md.');
+}
+
 const appGradle = read('android/app/build.gradle') ?? '';
 if (!appGradle.includes('com.android.billingclient:billing')) {
   notes.push('android/app/build.gradle has no com.android.billingclient:billing dependency,\n'

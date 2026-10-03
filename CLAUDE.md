@@ -14,7 +14,7 @@ each a fraction of its own mix, full when a save has neither — and the speaker
 master mute that silences both without discarding them. Progress leaves the device two ways, neither of them an
 account: Android's Auto Backup, and the save code on `TransferScene` — a checksummed
 Crockford base32 string carrying levels, accuracies and settings, never hearts or
-purchases. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
+purchases, and whose one calibration field this build writes but no longer restores. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`.
 
 The tiers stop at the eighth note; **triplets and sixteenths are a second stage on the
@@ -417,6 +417,21 @@ a fifth of a second. `AudioClock.calibrationMs` is then the correction on top fo
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
 when it is large enough to be the reason a player is failing levels.
+**The Tap offset is per audio route** (`game/routeCalibration.ts`, `audio/audioRoute.ts`,
+`docs/AUDIO_ROUTES.md`): `speaker`, `wired`, `bluetooth` and `unknown`, each with its own
+value in `Settings.calibration` (settings version 2), because one phone differs by a fifth of
+a second between its speaker and Bluetooth. `AudioRoutePlugin.java` classifies the connected
+outputs with `AudioManager`/`AudioDeviceInfo`, Bluetooth before wired before speaker, and
+follows `AudioDeviceCallback`; the browser has no plugin and stays `unknown`, which is the old
+single offset. **A route change never writes the clock**: `syncClockCalibration` does, only
+where a plan is placed — `PlayScene.beginPlan`, a tutorial pass, the calibration screen, a new
+engine — so a phrase in flight is judged on the offset it started with. An uncalibrated route
+is 0, never a neighbour's value. A version-1 save's single offset becomes `legacy`, used by
+`unknown` and adopted once by the first real route a device reports (`adoptLegacy`).
+Calibration and Reset touch the active route only. The map's `RouteNotice` card suggests
+calibrating an uncalibrated Bluetooth route, or any uncalibrated route once another has been
+calibrated, and a close silences it for that route for the session. It is device-local: in
+no cloud save, and not restored from a save code.
 
 **A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
 is the context time of the sample the player is hearing, so every phase, judgement and
@@ -689,6 +704,9 @@ src/
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
     AudioClock.ts      DOM event time to output time, plus the input offset
+    audioRoute.ts      The live output route, and the active route's offset onto the clock at a boundary
+    routeNative.ts     The AudioRoute plugin bridge; validates every answer
+    routeBoot.ts       Native-only route watch; the browser stays `unknown`
     MusicSystem.ts     One track at a time, a source per stem: load, normalize, start, layers, rate, gain
     metronomeSounds.ts The metronome bar: a click a beat, the first accented, as samples
     musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
@@ -741,6 +759,7 @@ src/
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
+    routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
     musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
@@ -795,6 +814,7 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
+    routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure
     sheen.ts           The light crossing a brass panel; still under reduced motion
@@ -1058,7 +1078,10 @@ reports the facts of a finished level to `offer`, and the cleared result's Conti
 and goes to the map on every branch. Play does not say whether it showed a dialog, so a
 completed launch means "attempted" and nothing more, and the one stored bit
 (`tiny-tempo.review.v1`) is written when a launch is tried, not when one is offered. See
-`docs/IN_APP_REVIEW.md`. Beyond those, the game
+`docs/IN_APP_REVIEW.md`. The audio route is the seventh: `AudioRoutePlugin.java` reads
+`AudioManager.getDevices` and `AudioDeviceCallback` and relays a category, never a device name,
+registered beside the others in `MainActivity` and checked by `check-android-config.mjs`. See
+`docs/AUDIO_ROUTES.md`. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately

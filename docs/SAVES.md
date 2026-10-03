@@ -56,7 +56,7 @@ the mute is the mute, and both levels come back full.
 | --- | --- |
 | 0 | Format version. 1 is the original record; 2 adds the two levels. A newer version is refused, not guessed at. |
 | 1–2 | Highest unlocked level |
-| 3–4 | Calibration offset, signed |
+| 3–4 | Calibration offset, signed. Written with the active route's offset; this build does not restore it (`docs/AUDIO_ROUTES.md`) |
 | 5 | Muted, haptics, tutorial complete |
 | 6–7 | Version 2 only: music and effects, each a whole percent, 0–100. A version 1 code reads both as full. |
 | 6 … or 8 … n−1 | One byte per level from 1, holding a rounded accuracy; zero means not cleared. The scores start at byte 6 in a version 1 code and at byte 8 in a version 2 code. |
@@ -67,7 +67,10 @@ which base32 and the run of zeros between clears compress into very little to re
 300-level save is under 600 characters, and a typical one is under 60.
 
 **What travels is what the player earned, never what they owe or own.** Levels, best
-accuracies, calibration, the mute, the two levels, the haptics switch, the tutorial flag.
+accuracies, the mute, the two levels, the haptics switch, the tutorial flag. The code still
+has a calibration field, written with the active route's offset for older builds, but this
+build does not restore it: the Tap offset is per audio route and device-local
+(`docs/AUDIO_ROUTES.md`).
 Not hearts, not the refill ledger, not the daily-heart ledger, not the premium cache —
 restoring any of those is
 either an exploit or an incoherence, and a purchase comes back through the store's own

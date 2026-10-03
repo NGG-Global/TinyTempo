@@ -1,4 +1,5 @@
 import { ANALYTICS } from '../config/analytics';
+import { NO_CALIBRATION, readRouteCalibration, writeRouteCalibration, type RouteCalibration } from './routeCalibration';
 
 /**
  * Persisted player settings. Same defensive shape as `game/progress.ts`: every field is
@@ -6,10 +7,13 @@ import { ANALYTICS } from '../config/analytics';
  */
 export interface Settings {
   /**
-   * Milliseconds the device's audio output lags the schedule. Subtracted from every judged
-   * tap, and from nothing else — see `AudioClock.input`.
+   * Milliseconds the device's audio output lags the schedule, per output route — the
+   * speaker, wired audio, Bluetooth — because one phone differs by a fifth of a second
+   * between them (`game/routeCalibration.ts`). The active route's value is subtracted from
+   * every judged tap, and from nothing else — see `AudioClock.input`. Device-local: it is
+   * in no cloud save, and a save code no longer restores it.
    */
-  readonly calibrationMs: number;
+  readonly calibration: RouteCalibration;
   /**
    * Master silence. The speaker puck flips this and nothing else: the two levels below
    * stay where the player left them, and come back when the mute comes off.
@@ -40,8 +44,12 @@ export interface Settings {
 }
 
 const KEY = 'tiny-tempo.settings.v1';
-/** Written but not required on read, so a future migration has something to branch on. */
-const VERSION = 1;
+/**
+ * 2 replaced the single `calibrationMs` with `calibration`, one slot per route. A version-1
+ * save is still read: its offset becomes the legacy slot, which the first route a native
+ * device reports adopts (`adoptLegacy`). The key keeps its name so nothing else moves.
+ */
+const VERSION = 2;
 /**
  * Bluetooth output on Android routinely adds 150-300 ms, which is why calibration exists at
  * all. Past half a second the player is not hearing the beat they are tapping, and the
@@ -51,7 +59,7 @@ export const CALIBRATION_LIMIT_MS = 500;
 /** Below this many usable taps a median says more about the sample than the device. */
 export const CALIBRATION_TAPS = 8;
 const DEFAULTS: Settings = Object.freeze({
-  calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true, analytics: ANALYTICS.consentGranted,
+  calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: ANALYTICS.consentGranted,
 });
 
 export type VolumeBus = 'music' | 'sfx';
@@ -92,12 +100,13 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
-    const { calibrationMs, muted, music, sfx, haptics, analytics } = parsed as {
-      calibrationMs?: unknown; muted?: unknown; music?: unknown; sfx?: unknown;
+    const { calibration, calibrationMs, muted, music, sfx, haptics, analytics } = parsed as {
+      calibration?: unknown; calibrationMs?: unknown; muted?: unknown; music?: unknown; sfx?: unknown;
       haptics?: unknown; analytics?: unknown;
     };
     return Object.freeze({
-      calibrationMs: typeof calibrationMs === 'number' ? clampCalibration(calibrationMs) : 0,
+      // A version-1 save's `calibrationMs` is the legacy slot; a version-2 save's is ignored.
+      calibration: readRouteCalibration(calibration, calibrationMs, clampCalibration),
       muted: muted === true,
       music: typeof music === 'number' ? clampVolume(music) : 1,
       sfx: typeof sfx === 'number' ? clampVolume(sfx) : 1,
@@ -115,11 +124,16 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
 /** False means nothing was written — blocked storage, a private window, or a full quota. */
 export function saveSettings(settings: Settings, storage: Storage | null = safeStorage()): boolean {
   try {
+    // Field by field rather than a spread: a caller holding a save code's settings must not
+    // be able to write a stray `calibrationMs` that a version-1 reader would trust.
     storage?.setItem(KEY, JSON.stringify({
-      version: VERSION, ...settings,
-      calibrationMs: clampCalibration(settings.calibrationMs),
+      version: VERSION,
+      calibration: writeRouteCalibration(settings.calibration, clampCalibration),
+      muted: settings.muted === true,
       music: clampVolume(settings.music),
       sfx: clampVolume(settings.sfx),
+      haptics: settings.haptics !== false,
+      analytics: settings.analytics === true,
     }));
     return storage !== null;
   } catch { return false; }

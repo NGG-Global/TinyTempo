@@ -5,6 +5,7 @@ import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { trackForLevel } from '@/game/musicSelection';
@@ -1150,6 +1151,10 @@ export class PlayScene extends BaseScene {
   }
 
   private beginPlan(pattern: Pattern, bpm: number, startAt: number, leadBeats: number): void {
+    // The active route's Tap offset, taken here and nowhere mid-task: a route that changed
+    // during the last phrase reaches the judge on this one, never retroactively. Placement
+    // follows the previous task's result, so nothing still being judged can see it move.
+    syncClockCalibration(this.audio!.clock);
     this.attempts++;
     this.demoCount = 0;
     this.finishUnlock = Infinity;

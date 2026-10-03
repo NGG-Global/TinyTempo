@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { hushMusic, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { syncClockCalibration } from '@/audio/audioRoute';
 import { RHYTHM } from '@/config/rhythm';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -248,6 +249,8 @@ export class TutorialScene extends BaseScene {
         complete: () => this.completeTry(),
         interrupted: () => this.interrupt(),
       });
+      // A judged pass is a plan placed: the active route's offset is taken here, as a level's is.
+      syncClockCalibration(this.audio.clock);
       const contextNow = this.audio.context.currentTime;
       const startAt = Math.max(this.now(), contextNow) + TUTORIAL.leadSec;
       this.controller.start(

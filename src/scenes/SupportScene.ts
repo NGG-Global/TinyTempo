@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { currentAudio, ensureShellMusic } from '@/audio/sharedAudio';
+import { activeCalibration, activeOffset, currentRoute } from '@/audio/audioRoute';
+import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { DIAGNOSTICS } from '@/config/diagnostics';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -37,8 +39,11 @@ import { body, display, label, resize } from '@/ui/type';
 function describeAudio(scene: Phaser.Scene): string {
   const engine = currentAudio(scene);
   if (engine === null) return 'not started this session';
-  const offset = loadSettings().calibrationMs;
-  return `${engine.clock.mode} clock · device reports ${engine.clock.reportedLagMs} ms · offset ${offset} ms`;
+  // The route and whether it was measured: "offset 0 ms" on Bluetooth reads very
+  // differently once support can see that nobody ever calibrated Bluetooth.
+  const measured = activeCalibration();
+  const offset = measured === null ? 'not calibrated' : `offset ${measured} ms`;
+  return `${engine.clock.mode} clock · ${ROUTE_LABELS[currentRoute()].toLowerCase()} · device reports ${engine.clock.reportedLagMs} ms · ${offset}`;
 }
 
 /** Design-unit metrics for the block of detail this screen exists to show. */
@@ -168,7 +173,7 @@ export class SupportScene extends BaseScene {
       saveCode: encodeSaveCode({
         progress,
         settings: {
-          calibrationMs: settings.calibrationMs, muted: settings.muted,
+          calibrationMs: activeOffset(), muted: settings.muted,
           music: settings.music, sfx: settings.sfx, haptics: settings.haptics,
         },
         tutorialComplete: tutorialComplete(),

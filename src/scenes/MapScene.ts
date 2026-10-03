@@ -1,7 +1,9 @@
 import Phaser from 'phaser';
+import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { MUSIC } from '@/config/music';
 import { currentAudio, ensureShellMusic, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentRoute, dismissRouteNotice, onRouteChange, routeNoticeWanted } from '@/audio/audioRoute';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -38,6 +40,7 @@ import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize } from '@/ui/type';
+import { RouteNotice } from '@/ui/routeNotice';
 import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
@@ -258,6 +261,9 @@ export class MapScene extends BaseScene {
   private objectivesAt = { x: 0, y: 0 };
   private objectives!: ObjectivesState;
   private objectivesCard!: ObjectivesCard;
+  /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
+  private routeNotice!: RouteNotice;
+  private stopWatchingRoute: (() => void) | null = null;
   private muted = false;
   private numbers: Phaser.GameObjects.Text[] = [];
   private areaTitles: Phaser.GameObjects.Text[] = [];
@@ -357,6 +363,9 @@ export class MapScene extends BaseScene {
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
     this.objectivesCard = new ObjectivesCard(this, 30);
+    // Under the objectives card and the rest sheet, over the road. Assigned on every entry.
+    this.routeNotice = new RouteNotice(this, 12);
+    this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) this.refreshRouteNotice(); });
     this.objectives = loadObjectives(Date.now(), objectiveContext(this.progress));
     this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 28, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
@@ -459,6 +468,8 @@ export class MapScene extends BaseScene {
     this.drawPucks(s, 0);
     this.drawDock(s, 0);
     this.drawRest(s, 0);
+    this.routeNotice.layout(safe.centerX, this.footerTop, safe.width - 32 * s, s, this.controlSize);
+    this.refreshRouteNotice();
     this.pressDirty = this.puckDirty = this.restPressDirty = true;
     this.cameras.main.setBounds(0, 0, full.width, this.worldHeight);
     if (!this.centered) { this.centered = true; this.scrollTo(this.focus); }
@@ -1756,6 +1767,7 @@ export class MapScene extends BaseScene {
     if (monetization().premium()) return;
     const first = !this.restShown;
     this.restShown = true;
+    this.refreshRouteNotice();
     this.restDailyOpen = canClaimDailyHeart(this.health);
     // The tip stays on the sheet for the whole visit once it has opened, and is marked
     // seen on the first showing, so it is said once — not once per sheet.
@@ -1781,6 +1793,7 @@ export class MapScene extends BaseScene {
   private hideRest(): void {
     if (!this.restShown) return;
     this.restShown = false;
+    this.refreshRouteNotice();
     this.restDailyOpen = false;
     this.restTipOpen = false;
     this.restPressed = null;
@@ -2146,6 +2159,16 @@ export class MapScene extends BaseScene {
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
       return;
     }
+    // The route note sits over the road, so it is asked before a node or a drag can take the tap.
+    if (!this.restShown) {
+      const notice = this.routeNotice.tap(x, y);
+      if (notice === 'close') { vibrate('tap'); dismissRouteNotice(); this.refreshRouteNotice(); return; }
+      if (notice === 'tune') {
+        vibrate('tap');
+        this.curtain.cover(() => this.scene.start(SceneKey.Calibrate, { from: SceneKey.Map, returnTo: SceneKey.Map }));
+        return;
+      }
+    }
     if (near(this.muteAt)) {
       toggleMute(sharedAudio(this));
       this.muted = outputSilent(this);
@@ -2227,9 +2250,16 @@ export class MapScene extends BaseScene {
     hushMusic(this, MUSIC.bedFadeSec);
     this.curtain.cover(() => this.scene.start(SceneKey.Play, { level, autoStart: true }));
   }
+  /** The route note: shown when the active route wants calibrating, never over the rest sheet. */
+  private refreshRouteNotice(): void {
+    this.routeNotice.show(!this.restShown && routeNoticeWanted() ? currentRoute() : null);
+  }
+
   private shutdown(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.stopWatchingRoute?.();
+    this.stopWatchingRoute = null;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.input.off(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);

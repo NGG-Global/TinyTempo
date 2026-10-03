@@ -51,7 +51,14 @@ export type SaveCodeError = 'empty' | 'malformed' | 'checksum' | 'version';
  * a consent question on a phone whose owner was never asked it, so the type says so and
  * the compiler keeps it that way.
  */
-export type PortableSettings = Pick<Settings, 'calibrationMs' | 'muted' | 'music' | 'sfx' | 'haptics'>;
+export type PortableSettings = Pick<Settings, 'muted' | 'music' | 'sfx' | 'haptics'> & {
+  /**
+   * One offset, as version 1 and 2 codes carry it. A code is written with the active route's
+   * value so an older build restoring it gets something sensible, and this build's restore
+   * ignores it: per-route calibration is device-local (`game/routeCalibration.ts`).
+   */
+  readonly calibrationMs: number;
+};
 
 export interface SaveData {
   readonly progress: Progress;

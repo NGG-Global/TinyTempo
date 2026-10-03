@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { AudioEngine } from './AudioEngine';
-import { clampCalibration, loadSettings, saveSettings, withVolume, type Settings, type VolumeBus } from '../game/settings';
+import { loadSettings, saveSettings, withVolume, type Settings, type VolumeBus } from '../game/settings';
+import { clearActiveCalibration, saveActiveCalibration, syncClockCalibration } from './audioRoute';
 import { setMusicBed } from './musicBed';
 import type { TrackId } from '../config/music';
 import { loadProgress } from '../game/progress';
@@ -21,7 +22,8 @@ export function sharedAudio(scene: Phaser.Scene): AudioEngine {
   // The composition point, rather than the engine or the clock, is where a stored setting
   // belongs: neither of those should know that storage exists.
   const settings = loadSettings();
-  engine.clock.calibrationMs = settings.calibrationMs;
+  // The active route's offset. An engine is made before any plan, so this is a boundary.
+  syncClockCalibration(engine.clock);
   applyMix(engine, settings);
   scene.registry.set(KEY, engine);
   scene.game.events.once(Phaser.Core.Events.DESTROY, () => { engine.dispose(); scene.registry.remove(KEY); });
@@ -75,14 +77,22 @@ export function toggleMute(engine: AudioEngine): boolean {
 }
 
 /**
- * Applies a calibration offset to the live clock, when there is one, and persists it.
- * Settings can reset the offset before PLAY has ever created the engine; the save is
- * still the source of truth for the next boot.
+ * Keeps a measured offset for the **active route only**, and puts it on the live clock when
+ * there is one. Only screens that judge nothing call this — calibration and Settings — so
+ * writing the clock here is never mid-phrase. Settings can reset the offset before PLAY has
+ * ever created the engine; the save is still the source of truth for the next boot.
  */
 export function applyCalibration(engine: AudioEngine | null, calibrationMs: number): boolean {
-  const value = clampCalibration(calibrationMs);
-  if (engine) engine.clock.calibrationMs = value;
-  return saveSettings({ ...loadSettings(), calibrationMs: value });
+  const saved = saveActiveCalibration(calibrationMs);
+  if (engine) syncClockCalibration(engine.clock);
+  return saved;
+}
+
+/** The active route back to uncalibrated; every other route keeps its own measurement. */
+export function resetCalibration(engine: AudioEngine | null): boolean {
+  const saved = clearActiveCalibration();
+  if (engine) syncClockCalibration(engine.clock);
+  return saved;
 }
 
 /**
