@@ -144,7 +144,7 @@ export interface AnalyticsPayloads {
 
   readonly tutorial_started: { readonly source: 'first_play' | 'menu'; readonly repeat: Flag };
   readonly tutorial_completed: { readonly tries: number; readonly passed: Flag; readonly duration_ms: number; readonly repeat: Flag };
-  readonly tutorial_skipped: { readonly step: 'watch' | 'try' | 'done'; readonly tries: number; readonly duration_ms: number; readonly repeat: Flag };
+  readonly tutorial_skipped: { readonly step: 'watch' | 'along' | 'try' | 'done'; readonly tries: number; readonly duration_ms: number; readonly repeat: Flag };
   readonly level_started: LevelParams;
   readonly level_retried: LevelParams;
   readonly level_replayed: LevelParams;

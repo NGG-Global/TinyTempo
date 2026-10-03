@@ -1,13 +1,20 @@
 import { describe, expect, it } from 'vitest';
 import { RHYTHM } from '../src/config/rhythm';
-import { handoverAt } from '../src/game/beatTrack';
-import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, tutorialComplete, tutorialSeen, TutorialRun } from '../src/game/TutorialRun';
+import { handoverAt, turnCount } from '../src/game/beatTrack';
+import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, tutorialComplete, tutorialSeen, TutorialRun, type JudgedStep } from '../src/game/TutorialRun';
 import type { Judgement } from '../src/rhythm/judge';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 
 const hit = (index: number, grade: Judgement['grade'] = 'Perfect'): Judgement => ({ kind: 'hit', grade, index, deltaMs: 0 });
 const omission = (index: number): Judgement => ({ kind: 'omission', grade: 'Miss', index, deltaMs: null });
 const extra = (): Judgement => ({ kind: 'extra', grade: 'Miss', index: null, deltaMs: null });
+
+const beginOnce = (run: TutorialRun, step: JudgedStep, start = 100) => {
+  const plan = createRoundPlan(1, TUTORIAL.pattern, TUTORIAL.bpm, start, TUTORIAL.leadBeats);
+  run.begin(step, plan);
+  return plan;
+};
+const missAll = (run: TutorialRun) => { for (let i = 0; i < 3; i++) run.judged(omission(i)); };
 
 describe('the watched pass', () => {
   it('runs on the level’s own grid: one counted bar, the hammer’s bar, then the answer with no pause', () => {
@@ -23,17 +30,21 @@ describe('the watched pass', () => {
     expect(plan.end).toBeCloseTo(plan.response + 4 * beat);
   });
 
-  it('names each moment from the plan, and hands over before the downbeat it announces', () => {
+  it('names each moment from the plan, and opens the count-down on the beat the "3" strikes', () => {
     const run = new TutorialRun();
     const plan = run.watch(0);
     const beat = 60 / plan.bpm;
     const first = plan.targets[0]!;
+    const countFrom = first - RHYTHM.turnCountBeats * beat;
     expect(momentOf(plan, plan.demo - 0.01)).toBe('count');
     expect(momentOf(plan, plan.demo)).toBe('theirs');
-    // The runway opens RHYTHM.runwayBeats before the first target — inside the hammer's
-    // own bar — and that is when the words say "get ready", not on the beat itself.
-    expect(handoverAt(plan)).toBeCloseTo(first - RHYTHM.runwayBeats * beat);
-    expect(momentOf(plan, handoverAt(plan) - 0.001)).toBe('theirs');
+    // The words follow the count, not the baton: the "3" lands one beat before the
+    // runway opens, and a sign still saying "Their turn" under it would lag the block.
+    expect(turnCount(plan, countFrom - 0.001)).toBeNull();
+    expect(turnCount(plan, countFrom + 0.001)?.count).toBe(3);
+    expect(momentOf(plan, countFrom - 0.001)).toBe('theirs');
+    expect(momentOf(plan, countFrom + 0.001)).toBe('runway');
+    expect(handoverAt(plan)).toBeGreaterThan(countFrom);
     expect(momentOf(plan, handoverAt(plan) + 0.001)).toBe('runway');
     expect(momentOf(plan, first - 0.001)).toBe('runway');
     expect(momentOf(plan, first)).toBe('yours');
@@ -43,34 +54,72 @@ describe('the watched pass', () => {
     expect(momentOf(plan, Number.NaN)).toBe('count');
   });
 
-  it('says whose turn it is in words that follow the block, and offers the try only once the pass is over', () => {
+  it('says whose turn it is in words that follow the block, and offers tapping along only once the pass is over', () => {
     const run = new TutorialRun();
     const plan = run.watch(0);
+    const beat = 60 / plan.bpm;
     const first = plan.targets[0]!;
-    expect(coach(run, plan.demo - 0.1)).toMatchObject({ heading: 'Listen', action: null, side: 'none' });
+    const countFrom = first - RHYTHM.turnCountBeats * beat;
+    expect(coach(run, plan.demo - 0.1)).toMatchObject({ heading: 'Listen', action: null, next: null, side: 'none' });
     expect(coach(run, plan.demo + 0.1)).toMatchObject({ heading: 'Their turn', action: null, side: 'theirs' });
-    expect(coach(run, handoverAt(plan) + 0.1)).toMatchObject({ heading: 'Get ready', action: null, side: 'handover' });
+    expect(coach(run, countFrom + 0.1)).toMatchObject({ heading: 'Count down', action: null, side: 'handover' });
+    expect(coach(run, countFrom + 0.1).copy).toContain('Go!');
     expect(coach(run, first + 0.1)).toMatchObject({ heading: 'Your turn', action: null, side: 'yours' });
     const done = coach(run, plan.end);
-    expect(done.action).toBe('Try it');
-    expect(done.copy).toContain('Top row: theirs. Bottom row: yours.');
-    // Every line of the lesson says where to look: the rows or the token.
-    for (const now of [plan.demo - 0.1, plan.demo + 0.1, handoverAt(plan) + 0.1, first + 0.1, plan.end]) {
-      expect(coach(run, now).copy).toMatch(/row|token/);
+    expect(done).toMatchObject({ action: 'Tap along', next: 'along' });
+    expect(done.copy).toContain('Go!');
+    // Every line of the lesson says where to look — a row — or what to wait for — Go!
+    // — and fits on one line: it is read while a bar is playing.
+    for (const now of [plan.demo - 0.1, plan.demo + 0.1, countFrom + 0.1, first + 0.1, plan.end]) {
+      const { copy } = coach(run, now);
+      expect(copy).toMatch(/row|Go!/);
+      expect(copy).not.toContain('\n');
+      expect(copy.length).toBeLessThanOrEqual(52);
     }
   });
 });
 
-describe('the tried pass', () => {
-  const tryOnce = (run: TutorialRun, start = 100) => {
-    const plan = createRoundPlan(1, TUTORIAL.pattern, TUTORIAL.bpm, start, TUTORIAL.leadBeats);
-    run.try(plan);
-    return plan;
-  };
+describe('tapping along', () => {
+  it('passes on one judged hit, and offers the pass on their own rather than the game', () => {
+    const run = new TutorialRun();
+    const plan = beginOnce(run, 'along');
+    expect(run.step).toBe('along');
+    expect(run.tries).toBe(1);
+    expect(coach(run, plan.end + 0.05)).toMatchObject({ heading: 'Your turn', action: null });
+    run.judged(omission(0));
+    run.judged(hit(1, 'Good'));
+    run.judged(omission(2));
+    expect(run.complete()).toBe('clear');
+    expect(run.step).toBe('along');
+    expect(coach(run, plan.end + 1)).toMatchObject({ heading: 'With it', action: 'On your own', next: 'try', side: 'yours' });
+  });
 
+  it('names its own words: the hammer is sounding the answer and the player taps with it', () => {
+    const run = new TutorialRun();
+    const plan = beginOnce(run, 'along');
+    expect(coach(run, plan.targets[0]! + 0.1).copy).toMatch(/with the hammer/i);
+    const alone = new TutorialRun();
+    const solo = beginOnce(alone, 'try');
+    expect(coach(alone, solo.targets[0]! + 0.1).copy).not.toMatch(/with the hammer/i);
+  });
+
+  it('repeats itself on a miss, and offers the way on once enough has been tried', () => {
+    const run = new TutorialRun();
+    for (let attempt = 1; attempt <= TUTORIAL.offerPlayAfter; attempt++) {
+      const plan = beginOnce(run, 'along');
+      missAll(run);
+      expect(run.complete()).toBe('silent');
+      expect(run.step).toBe('along');
+      const words = coach(run, plan.end + 1);
+      expect(words).toMatchObject(attempt < TUTORIAL.offerPlayAfter ? { action: 'Try again', next: 'along' } : { action: 'Let’s play', next: 'play' });
+    }
+  });
+});
+
+describe('the pass on their own', () => {
   it('passes on two judged hits of three, and ends the lesson', () => {
     const run = new TutorialRun();
-    const plan = tryOnce(run);
+    const plan = beginOnce(run, 'try');
     expect(run.step).toBe('try');
     expect(run.tries).toBe(1);
     // Until the verdict is in, the judged bar is still the player's: no button appears.
@@ -81,73 +130,102 @@ describe('the tried pass', () => {
     expect(run.complete()).toBe('clear');
     expect(run.step).toBe('done');
     expect(run.verdict).toBe('clear');
-    expect(coach(run, plan.end + 1)).toMatchObject({ heading: 'You’ve got it', action: 'Let’s play', side: 'yours' });
+    expect(coach(run, plan.end + 1)).toMatchObject({ heading: 'You’ve got it', action: 'Let’s play', next: 'play', side: 'yours' });
+  });
+
+  it('needs more than tapping along did: one hit is nearly, not a pass', () => {
+    const run = new TutorialRun();
+    beginOnce(run, 'try');
+    run.judged(hit(0));
+    run.judged(omission(1));
+    run.judged(omission(2));
+    expect(run.complete()).toBe('partial');
+    expect(run.step).toBe('try');
   });
 
   it('names taps in the hammer’s turn as the mistake, rather than scoring them', () => {
     const run = new TutorialRun();
-    const plan = tryOnce(run);
-    run.earlyTap();
-    run.earlyTap();
-    run.judged(omission(0));
-    run.judged(omission(1));
-    run.judged(omission(2));
+    const plan = beginOnce(run, 'try');
+    run.earlyTap(plan.demo + 0.2);
+    run.earlyTap(plan.demo + 1);
+    missAll(run);
     expect(run.complete()).toBe('early');
     expect(run.step).toBe('try');
     const words = coach(run, plan.end + 1);
     expect(words.heading).toBe('Too early');
     expect(words.copy).toContain('hammer’s turn');
-    expect(words.action).toBe('Try again');
+    expect(words).toMatchObject({ action: 'Try again', next: 'try' });
   });
 
-  it('tells a player whose bar went by that their turn starts the moment the hammer’s ends', () => {
+  it('says "Not yet" the moment a tap lands in the hammer’s turn, and lets it go by the player’s bar', () => {
     const run = new TutorialRun();
-    const plan = tryOnce(run);
-    for (let i = 0; i < 3; i++) run.judged(omission(i));
+    const plan = beginOnce(run, 'try');
+    const at = plan.demo + 0.5;
+    expect(coach(run, at).heading).toBe('Their turn');
+    run.earlyTap(at);
+    expect(coach(run, at)).toMatchObject({ heading: 'Not yet', side: 'theirs', action: null });
+    expect(coach(run, at).copy).toContain('Go!');
+    expect(coach(run, at + TUTORIAL.nudgeSec - 0.01).heading).toBe('Not yet');
+    // By the time the nudge has run its course the "3" has struck, so the sign goes to the count.
+    expect(momentOf(plan, at + TUTORIAL.nudgeSec + 0.01)).toBe('runway');
+    expect(coach(run, at + TUTORIAL.nudgeSec + 0.01).heading).toBe('Count down');
+    // A nudge never covers the player's own bar: once it is their turn, the words say so.
+    run.earlyTap(plan.targets[0]! - 0.2);
+    expect(coach(run, plan.targets[0]! + 0.05).heading).toBe('Your turn');
+    // Nor the verdict.
+    missAll(run);
+    run.complete();
+    expect(coach(run, plan.end + 0.1).heading).toBe('Too early');
+  });
+
+  it('tells a player whose bar went by that their turn starts on Go!, with no pause', () => {
+    const run = new TutorialRun();
+    const plan = beginOnce(run, 'try');
+    missAll(run);
     expect(run.complete()).toBe('silent');
     const words = coach(run, plan.end + 1);
     expect(words.heading).toBe('That was your turn');
     expect(words.copy).toMatch(/no pause/i);
+    expect(words.copy).toContain('Go!');
   });
 
-  it('calls one hit, or a burst of extras, nearly rather than wrong', () => {
-    const run = new TutorialRun();
-    tryOnce(run);
-    run.judged(hit(0));
-    run.judged(omission(1));
-    run.judged(omission(2));
-    expect(run.complete()).toBe('partial');
+  it('calls a burst of extras nearly rather than wrong', () => {
     const spam = new TutorialRun();
-    tryOnce(spam);
+    beginOnce(spam, 'try');
     spam.judged(extra());
     spam.judged(extra());
-    for (let i = 0; i < 3; i++) spam.judged(omission(i));
+    missAll(spam);
     expect(spam.complete()).toBe('partial');
   });
 
-  it('ignores judgements outside a try and after its verdict, and a hit graded Miss is a miss', () => {
+  it('ignores judgements outside a judged pass and after its verdict, and a hit graded Miss is a miss', () => {
     const run = new TutorialRun();
     run.watch(0);
     run.judged(hit(0));
-    run.earlyTap();
+    run.earlyTap(1);
     expect(run.tally).toEqual({ hits: 0, misses: 0, extras: 0, early: 0 });
-    tryOnce(run);
+    expect(run.earlyAt).toBe(-Infinity);
+    beginOnce(run, 'try');
     run.judged(hit(0, 'Miss'));
     expect(run.tally.misses).toBe(1);
     run.judged(hit(1));
     run.judged(hit(2));
     expect(run.complete()).toBe('clear');
     run.judged(omission(0));
-    run.earlyTap();
+    run.earlyTap(5);
     expect(run.tally).toEqual({ hits: 2, misses: 1, extras: 0, early: 0 });
     expect(run.complete()).toBe('clear');
   });
 
-  it('offers the way on after three tries that did not pass, so nobody is held in the lesson', () => {
+  it('offers the way on after enough tries that did not pass, counting tapping along, so nobody is held in the lesson', () => {
     const run = new TutorialRun();
-    for (let attempt = 1; attempt <= TUTORIAL.offerPlayAfter; attempt++) {
-      const plan = tryOnce(run);
-      for (let i = 0; i < 3; i++) run.judged(omission(i));
+    const alongPlan = beginOnce(run, 'along');
+    missAll(run);
+    run.complete();
+    expect(coach(run, alongPlan.end + 1).action).toBe('Try again');
+    for (let attempt = 2; attempt <= TUTORIAL.offerPlayAfter; attempt++) {
+      const plan = beginOnce(run, 'try');
+      missAll(run);
       run.complete();
       expect(run.tries).toBe(attempt);
       const words = coach(run, plan.end + 1);
@@ -167,21 +245,38 @@ describe('the tried pass', () => {
     expect(isPlayersWindow(null, first)).toBe(false);
   });
 
-  it('starts each try clean, and a watched pass clears the verdict', () => {
+  it('starts each pass clean, and a watched pass clears the verdict', () => {
     const run = new TutorialRun();
-    tryOnce(run);
+    beginOnce(run, 'try');
     run.judged(hit(0));
-    run.earlyTap();
+    run.earlyTap(101);
     run.judged(omission(1));
     run.judged(omission(2));
     expect(run.complete()).toBe('partial');
-    tryOnce(run, 200);
+    beginOnce(run, 'try', 200);
     expect(run.tally).toEqual({ hits: 0, misses: 0, extras: 0, early: 0 });
+    expect(run.earlyAt).toBe(-Infinity);
     expect(run.verdict).toBeNull();
     expect(run.tries).toBe(2);
     run.watch(300);
     expect(run.step).toBe('watch');
     expect(run.verdict).toBeNull();
+  });
+
+  it('keeps every line of every judged pass to one line, and the count-down says what to do', () => {
+    for (const step of ['along', 'try'] as const) {
+      const run = new TutorialRun();
+      const plan = beginOnce(run, step);
+      const beat = 60 / plan.bpm;
+      const first = plan.targets[0]!;
+      const countFrom = first - RHYTHM.turnCountBeats * beat;
+      expect(coach(run, countFrom + 0.1)).toMatchObject({ heading: 'Count down', copy: '3, 2, 1 — tap on Go!' });
+      for (const now of [plan.demo - 0.1, plan.demo + 0.1, countFrom + 0.1, first + 0.1]) {
+        const { copy } = coach(run, now);
+        expect(copy).not.toContain('\n');
+        expect(copy.length).toBeLessThanOrEqual(52);
+      }
+    }
   });
 });
 

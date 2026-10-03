@@ -183,10 +183,15 @@ every take. If playtesting says it wears, `RHYTHM.turnCountBeats` shortens it, a
 it on `guidedLevel(progress)` — the same derivation the socket ring already uses — confines
 it to the level that still teaches.
 
-The separate `TutorialScene` does not draw it. It already names every moment in words
-(`coach`), its band above the shelf carries the row's own label, and a third voice on a
-screen that has a heading, copy, two row labels and a travelling pointer would crowd the
-lesson rather than clarify it.
+The separate `TutorialScene` draws it too, from the same `turnCount` and `turnCountPose`,
+in the same place under the face. It did not at first — the worry was that a third voice on
+a screen with a heading, copy, two row labels and a pointer would crowd the lesson — and
+the result was that the one cue the level relies on for *when* was the one cue the lesson
+never showed, so a player met "3, 2, 1, Go!" for the first time on level 1 with nothing to
+say what it was. The crowding was answered by cutting the words instead: the lesson's copy
+is one line, its row labels sit beside the owner slots rather than across the centre, and
+the words name the count as it strikes — *Count down*, "3, 2, 1 — tap on Go!" — so the
+numerals are introduced with the three words that explain them (`docs/TUTORIAL.md`).
 
 The numerals are locale-neutral; "Go!" is not, and is the one string on the play HUD that
 would need translating. That is a real cost against the reasoning that removed the words
