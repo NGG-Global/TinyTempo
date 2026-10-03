@@ -223,6 +223,17 @@ keepsake's card, which is as tall as its words; a clear short of three stars add
 **Replay level N** block over Continue, by the restart puck's path — coral stays on
 Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
 shrinks the plaque, never below `minScale`.
+**The line under the score is a toggle, not a caption.** *TIMING DETAILS* swaps the tray's
+medals for what the scorer already measured — the counts, a hit-error bar with the Perfect
+band and a coral marker on the lean, the lean in milliseconds and one line of advice
+(`game/timingReport.ts`, pure). The lean is the **median** signed error (`RoundResult.deltasMs`,
+negative early), so one flubbed tap cannot flip it; spread is the mean distance from it, so a
+centred scatter is told "uneven" rather than sent chasing a lean; a large, steady lean is
+pointed at the Tap offset, since the errors are measured after it. It opens in the tray, never
+as a row under the plaque, because a row would re-plan the stack under the thumb and has no
+room on 16:9 beside a finale's card and the next star. It starts closed on every result, the
+toggle is checked before the summary's tap-anywhere Continue, and every advice line fits one
+line at the tray's width. See `docs/TIMING_DETAILS.md`.
 **A plaque is a Graphics *and* its Text.** `stars.clear()` empties the drawing and leaves
 every `Text` on it untouched, which left the score and its "On the beat" caption hanging
 over the middle of the act for a whole round after the summary closed. `drawStars` is the
@@ -729,6 +740,7 @@ src/
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
+    timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
     musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure

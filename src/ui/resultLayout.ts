@@ -36,6 +36,35 @@ export const PLATE = {
   keptTall: 60,
 } as const;
 
+/**
+ * The timing details, which take the tray's place when the player opens them from the line
+ * under the score. In the tray rather than in a row under the plaque, on purpose: a row
+ * would re-plan the whole stack on a tap — the plaque jumping and shrinking under the
+ * thumb — and on a 16:9 handset with a finale's card and the next star already under it,
+ * there is no room left for one. The tray is 510 by 245 whatever else is on screen. All in
+ * design units from the tray's own top edge.
+ */
+export const TIMING_TRAY = {
+  countsY: 36,
+  countsSize: 25,
+  barY: 92,
+  /** The bar stops short of the tray's sides by this much, for "Early" and "Late". */
+  barInset: 92,
+  barHeight: 8,
+  bandHeight: 26,
+  markHeight: 24,
+  labelSize: 18,
+  leanY: 140,
+  leanSize: 22,
+  adviceY: 166,
+  adviceSize: 22,
+  /** Text keeps this far from the tray's sides. */
+  pad: 24,
+  /** The toggle's hit box is at least this wide, so the line is easy to find with a thumb. */
+  toggleWidth: 340,
+  toggleChevron: 8,
+} as const;
+
 /** Medal `k`'s seat, in the plaque's own units: x from its centre, y from its top edge. */
 export function medalSeat(k: 0 | 1 | 2): { readonly x: number; readonly y: number; readonly radius: number } {
   const seat = k === 1 ? PLATE.middle : PLATE.outer;

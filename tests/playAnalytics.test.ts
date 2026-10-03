@@ -35,7 +35,7 @@ function road(through: number, stars: 1 | 2 | 3): Progress {
 const EMPTY: Progress = { unlocked: 1, best: {} };
 
 function task(accuracy: number, over: Partial<RoundResult> = {}): RoundResult {
-  return { perfect: 3, good: 1, missed: 0, extras: 0, accuracy, meanAbsoluteErrorMs: 31.6, ...over };
+  return { perfect: 3, good: 1, missed: 0, extras: 0, accuracy, meanAbsoluteErrorMs: 31.6, deltasMs: [], ...over };
 }
 
 let ids = 0;

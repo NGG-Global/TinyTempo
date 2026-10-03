@@ -18,6 +18,7 @@ import { wrongOrientation } from '@/core/shell';
 import { RoundController, pauseShouldShowSummary, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
+import { addRound, EMPTY_TIMING, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
@@ -64,8 +65,7 @@ import { arrive, settle, squash } from '@/ui/spring';
 import { body, display, label, resize } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
-  chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, trayRect, type ResultPlan,
-} from '@/ui/resultLayout';
+  chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, TIMING_TRAY, trayRect, type ResultPlan } from '@/ui/resultLayout';
 import { nextGateChip, nextStarCopy, offersReplay, replayCopy, thresholdLabels, type GateChip } from '@/game/resultCopy';
 import { dashes } from '@/ui/path';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
@@ -178,7 +178,19 @@ export class PlayScene extends BaseScene {
   }
   private stars!: Phaser.GameObjects.Graphics;
   private scoreValue!: Phaser.GameObjects.Text;
+  /** "TIMING DETAILS" when the level judged any beat, else the old "On the beat" caption. */
   private scoreNote!: Phaser.GameObjects.Text;
+  /** The finishing pass's timing, summed over its scored tasks (`game/timingReport.ts`). */
+  private timing: TimingTally = EMPTY_TIMING;
+  private timingReport: TimingReport | null = null;
+  /** Whether the tray shows the timing details instead of the medals. Closed on every summary. */
+  private timingOpen = false;
+  private timingRect = new Phaser.Geom.Rectangle();
+  private timingCounts!: Phaser.GameObjects.Text;
+  private timingLean!: Phaser.GameObjects.Text;
+  private timingAdvice!: Phaser.GameObjects.Text;
+  private timingEarly!: Phaser.GameObjects.Text;
+  private timingLate!: Phaser.GameObjects.Text;
   /** Ceiling anchor the plaque and its ropes swing about; local (0,0) of `stars`. */
   private plaqueAt = { x: 0, y: 0 };
   private headline!: Phaser.GameObjects.Text;
@@ -445,6 +457,16 @@ export class PlayScene extends BaseScene {
     this.kept = label(this, 'Heart kept', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreValue = display(this, '', { size: 104, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.scoreNote = label(this, 'On the beat', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    // The timing details' words, in the tray. Assigned on every entry, like every plaque Text.
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
+    this.timingRect = new Phaser.Geom.Rectangle();
+    this.timingCounts = body(this, '', { size: TIMING_TRAY.countsSize, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.timingLean = body(this, '', { size: TIMING_TRAY.leanSize, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    this.timingAdvice = body(this, '', { size: TIMING_TRAY.adviceSize, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5, 0).setDepth(11).setVisible(false);
+    this.timingEarly = label(this, 'EARLY', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.timingLate = label(this, 'LATE', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
     this.actionRoot = this.add.container(0, 0).setDepth(10);
     this.action = this.add.graphics();
@@ -839,6 +861,9 @@ export class PlayScene extends BaseScene {
     this.masteryStruck = false;
     // A restart is a new pass: only the pass that finishes is counted.
     this.tally = { perfect: 0, flawless: 0 };
+    this.timing = EMPTY_TIMING;
+    this.timingReport = null;
+    this.timingOpen = false;
     this.lastJudgement = '';
     this.taskIndex = 0;
     this.results = [];
@@ -1166,6 +1191,14 @@ export class PlayScene extends BaseScene {
     }
     if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }
     if (near(this.mapAt)) { this.pressPuck('map'); this.leaveForMap(); return; }
+    // The line under the score opens the timing details in the tray, and closes them again.
+    // Before the summary's own tap-anywhere, which would otherwise take it as Continue.
+    if (this.summaryShown && this.timingReport && Phaser.Geom.Rectangle.Contains(this.timingRect, tap.x, tap.y)) {
+      this.timingOpen = !this.timingOpen;
+      vibrate('tap');
+      this.drawStars();
+      return;
+    }
     // The wood block over Continue plays the same level again, by the restart puck's path.
     if (this.summaryShown && this.replayOffered && Phaser.Geom.Rectangle.Contains(this.replayRect, tap.x, tap.y)) {
       this.replayPressedAt = performance.now() / 1000;
@@ -1815,6 +1848,7 @@ export class PlayScene extends BaseScene {
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
     this.tally.perfect += result.perfect;
+    this.timing = addRound(this.timing, result);
     const flawless = isFlawless(this.outcomes) && result.extras === 0;
     if (flawless) {
       this.tally.flawless++;
@@ -1968,6 +2002,15 @@ export class PlayScene extends BaseScene {
     }
     this.scoreValue.setText(`${Math.round(accuracy)}%`);
     this.accuracy.setText('');
+    // The details are what the scorer already counted; the line under the score opens them.
+    // A preview result judged nothing, so it keeps the old caption and offers nothing.
+    this.timingReport = timingReport(this.timing);
+    this.timingOpen = false;
+    const report = this.timingReport;
+    this.scoreNote.setText(report ? 'TIMING DETAILS' : 'On the beat');
+    this.timingCounts.setText(report?.counts ?? '');
+    this.timingLean.setText(report?.lean ?? '');
+    this.timingAdvice.setText(report?.advice ?? '');
     this.kept.setVisible(this.heartRefunded);
     this.summaryStars = starsFor(accuracy, this.spec);
     this.replayOffered = offersReplay(outcome.cleared, this.summaryStars);
@@ -2021,6 +2064,13 @@ export class PlayScene extends BaseScene {
     });
     this.resultPlan = plan;
     this.plaqueAt = { x: safe.centerX, y: plan.anchorY };
+    // The details' toggle, where the line under the score rests once the plaque has settled.
+    // At least a thumb tall: the line itself is a caption's height.
+    const ks = s * plan.k;
+    const toggleW = Math.max(TIMING_TRAY.toggleWidth * ks, this.scoreNote.width + 80 * ks);
+    const toggleH = Math.max(this.controlSize, 64 * ks);
+    const noteY = plan.anchorY + plan.rope + PLATE.noteY * ks;
+    this.timingRect.setTo(safe.centerX - toggleW / 2, noteY - toggleH / 2, toggleW, toggleH);
     const card = plan.rows.find(row => row.kind === 'keepsake');
     if (card) this.keepsakeRect.setTo(safe.centerX - cardW / 2, card.y, cardW, card.height);
     this.keepsakeSettled = false;
@@ -2071,7 +2121,9 @@ export class PlayScene extends BaseScene {
   private dressResult(): void {
     const s = this.uiScale, k = this.resultPlan?.k ?? 1;
     resize(this.scoreValue, PLATE.scoreSize * s * k, PALETTE.ink);
-    resize(this.scoreNote, PLATE.noteSize * s * k, PALETTE.muted, STYLE.current, false);
+    // An ink line when it opens something, the muted caption when it is only a caption.
+    resize(this.scoreNote, PLATE.noteSize * s * k, this.timingReport ? PALETTE.ink : PALETTE.muted, STYLE.current, false);
+    this.dressTiming(s * k);
     resize(this.kept, 22 * s * k, shade(BRASS, -0.62), STYLE.current, false);
     for (const chip of this.chipLabels) resize(chip, PLATE.chip.text * s * k, PALETTE.ink, STYLE.current, false);
     this.chipEarned = [null, null, null];
@@ -2207,7 +2259,9 @@ export class PlayScene extends BaseScene {
     this.kept.setVisible(shown && this.heartRefunded);
     this.scoreValue.setVisible(shown);
     this.scoreNote.setVisible(shown);
-    for (const chip of this.chipLabels) chip.setVisible(shown);
+    const details = shown && this.timingOpen && this.timingReport !== null;
+    for (const chip of this.chipLabels) chip.setVisible(shown && !details);
+    for (const text of this.timingTexts()) text.setVisible(details);
     this.replayRoot.setVisible(shown && this.replayOffered);
     if (!shown || !this.resultPlan) {
       for (const plate of [this.nextStarPlate, this.finalePlate, this.masteryPlate]) plate.clear().setVisible(false);
@@ -2268,7 +2322,8 @@ export class PlayScene extends BaseScene {
     g.fillStyle(0xffffff, 0.4).fillRoundedRect(tx + tr, ty + th - 5 * s, tw - tr * 2, 3 * s, 1.5 * s);
 
     const empty = starColour(false, this.definition.ink, SHELL.cream);
-    for (let k = 0; k < 3; k++) {
+    if (details) this.drawTimingDetails(s, top, pose.tilt, drop, pose.alpha);
+    else for (let k = 0; k < 3; k++) {
       const seat = medalSeat(k as 0 | 1 | 2);
       const at = { x: seat.x * s, y: top + seat.y * s }, radius = seat.radius * s;
       // An empty seat is a hollow, never a duller star: brass reads against hollow at any tone.
@@ -2291,6 +2346,7 @@ export class PlayScene extends BaseScene {
 
     this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
     this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
+    if (this.timingReport) this.drawTimingChevron(s, top);
     if (this.heartRefunded) {
       // A refunded heart is brass on brass: a small struck plate, not a coral caption.
       const keptW = PLATE.keptWidth * s, keptH = PLATE.keptTall * s, keptY = top + PLATE.keptY * s;
@@ -2300,6 +2356,74 @@ export class PlayScene extends BaseScene {
     }
     this.drawResultRows(age, still);
     this.drawMasteryRow(mastery, still);
+  }
+
+  /** The details' Texts: hidden together, as the plaque's other Texts are. */
+  private timingTexts(): readonly Phaser.GameObjects.Text[] {
+    return [this.timingCounts, this.timingLean, this.timingAdvice, this.timingEarly, this.timingLate];
+  }
+
+  /** Sizes, and a scale-down for a counts line too wide for the tray. Set on layout, never per frame. */
+  private dressTiming(ks: number): void {
+    const room = (PLATE.width - 2 * PLATE.tray.inset - 2 * TIMING_TRAY.pad) * ks;
+    resize(this.timingCounts, TIMING_TRAY.countsSize * ks, PALETTE.ink, STYLE.current, false);
+    this.timingCounts.setScale(this.timingCounts.width > room ? room / this.timingCounts.width : 1);
+    resize(this.timingLean, TIMING_TRAY.leanSize * ks, PALETTE.muted, STYLE.current, false);
+    this.timingLean.setScale(this.timingLean.width > room ? room / this.timingLean.width : 1);
+    resize(this.timingAdvice, TIMING_TRAY.adviceSize * ks, PALETTE.ink, STYLE.current, false);
+    this.timingAdvice.setWordWrapWidth(room, false);
+    resize(this.timingEarly, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
+    resize(this.timingLate, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
+  }
+
+  /**
+   * The timing details, in the tray where the medals sit: the counts, a hit-error bar — one
+   * tick per judged hit between Early and Late, the Perfect window as a lighter band, and a
+   * coral marker on the lean — then the lean in words and the one thing to change. Local to
+   * the plaque, so it swings with it like everything else on it.
+   */
+  private drawTimingDetails(s: number, top: number, tilt: number, drop: number, alpha: number): void {
+    const report = this.timingReport;
+    if (!report) return;
+    const g = this.stars, tray = trayRect();
+    const ty = top + tray.y * s, halfTray = (tray.width * s) / 2;
+    this.hangText(this.timingCounts, 0, ty + TIMING_TRAY.countsY * s, tilt, drop, alpha);
+
+    const barY = ty + TIMING_TRAY.barY * s;
+    const half = halfTray - TIMING_TRAY.barInset * s;
+    const bar = TIMING_TRAY.barHeight * s, band = TIMING_TRAY.bandHeight * s;
+    g.fillStyle(shade(SHELL.bench, -0.22), 1).fillRoundedRect(-half, barY - bar / 2, half * 2, bar, bar / 2);
+    const bandW = half * 2 * report.perfectBand;
+    g.fillStyle(mix(SHELL.bench, SHELL.cream, 0.7), 1).fillRoundedRect(-bandW / 2, barY - band / 2, bandW, band, 6 * s);
+    g.lineStyle(2.5 * s, PALETTE.ink, 0.8).lineBetween(0, barY - band / 2 - 4 * s, 0, barY + band / 2 + 4 * s);
+    const mark = TIMING_TRAY.markHeight * s;
+    // Many hits overlap, so each tick is faint and a crowd of them is what reads as dark.
+    const tickAlpha = Math.max(0.18, Math.min(0.7, 6 / Math.max(1, report.marks.length)));
+    for (const m of report.marks) {
+      const x = m * half;
+      const inBand = Math.abs(m) <= report.perfectBand;
+      g.lineStyle(3 * s, inBand ? PALETTE.ink : shade(PALETTE.muted, -0.2), tickAlpha).lineBetween(x, barY - mark / 2, x, barY + mark / 2);
+    }
+    if (report.offsetMs !== null) {
+      const x = Math.max(-1, Math.min(1, report.offsetMs / RHYTHM.goodMs)) * half;
+      const tipY = barY - band / 2 - 2 * s, size = 10 * s;
+      g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillTriangle(x, tipY + 2 * s, x - size, tipY - size * 1.4 + 2 * s, x + size, tipY - size * 1.4 + 2 * s);
+      g.fillStyle(PALETTE.coral, 1).fillTriangle(x, tipY, x - size, tipY - size * 1.4, x + size, tipY - size * 1.4);
+      g.lineStyle(3 * s, PALETTE.coral, 1).lineBetween(x, barY - band / 2, x, barY + band / 2);
+    }
+    this.hangText(this.timingEarly, -halfTray + TIMING_TRAY.pad * s, barY, tilt, drop, alpha);
+    this.hangText(this.timingLate, halfTray - TIMING_TRAY.pad * s, barY, tilt, drop, alpha);
+    this.hangText(this.timingLean, 0, ty + TIMING_TRAY.leanY * s, tilt, drop, alpha);
+    this.hangText(this.timingAdvice, 0, ty + TIMING_TRAY.adviceY * s, tilt, drop, alpha);
+  }
+
+  /** A drawn chevron beside the toggle: pointing on when closed, down when open. No symbol fonts. */
+  private drawTimingChevron(s: number, top: number): void {
+    const g = this.stars, size = TIMING_TRAY.toggleChevron * s;
+    const x = this.scoreNote.width / 2 + 14 * s + size / 2, y = top + PLATE.noteY * s;
+    g.lineStyle(3 * s, PALETTE.ink, 1);
+    if (this.timingOpen) g.lineBetween(x - size, y - size / 2, x, y + size / 2).lineBetween(x, y + size / 2, x + size, y - size / 2);
+    else g.lineBetween(x - size / 2, y - size, x + size / 2, y).lineBetween(x + size / 2, y, x - size / 2, y + size);
   }
 
   /**
@@ -2425,7 +2549,8 @@ export class PlayScene extends BaseScene {
       const medal = starPose(age, k < earned, STYLE.current.exaggeration);
       if (!medal.landed || k < this.starsLanded) continue;
       this.starsLanded = k + 1;
-      if (k >= earned || still) continue;
+      // Open details have taken the tray: a burst would land on the words, not on a medal.
+      if (k >= earned || still || this.timingOpen) continue;
       // The burst leaves from where the medal actually struck, which on a swinging
       // plaque is not where it was laid out.
       const local = this.medalLocal(k);

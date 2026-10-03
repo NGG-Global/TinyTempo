@@ -98,6 +98,12 @@ star. Under each seat a chip names the threshold from `spec.starAccuracy`: a das
 `muted` outline round `ink` text, turning to `ink` with `cream` text as its star lands.
 The score sits under the tray.
 
+**The line under the score opens the timing details.** It reads *TIMING DETAILS* with a
+drawn chevron, and a tap swaps the tray's medals for the counts, a hit-error bar, the lean
+in milliseconds and one piece of advice; another tap brings the medals back. It lives in the
+tray so that opening it never re-plans the stack under the plaque. See
+`docs/TIMING_DETAILS.md`.
+
 **Under the plaque, rows in one order**, placed by `planResult`: a cleared finale's card
 (the collection as a brass star and a number, and the next area's gate as a chip in that
 area's own ground and ink — "Sand is open" or "Sand opens at 25"), then, short of three
