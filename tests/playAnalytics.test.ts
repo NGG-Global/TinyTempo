@@ -129,7 +129,7 @@ describe('exactly one result per finished attempt', () => {
     expect(only('level_abandoned')).toEqual([]);
   });
 
-  it('treats Resume and the restart puck as the same attempt going round again', () => {
+  it('treats Resume and a free restart as the same attempt going round again', () => {
     const begin = start(3, road(2, 3));
     const first = ledger.beginLevel(begin)!;
     first.task(0, task(60));
@@ -424,6 +424,11 @@ describe('every gameplay event, as the game actually fires it', () => {
     const pocket = ledger.beginLevel(locked)!;
     locked.spec.tasks.forEach((_, i) => { pocket.task(i, task(100, { good: 0 })); if (i === 1) pocket.groove(2, i); if (i === 2) pocket.groove(3, i); });
     pocket.finish(recordResult(road(1, 3), 2, 100), 100, 'first');
+    // A restart asked for, cancelled, then confirmed; and an out-of-hearts ad that closed early.
+    ledger.restartRequested(8, 'paid', 3, false);
+    ledger.restartCancelled(8, 'paid', 'keep_playing', 3, false);
+    ledger.restartConfirmed(8, 'heart', 3, false);
+    ledger.rewardedRestartFailed(8, 'cancelled');
     // A day of objectives: progress, a completion each, and the stamp.
     let day: ObjectivesState = {
       day: '2026-09-23', stampedDays: [], stamps: 0, seen: 0,
@@ -471,7 +476,7 @@ describe('area finales', () => {
   it('fail once, and a restart of the same attempt starts nothing new', () => {
     const begin = start(20, road(19, 2), { heartSpent: true });
     const run = ledger.beginLevel(begin)!;
-    // Resume and the restart puck continue the attempt: no second start.
+    // Resume and a free restart continue the attempt: no second start.
     expect(ledger.beginLevel(begin)).toBe(run);
     const outcome = recordResult(begin.progress, 20, 12);
     run.finish(outcome, 12);

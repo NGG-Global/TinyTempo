@@ -1,5 +1,6 @@
 import {
   track, type AnalyticsEvent, type AnalyticsPayloads, type AttemptMode, type FinaleParams, type Flag, type GridName, type LevelParams,
+  type RestartCost, type RestartParams, type RestartSheet,
 } from '../monetization/analytics';
 import { finaleTreatment } from './finale';
 import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
@@ -98,6 +99,10 @@ export function taskParams(
     flawless: flag(result.missed === 0 && result.good === 0 && result.perfect > 0),
     ...(error !== null && Number.isFinite(error) ? { error_ms: Math.round(error) } : {}),
   };
+}
+
+function restartParams(level: number, hearts: number, premium: boolean): RestartParams {
+  return { level, area: areaNumber(level), placement: 'restart', hearts, premium: flag(premium) };
 }
 
 /** What an area finale's events share, from the level's own parameters. */
@@ -519,6 +524,26 @@ export class PlayAnalytics {
         vignette: keepsake.vignette, collectible: keepsake.id, level: keepsake.level, first: flag(first), owned,
       });
     });
+  }
+
+  /** The restart puck reached the restart flow (`docs/RESTART.md`). */
+  public restartRequested(level: number, sheet: RestartSheet, hearts: number, premium: boolean): void {
+    guard(undefined, () => this.emit('restart_requested', { ...restartParams(level, hearts, premium), sheet }));
+  }
+
+  /** A restart is going ahead. One per restart: the scene calls this from the one place a restart commits. */
+  public restartConfirmed(level: number, cost: RestartCost, hearts: number, premium: boolean): void {
+    guard(undefined, () => this.emit('restart_confirmed', { ...restartParams(level, hearts, premium), cost }));
+  }
+
+  public restartCancelled(
+    level: number, sheet: Exclude<RestartSheet, 'none'>, reason: AnalyticsPayloads['restart_cancelled']['reason'], hearts: number, premium: boolean,
+  ): void {
+    guard(undefined, () => this.emit('restart_cancelled', { ...restartParams(level, hearts, premium), sheet, reason }));
+  }
+
+  public rewardedRestartFailed(level: number, reason: AnalyticsPayloads['rewarded_restart_failed']['reason']): void {
+    guard(undefined, () => this.emit('rewarded_restart_failed', { level, area: areaNumber(level), placement: 'restart', reason }));
   }
 
   public beginPractice(level: number): PracticeRun | null {

@@ -50,6 +50,10 @@ export const GAMEPLAY_EVENTS = [
   'daily_objectives_all_completed',
   'groove_reached',
   'level_mastered',
+  'restart_requested',
+  'restart_confirmed',
+  'restart_cancelled',
+  'rewarded_restart_failed',
   // Reserved for a practice mode that does not exist yet: typed and shape-checked now, so
   // the day it ships its events are already in every dashboard's vocabulary.
   'practice_started',
@@ -123,16 +127,37 @@ export type LevelResultParams = LevelParams & {
   /** Mean task accuracy, rounded, 0–100. */
   readonly accuracy: number;
   readonly duration_ms: number;
-  /** Times this attempt went back to its first task: Resume after a pause, or the restart puck. */
+  /** Times this attempt went back to its first task: Resume after a pause, or a free restart. A paid restart is a new attempt. */
   readonly restarts: number;
   /** 1-based index of the task with the lowest accuracy, and that accuracy. */
   readonly weakest_task: number;
   readonly weakest_accuracy: number;
 };
 
+/**
+ * Where a restart was asked for: the level's restart puck. One value today, and short, because
+ * gameplay strings stay within twelve characters (`tests/playAnalytics.test.ts`); it sits beside
+ * the rewarded offer's `map` and `play`.
+ */
+export type RestartPlacement = 'restart';
+/** Which sheet the restart puck raised: none for a free level, Premium or a start not yet begun. */
+export type RestartSheet = 'none' | 'free' | 'paid' | 'empty';
+/** What a confirmed restart cost: nothing, a heart, or a heart got from an ad, a refill or Premium. */
+export type RestartCost = 'free' | 'heart' | 'rewarded' | 'refill' | 'premium';
+
+/** What every restart event carries. No device, no account: the level, and the hearts it was decided on. */
+export type RestartParams = {
+  readonly level: number;
+  readonly area: number;
+  readonly placement: RestartPlacement;
+  /** Hearts the player held when the event happened, before any new attempt spent one. */
+  readonly hearts: number;
+  readonly premium: Flag;
+};
+
 export interface AnalyticsPayloads {
   readonly health_empty: { readonly level: number };
-  readonly rewarded_offer_shown: { readonly placement: 'map' | 'play' };
+  readonly rewarded_offer_shown: { readonly placement: 'map' | 'play' | RestartPlacement };
   readonly rewarded_started: Record<string, never>;
   readonly rewarded_completed: Record<string, never>;
   readonly rewarded_failed: { readonly reason: 'unavailable' | 'cancelled' | 'failed' };
@@ -252,6 +277,26 @@ export interface AnalyticsPayloads {
     readonly task_count: number;
     readonly accuracy: number;
     readonly stars: number;
+  };
+  /** The restart puck was tapped mid-level (`docs/RESTART.md`). Once per tap that reached the flow. */
+  readonly restart_requested: RestartParams & { readonly sheet: RestartSheet };
+  /** A restart went ahead: the level is starting again. Once per restart, however it was paid for. */
+  readonly restart_confirmed: RestartParams & { readonly cost: RestartCost };
+  /**
+   * A restart sheet closed without restarting: Keep playing, the run reaching its result,
+   * a pause, or leaving for the map.
+   */
+  readonly restart_cancelled: RestartParams & {
+    readonly sheet: Exclude<RestartSheet, 'none'>;
+    readonly reason: 'keep_playing' | 'run_ended' | 'paused' | 'left';
+  };
+  /**
+   * The out-of-hearts sheet's Watch did not end in a restart. `no_heart`: the ad paid out
+   * but no heart could be granted. `run_ended`: the heart was granted and kept, but the run
+   * had finished or moved on meanwhile, so nothing restarted.
+   */
+  readonly rewarded_restart_failed: Omit<RestartParams, 'hearts' | 'premium'> & {
+    readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'no_heart' | 'run_ended';
   };
   readonly collectible_unlocked: {
     /** The act's registry id: 25 values. */

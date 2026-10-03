@@ -28,6 +28,11 @@ import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelS
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
 import { masteryResult, type MasteryResult } from '@/game/mastery';
+import {
+  attemptForStart, liveSheet, releaseAttempt, restartKind, scoredResponseBegins, sheetFor, ticketStillApplies, watchForHeart,
+  type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
+} from '@/game/restart';
+import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
@@ -42,7 +47,7 @@ import {
   abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
 import {
   guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, markSubdivisionSeen, recordResult, saveProgress,
   markScrapbookSeen, seenDemonstration, seenReplayTip, seenScrapbook, seenSubdivisions, type LevelOutcome, type Progress,
@@ -166,6 +171,18 @@ export class PlayScene extends BaseScene {
   private attemptId: string | null = null;
   /** The analytics side of the same attempt: started once, finished or abandoned once. */
   private levelRun: LevelRun | null = null;
+  /**
+   * The attempt has entered its first scored response: the controller reached `respond`,
+   * or judged a tap, on a task that counts. Never the first-run pass, an introduction or
+   * the DEV rehearsal. Per attempt: a new attempt starts it false, and Resume keeps it,
+   * because the attempt it continues has already been played. It is what turns the
+   * restart puck from a free reset into the end of the attempt (`game/restart.ts`).
+   */
+  private scoredResponseBegun = false;
+  /** The restart puck's sheet, over the running level (`ui/restartSheet.ts`). */
+  private restartSheet!: RestartSheet;
+  /** Last wall second the open sheet re-read hearts and Premium. */
+  private restartPollAt = 0;
   private heartRefunded = false;
   private emptyTracked = false;
   /** Whether this screen has decided if it is the player's first empty bar, and what it decided. */
@@ -432,6 +449,7 @@ export class PlayScene extends BaseScene {
     // second visit inherited the last visit's attempt id, and a Resume id from a level the
     // player had already walked away from is exactly the duplicate analytics must not see.
     this.attemptId = null;
+    this.scoredResponseBegun = false;
     this.outcome = null;
     this.continuation = null;
     this.levelRun = null;
@@ -521,6 +539,8 @@ export class PlayScene extends BaseScene {
     this.finalePlate = this.add.graphics().setDepth(9).setVisible(false);
     this.masteryPlate = this.add.graphics().setDepth(9).setVisible(false);
     this.masteryLabel = label(this, 'IN THE POCKET', { size: 24, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
+    // Over everything a level draws, under the curtain.
+    this.restartSheet = new RestartSheet(this, 40);
     this.nextStar = body(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCount = display(this, '', { size: 48, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCountLabel = label(this, 'Stars', { size: 20, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -556,7 +576,7 @@ export class PlayScene extends BaseScene {
     // Reveal the illustration before starting the four-beat preparation. Navigation
     // motion must never obscure a musical cue or move an already-running rhythm grid.
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => {
-      if (data?.autoStart) void this.startRound();
+      if (data?.autoStart) void this.startRound('resume');
     }));
   }
   private text(value: string, size: number, fontFamily: string): Phaser.GameObjects.Text {
@@ -601,6 +621,8 @@ export class PlayScene extends BaseScene {
     this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    // Above the verdict's line, so the rows the player is answering on stay in sight.
+    this.restartSheet.layout(safe.centerX, this.verdictY - 34 * s, safe.width - 40 * s, s, this.controlSize);
     // The flawless word takes the verdict's line: it is the verdict on the whole task.
     this.flawless.setPosition(safe.centerX, this.verdictY);
     resize(this.flawless, 54 * s, PALETTE.coral);
@@ -826,20 +848,36 @@ export class PlayScene extends BaseScene {
   private blocked(): boolean { return document.hidden || wrongOrientation(this.scale.isLandscape); }
   private now(): number { return this.audio?.clock.now() ?? performance.now() / 1000; }
 
-  private async startRound(study = false): Promise<void> {
+  /**
+   * Start the level from its first task. `mode` says what happens to the attempt in hand,
+   * explicitly (`attemptForStart`): Resume and a free restart continue it, a paid restart and
+   * Try again end it and begin another. Never inferred from whether a result exists alone.
+   */
+  private async startRound(mode: StartMode, study = false): Promise<void> {
     const rehearsal = import.meta.env.DEV && study;
     const health = loadHealth();
     const progress = loadProgress();
     const premium = monetization().premium();
-    // An unfinished try that already spent keeps its heart: Resume and the restart puck
-    // are the same attempt. Try-again after the plaque is a new one (`outcome` is set).
-    const resumeId = this.outcome === null ? this.attemptId : null;
+    const handover = attemptForStart(mode, this.attemptId, this.outcome !== null);
+    const resumeId = handover.keep;
     // Gate before tearing anything down: a denied restart must not kill a paid run.
     if (!rehearsal && !canBeginAttempt(health, progress, this.spec.level, Date.now(), premium, resumeId)) {
       if (this.controller?.active) return;
       this.showNoHearts();
       return;
     }
+    // A sheet still open is answered by this start: Resume from a pause is keeping on.
+    this.closeRestartSheet('keep_playing');
+    // The attempt this start ends is ended here, once, before anything can fail: the heart
+    // it spent stays spent and it holds nothing, so the new id's `beginAttempt` spends
+    // exactly one. If the audio below then fails, no attempt holds a heart and the player
+    // has it to spend on Retry.
+    if (handover.abandon !== null) {
+      saveHealth(releaseAttempt(loadHealth(), handover));
+      this.levelRun?.abandon();
+      this.levelRun = null;
+    }
+    if (resumeId === null) this.scoredResponseBegun = false;
     const request = ++this.startRequest;
     breadcrumb('level started', { level: this.spec.level, act: this.spec.vignette, attempt: this.attempts + 1 });
     this.replay = null;
@@ -1196,14 +1234,18 @@ export class PlayScene extends BaseScene {
     // one. Every control is inert until the map, so a second tap cannot launch a second
     // sheet, and the pucks cannot start a restart the map would land on top of.
     if (this.blocked() || this.curtain.active || this.continuation?.busy) return;
+    // The sheet answers its own taps; one off the card is the player's beat, and the level
+    // goes on taking it, since the run is still running behind the sheet.
+    const sheetTap = this.restartSheet.tap(tap.x, tap.y, performance.now() / 1000);
+    if (sheetTap !== null) { this.onRestartSheet(sheetTap); return; }
     const near = (at: { x: number; y: number }) => Math.abs(tap.x - at.x) < this.controlSize / 2 && Math.abs(tap.y - at.y) < this.controlSize / 2;
     if (near(this.muteAt)) {
       this.pressPuck('mute');
       if (this.audio) { toggleMute(this.audio); this.muted = this.audio.silent; }
       return;
     }
-    if (near(this.restartAt)) { this.pressPuck('restart'); void this.startRound(); return; }
-    if (near(this.mapAt)) { this.pressPuck('map'); this.leaveForMap(); return; }
+    if (near(this.restartAt)) { this.pressPuck('restart'); this.requestRestart(); return; }
+    if (near(this.mapAt)) { this.pressPuck('map'); this.closeRestartSheet('left'); this.leaveForMap(); return; }
     // The line under the score opens the timing details in the tray, and closes them again.
     // Before the summary's own tap-anywhere, which would otherwise take it as Continue.
     if (this.summaryShown && this.timingReport && Phaser.Geom.Rectangle.Contains(this.timingRect, tap.x, tap.y)) {
@@ -1216,7 +1258,7 @@ export class PlayScene extends BaseScene {
     if (this.summaryShown && this.replayOffered && Phaser.Geom.Rectangle.Contains(this.replayRect, tap.x, tap.y)) {
       this.replayPressedAt = performance.now() / 1000;
       this.replayPressDirty = true;
-      void this.startRound();
+      void this.startRound('new_attempt');
       return;
     }
     if (this.offeringHeart() && Phaser.Geom.Rectangle.Contains(this.refillRect, tap.x, tap.y)) {
@@ -1251,12 +1293,12 @@ export class PlayScene extends BaseScene {
         if (!this.summaryShown) this.showSummary();
         return;
       }
-      if (!this.starting) void this.startRound();
+      if (!this.starting) void this.startRound('resume');
       return;
     }
     if (phase === 'result') {
       // Cleared: back to the road, centred on what just opened. Failed: straight into another go.
-      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound(); }
+      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound('new_attempt'); }
       return;
     }
     if (!this.audio || !this.controller?.active) return;
@@ -1341,7 +1383,7 @@ export class PlayScene extends BaseScene {
       button.addEventListener('click', action);
       previews.appendChild(button);
     };
-    add('Loop room study', () => { void this.startRound(true); });
+    add('Loop room study', () => { void this.startRound('resume', true); });
     for (const level of [0, 1, 2, 3] as const) add(`Room ${level}`, () => {
       if (this.groovePreview === level || this.teach || this.intro) return;
       this.groovePreview = level;
@@ -1380,7 +1422,7 @@ export class PlayScene extends BaseScene {
   }
   private async runReplay(offsetSec: number): Promise<void> {
     const request = this.startRequest + 1;
-    await this.startRound();
+    await this.startRound('resume');
     if (request !== this.startRequest || !this.controller?.active || !this.controller.plan) return;
     const plan = this.controller.plan;
     this.replayOffset = offsetSec;
@@ -1456,6 +1498,12 @@ export class PlayScene extends BaseScene {
       this.replayPressDirty = replayPress > 0.001;
     }
     if (this.offeringHeart()) this.premiumSheen.update(wall, !monetization().premium());
+    // Hearts regenerate and Premium can arrive while the sheet is open; a heart read every
+    // frame was the profile's localStorage cost before, so half a second is the cadence.
+    if (this.restartSheet.open && wall - this.restartPollAt >= 0.5) {
+      this.restartPollAt = wall;
+      this.refreshRestartSheet();
+    }
     if (this.actionCaption !== '') {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(wall - this.actionShownAt, 0.5);
       this.actionRoot.setY(rise * 24 * this.uiScale).setAlpha(alpha);
@@ -1476,7 +1524,7 @@ export class PlayScene extends BaseScene {
           !this.starting && !this.commerceBusy
           && canBeginAttempt(health, loadProgress(), this.spec.level, wall, monetization().premium())
         ) {
-          void this.startRound();
+          void this.startRound('resume');
           return;
         }
         const copy = this.waitCopy(health);
@@ -1553,6 +1601,7 @@ export class PlayScene extends BaseScene {
     if (phase === 'demonstrate' && !introducing) this.changeHeadline('');
     if (phase !== 'prepare') this.setRestWords(null);
     if (phase === 'respond') {
+      this.noteScoredResponse('respond');
       this.changeHeadline('');
       this.setIntroCaption('');
       this.setAction('');
@@ -1561,8 +1610,21 @@ export class PlayScene extends BaseScene {
       this.struckAt = this.extraAt = -Infinity;
     }
   }
+  /**
+   * The attempt's scored part has begun, if this phase or judgement belongs to a task that
+   * counts. A tap the judge takes in the early window before `respond` counts too: the
+   * response has begun when the first beat of it is judged, whatever the phase says.
+   */
+  private noteScoredResponse(event: 'respond' | 'judged'): void {
+    if (this.scoredResponseBegun) return;
+    if (!scoredResponseBegins(event, { teaching: this.teach !== null, introducing: this.intro !== null, rehearsal: this.grooveStudy })) return;
+    this.scoredResponseBegun = true;
+    // A free sheet open over the demonstration becomes the paid one now, and says so.
+    this.refreshRestartSheet();
+  }
   private showJudgement(result: Judgement): void {
     this.lastJudgement = `${result.kind} ${result.grade} ${result.deltaMs?.toFixed(0) ?? '—'} ms`;
+    this.noteScoredResponse('judged');
     // A missed beat on the level's very first task says nothing: no mark on the socket,
     // no judder, no Miss. The player cannot lose the loop before they have understood
     // it, and on this level nothing was spent to attempt it either — `protectedThrough`
@@ -1932,6 +1994,9 @@ export class PlayScene extends BaseScene {
   /** Idempotent: the level is scored and saved once, however often this is reached. */
   private recordOutcome(): void {
     if (this.outcome) return;
+    // The run reached its result: the sheet's restart no longer has a run to end, and the
+    // result's own Try again is the way back in.
+    this.closeRestartSheet('run_ended');
     const accuracy = meanAccuracy(this.results);
     const before = loadProgress();
     const outcome = recordResult(before, this.spec.level, accuracy);
@@ -2684,7 +2749,7 @@ export class PlayScene extends BaseScene {
         this.accuracy.setText(HEALTH_COPY.playNote);
         return;
       }
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2695,14 +2760,13 @@ export class PlayScene extends BaseScene {
     this.commerceBusy = true;
     const claimId = `play:${++this.watchClaims}`;
     try {
-      const result = await monetization().showRewarded();
-      if (result.ok) redeemHeart(claimId);
+      const watch = await watchForHeart(() => monetization().showRewarded(), redeemHeart, claimId);
       if (this.disposed) return;
-      if (!result.ok) {
-        this.accuracy.setText(rewardedFeedback(result.reason));
+      if (watch.kind === 'failed') {
+        this.accuracy.setText(rewardedFeedback(watch.reason));
         return;
       }
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2726,7 +2790,7 @@ export class PlayScene extends BaseScene {
         return;
       }
       if (this.disposed) return;
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
@@ -2749,14 +2813,227 @@ export class PlayScene extends BaseScene {
         return;
       }
       vibrate('stamp');
-      void this.startRound();
+      void this.startRound('resume');
     } finally {
       this.commerceBusy = false;
     }
   }
 
+  // ---- Restart -----------------------------------------------------------------------
+  // One heart is one real attempt at an unfinished frontier level (`docs/RESTART.md`).
+
+  private restartFacts(): RestartFacts {
+    return {
+      level: this.spec.level, progress: loadProgress(), health: loadHealth(), now: Date.now(),
+      premium: monetization().premium(), attemptId: this.attemptId,
+      outcomeRecorded: this.outcome !== null, scoredResponseBegun: this.scoredResponseBegun,
+    };
+  }
+
+  private heartsNow(facts: RestartFacts): number {
+    return viewHealth(facts.health, facts.now).hearts;
+  }
+
+  /**
+   * The restart puck. A recorded result is the result's own Try again; a free level, Premium
+   * or a start not yet on its first downbeat restarts at once; an unfinished frontier
+   * attempt asks first, saying whether a heart is used, and nothing is spent by asking.
+   */
+  private requestRestart(): void {
+    // A second tap on the puck while the sheet is up, or while a purchase is out, is the
+    // same request: the sheet is already its answer.
+    if (this.restartSheet.open || this.commerceBusy) return;
+    const facts = this.restartFacts();
+    const kind = restartKind(facts);
+    if (kind === 'try_again') { void this.startRound('new_attempt'); return; }
+    // No attempt yet — the first start still loading, or the empty-hearts screen — means
+    // no run to restart: the puck is a start, gated and reported like any other.
+    if (facts.attemptId === null) { void this.startRound('resume'); return; }
+    const hearts = this.heartsNow(facts);
+    if (kind === 'immediate') {
+      // Nothing is charged on a finished or protected level, under Premium, or before the
+      // first downbeat, so the restart is the free reset of the same attempt, as it was.
+      playAnalytics.restartRequested(this.spec.level, 'none', hearts, facts.premium);
+      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
+      void this.startRound('free_restart');
+      return;
+    }
+    const sheet = sheetFor(kind)!;
+    playAnalytics.restartRequested(this.spec.level, sheet, hearts, facts.premium);
+    this.openRestartSheet(sheet);
+  }
+
+  private openRestartSheet(kind: RestartSheetKind): void {
+    const previous = this.restartSheet.kind;
+    const store = monetization();
+    const purchases = store.purchasesAvailable();
+    const premium = store.premium();
+    this.restartSheet.show(kind, performance.now() / 1000, {
+      refill: purchases,
+      premium: purchases && !premium,
+      refillPrice: store.productPrice(PRODUCT.heartRefill),
+      premiumPrice: store.productPrice(PRODUCT.premium),
+    });
+    // The offers are reported when the empty sheet is what the player is looking at, once
+    // per showing of it, never for the paid sheet: an ad is never offered beside a heart.
+    if (kind === 'empty' && previous !== 'empty') {
+      track('rewarded_offer_shown', { placement: 'restart' });
+      if (purchases) track('purchase_offer_shown', { product: PRODUCT.heartRefill });
+    }
+  }
+
+  /**
+   * Re-read the run under an open sheet. It never acts: it only makes the sheet say what
+   * a tap would now do, and a sheet that changes ignores taps for a moment
+   * (`RESTART_SHEET_ARM_SEC`), so no one lands on a button they did not read.
+   */
+  private refreshRestartSheet(): void {
+    if (!this.restartSheet.open || this.restartSheet.busy) return;
+    const next = liveSheet(this.restartFacts());
+    if (next === null) { this.closeRestartSheet('run_ended'); return; }
+    this.openRestartSheet(next);
+  }
+
+  /** Close without restarting. Reported once; a sheet waiting on an ad or a purchase is reported by that path instead. */
+  private closeRestartSheet(reason: 'keep_playing' | 'run_ended' | 'paused' | 'left'): void {
+    const kind = this.restartSheet.kind;
+    if (kind === null) return;
+    if (!this.restartSheet.busy) {
+      const facts = this.restartFacts();
+      playAnalytics.restartCancelled(this.spec.level, kind, reason, this.heartsNow(facts), facts.premium);
+    }
+    this.restartSheet.hide();
+  }
+
+  private onRestartSheet(choice: RestartSheetTap): void {
+    if (choice === 'swallow') return;
+    vibrate('tap');
+    if (choice === 'keep') { this.closeRestartSheet('keep_playing'); return; }
+    if (choice === 'refill') { void this.buyToRestart(PRODUCT.heartRefill); return; }
+    if (choice === 'premium') { void this.buyToRestart(PRODUCT.premium); return; }
+    // Confirm: only what the sheet said. If the run has moved under it — the response has
+    // begun, a heart came back, Premium arrived — the sheet changes and asks again.
+    const facts = this.restartFacts();
+    const shown = this.restartSheet.kind;
+    if (liveSheet(facts) !== shown) { this.refreshRestartSheet(); return; }
+    const kind = restartKind(facts);
+    const hearts = this.heartsNow(facts);
+    if (shown === 'free') {
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
+      // A free sheet is either a frontier attempt before its scored part, or a run that no
+      // longer costs anything (Premium arrived): both are the same attempt again.
+      void this.startRound(kind === 'confirm_free' || kind === 'immediate' ? 'free_restart' : 'new_attempt');
+      return;
+    }
+    if (shown === 'paid') {
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, 'heart', hearts, facts.premium);
+      void this.startRound('new_attempt');
+      return;
+    }
+    void this.watchToRestart();
+  }
+
+  /** The ticket an asynchronous restart is checked against when it comes back. */
+  private restartTicket(): RestartTicket {
+    return { attemptId: this.attemptId, startRequest: this.startRequest };
+  }
+
+  private ticketHolds(ticket: RestartTicket): boolean {
+    return ticketStillApplies(ticket, {
+      disposed: this.disposed, attemptId: this.attemptId, startRequest: this.startRequest, outcomeRecorded: this.outcome !== null,
+    });
+  }
+
+  /**
+   * Watch ad & Restart: the same rewarded video and the same one-heart grant the play
+   * screen's Watch uses (`watchForHeart`, `redeemHeart`, a fresh claim id). Only once the
+   * reward is confirmed does the run end and the next begin, and the next attempt's
+   * `beginAttempt` spends the heart the ad just gave. A failed, closed or unavailable ad
+   * ends nothing and spends nothing: the run is still running behind the sheet.
+   */
+  private async watchToRestart(): Promise<void> {
+    if (this.commerceBusy || this.curtain.active) return;
+    this.commerceBusy = true;
+    const ticket = this.restartTicket();
+    const level = this.spec.level;
+    this.restartSheet.setBusy(RESTART_COPY.watching);
+    try {
+      const watch = await watchForHeart(() => monetization().showRewarded(), redeemHeart, `restart:${++this.watchClaims}`);
+      // The heart, if granted, is already in the ledger; a dead scene restarts nothing.
+      if (this.disposed) {
+        playAnalytics.rewardedRestartFailed(level, watch.kind === 'failed' ? watch.reason : 'run_ended');
+        return;
+      }
+      this.restartSheet.setBusy(null);
+      if (watch.kind === 'failed') {
+        playAnalytics.rewardedRestartFailed(level, watch.reason);
+        this.restartSheet.say(rewardedFeedback(watch.reason));
+        return;
+      }
+      if (!this.ticketHolds(ticket)) {
+        // The run finished, paused or was replaced while the ad played. The heart is kept
+        // for the player's next attempt; nothing restarts into a run that is not there.
+        playAnalytics.rewardedRestartFailed(level, 'run_ended');
+        this.restartSheet.hide();
+        return;
+      }
+      const facts = this.restartFacts();
+      if (this.heartsNow(facts) <= 0) {
+        playAnalytics.rewardedRestartFailed(level, 'no_heart');
+        this.restartSheet.say(rewardedFeedback('failed'));
+        return;
+      }
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(level, 'rewarded', this.heartsNow(facts), facts.premium);
+      void this.startRound('new_attempt');
+    } finally {
+      this.commerceBusy = false;
+      if (!this.disposed) this.restartSheet.setBusy(null);
+    }
+  }
+
+  /**
+   * Refill or Premium from the empty sheet, through the same purchase and the same fill
+   * the play screen's offers use. A successful refill restarts on one of the five hearts;
+   * Premium restarts on none.
+   */
+  private async buyToRestart(product: ProductId): Promise<void> {
+    if (this.commerceBusy || this.curtain.active) return;
+    if (product === PRODUCT.premium && monetization().premium()) { this.refreshRestartSheet(); return; }
+    this.commerceBusy = true;
+    const ticket = this.restartTicket();
+    this.restartSheet.setBusy(RESTART_COPY.buying);
+    if (product === PRODUCT.premium) track('purchase_offer_shown', { product });
+    try {
+      const result = await monetization().purchase(product);
+      // A refill is the player's the moment the store confirms it, scene or no scene.
+      const filled = result.ok && product === PRODUCT.heartRefill ? redeemFill(result.claimId) : null;
+      if (this.disposed) return;
+      this.restartSheet.setBusy(null);
+      if (!result.ok) { this.restartSheet.say(purchaseFeedback(result.reason)); return; }
+      if (!this.ticketHolds(ticket)) { this.restartSheet.hide(); return; }
+      const facts = this.restartFacts();
+      if (filled !== null && !facts.premium && this.heartsNow(facts) <= 0) {
+        this.restartSheet.say(purchaseFeedback('failed'));
+        return;
+      }
+      if (product === PRODUCT.premium) vibrate('stamp');
+      this.restartSheet.hide();
+      playAnalytics.restartConfirmed(this.spec.level, product === PRODUCT.premium ? 'premium' : 'refill', this.heartsNow(facts), facts.premium);
+      void this.startRound('new_attempt');
+    } finally {
+      this.commerceBusy = false;
+      if (!this.disposed) this.restartSheet.setBusy(null);
+    }
+  }
+
   private showPause(): void {
     if (this.disposed) return;
+    // The controller can pause itself on a stall without passing through `interrupt`:
+    // Resume is then the way on, and the sheet closes for the same reason.
+    this.closeRestartSheet('paused');
     this.vignette.pause();
     this.setIntroCaption('');
     this.changeHeadline('Paused');
@@ -2767,6 +3044,9 @@ export class PlayScene extends BaseScene {
     // both are on the same snapshot — so this can be entered after shutdown has already
     // destroyed the act and the text. Touching them here is a throw on the way out.
     if (this.disposed) return;
+    // Paused: Resume is the way on, and it is the same attempt. A purchase or an ad still
+    // out sees the start request move and does not restart into the paused run.
+    this.closeRestartSheet('paused');
     this.grooveHandoff = false;
     ++this.startRequest;
     this.replay = null;
@@ -2818,6 +3098,7 @@ export class PlayScene extends BaseScene {
     if (this.pump !== null) clearInterval(this.pump);
     this.pump = null;
     this.persistAbandonedAttempt();
+    this.restartSheet.hide();
     this.taps.dispose();
     this.replayPanel?.remove();
     this.replayPanel = null;

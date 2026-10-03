@@ -20,6 +20,7 @@ import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { mapMastered } from '@/game/mastery';
+import { watchForHeart } from '@/game/restart';
 import { MaterialKey } from '@/textures/materials';
 import { mix, relativeLuminance, shade, starColour } from '@/ui/colour';
 import { fillContour, traceContour } from '@/ui/illustration';
@@ -1828,11 +1829,15 @@ export class MapScene extends BaseScene {
     this.restPressDirty = true;
     const claimId = `map:${++this.watchClaims}`;
     try {
-      const result = await monetization().showRewarded();
-      if (result.ok) this.health = redeemHeart(claimId).health;
+      // The one rewarded path the play screen's Watch and its restart sheet also take.
+      const watch = await watchForHeart(() => monetization().showRewarded(), id => {
+        const grant = redeemHeart(id);
+        this.health = grant.health;
+        return grant;
+      }, claimId);
       if (this.disposed) return;
-      if (!result.ok) {
-        this.restNote = rewardedFeedback(result.reason);
+      if (watch.kind === 'failed') {
+        this.restNote = rewardedFeedback(watch.reason);
         this.drawRest(this.uiScale, 0);
         return;
       }

@@ -264,7 +264,7 @@ with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` 
 it deliberately does not travel in a save code; the adapter also refuses to hand an event
 to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
 through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
-attempt on PlayScene's heart attempt id, so Resume and the restart puck continue a run
+attempt on PlayScene's heart attempt id, so Resume and a free restart continue a run
 instead of starting a second one, `level_completed`/`level_failed` fire once from
 `recordOutcome`, and a finished id is never reopened. Its session state (retries, the gate
 dedupe) is in memory and stores nothing. See `docs/ANALYTICS.md`.
@@ -568,6 +568,22 @@ completed day — no currency, no streak to lose, nothing to buy. Every stored f
 validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
 tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
 
+**One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
+`ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
+that paid. The restart puck is free before the attempt's first scored response
+(`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
+an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
+first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
+heart*, or at zero hearts *Out of hearts* with Watch ad & Restart, the refill, Premium and
+Keep playing. A finished, protected or Premium level restarts at once and free. Opening a
+sheet spends and ends nothing, and the sheet re-reads the run and re-arms before it acts.
+**`startRound(mode)` names what happens to the attempt** — `resume`, `free_restart`,
+`new_attempt` (`attemptForStart`), never inferred from whether a result exists — and a new
+attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
+id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
+same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
+and it restarts only if its `RestartTicket` still holds.
+
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
 highest finished level short of three stars, never the frontier). `seenReplayTip` lives
@@ -769,6 +785,7 @@ src/
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
+    restart.ts         The restart puck: free, paid or out of hearts; start modes, the handover, the rewarded heart; pure
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
@@ -824,6 +841,7 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
+    restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure

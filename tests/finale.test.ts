@@ -85,7 +85,7 @@ describe('the finale’s rules are every level’s', () => {
       const begun = beginAttempt(FULL, progress, at, `a${at}`, 0);
       expect(begun).toMatchObject({ ok: true, spent: true });
       expect(begun.health.hearts).toBe(HEALTH.max - 1);
-      // Resume and restart are the same attempt: still one heart.
+      // Resume and a free restart are the same attempt: still one heart. A paid restart is a new id.
       expect(beginAttempt(begun.health, progress, at, `a${at}`, 0).health.hearts).toBe(HEALTH.max - 1);
       expect(finishAttempt(begun.health, `a${at}`, 3, 0)).toMatchObject({ refunded: true });
       expect(finishAttempt(begun.health, `a${at}`, 2, 0).health.hearts).toBe(HEALTH.max - 1);
