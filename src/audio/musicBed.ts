@@ -54,6 +54,13 @@ export async function setMusicBed(
 
   if (next === 'level') {
     bed = 'level';
+    // A hush may still be fading the bus toward zero — the map's `openLevel` fades over
+    // `bedFadeSec`, and under reduced motion the curtain is quicker than that fade — and
+    // its early return below deliberately leaves the gain where it found it, since the
+    // source that superseded it owns the mix now. That source is this level's, started a
+    // moment ago by PlayScene, which never touches the bus; so the level takes the gain
+    // back here, or it plays its whole run with the stems and the metronome at zero.
+    if (music.gain === 0) music.setGain(music.trackGain, 0);
     return;
   }
 
@@ -78,6 +85,11 @@ export async function setMusicBed(
   if (sameTrack && music.ready && canReuseShell(music.activeSources, music.playbackRate, bed, sameTrack)) {
     bed = 'shell';
     if (music.gain !== music.trackGain) music.setGain(music.trackGain, fadeSec);
+    // A leftover level's sources carry the level's mix: the stems it had earned and the
+    // metronome bar under them. The shell hears every stem and no click, so the road after
+    // a level is the same room as the road before it.
+    if (music.activeLayers < music.stemCount) music.setLayers(music.stemCount, context.currentTime, fadeSec);
+    music.stopMetronome();
     return;
   }
 

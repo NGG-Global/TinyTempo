@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { LAYOUT } from '../config/design';
 import { STYLE } from '../config/style';
 import { PALETTE, SHELL } from '../config/theme';
 import { isDone, objectiveDefinition, stampWeek, type ObjectivesState } from '../game/objectives';
@@ -6,7 +7,7 @@ import { shade } from './colour';
 import { drawPanel, Rect } from './panel';
 import { arrive } from './spring';
 import { drawStar, STAR_PRIZE } from './star';
-import { body, display, label, resize } from './type';
+import { body, display, label, resize, wrapWidth } from './type';
 
 /** Design-unit metrics, scaled by the scene's `s`. */
 const CARD = Object.freeze({
@@ -169,7 +170,7 @@ export class ObjectivesCard {
           .moveTo(tickX - r * 0.42, rowY + 16 * s).lineTo(tickX - r * 0.08, rowY + 16 * s + r * 0.36).lineTo(tickX + r * 0.45, rowY + 16 * s - r * 0.36).strokePath();
       }
       const textX = tickX + r + 18 * s;
-      row.name.setWordWrapWidth(Math.max(80 * s, right - textX - 90 * s), false);
+      wrapWidth(row.name, Math.max(80 * s, right - textX - 90 * s));
       place(row.name, textX, rowY);
       place(row.count, right, rowY);
       // The one place a bar belongs: inside the card, under the objective it measures.
@@ -199,7 +200,9 @@ export class ObjectivesCard {
 
     place(this.footer, f.centerX, y + h - 146 * s);
     const cw = CARD.closeWidth * s, ch = CARD.closeHeight * s;
-    this.closeRect.setTo(f.centerX - cw / 2, y - rise + h - ch - 28 * s, cw, ch);
+    // The block is drawn at its own height; the target is the touch floor, centred on it.
+    const hit = Math.max(ch, LAYOUT.minTouchTarget * s);
+    this.closeRect.setTo(f.centerX - cw / 2, y - rise + h - 28 * s - (ch + hit) / 2, cw, hit);
     drawPanel(g, new Rect(f.centerX - cw / 2, y + h - ch - 28 * s, cw, ch), s, { fill: SHELL.wood, depth: 8 });
     place(this.closeLabel, f.centerX, y + h - ch / 2 - 28 * s);
 

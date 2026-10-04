@@ -104,6 +104,8 @@ export class MusicSystem {
   public get activeSources(): number { return this.sources.length; }
   /** How many stems are heard, or scheduled to be, of the loaded track. */
   public get activeLayers(): number { return this.layers; }
+  /** How many stems the loaded track has: what the shell hears, and the most a level can earn. */
+  public get stemCount(): number { return this.buffers.length; }
   /** Whether the metronome bar is looping with the track. */
   public get metronome(): boolean { return this.click !== null; }
   public get startTime(): number | null { return this.origin; }
@@ -326,6 +328,20 @@ export class MusicSystem {
     parameter.setValueAtTime(from, start);
     parameter.linearRampToValueAtTime(to, Math.max(start, endAt));
     this.level = to;
+  }
+  /**
+   * Silence the metronome bar and leave the stems running. The map inherits a level's
+   * sources rather than restarting them, and the click is the one thing of the level's
+   * that must not come with them.
+   */
+  public stopMetronome(): void {
+    if (!this.click) return;
+    const { source, gain } = this.click;
+    source.onended = null;
+    try { source.stop(); } catch { /* A source that never started cannot be stopped. */ }
+    source.disconnect();
+    gain.disconnect();
+    this.click = null;
   }
   public stop(): void {
     const sources = this.click ? [...this.sources, this.click.source] : this.sources;

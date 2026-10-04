@@ -24,7 +24,7 @@ import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { settle, squash } from '@/ui/spring';
 import { batonCrossing, blockGeometry, blockWidth, columnRoom, drawBlock, faceLift, TRACK, type Ghost } from '@/ui/turnBlock';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 import { VIGNETTES } from '@/vignettes/registry';
 
@@ -157,7 +157,7 @@ export class TutorialScene extends BaseScene {
     resize(this.heading, 56 * s, SHELL.cream);
     this.copy.setPosition(safe.centerX, safe.top + 268 * s);
     resize(this.copy, 30 * s, PALETTE.ink, STYLE.current, false);
-    this.copy.setWordWrapWidth(680 * s);
+    wrapWidth(this.copy, 680 * s);
     // Under two lines of the caption at most, which is what the copy runs to.
     this.illustration.layout(this.viewport, Math.min(safe.top + safe.height * 0.6, safe.bottom - 520 * s), safe.top + (268 + 2 * 42 + 12) * s);
     this.stepLabel.setPosition(safe.centerX, safe.top + 66 * s);

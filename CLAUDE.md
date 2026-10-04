@@ -434,7 +434,16 @@ menu's PLAY tap. The same loop is the **shell bed** on settings and the map
 reuse the one source, a level fades it out and starts a fresh source on its own
 downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
 the track from a scene without going through the bed is how a leftover level
-and the menu overlap.
+and the menu overlap. **The level owns the bus gain from the moment it is named**:
+`setMusicBed('level')` puts a gain the map's hush was fading to zero back to the track's,
+because under reduced motion the curtain beats `bedFadeSec` and the hush's early return
+leaves the gain where it found it — a level played with its stems and metronome at zero.
+And **a reused level loop takes the shell's mix** on the way back: the shell branch fades
+every stem in (`stemCount`) and `stopMetronome` ends the click, so the road after a level is
+the road before it. Both are pinned in `tests/musicBed.test.ts`. **A wrap width is written
+only when it changes** (`wrapWidth`, `ui/type.ts`): Phaser's `setWordWrapWidth` re-rasterises
+on every call, and `layout()` runs once per frame of an Android URL-bar collapse;
+`balanceWrap` remembers its answer for the same copy, size and room.
 
 Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from

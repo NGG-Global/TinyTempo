@@ -19,7 +19,7 @@ import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { balanceWrap, body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 /**
@@ -92,12 +92,17 @@ export class CalibrateScene extends BaseScene {
   private pressed: Button | 'back' | null = null;
   private pressDirty = false;
   private enteredAt = 0;
+  /** Set by shutdown: `start` awaits the unlock, and the player may have gone back meanwhile. */
+  private disposed = false;
+  private request = 0;
   private headlineAt = { x: 0, y: 0 };
   private get reducedMotion(): boolean { return reducedMotion(); }
 
   public constructor() { super(SceneKey.Calibrate); }
 
   protected override build(): void {
+    this.disposed = false;
+    this.request += 1;
     this.phase = 'idle';
     this.run = null;
     this.measuredMs = null;
@@ -217,7 +222,7 @@ export class CalibrateScene extends BaseScene {
     this.countedNote.setPosition(this.countRect.centerX, this.countRect.bottom - 36 * s);
     // Wrapped as a guard, not as a layout: the line fits on one at every offset the
     // clamp allows, and this only stops a longer wording from running off the screen.
-    this.current.setWordWrapWidth(Math.min(620 * s, width), false);
+    wrapWidth(this.current, Math.min(620 * s, width));
     resize(this.current, 27 * s, PALETTE.muted, STYLE.current, false);
     this.current.setPosition(safe.centerX, this.countRect.bottom + 40 * s);
 
@@ -383,16 +388,22 @@ export class CalibrateScene extends BaseScene {
 
   private async start(): Promise<void> {
     const audio = sharedAudio(this);
+    const request = ++this.request;
     try {
       // This tap is the gesture, so a player who reached settings before ever pressing
       // PLAY can still calibrate.
       await audio.unlock();
     } catch {
+      if (this.disposed || request !== this.request) return;
       this.phase = 'failed';
       this.measuredMs = null;
       this.refreshCopy();
       return;
     }
+    // The unlock can take up to three seconds, and Back is live throughout: a run that
+    // began after the player left would schedule sixteen clicks under Settings and write
+    // to Texts the display list has destroyed.
+    if (this.disposed || request !== this.request) return;
     audio.clock.refresh();
     // The run's residuals are against what the clock subtracts, so the two must agree.
     this.readRoute();
@@ -473,6 +484,8 @@ export class CalibrateScene extends BaseScene {
   }
 
   private shutdown(): void {
+    this.disposed = true;
+    this.request += 1;
     this.events.off(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.off(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.stopWatchingRoute?.();

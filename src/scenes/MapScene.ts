@@ -41,7 +41,7 @@ import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { RouteNotice } from '@/ui/routeNotice';
 import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -1657,7 +1657,7 @@ export class MapScene extends BaseScene {
     resize(this.restTitle, 68 * s, PALETTE.ink);
     this.restTitle.setPosition(this.restRect.centerX, top + 148 * s);
     resize(this.restWait, 28 * s, PALETTE.muted, STYLE.current, false);
-    this.restWait.setWordWrapWidth(width - 56 * s, false);
+    wrapWidth(this.restWait, width - 56 * s);
     this.restWait.setPosition(this.restRect.centerX, top + 194 * s);
 
     let y = top + head;
@@ -1688,9 +1688,9 @@ export class MapScene extends BaseScene {
         drawPanel(c, chip, s, { fill: PALETTE.coral, depth: 8, press: tipPress, radius: 20 });
         go.setPosition(chip.centerX, chip.centerY + 8 * s * tipPress * 0.8);
         // The title yields to the chip rather than running under it.
-        title.setWordWrapWidth(Math.max(120 * s, chip.x - 12 * s - title.x), false);
+        wrapWidth(title, Math.max(120 * s, chip.x - 12 * s - title.x));
       } else {
-        title.setWordWrapWidth(r.right - 24 * s - title.x, false);
+        wrapWidth(title, r.right - 24 * s - title.x);
       }
       const copy = this.restTexts.tipCopy!;
       const compact = tipH < tipFull;
@@ -1698,7 +1698,7 @@ export class MapScene extends BaseScene {
       if (!compact) {
         copy.setText(this.restTipLevel === null ? HEALTH_COPY.firstEmptyMastered : HEALTH_COPY.firstEmpty);
         resize(copy, 23 * s, PALETTE.muted, STYLE.current, false);
-        copy.setWordWrapWidth(r.width - 52 * s, false);
+        wrapWidth(copy, r.width - 52 * s);
         copy.setPosition(r.x + 26 * s, lineY + 40 * s);
       }
       y += tipH + gap;
@@ -1769,7 +1769,7 @@ export class MapScene extends BaseScene {
       const copyX = markX + markR + 24 * s;
       // The copy stops where the price chip starts, so the longest locale cannot run under it.
       resize(this.restTexts.premiumTerms!, 21 * s, shade(BRASS, -0.62), STYLE.current, false);
-      this.restTexts.premiumTerms!.setWordWrapWidth(premium.right - 40 * s - pw - copyX, false);
+      wrapWidth(this.restTexts.premiumTerms!, premium.right - 40 * s - pw - copyX);
       this.restTexts.premium!.setPosition(copyX, premium.centerY - 20 * s + premiumSink);
       this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 13 * s + premiumSink);
       c.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + 3 * s + premiumSink, pw, ph, 14 * s);
@@ -1791,7 +1791,8 @@ export class MapScene extends BaseScene {
     y += backH;
 
     const note = this.restTexts.note!;
-    note.setText(this.restNote).setWordWrapWidth(width - 56 * s, false);
+    note.setText(this.restNote);
+    wrapWidth(note, width - 56 * s);
     note.setPosition(this.restRect.centerX, y + 24 * s);
   }
 

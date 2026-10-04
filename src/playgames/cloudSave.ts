@@ -331,6 +331,15 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
 /** The device's note of whose progression it holds, and whose it has shelved. Never in a save code. */
 export const CLOUD_STORE_KEY = 'tiny-tempo.cloud.v1';
 
+/**
+ * Whether what is stored is a binding that cannot be read. A sync stops on one, by design
+ * (`decodeBinding`), and nothing in the sync rewrites it; this is the question Reset
+ * progress asks so the player has a way back without clearing the app's data.
+ */
+export function cloudBindingDamaged(text: string | null): boolean {
+  return text !== null && text.trim() !== '' && decodeBinding(text) === null;
+}
+
 export function cloudStoreOn(storage: Storage | null): CloudStore {
   return {
     read() { try { return storage?.getItem(CLOUD_STORE_KEY) ?? null; } catch { return null; } },

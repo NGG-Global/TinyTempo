@@ -11,7 +11,8 @@ const LEAD = 18;
 
 function fakeBuffer(length: number, rate = RATE, channels = 2, onset = LEAD) {
   const data = Array.from({ length: channels }, () => new Float32Array(length));
-  if (length > onset) data[1]![onset] = 0.5;
+  // The onset sits on the last channel, so a mono buffer (the metronome bar) can be made too.
+  if (length > onset) data[Math.min(1, channels - 1)]![onset] = 0.5;
   return {
     length, sampleRate: rate, duration: length / rate, numberOfChannels: channels,
     getChannelData: (c: number) => data[c]!,
@@ -130,6 +131,26 @@ describe('the shell / level / silent music bed', () => {
     expect(currentMusicBed()).toBe('shell');
   });
 
+  it('gives a reused level loop the shell\'s mix: every stem, and no metronome', async () => {
+    const { system, nodes, host } = setup();
+    await system.load('b');
+    const stems = system.stemCount;
+    expect(stems).toBeGreaterThan(1);
+    system.start(12, { layers: 1, metronome: true });
+    expect(system.metronome).toBe(true);
+    expect(nodes).toHaveLength(stems + 1);
+    await setMusicBed(host, 'level');
+    await setMusicBed(host, 'shell', { fadeSec: 0 });
+    expect(currentMusicBed()).toBe('shell');
+    // The stems play on; only the click bar is stopped.
+    expect(nodes).toHaveLength(stems + 1);
+    for (const stem of nodes.slice(0, stems)) expect(stem.stop).not.toHaveBeenCalled();
+    expect(nodes[stems]!.stop).toHaveBeenCalledTimes(1);
+    expect(system.metronome).toBe(false);
+    expect(system.activeLayers).toBe(stems);
+    expect(system.activeSources).toBe(stems);
+  });
+
   it('cuts immediately on silent so tap offset is not competing with the loop', async () => {
     const { system, nodes, host } = setup();
     await system.load('a');
@@ -153,5 +174,27 @@ describe('the shell / level / silent music bed', () => {
     expect(currentMusicBed()).toBe('level');
     expect(system.activeSources).toBe(1);
     expect(nodes[1]!.stop).not.toHaveBeenCalled();
+    // And the level is not left with the bus the hush was fading to zero: the mix is the
+    // level's from the moment it is named, so its stems and metronome are heard.
+    expect(system.gain).toBe(system.trackGain);
+  });
+
+  it('hands the bus gain to a level that starts while the map\'s hush is still fading', async () => {
+    vi.useFakeTimers();
+    const { system, host } = setup();
+    await system.load('a');
+    await setMusicBed(host, 'shell', { fadeSec: 0 });
+    expect(system.gain).toBe(system.trackGain);
+    const hush = setMusicBed(host, 'silent', { fadeSec: MUSIC.bedFadeSec });
+    expect(system.gain).toBe(0);
+    // Reduced motion: the curtain beats the fade, and the level starts under it.
+    system.start(12, { layers: 1, metronome: true });
+    await setMusicBed(host, 'level');
+    expect(system.gain).toBe(system.trackGain);
+    await vi.advanceTimersByTimeAsync(MUSIC.bedFadeSec * 1000 + 50);
+    await hush;
+    expect(system.gain).toBe(system.trackGain);
+    expect(system.activeSources).toBe(1);
+    expect(system.metronome).toBe(true);
   });
 });

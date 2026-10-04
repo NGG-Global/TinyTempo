@@ -19,7 +19,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { balanceWrap, body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 
 /** Design-unit metrics for the one long string this screen exists to show. */
 const TRANSFER = {
@@ -160,7 +160,7 @@ export class TransferScene extends BaseScene {
     // the copy around it does not: the footnote and the notice each own their strip above
     // the buttons before the card is given what is left. Laying it out top-down instead
     // let the card grow into the footnote's space and put two lines of text on each other.
-    this.notice.setWordWrapWidth(width - 20 * s, false);
+    wrapWidth(this.notice, width - 20 * s);
     resize(this.notice, 24 * s, PALETTE.coral, STYLE.current, false);
     this.notice.setPosition(safe.centerX, this.buttons.copy.rect.y - 22 * s);
     resize(this.scope, 24 * s, PALETTE.muted, STYLE.current, false);
@@ -172,7 +172,7 @@ export class TransferScene extends BaseScene {
     // read as an empty box with a few characters adrift in the middle of it; the room
     // belongs around the card, where it sets the one thing on screen apart from the paper.
     resize(this.codeNote, 19 * s, PALETTE.muted, STYLE.current, false);
-    this.codeText.setWordWrapWidth(width - 76 * s, false);
+    wrapWidth(this.codeText, width - 76 * s);
     resize(this.codeText, TRANSFER.codeSize * s, PALETTE.ink, STYLE.current, false);
     const bandTop = this.intro.y + this.intro.height + 28 * s;
     const bandBottom = scopeBottom - this.scope.height - 24 * s;

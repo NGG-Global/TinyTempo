@@ -48,8 +48,10 @@ export function loadProgress(storage: Storage | null = safeStorage()): Progress 
         if (Number.isInteger(n) && n >= 1 && typeof accuracy === 'number' && Number.isFinite(accuracy)) clean[n] = Math.max(0, Math.min(100, accuracy));
       }
     }
-    const stored = Number.isInteger(unlocked) && (unlocked as number) >= 1 ? Math.min(MAX_LEVEL, unlocked as number) : frontierFrom(clean);
-    return { unlocked: stored, best: Object.freeze(clean) };
+    // Never below the clears: a stale or edited `unlocked` beside a `best` that reaches
+    // past it would hold finished levels on the map until a merge happened to lift it.
+    const stored = Number.isInteger(unlocked) && (unlocked as number) >= 1 ? Math.min(MAX_LEVEL, unlocked as number) : 1;
+    return { unlocked: Math.max(stored, frontierFrom(clean)), best: Object.freeze(clean) };
   } catch { return EMPTY; }
 }
 

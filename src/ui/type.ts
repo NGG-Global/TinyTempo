@@ -207,6 +207,13 @@ export function restyle(look: TextLook, style: RestyleTarget, padding: Partial<T
  * and a hard break is never moved.
  */
 export function balanceWrap(text: Phaser.GameObjects.Text, maxWidth: number): void {
+  // The answer depends only on the copy, the face's size and the room, and `layout()` runs
+  // once per frame of an Android URL-bar collapse with all three unchanged. Measuring is
+  // cheap; the `setWordWrapWidth` at the end is a full raster and upload, so the same
+  // question is not asked twice.
+  const key = `${text.text}\u0000${String(text.style.fontSize)}\u0000${maxWidth}`;
+  if (balanced.get(text) === key) return;
+  balanced.set(text, key);
   const style = text.style;
   style.wordWrapWidth = maxWidth;
   style.wordWrapUseAdvanced = false;
@@ -225,4 +232,18 @@ export function balanceWrap(text: Phaser.GameObjects.Text, maxWidth: number): vo
     width = Math.min(maxWidth, Math.ceil(hi) + 1);
   }
   text.setWordWrapWidth(width, false);
+}
+
+const balanced = new WeakMap<Phaser.GameObjects.Text, string>();
+
+/**
+ * `setWordWrapWidth` that does nothing when nothing changes. Phaser's own re-rasterises
+ * the text and re-uploads its texture on every call, unlike `setText`, which compares
+ * first — and a `layout()` that wraps a caption to the same width fifteen frames running
+ * paid for fifteen rasters of it. The same trap `MapScene.bakeKey` exists for.
+ */
+export function wrapWidth(text: Phaser.GameObjects.Text, width: number, advanced = false): void {
+  const style = text.style;
+  if (style.wordWrapWidth === width && style.wordWrapUseAdvanced === advanced) return;
+  text.setWordWrapWidth(width, advanced);
 }

@@ -25,7 +25,7 @@ import { drawBack } from '@/ui/icons';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
-import { balanceWrap, body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 
 /**
  * How the clock is tracking output, what the device says its lag is, and what the player
@@ -209,7 +209,7 @@ export class SupportScene extends BaseScene {
     this.address.setPosition(safe.centerX, this.intro.y + this.intro.height + 34 * s);
 
     // Bottom-up, so on a short screen the card gives way and the copy around it does not.
-    this.notice.setWordWrapWidth(width - 20 * s, false);
+    wrapWidth(this.notice, width - 20 * s);
     resize(this.notice, 24 * s, PALETTE.coral, STYLE.current, false);
     this.notice.setPosition(safe.centerX, this.buttons.email.rect.y - 22 * s);
 
@@ -217,7 +217,7 @@ export class SupportScene extends BaseScene {
     // Wrap before measuring: the card is sized from the wrapped height, and a save code is
     // one 58-character word with no spaces in it, so basic wrapping leaves it hanging off
     // the right edge. Advanced wrapping breaks a word longer than the line.
-    this.reportText.setWordWrapWidth(width - 60 * s, true);
+    wrapWidth(this.reportText, width - 60 * s, true);
     resize(this.reportText, HELP.reportSize * s, PALETTE.ink, STYLE.current, false);
     const bandTop = this.address.y + 34 * s;
     // Enough for a notice of two lines, which is the longest any of them runs.

@@ -5,10 +5,9 @@ import { completeTutorial, skipTutorial, tutorialState } from '../src/game/Tutor
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 import { achievementsFrom, hasEarned } from '../src/playgames/achievements';
 import {
-  CLOUD_SAVE, CLOUD_STORE_KEY, cloudStoreOn, createCloudSync, decodeBinding, decodeCloudSave, emptyCloudSave, encodeBinding, encodeCloudSave,
-  localCloudSave, mergeCloudSaves, ownerTag, planBinding, sameCloudSave, snapshotPayload, switchBinding,
-  type CloudSaveV1, type CloudSyncDeps, type CloudSyncOutcome,
+  CLOUD_SAVE, CLOUD_STORE_KEY, cloudStoreOn, createCloudSync, decodeBinding, decodeCloudSave, emptyCloudSave, encodeBinding, encodeCloudSave, localCloudSave, mergeCloudSaves, ownerTag, planBinding, sameCloudSave, snapshotPayload, switchBinding, type CloudSaveV1, type CloudSyncDeps, type CloudSyncOutcome, cloudBindingDamaged, EMPTY_BINDING,
 } from '../src/playgames/cloudSave';
+import { repairCloudBinding } from '../src/playgames/cloudSync';
 import { base64FromText, textFromBase64, toSnapshotRead, toSnapshotResolution, toSnapshotWrite } from '../src/playgames/native';
 import {
   createPlayGames, NOT_SHOWN, NOT_SUBMITTED, NOT_UNLOCKED, SIGNED_OUT, SNAPSHOT_FAILED, stubPlayGames,
@@ -806,5 +805,34 @@ describe('the bridge', () => {
     });
     await expect(games.writeSnapshot('n', { data: '{}', description: '', progress: 1 })).resolves.toEqual(SNAPSHOT_FAILED('failed'));
     await expect(games.resolveSnapshot('c', { data: '{}', description: '', progress: 1 })).resolves.toEqual(SNAPSHOT_FAILED('failed'));
+  });
+});
+
+describe('a damaged cloud binding', () => {
+  const memory = (initial: Record<string, string> = {}): Storage => {
+    const map = new Map(Object.entries(initial));
+    return {
+      getItem: (k: string) => map.get(k) ?? null, setItem: (k: string, v: string) => { map.set(k, v); },
+      removeItem: (k: string) => { map.delete(k); }, clear: () => map.clear(), key: () => null, get length() { return map.size; },
+    } as Storage;
+  };
+  it('is told apart from a missing one and a readable one', () => {
+    expect(cloudBindingDamaged(null)).toBe(false);
+    expect(cloudBindingDamaged('')).toBe(false);
+    expect(cloudBindingDamaged(encodeBinding(EMPTY_BINDING))).toBe(false);
+    expect(cloudBindingDamaged(encodeBinding({ version: 1, owner: 'a'.repeat(16), shelf: {} }))).toBe(false);
+    expect(cloudBindingDamaged('{"version":1,"owner":')).toBe(true);
+    expect(cloudBindingDamaged('{"version":7}')).toBe(true);
+  });
+  it('is the only binding Reset progress removes', () => {
+    const readable = encodeBinding({ version: 1, owner: 'a'.repeat(16), shelf: {} });
+    const kept = memory({ 'tiny-tempo.cloud.v1': readable });
+    expect(repairCloudBinding(kept)).toBe(false);
+    expect(kept.getItem('tiny-tempo.cloud.v1')).toBe(readable);
+    const damaged = memory({ 'tiny-tempo.cloud.v1': '{"version":1,"owner":' });
+    expect(repairCloudBinding(damaged)).toBe(true);
+    expect(damaged.getItem('tiny-tempo.cloud.v1')).toBeNull();
+    expect(repairCloudBinding(memory())).toBe(false);
+    expect(repairCloudBinding(null)).toBe(false);
   });
 });

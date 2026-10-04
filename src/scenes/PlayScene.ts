@@ -4,7 +4,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
-import { sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
@@ -69,7 +69,7 @@ import { Feedback } from '@/ui/feedback';
 import { flawlessPose, socketGlint } from '@/ui/flourish';
 import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
   chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, TIMING_TRAY, trayRect, type ResultPlan } from '@/ui/resultLayout';
@@ -468,6 +468,16 @@ export class PlayScene extends BaseScene {
     this.heartRefunded = false;
     this.replayOffered = false;
     this.finaleCleared = false;
+    // The empty-hearts screen's once-per-visit flags, for the same reason: a start the
+    // hearts refuse goes straight to `showNoHearts`, so a visit that opened on the empty
+    // screen would otherwise inherit the last one's "already said, already tracked".
+    this.emptyTracked = false;
+    this.replayTipShown = this.firstEmpty = false;
+    this.watchOfferTracked = false;
+    this.purchaseOfferTracked = false;
+    // `layout()` draws the speaker before `startRound` reads the engine, so a mute flipped
+    // on the map would show the previous visit's glyph through the curtain.
+    this.muted = outputSilent(this);
     this.results = [];
     this.taskIndex = 0;
     this.tally = { perfect: 0, flawless: 0 };
@@ -676,7 +686,7 @@ export class PlayScene extends BaseScene {
     this.scrim.clear().fillStyle(0x1a201c, 0.5).fillRect(full.x, full.y, full.width, full.height);
     this.roomDim.clear().fillStyle(PALETTE.ink, 1).fillRect(full.x, full.y, full.width, full.height);
     resize(this.accuracy, 34 * s, ink, STYLE.current, false);
-    this.accuracy.setWordWrapWidth(Math.min(560 * s, safe.width - 64 * s), false);
+    wrapWidth(this.accuracy, Math.min(560 * s, safe.width - 64 * s));
     this.accuracy.setLineSpacing(-4 * s);
     this.placeWaitCopy();
     this.placeResult();
@@ -2225,7 +2235,7 @@ export class PlayScene extends BaseScene {
       ? `Three stars on a level earn its keepsake. Yours are in the Scrapbook on the title screen.`
       : `In your Scrapbook · ${count.owned}/${count.total}`);
     resize(this.keepsakeNote, 21 * s, PALETTE.muted, STYLE.current, false);
-    this.keepsakeNote.setWordWrapWidth(Math.max(80 * s, width - (28 + KEEPSAKE_CARD.art + 48) * s), false);
+    wrapWidth(this.keepsakeNote, Math.max(80 * s, width - (28 + KEEPSAKE_CARD.art + 48) * s));
     return keepsakeCardHeight(KEEPSAKE_CARD.noteTop * s + this.keepsakeNote.height, s);
   }
 
@@ -2486,7 +2496,7 @@ export class PlayScene extends BaseScene {
     resize(this.timingLean, TIMING_TRAY.leanSize * ks, PALETTE.muted, STYLE.current, false);
     this.timingLean.setScale(this.timingLean.width > room ? room / this.timingLean.width : 1);
     resize(this.timingAdvice, TIMING_TRAY.adviceSize * ks, PALETTE.ink, STYLE.current, false);
-    this.timingAdvice.setWordWrapWidth(room, false);
+    wrapWidth(this.timingAdvice, room);
     resize(this.timingEarly, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
     resize(this.timingLate, TIMING_TRAY.labelSize * ks, PALETTE.muted, STYLE.current, false);
   }

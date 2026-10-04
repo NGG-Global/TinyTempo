@@ -171,7 +171,6 @@ export class MenuScene extends BaseScene {
     this.muteAt = { x: safe.right - 56 * s, y: safe.top + 66 * s };
     this.setupAt = { x: this.muteAt.x - Math.max(88 * s, this.controlSize + 4 * s), y: this.muteAt.y };
     this.bookAt = { x: safe.left + 56 * s, y: this.muteAt.y };
-    this.drawPucks(s, 0);
     this.puckDirty = true;
 
     // The block sits a fixed distance above the bottom edge: thumb reach is absolute, not proportional.

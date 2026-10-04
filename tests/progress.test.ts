@@ -24,6 +24,10 @@ describe('progress', () => {
     // Nothing cleared and nothing usable stored still starts at the beginning.
     expect(loadProgress(memoryStorage({ 'small-acts.progress.v1': '{"unlocked":-5,"best":{}}' }))).toEqual({ unlocked: 1, best: {} });
   });
+  it('never holds the frontier below the levels already cleared', () => {
+    expect(loadProgress(memoryStorage({ 'small-acts.progress.v1': '{"unlocked":1,"best":{"1":80,"2":90,"3":70}}' })).unlocked).toBe(4);
+    expect(loadProgress(memoryStorage({ 'small-acts.progress.v1': '{"unlocked":9,"best":{"1":80}}' })).unlocked).toBe(9);
+  });
   it('bounds a corrupt or tampered frontier so the map cannot be asked to allocate it', () => {
     // MapScene builds one Text per level from this number; 1e15 threw RangeError in
     // build(), and with no reset in the UI the player could not recover.
