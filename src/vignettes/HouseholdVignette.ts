@@ -5,6 +5,7 @@ import type { Phase } from '@/game/RoundController';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
 import { Backdrop } from '@/ui/backdrop';
+import { Feedback, type Preset } from '@/ui/feedback';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
 import { acceptDemoBeat, turnOpen } from './motion';
@@ -47,6 +48,9 @@ export abstract class HouseholdVignette implements Vignette {
    */
   private baseX = 0;
   private baseY = 0;
+  /** Material particles in the stage's own space, made on an act's first burst. */
+  private bursts: Feedback | null = null;
+  private readonly fxScene: Phaser.Scene;
   protected get still(): boolean { return reducedMotion(); }
   protected get watching(): boolean { return this.phase === 'prepare' || this.phase === 'demonstrate'; }
   protected get strokes(): number { return this.watching ? this.demoTimes.length : this.taps; }
@@ -59,6 +63,7 @@ export abstract class HouseholdVignette implements Vignette {
    * `layout`, once per viewport, never per frame.
    */
   public constructor(scene: Phaser.Scene, private readonly paper: number, private readonly glow: number, private readonly staging: StagingOptions = {}) {
+    this.fxScene = scene;
     this.backdrop = new Backdrop(scene, paper, glow, { glowAlpha: 0.45 });
     this.stage = scene.add.container(0, 0).setDepth(-10);
     this.shelfLayer = scene.add.graphics();
@@ -142,6 +147,22 @@ export abstract class HouseholdVignette implements Vignette {
     this.grooveReaction?.update(now, this.plan, this.still);
   }
   protected abstract draw(now: number, ending: number): void;
+  /**
+   * A burst of material bits at a point in the art's own units, fired by a judged contact.
+   * Over the art and under the card light, so the light falls on what was thrown. Nothing
+   * under reduced motion; counts stay in the range the presets were tuned for.
+   */
+  protected throwBits(preset: Preset, x: number, y: number, tint: number | number[], count: number): void {
+    if (this.still) return;
+    if (!this.bursts) {
+      this.bursts = new Feedback(this.fxScene, 0, this.stage);
+      // `Feedback` adds each emitter to the stage as it is made, at the top; under the light.
+      this.stage.bringToTop(this.lightLayer);
+    }
+    this.bursts.burst(preset, x, y, tint, count);
+    this.stage.bringToTop(this.lightLayer);
+  }
   public translate(offset: number): void { if (!this.still) this.stage.x += offset; }
-  public destroy(): void { this.stage.destroy(true); this.backdrop.destroy(); }
+  public punch(dy: number): void { if (!this.still) this.stage.y += dy; }
+  public destroy(): void { this.bursts?.destroy(); this.bursts = null; this.stage.destroy(true); this.backdrop.destroy(); }
 }

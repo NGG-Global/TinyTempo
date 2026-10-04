@@ -5,6 +5,7 @@ import { HouseholdVignette } from './HouseholdVignette';
 import { contactPulse, eggReveal } from './householdMotion';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { eggLook, type EggLook } from './eggLooks';
+import { contactGive } from '@/ui/spring';
 import { clamp01, easeOut } from './motion';
 const EGG = cubicContour(0, -66, [
   [29, -66, 52, -10, 49, 21], [46, 64, -46, 64, -49, 21],
@@ -74,7 +75,8 @@ export class EggCrackingVignette extends HouseholdVignette {
       const approach = easeOut((ending + 0.24) / 0.24);
       const x = -148 + pulse * 38 + approach * 193, y = -96 + pulse * 106;
       const tilt = (-0.22 + pulse * 0.38) * (1 - approach);
-      this.egg(x, y, tilt);
+      // The shell gives on the rim for a few frames: squat along its own axis, never cracked by it.
+      this.egg(x, y, tilt, this.still ? 0 : contactGive(age, 1, STYLE.current.exaggeration));
       if (pulse > 0.2) {
         g.lineStyle(3, 0xc29254, pulse);
         for (let i = 0; i < 3; i++) g.lineBetween(-135 + i * 22, 18, -144 + i * 28, 4);
@@ -103,9 +105,12 @@ export class EggCrackingVignette extends HouseholdVignette {
       }
     }
   }
-  private egg(x: number, y: number, angle: number): void {
+  private egg(x: number, y: number, angle: number, give = 0): void {
     const g = this.art;
-    shape(g, EGG.map((v, i) => i % 2 ? y + EGG[i - 1]! * Math.sin(angle) + v * Math.cos(angle) : x + v * Math.cos(angle) - EGG[i + 1]! * Math.sin(angle)), this.look.shell, this.look.ink);
+    // Squat about the egg's own centre: x a little wider, y shorter, then rotated as before.
+    const sx = 1 + give * 0.5, sy = 1 - give;
+    const local = EGG.map((v, i) => v * (i % 2 ? sy : sx));
+    shape(g, local.map((v, i) => i % 2 ? y + local[i - 1]! * Math.sin(angle) + v * Math.cos(angle) : x + v * Math.cos(angle) - local[i + 1]! * Math.sin(angle)), this.look.shell, this.look.ink);
     g.fillStyle(this.look.highlight).fillEllipse(x - 16, y - 19, 20, 43);
     for (let i = 0; i < 13; i++) {
       const dx = ((i * 19) % 63) - 27, dy = ((i * 31) % 74) - 26;

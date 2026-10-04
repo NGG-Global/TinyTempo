@@ -69,6 +69,7 @@ import { Feedback, FxKey } from '@/ui/feedback';
 import { flawlessPose, socketGlint } from '@/ui/flourish';
 import { Sheen } from '@/ui/sheen';
 import { arrive, overshoot, settle, squash } from '@/ui/spring';
+import { punch } from '@/ui/punch';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
@@ -406,6 +407,8 @@ export class PlayScene extends BaseScene {
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
+  /** The last Perfect, or a clean coda's contact, on the audio clock: when the act's stage was punched. */
+  private punchAt = -Infinity;
   /** The count into the player's turn: "3 2 1 Go!", in the free band under the face. */
   private turnCall!: Phaser.GameObjects.Text;
   /**
@@ -470,6 +473,7 @@ export class PlayScene extends BaseScene {
     // drew the previous level's plaque behind its offer — empty medals, "On the beat",
     // "Heart kept" and a blank star strip under "No hearts". And while the audio loads,
     // `layout()` would draw it for every visit.
+    this.punchAt = -Infinity;
     this.summaryShown = false;
     this.summaryAt = -Infinity;
     this.summaryStars = 0;
@@ -1516,6 +1520,11 @@ export class PlayScene extends BaseScene {
       const p = slide.swapped ? (now - slide.swap) / (slide.next - slide.swap) : (now - slide.slide) / (slide.swap - slide.slide);
       this.vignette.translate(this.viewport.full.width * (slide.swapped ? 1 - easeOut(p) : -(Math.min(1, Math.max(0, p)) ** 3)));
     }
+    // After `update` has put the stage home, as the slide is: the punch never accumulates.
+    if (!this.reducedMotion) {
+      const kick = punch(now - this.punchAt, 1, STYLE.current.exaggeration);
+      if (kick !== 0) this.vignette.punch?.(kick * this.uiScale);
+    }
     const still = this.reducedMotion;
     const entry = still || this.headlineAt < 0 ? { rise: 0, alpha: 1 } : arrive(now - this.headlineAt, 0.4);
     const playing = this.controller?.active;
@@ -1706,6 +1715,9 @@ export class PlayScene extends BaseScene {
     else if (result.kind === 'omission') this.audio?.playAccent(now, 'judder');
     if (result.kind === 'extra') this.extraAt = now;
     else if (result.kind === 'hit' && result.index !== null) { this.struckIndex = result.index; this.struckAt = now; }
+    // A Perfect lands with weight: the act's stage gives under it (`ui/punch.ts`). Only the
+    // player's own hits — never a demonstration beat, which the player is watching.
+    if (result.kind === 'hit' && result.grade === 'Perfect' && !this.intro && !this.teach) this.punchAt = now;
     this.sayVerdict(result, now);
   }
   private releaseHeldJudgements(): void {
@@ -2085,6 +2097,8 @@ export class PlayScene extends BaseScene {
     const outcome: FinishOutcome = strong ? 'success'
       : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
     this.vignette.finish(strong, contact, result.accuracy);
+    // A clean round's coda lands its finishing blow with the same weight, on its contact.
+    if (strong) this.punchAt = contact;
     // A coda has the room to itself until the next task's downbeat; after the last task
     // there is no next task, and it rings out under the summary.
     this.audio!.playFinish(contact, outcome, last ? undefined : ending.next);

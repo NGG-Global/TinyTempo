@@ -70,7 +70,16 @@ directly over the previous finale — so node y is no longer linear in the level
 step. The dock's trail ends in a flag. See `docs/FINALES.md`. An **open** gate's posts are
 laid with the road, under the stops (`drawOpenGates`), since they reach into the first
 level's star plate; and a haze in the top area's colour sits behind the header
-(`drawHaze`), so nothing on the road reads as part of the sign or the pucks.
+(`drawHaze`), so nothing on the road reads as part of the sign or the pucks. **A stop's
+colours are `puckColours`** (`ui/roadLayout.ts`): frontier coral, then a cleared stop in a
+settled mid-tone of the area's road, then locked and preview, and every number clears
+`OUTLINE_CONTRAST` on its puck — a preview's is drawn whole in its faintest legible colour,
+never faded by alpha. **One ambient layer per area** (`ui/mapAmbience.ts`) — pollen, lamp
+glow, dust, snow, fireflies — is a fixed pool of 40 world-anchored images posed as pure
+`f(seed, t, view)`, under every prop and stop, off under reduced motion and on blur. **The
+frontier hops on beat 1 of the music**: `ui/musicPulse.ts` turns `MusicSystem.playheadAt`
+(the loop's position across its rate history, read at the heard clock) into a bar pose, and
+falls back to the frame clock at 120 BPM, never freezing. See `docs/VISUAL_POLISH.md`.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -126,7 +135,13 @@ on one enormous kernel; the toothbrush brushes sixteen teeth once round, and a c
 rinses the foam and sweeps a gleam across them. Their demonstrations snip the air, hop a
 kernel back into the pan and scrub without cleaning. See `docs/BARBER_POPCORN_TOOTHBRUSH.md`.
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
-stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
+stay authoritative, as `docs/VERTICAL_SLICE.md` sets out. **Impact is the act's alone**: a
+Perfect player hit and a clean task's coda blow kick the act's stage through the optional
+`Vignette.punch` (`ui/punch.ts`, 3 units settling in 120 ms, after `translate`), never the
+camera, block, verdict or headline; a struck subject gives through `contactGive`
+(`ui/spring.ts`); material bits (`splinters`, `droplets`, `rings`, `flakes`) are `Feedback`
+presets, which a household act fires with `throwBits`. All of it is off under reduced
+motion. The act-by-act audit is in `docs/VISUAL_POLISH.md`.
 
 Every act carries more than one look. `LevelSpec.lap` counts how many earlier levels
 the act played, PlayScene passes it to `create(scene, lap)`,
@@ -436,7 +451,11 @@ seamless 64 s loop, and an MP3 cannot loop on its own ends** — the encoder pad
 the encoder writes it with a 0.1 s head and the loop's opening copied after its end, and
 `themeLoop` finds the music's start in the decode and loops exactly `THEME.loopSec` from
 `THEME.seamSec` (0.1 s) into it, past the encoder's smear of the first frames.
-**The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
+**The title is on the theme's beat**: the theme was measured at a steady 120 BPM with its
+first downbeat on the music's start (`THEME.bpm`), and `ThemeMusic.playheadAt` drives the
+tempo beads and a silent hammer blow on beat 1 of every bar through the same `musicPulse`,
+on the frame clock until the theme sounds; a beat blow never sinks the nail, and reduced
+motion has none. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
 (`MenuScene.knock` → `HammerNailVignette.knock`, round `onPlayerHit`'s turn gate, since the
 cover has no plan), voiced by the act's own hit as a stinger on the effects bus rather than
 through `setSounds`, which belongs to the level that set it. The nail gives `KNOCK.depth` on

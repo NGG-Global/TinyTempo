@@ -273,5 +273,6 @@ export class BugShoeVignette implements Vignette {
   }
 
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
 }

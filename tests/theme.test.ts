@@ -125,6 +125,21 @@ describe('the title theme', () => {
     expect(sources).toHaveLength(1);
   });
 
+  it('reports where the theme is, from the moment its source began, for the beads and the hammer', async () => {
+    vi.stubGlobal('fetch', ok());
+    const { context, raw } = stub();
+    const theme = new ThemeMusic(context, {} as AudioNode);
+    expect(theme.playheadAt(5)).toBeNull();
+    await theme.enter();
+    // Started at the music's own start, which is its first downbeat.
+    expect(theme.playheadAt(5)).toBeCloseTo(0, 9);
+    raw.currentTime = 9;
+    expect(theme.playheadAt(7.5)).toBeCloseTo(2.5, 9);
+    expect(theme.playheadAt(NaN)).toBeNull();
+    theme.leave();
+    expect(theme.playheadAt(9)).toBeNull();
+  });
+
   it('does not keep a fading copy when the title screen comes back', async () => {
     // leave() schedules the stop at the end of the fade and drops its playing
     // reference. Coming back before that stop used to start a second copy on top.

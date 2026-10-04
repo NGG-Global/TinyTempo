@@ -3,7 +3,7 @@ import { setMusicBed } from '@/audio/musicBed';
 import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, stopTheme, toggleMute } from '@/audio/sharedAudio';
 import { createImpactBuffers } from '@/audio/hammerSounds';
 import { samples } from '@/audio/samples';
-import { MUSIC } from '@/config/music';
+import { MUSIC, THEME } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -25,14 +25,15 @@ import { STAR_PRIZE } from '@/ui/star';
 import { faces } from '@/ui/light';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { arrive, settle } from '@/ui/spring';
 import { display, resize } from '@/ui/type';
 import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 
 const MENU = {
   sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
-  /** Beats per second of the sign's tempo beads: the game's own 120 BPM. */
-  beatHz: 2, dots: 4,
+  /** One bead a beat, a bar across the sign: the theme's own 4/4. */
+  dots: 4,
 } as const;
 
 /**
@@ -45,6 +46,9 @@ const MENU = {
  */
 export class MenuScene extends BaseScene {
   private illustration!: HammerNailVignette;
+  /** The bar the hammer last struck, and whether that count came from the theme. */
+  private struckBar = 0;
+  private struckOnMusic = false;
   /** The hammer's hit, synthesized once per AudioContext for the knock a stray tap lands. */
   private knockVoice: { context: AudioContext; buffer: AudioBuffer } | null = null;
   private sign!: Phaser.GameObjects.Container;
@@ -110,6 +114,8 @@ export class MenuScene extends BaseScene {
     this.objectives = loadObjectives(Date.now(), objectiveContext(loadProgress()));
     // The hammer's idle sway doubles as the title illustration; it never receives a plan.
     this.illustration = new HammerNailVignette(this, true);
+    this.struckBar = Number.NaN;
+    this.struckOnMusic = false;
 
     this.sign = this.add.container(0, 0);
     this.ropes = this.add.graphics();
@@ -230,13 +236,43 @@ export class MenuScene extends BaseScene {
     drawPlay(g, iconX + 2 * s, r.centerY + sink, 12 * s, SHELL.cream);
   }
 
+  /**
+   * The theme's beat, from the heard clock and the theme's playhead, measured at 120 BPM
+   * with its first downbeat on the music's start (`THEME.bpm`). The frame clock at that
+   * tempo stands in before the theme sounds and when it fails to load, so the beads never
+   * stop. A muted theme is still playing under a silent bus, and keeps the beat.
+   */
+  private themePulse(frameSec: number): Pulse {
+    const audio = currentAudio(this);
+    if (audio && audio.context.state === 'running' && audio.theme.playing) {
+      audio.clock.refresh();
+      const position = audio.theme.playheadAt(audio.clock.now());
+      if (position !== null) return pulseAt(position, THEME.bpm, 1, frameSec);
+    }
+    return pulseAt(null, THEME.bpm, 1, frameSec);
+  }
+
   public override update(): void {
     const now = performance.now() / 1000;
+    const still = reducedMotion();
+    const pulse = this.themePulse(now);
+    const bar = barPose(pulse, THEME.beatsPerBar);
+    // The hammer plays beat 1 of every bar: it winds up into the next bar line and lands on
+    // it. A change of source — the theme arriving, or stopping — moves the count without a
+    // blow, so it never strikes off the beat it has just found. A slow frame strikes late but
+    // dated on its bar line, so the recoil is already under way. Still under reduced motion.
+    if (still) {
+      this.illustration.coverBeat(null);
+    } else {
+      this.illustration.coverBeat(now + bar.untilBarSec);
+      if (pulse.onMusic === this.struckOnMusic && bar.bar !== this.struckBar) this.illustration.beatStrike(now - bar.sinceBarSec);
+    }
+    this.struckBar = bar.bar;
+    this.struckOnMusic = pulse.onMusic;
     this.illustration.update(now);
     this.objectivesCard.update(now, reducedMotion());
     const s = this.uiScale;
     const t = STYLE.current;
-    const still = reducedMotion();
     const age = now - this.enteredAt;
 
     // The sign drops in on its ropes and swings itself quiet; at rest it drifts a little.
@@ -259,8 +295,8 @@ export class MenuScene extends BaseScene {
 
     // Four beads on the game's own pulse: the sign says what the game is before the copy does.
     const g = this.beads.clear();
-    const beat = still ? 0 : Math.floor(now * MENU.beatHz) % MENU.dots;
-    const phase = still ? 0 : (now * MENU.beatHz) % 1;
+    const beat = still ? 0 : bar.beatInBar % MENU.dots;
+    const phase = still ? 0 : bar.phase;
     for (let i = 0; i < MENU.dots; i++) {
       const lit = still ? i === 0 : i === beat;
       const grow = lit ? 1 + (1 - phase) ** 2 * 0.7 * t.exaggeration : 1;

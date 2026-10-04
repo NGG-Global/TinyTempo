@@ -8,6 +8,7 @@ import type { Judgement } from '@/rhythm/judge';
 import { MaterialKey } from '@/textures/materials';
 import { Backdrop } from '@/ui/backdrop';
 import { Feedback } from '@/ui/feedback';
+import { contactGive } from '@/ui/spring';
 import { cubicContour, fillContour, paintedContour, traceContour } from '@/ui/illustration';
 import { kitchenKnife, kitchenBoard, KITCHEN_BOARD } from './kitchenArt';
 import type { Vignette } from './Vignette';
@@ -335,6 +336,10 @@ export class BananaKnifeVignette implements Vignette {
     this.produce.setPosition(0, this.reducedMotion ? 0 : press * 1.6);
     this.poseKnife(now, beat, age);
     this.drawBanana();
+    // The banana gives under the blade, about the cut on the board (`ui/spring.ts`). Its y
+    // stays where it is: the slices read it as the banana's offset.
+    const give = this.reducedMotion ? 0 : contactGive(age, 1, STYLE.current.exaggeration);
+    this.bananaG.setScale(1 + give * 0.5, 1 - give).setX(bananaAt(this.cutT).x * -give * 0.5);
     this.drawSlices(now, beat);
     this.drawMarks();
     this.drawJuice(beat, age);
@@ -529,6 +534,9 @@ export class BananaKnifeVignette implements Vignette {
 
   public translate(offset: number): void {
     this.stage.x += this.reducedMotion ? 0 : offset;
+  }
+  public punch(dy: number): void {
+    this.stage.y += this.reducedMotion ? 0 : dy;
   }
   public destroy(): void {
     this.bursts.destroy();

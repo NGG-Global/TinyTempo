@@ -1,5 +1,5 @@
-import { isAreaFinale, mapLastLevel, type MapLevelState } from '../game/levels';
-import { shade } from './colour';
+import { isAreaFinale, mapLastLevel, type Area, type MapLevelState } from '../game/levels';
+import { contrastRatio, mix, OUTLINE_CONTRAST, relativeLuminance, shade } from './colour';
 
 /**
  * Where the map's road puts things, as pure functions of the window: the stops, the seams
@@ -291,4 +291,72 @@ export const GATE = {
 /** Top of the plate under a gate's bar, with the bar down. The plate's text and its drawing agree through this. */
 export function gatePlateTop(seam: number, s: number): number {
   return seam - (GATE.height - GATE.bar - GATE.plate.drop) * s;
+}
+
+/** A stop's paint: its puck, its number, and how far the number is faded. */
+export interface PuckColours {
+  readonly fill: number;
+  readonly number: number;
+  readonly numberAlpha: number;
+}
+
+/** Where the number's colour starts from on a cleared puck, toward the area's dark tone. */
+const CLEARED_DEPTH = 0.45;
+/** Where a preview's number starts toward the ink: the old 58% fade, as a colour. */
+const PREVIEW_START = 0.58;
+/** A preview's number clears the floor by this much, so a rounding of the tones cannot drop it under. */
+const PREVIEW_MARGIN = 0.15;
+
+/** What a number at `alpha` over `fill` actually shows: the composite the eye reads. */
+export function shownColour(fill: number, number: number, alpha: number): number {
+  return mix(fill, number, Math.max(0, Math.min(1, alpha)));
+}
+
+/**
+ * How each kind of stop is painted in an area. The frontier is the game's coral and stays
+ * the one focal point; everything else is derived from the area, in a hierarchy that has to
+ * hold on all five grounds: frontier, then cleared, then locked and preview.
+ *
+ * A cleared stop used to be filled with the area's ink, which on the light areas made a
+ * near-black puck — the heaviest thing on the road, heavier than the frontier it is meant
+ * to sit behind. It is now a settled mid-tone, the road deepened toward the area's darker
+ * tone: Dusk inverts its paper and ink, so "darker" is whichever of the two is, never the
+ * ink by name. The number takes the lighter of the two, and the puck is deepened further only
+ * as far as the number needs to clear `OUTLINE_CONTRAST`.
+ *
+ * Every number clears `OUTLINE_CONTRAST` against its own puck, a faded preview's as shown,
+ * which `tests/roadLayout.test.ts` checks for every area and state.
+ */
+export function puckColours(area: Area, state: MapLevelState, frontier: { readonly fill: number; readonly number: number }): PuckColours {
+  if (state === 'frontier') return { fill: frontier.fill, number: frontier.number, numberAlpha: 1 };
+  const inkDarker = relativeLuminance(area.ink) <= relativeLuminance(area.paper);
+  const dark = inkDarker ? area.ink : area.paper;
+  const light = inkDarker ? area.paper : area.ink;
+  if (state === 'cleared') {
+    let depth = CLEARED_DEPTH;
+    let fill = mix(area.road, dark, depth);
+    while (contrastRatio(fill, light) < OUTLINE_CONTRAST && depth < 0.95) {
+      depth += 0.05;
+      fill = mix(area.road, dark, depth);
+    }
+    return { fill, number: light, numberAlpha: 1 };
+  }
+  // Locked and preview sit on the paper side of the ground, with an ink-side number: the
+  // area's own reading order, which on Dusk is light on dark.
+  const fill = mix(area.paper, area.ground, state === 'locked' ? 0.42 : 0.62);
+  if (state === 'locked') {
+    let number = mix(area.ink, area.ground, 0.12);
+    for (let k = 0; k < 10 && contrastRatio(fill, number) < OUTLINE_CONTRAST; k++) number = mix(number, area.ink, 0.25);
+    return { fill, number, numberAlpha: 1 };
+  }
+  // A preview's number used to be drawn at 58% over its puck, which on the pale grounds no
+  // ink could carry: Grass's read at 2.6:1. It is now the faintest colour toward the ink that
+  // still clears the floor, drawn whole: the quietest number on the road, and still legible.
+  let t = PREVIEW_START;
+  let number = mix(fill, area.ink, t);
+  while (contrastRatio(fill, number) < OUTLINE_CONTRAST + PREVIEW_MARGIN && t < 1) {
+    t = Math.min(1, t + 0.04);
+    number = mix(fill, area.ink, t);
+  }
+  return { fill, number, numberAlpha: 1 };
 }

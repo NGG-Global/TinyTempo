@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import type { Judgement } from '@/rhythm/judge';
 import { STYLE } from '@/config/style';
 import { faces } from '@/ui/light';
 import { canvasFinale, brushTravel, CANVAS_MOTION, strokePose, strokeTimes } from './canvasMotion';
@@ -58,6 +59,17 @@ export class PaintbrushVignette extends HouseholdVignette {
     if (ending >= 0 && this.successful && !this.still) {
       const a = Math.sin(clamp01((ending - 0.7) / 0.7) * Math.PI);
       sparkle(g, CANVAS.x + CANVAS.w - 28, CANVAS.y + CANVAS.h - 28, 12 * a, a);
+    }
+  }
+
+  public override onAccuracy(result: Judgement, now: number): void {
+    const before = this.hitTimes.length;
+    super.onAccuracy(result, now);
+    // A judged hit lays its stroke, and the loaded brush spits a few drops where it lands.
+    if (this.hitTimes.length > before) {
+      const stroke = this.look.strokes[Math.min(before, this.look.strokes.length - 1)];
+      const start = stroke?.points[0];
+      if (stroke && start) this.throwBits('droplets', start[0], start[1], [stroke.colour, stroke.ink], 3);
     }
   }
 

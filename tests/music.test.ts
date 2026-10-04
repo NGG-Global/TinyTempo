@@ -306,6 +306,28 @@ describe('the premixed music loop', () => {
     system.start(30);
     expect(system.playbackRate).toBe(1);
   });
+  it('knows where the loop is across rate changes, for the map\'s hop', async () => {
+    const { system, context } = setup();
+    await system.load('a');
+    expect(system.playheadAt(12)).toBeNull();
+    system.start(12);
+    // Source seconds from the first downbeat, at the rate in effect.
+    expect(system.playheadAt(12)).toEqual({ position: 0, rate: 1 });
+    expect(system.playheadAt(16)!.position).toBeCloseTo(4, 9);
+    system.setRate(1.25, 20);
+    expect(system.playheadAt(20)!.position).toBeCloseTo(8, 9);
+    expect(system.playheadAt(24)).toEqual({ position: expect.closeTo(13, 9), rate: 1.25 });
+    // A later change replaces one set for the same instant, and a level's loop reused at
+    // rate 1 carries the faster stretch in its position.
+    system.setRate(1.1, 28);
+    system.setRate(1, 28);
+    expect(system.playheadAt(30)).toEqual({ position: expect.closeTo(20, 9), rate: 1 });
+    context.currentTime = 40;
+    system.setRate(1.2, 44);
+    expect(system.playheadAt(44)!.position).toBeCloseTo(34, 9);
+    system.stop();
+    expect(system.playheadAt(44)).toBeNull();
+  });
   it('rejects suspended or non-future starts and invalid gains', async () => {
     const { system, context, nodes } = setup();
     await system.load('a');

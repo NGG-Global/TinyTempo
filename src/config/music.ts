@@ -233,6 +233,17 @@ export const THEME = {
   url: new URL('../../bgm/theme/home-page.mp3', import.meta.url).href,
   /** The loop, as delivered: 3,072,000 frames at 48 kHz. */
   loopSec: 64,
+  /**
+   * The theme's tempo, measured from the master rather than assumed: onset autocorrelation
+   * peaks at 120.0 BPM (with a weaker 80 from a dotted-quarter figure, which cannot be the
+   * tempo — 64 s is 85⅓ beats at 80 and exactly 128 at 120), and its 109 strongest
+   * transients sit on an eighth-note grid from the master's first sample to its last, within
+   * 3–6 ms and with no drift. So the loop is 32 bars of 4/4 and beat 1 is the music's start,
+   * which `themeLoop` already finds. The title's beads and the hammer read their pulse from
+   * this (`ui/musicPulse.ts`); nothing on the title screen is judged against it.
+   */
+  bpm: 120,
+  beatsPerBar: 4,
   /** How far into the music the loop restarts: past the encoder's smear of the first frames. */
   seamSec: 0.1,
   /** Where the master's first sound crosses `leadIn.threshold`, after its sample 0. */

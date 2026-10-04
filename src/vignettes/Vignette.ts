@@ -25,6 +25,13 @@ export interface Vignette {
    */
   translate(offset: number): void;
   /**
+   * Optional: the contact punch (`ui/punch.ts`), a vertical offset from the act's home in
+   * the same terms as `translate` — PlayScene calls it right after `update`, which has put
+   * the stage back at home first, so it never accumulates. Only the act's own stage moves;
+   * under reduced motion an act ignores it, as it ignores the slide.
+   */
+  punch?(dy: number): void;
+  /**
    * Optional: the player's groove level changed (`game/groove.ts`), at `now` on the audio
    * clock. The generic treatment — the warm pool, the brass rim, the breath on the bar —
    * is the scene's and every act gets it without this; an act implements it only to add

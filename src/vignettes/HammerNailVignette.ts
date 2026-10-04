@@ -13,6 +13,7 @@ import { shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
+import { contactGive } from '@/ui/spring';
 import { anticipation, clamp01, easeOut, HAMMER_MOTION, KNOCK, knockDepth, nailHeight, recoil } from './hammerMotion';
 import { hammerLook, type HammerLook } from './hammerLooks';
 import { handoverAt } from '@/game/beatTrack';
@@ -62,6 +63,8 @@ export class HammerNailVignette implements Vignette {
   /** The title screen's last knock, on the scene's clock; -Infinity on a screen never tapped and in every level. */
   private lastKnock = -Infinity;
   private strikeAt = -100;
+  /** The cover's next bar line, on the clock `update` is given; null when it plays no beat. */
+  private coverBar: number | null = null;
   private impactX = 310;
   private impactY = -203;
   private strength = 1;
@@ -177,6 +180,7 @@ export class HammerNailVignette implements Vignette {
     this.depthAt = this.strikeAt = -100;
     this.depthSec = DEPTH_EASE_SEC;
     this.lastKnock = -Infinity;
+    this.coverBar = null;
     this.bend = 0;
     this.finishAt = null;
     this.finishDone = false;
@@ -220,6 +224,22 @@ export class HammerNailVignette implements Vignette {
     this.strike(now, 1);
     const depth = knockDepth(0);
     if (this.depthTo !== depth) this.setDepth(depth, now);
+  }
+  /**
+   * The title's beat: `nextBar` is when the theme's next bar line is heard, on the clock
+   * `update` is given, so the hammer winds up into it with the same `anticipation` a cued
+   * blow takes. Null stops it and leaves the idle sway. The cover only.
+   */
+  public coverBeat(nextBar: number | null): void {
+    this.coverBar = this.cover ? nextBar : null;
+  }
+  /**
+   * A blow on the theme's beat 1. The same strike a cue lands, and the nail stays where it
+   * is: a bar of the title is not a tap, and a nail that sank every two seconds would be
+   * driven home before anyone had read the sign.
+   */
+  public beatStrike(at: number): void {
+    if (this.cover) this.strike(at, 0.8);
   }
   public onAccuracy(result: Judgement, now: number): void {
     if (this.phase === 'respond' && result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction.perfect(now);
@@ -274,7 +294,7 @@ export class HammerNailVignette implements Vignette {
     let angle = age < HAMMER_MOTION.recoilSec ? recoil(age) : 0.55;
     const next = this.phase === 'demonstrate' || this.phase === 'prepare'
       ? this.plan?.cues.find(cue => cue.kind === 'action' && cue.time > now)?.time : undefined;
-    const upcoming = this.finishAt !== null && !this.finishDone ? this.finishAt : next;
+    const upcoming = this.finishAt !== null && !this.finishDone ? this.finishAt : next ?? this.coverBar;
     if (upcoming !== undefined && upcoming !== null && upcoming - now < HAMMER_MOTION.anticipationSec) angle = anticipation(upcoming - now, angle);
     if (this.phase === 'idle') angle += Math.sin(now * 1.25) * 0.025;
     if (this.finishDone && !this.successful) {
@@ -294,6 +314,10 @@ export class HammerNailVignette implements Vignette {
     this.shadow.setPosition(340 - Math.sin(angle) * 25, 10).setScale(1 + pressure * 0.25, 1 - pressure * 0.2).setAlpha(0.8 + pressure * 0.2);
     this.wood.y = this.bench.y = this.reducedMotion ? 0 : pressure * 1.6;
     this.drawNail(now);
+    // The nail gives under the face: shorter and a little wider for a few frames, about its
+    // foot in the timber, so the blow reads as landing on something rather than beside it.
+    const give = this.reducedMotion ? 0 : contactGive(age, 1.5 * this.strength, exaggeration);
+    this.nail.setScale(1 + give * 0.5, 1 - give).setPosition(310 * -give * 0.5, 0);
     this.drawDust(age);
     // The spotlight opens toward the player's side across the handover, so it has
     // finished moving before the downbeat it announces rather than starting there.
@@ -350,4 +374,5 @@ export class HammerNailVignette implements Vignette {
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
   /** Scene supplies absolute musical slide progress; never owns a transition timer. */
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
 }

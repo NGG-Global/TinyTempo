@@ -58,6 +58,127 @@ scheduled, judged or scored changed.
   frame read as a smeared double image rather than as light. `flawlessPose`'s timing is
   unchanged.
 
+## The map
+
+- **A cleared stop is settled, not heavy.** It used to be filled with the area's ink, which on
+  the four light areas made a near-black puck, the heaviest thing on the road and heavier than
+  the coral frontier. `puckColours` (`ui/roadLayout.ts`) now fills it with the area's road
+  mixed 45% toward whichever of ink and paper is darker, deepened only as far as the lighter
+  one needs to clear `OUTLINE_CONTRAST` on it. The order at a glance is frontier, then
+  cleared, then locked and preview, on all five areas. On Dusk, where paper and ink are
+  inverted, this gives a warm mid-brown under a cream number. The brass star plates are
+  unchanged.
+- **Every number on the road clears the contrast floor.** A preview's number used to be
+  drawn at 58% alpha, and on Grass it read at 2.6:1. It is now drawn whole, in the faintest
+  mix toward the ink that reaches 3.15:1. `tests/roadLayout.test.ts` checks every state on
+  every area.
+- **One ambient layer per area** (`ui/mapAmbience.ts`): pollen on Grass, a slow glow
+  breathing on Pavement's lamps, dust on Sand, snowfall on Snow, fireflies at Dusk. It is a
+  fixed pool of 32 motes and 8 lamp glows, made once. Each mote's place is a pure function of
+  its seed, the time and the view, wrapped round only off screen. Every mote is anchored to
+  the world, so it keeps its place on the ground as the road scrolls. It sits at depth 0.75,
+  over the ground and under every prop, stop, plate, gate and the header haze. It fades out
+  near an area's seam, so a mote never changes kind in view. It is hidden under reduced
+  motion and while the window is blurred. The lamp positions come from the bake, so the
+  glows cost nothing when the road has not moved. Frame cost is in `docs/PERFORMANCE.md`.
+- **The frontier hops on the music.** It used to jump every 1.6 s against a 2 s bar, so it
+  drifted across the beat the player hears. The hop now leaves the ground `MAP.hopSec`
+  (0.32 s) before each bar line and lands on beat 1, and the ring rolls out from the
+  landing. The phase comes from `ui/musicPulse.ts`, read from the shell loop's playhead at
+  the heard clock. The playhead (`MusicSystem.playheadAt`) records each rate change, so a
+  level's loop that the map reuses at rate 1 still knows where its bar lines are. With no
+  music playing, the frame clock runs at 120 BPM instead, so the hop never freezes.
+
+## The title on the beat
+
+- The theme (`bgm/theme/home-page.mp3`) was measured from the audio, not assumed. It runs at
+  a steady 120 BPM in 4/4, with its first downbeat on the music's start, and its 64 s loop
+  is 32 whole bars (`THEME.bpm`, `THEME.beatsPerBar`). `ThemeMusic.playheadAt` gives
+  seconds from that downbeat.
+- The tempo beads light beat by beat from that playhead through `ui/musicPulse.ts`, the same
+  helper the map uses. Before the theme sounds (a cold start waits for a touch), or if it
+  fails to load, they run on the frame clock at the same tempo.
+- **The hammer plays beat 1 of every bar.** It winds up into the next bar line with the
+  existing `anticipation` curve and lands with the existing strike (strength 0.8). The
+  nail does not move: only a tap's knock sinks it, as before. When the beat source
+  changes, for example when the theme arrives, the count moves without a blow, so the
+  hammer never strikes off the beat it has just found. The strikes are silent; a soft
+  tick under the theme is the open question for Dor. Under reduced motion there are no
+  strikes and the cover holds still.
+
+## Impact during play
+
+- **Contact punch** (`ui/punch.ts`): the act's stage kicks down `PUNCH.reach` (3 design
+  units, times the treatment's exaggeration and the scene's scale) on a contact and settles
+  within 120 ms, with one small rebound. It moves the act's stage container and nothing
+  else: not the camera, the block, the verdict or the headline. It fires on a Perfect
+  player hit, never on a demonstration beat, an introduction or a teach pass, and on the
+  finishing blow of a clean task's coda (the five-beat finale hold). It is applied after the slide's `translate` through the
+  optional `Vignette.punch`, so the stage-home rule still holds. It is a pure function of
+  the contact's audio-clock time and is off under reduced motion.
+- **Material particles.** `generateFeedbackTextures` now draws four more textures:
+  `splinter`, `droplet`, `ring` and `flake`. Four presets use them: `splinters`,
+  `droplets`, `rings` and `flakes`. The saw throws splinters. The tomato and cucumber throw
+  droplets. Bubble wrap lets out rings on each judged pop. The roller and the paintbrush,
+  whose only contact feedback was the picture itself growing, now flick drops of the
+  stripe's or stroke's own paint. Counts are 3–7, inside the existing range, and `burst`
+  still scales them by exaggeration. Household acts reach them through
+  `HouseholdVignette.throwBits`, which makes one `Feedback` in the stage on first use and
+  keeps it under the card light. As `ui/feedback.ts` documents, a burst fires at the
+  contact and then flies on Phaser's frame delta. It is decoration for a moment that has
+  already been judged.
+- **Squash where it was missing** (levels 1–13). The struck subject now gives on contact
+  through `contactGive` (`ui/spring.ts`, built on `squash`). It squats 6% and widens 3% for
+  100 ms, about the point where it rests. This applies to the nail (scaled by the blow's
+  strength), the tomato, the cucumber and the banana (about the cut face on the board, so
+  the blade stays on it), and the egg (about its own centre, before it is tilted). The bug,
+  the bubble and the doorbell's button already deformed. The glass, the timber and the paper
+  are rigid, so they were left as they are. Off under reduced motion.
+
+### Contact feedback, act by act
+
+What each act shows on a player's judged contact, audited before the changes above. ✚ marks
+what this pass added.
+
+| # | Act | Particles | Its own effect | The subject deforms |
+|---|---|---|---|---|
+| 1 | Hammer | dust | flash lines, ring | hammer head; nail ✚ |
+| 2 | Window | water | lane wiped, gleam | squeegee; glass is rigid |
+| 3 | Bug & shoe | dust | contact ring | shoe and bug |
+| 4 | Saw | chips → splinters ✚ | kerf, sawdust plume | timber is rigid |
+| 5 | Tomato | dust → droplets ✚ | juice, board ring | tomato ✚ |
+| 6 | Bicep curl | dust, sweat | tally | trunk, bicep |
+| 7 | Cucumber | water → droplets ✚ | juice, ring | cucumber ✚ |
+| 8 | Banana | dust | pulp drops, ring | banana ✚ |
+| 9 | Scissors & paper | — | snip ticks, scraps | paper is a sheet |
+| 10 | Egg | — | strike lines | egg ✚ |
+| 11 | Bubble wrap | rings ✚ | pop ring, crinkle | bubble flattens |
+| 12 | Light switch | — | — | paddle, slightly |
+| 13 | Doorbell | — | halo, sound arcs | button sinks |
+| 14 | Paint roller | droplets ✚ | stripe painted | — |
+| 15 | Hotel bell | — | ring arcs | plunger |
+| 16 | Balloon pump | — | — | balloon puffs and grows |
+| 17 | Stapler | — | jaw flash, staple | — |
+| 18 | Fisherman | — | water rings, drops | rod bends |
+| 19 | DJ scratch | — | meter lights | — |
+| 20 | Trombone | — | sound arcs, note | cheeks |
+| 21 | Clapping hands | — | rings | palms |
+| 22 | Snare | — | rings | — |
+| 23 | Bongos | — | rings | palm drops |
+| 24 | Slushy | — | sip drops | mouth |
+| 25 | Apple | — | crumbs | — |
+| 26 | Barber | — | snip flash, falling hair | — |
+| 27 | Popcorn | — | pop flash | kernels squash on landing |
+| 28 | Toothbrush | — | glint, foam | — |
+| 29 | Paintbrush | droplets ✚ | stroke laid | — |
+| 30 | Blow your nose | — | motion lines | face, tissue |
+| 31 | Wash the plate | — | suds | sponge |
+| 32 | Prospector | — | sparks, cracks | — |
+
+The light switch and the DJ scratch are the quietest at the moment of contact. They were
+left alone: a switch throws nothing, and the record's dust on a dark deck would not read.
+They are the next candidates if more is wanted.
+
 ## Boundaries
 
 `SceneCurtain` owns only screen-navigation motion. It cancels its tween and update

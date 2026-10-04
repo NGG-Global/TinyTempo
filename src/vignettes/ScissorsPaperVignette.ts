@@ -502,5 +502,6 @@ export class ScissorsPaperVignette implements Vignette {
   }
 
   public translate(offset: number): void { this.stage.x += reducedMotion() ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += reducedMotion() ? 0 : dy; }
   public destroy(): void { this.stage.destroy(true); this.backdrop.destroy(); }
 }

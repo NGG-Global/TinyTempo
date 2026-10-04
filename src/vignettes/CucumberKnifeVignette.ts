@@ -8,6 +8,7 @@ import type { Judgement } from '@/rhythm/judge';
 import { MaterialKey } from '@/textures/materials';
 import { Backdrop } from '@/ui/backdrop';
 import { Feedback } from '@/ui/feedback';
+import { contactGive } from '@/ui/spring';
 import { cubicContour, fillContour, paintedContour, traceContour } from '@/ui/illustration';
 import { kitchenKnife, kitchenBoard, KITCHEN_BOARD } from './kitchenArt';
 import type { Vignette } from './Vignette';
@@ -234,7 +235,7 @@ export class CucumberKnifeVignette implements Vignette {
   }
 
   private takeSlice(now: number, targets: number): void {
-    if (!this.reducedMotion) this.bursts.burst('water', this.cutTo, -RY, [this.fruit.flesh, this.fruit.gel, this.fruit.fleshRing], 7);
+    if (!this.reducedMotion) this.bursts.burst('droplets', this.cutTo, -RY, [this.fruit.flesh, this.fruit.gel, this.fruit.fleshRing], 7);
     this.sliceAt.push(now);
     this.sliceFrom.push(this.cutTo);
     this.sliceWobble.push(this.uneven * (((this.slices * 7 + 3) % 5) / 5 - 0.5));
@@ -324,6 +325,9 @@ export class CucumberKnifeVignette implements Vignette {
     this.produce.setPosition(0, this.reducedMotion ? 0 : press * 1.2);
     this.poseKnife(now, beat, age);
     this.drawCucumber();
+    // The cucumber gives under the blade, about its cut face on the board (`ui/spring.ts`).
+    const give = this.reducedMotion ? 0 : contactGive(age, 1, STYLE.current.exaggeration);
+    this.cucumberG.setScale(1 + give * 0.5, 1 - give).setPosition(this.cut * -give * 0.5, 0);
     this.drawSlices(now, beat);
     this.drawMarks();
     this.drawJuice(beat, age);
@@ -502,6 +506,9 @@ export class CucumberKnifeVignette implements Vignette {
 
   public translate(offset: number): void {
     this.stage.x += this.reducedMotion ? 0 : offset;
+  }
+  public punch(dy: number): void {
+    this.stage.y += this.reducedMotion ? 0 : dy;
   }
   public destroy(): void {
     this.bursts.destroy();

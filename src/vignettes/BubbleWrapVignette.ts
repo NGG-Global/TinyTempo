@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import type { Judgement } from '@/rhythm/judge';
 import { bubbleLook, type BubbleLook } from './bubbleLooks';
 import { HouseholdVignette } from './HouseholdVignette';
 import { BUBBLE_CHAIN, contactPulse } from './householdMotion';
@@ -13,6 +14,22 @@ export class BubbleWrapVignette extends HouseholdVignette {
   public constructor(scene: Phaser.Scene, lap = 0) {
     super(scene, 0xe5eee6, 0xc9e9cf);
     this.look = bubbleLook(lap);
+  }
+
+  /** Where bubble `i` sits: rows run back and forth, as the pops do. */
+  private static bubbleAt(i: number): { x: number; y: number } {
+    const row = Math.floor(i / COLS), col = row % 2 ? COLS - 1 - i % COLS : i % COLS;
+    return { x: -210 + col * STEP, y: -168 + row * STEP };
+  }
+
+  public override onAccuracy(result: Judgement, now: number): void {
+    const before = this.hitTimes.length;
+    super.onAccuracy(result, now);
+    // The pocket's air: a few rings opening out of the bubble that just went.
+    if (this.hitTimes.length > before && before < COLS * ROWS) {
+      const { x, y } = BubbleWrapVignette.bubbleAt(before);
+      this.throwBits('rings', x, y, [0xffffff, this.look.highlight], 3);
+    }
   }
 
   protected draw(now: number, ending: number): void {
@@ -35,8 +52,7 @@ export class BubbleWrapVignette extends HouseholdVignette {
     }
     shape(g, [242, -235, 277, -202, 241, -200], 0xf5fff2, this.look.sheetEdge, 2);
     for (let i = 0; i < COLS * ROWS; i++) {
-      const row = Math.floor(i / COLS), col = row % 2 ? COLS - 1 - i % COLS : i % COLS;
-      const x = -210 + col * STEP, y = -168 + row * STEP;
+      const { x, y } = BubbleWrapVignette.bubbleAt(i);
       const stamp = i < times.length ? times[i]! : i < times.length + chained ? (this.finishAt ?? now) + BUBBLE_CHAIN[i - times.length]! : Infinity;
       const age = now - stamp;
       const popped = age >= 0;
