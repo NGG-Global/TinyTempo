@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { cubicContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab } from './householdArt';
 import { shade } from '@/ui/colour';
 import { clamp01 } from './motion';
@@ -33,7 +34,7 @@ export class AppleVignette extends HouseholdVignette {
   private readonly look: PlateLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xf0e7cc, 0xf2d58d);
+    super(scene, 0xf0e7cc, 0xf2d58d, { card: PANEL_CARD });
     this.look = appleLook(lap);
   }
 

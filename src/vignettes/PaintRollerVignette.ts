@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import {
   PAINT_GRID, rollerPass, rollerReturn, stripeColumns, type PaintImage,
@@ -25,7 +26,7 @@ export class PaintRollerVignette extends HouseholdVignette {
   private readonly lap: number;
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = rollerLook(lap);
-    super(scene, look.paper, look.glow);
+    super(scene, look.paper, look.glow, { card: FRAME_CARD });
     this.look = look;
     this.lap = lap;
   }

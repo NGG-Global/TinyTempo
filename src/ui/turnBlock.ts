@@ -7,6 +7,9 @@ import { socketGlint, sweepBand } from './flourish';
 import { drawHammerMark, drawTapMark } from './icons';
 import { drawPanel } from './panel';
 import { squash } from './spring';
+import { TRACK } from './trackMetrics';
+
+export { TRACK, VERDICT_REACH, verdictLine } from './trackMetrics';
 
 /**
  * The turn block: two rows at the thumb that say whose turn it is, and one token that
@@ -29,54 +32,6 @@ import { squash } from './spring';
  * that breaks.
  */
 
-/**
- * The block's metrics, in design units at scale 1. The sockets are deliberately larger
- * than the map's area pips: this is the only thing on screen that says whose turn it is,
- * so it has to read at arm's length rather than merely be present.
- */
-export const TRACK = {
-  beadGap: 58,
-  beadRadius: 19,
-  plateHeight: 72,
-  plateDepth: 7,
-  plateRadius: 28,
-  pipGap: 30,
-  pipRadius: 6,
-
-  shelfHeight: 46,
-  shelfRadius: 22,
-  /** The shelf is this much narrower per side, so the face reads as the object in front. */
-  shelfInset: 24,
-  shelfBeadRadius: 12,
-  /** Clear space between the shelf's bottom edge and the face's top. */
-  rowGap: 14,
-
-  ownerSlotRadius: 26,
-  /** Slot centre, measured in from its row's left edge. */
-  ownerInset: 46,
-  /** Clear space between the owner slot's edge and the first column's. */
-  slotClearance: 10,
-  batonRadius: 26,
-  /** How far the face rises into the thumb once the turn has passed. */
-  faceLift: 15,
-  /** How far the baton bows out, over the columns it is handing across. */
-  batonBow: 60,
-
-  /** The breather's bar tiles on the face: height, corner, gap, and the right-hand inset. */
-  tileHeight: 44,
-  tileRadius: 12,
-  tileGap: 10,
-  tileInset: 22,
-  /** A tile's beat dots, and their pitch; in the last bar they grow to `pipRadius`. */
-  tileDot: 5,
-  tileDotPitch: 0.2,
-  /**
-   * The narrowest the block is while a breather's tiles are on it, so four bars of four
-   * dots stay readable on a short pattern's block. The breather task's own plan carries it
-   * from the rest through its response, so nothing moves inside the task.
-   */
-  restWidth: 560,
-} as const;
 
 /**
  * A deep terracotta, deliberately not `PALETTE.coral`. The socket ring has to stay

@@ -60,7 +60,7 @@ import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit }
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
-import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, type Ghost } from '@/ui/turnBlock';
+import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
 import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
@@ -668,7 +668,7 @@ export class PlayScene extends BaseScene {
     this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
     // Above the shelf, not above the face: the demonstration row now occupies the band
     // the verdict word used to sit in, and a word over the beads is a word over the cue.
-    this.verdictY = this.trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + 34) * s;
+    this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
     // Above the verdict's line, so the rows the player is answering on stay in sight.

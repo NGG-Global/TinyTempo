@@ -11,7 +11,7 @@ export class NoseBlowingVignette extends HouseholdVignette {
   private readonly look: NoseLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xf2e9df, 0xfbe3c9);
+    super(scene, 0xf2e9df, 0xfbe3c9, { card: { x: -324, y: -222, width: 648, height: 442, radius: 36 } });
     this.look = noseLook(lap);
   }
 

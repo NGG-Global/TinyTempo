@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { balloonFinale, balloonSize, pumpStroke } from './errandMotion';
 import { balloonLook, type BalloonLook } from './balloonLooks';
@@ -15,7 +16,7 @@ export class BalloonPumpVignette extends HouseholdVignette {
   /** Which set of balloons. The pump stroke does not change. */
   private readonly look: BalloonLook;
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe7eef0, 0xf5e2b8);
+    super(scene, 0xe7eef0, 0xf5e2b8, { card: FRAME_CARD });
     this.look = balloonLook(lap);
   }
 

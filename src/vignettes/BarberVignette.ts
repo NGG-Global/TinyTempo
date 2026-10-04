@@ -3,6 +3,7 @@ import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import { cubicContour, fillContour, traceContour } from '@/ui/illustration';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import { clamp01, easeOut, TURN_OPEN_SEC } from './motion';
 import {
@@ -52,7 +53,7 @@ export class BarberVignette extends HouseholdVignette {
   private outcome: BarberOutcome | null = null;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe9efe6, 0xf3e1b5);
+    super(scene, 0xe9efe6, 0xf3e1b5, { card: PANEL_CARD });
     this.look = barberLook(lap);
   }
 

@@ -367,7 +367,9 @@ Two flags, both in `game/progress.ts` and neither inside `Progress`.
   column *edge* and ignores the shelf's inset, which put the shelf's slot on top of
   the first bead at every pattern length. See **Widening the rows**.
 - `TRACK` moved from `PlayScene` into `ui/turnBlock.ts` with the block it describes,
-  rather than being extended where it was.
+  rather than being extended where it was. It now lives in `ui/trackMetrics.ts` with the
+  verdict line, re-exported by the block, so the household stage can keep its shelf clear of
+  the verdict without loading the block's drawing code (`docs/STAGING.md`).
 - The separate `TutorialScene` still runs on a first Play, and has since been remade
   to teach on this block rather than on a sign and a labelled bead row of its own
   (`docs/TUTORIAL.md`). The in-play pass and the ring remain the teach for a player

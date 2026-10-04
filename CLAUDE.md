@@ -208,6 +208,20 @@ as every other act does in its own `update`. `Vignette.translate` is the
 between-task slide and is an absolute offset from that home, applied by PlayScene
 right after `update`; an act that skips the re-anchor walks off screen.
 
+**A household act stands on a shelf and takes the key light** (`vignettes/staging.ts`). It
+names its card in its `super` call (`FRAME_CARD`, `PANEL_CARD` or its own rectangle), and
+`HouseholdVignette` paints two Graphics inside the stage, once per `layout`, never per frame:
+under the art a shelf with the card's wall shadow, its own shadow and a contact seam, all
+from `castShadow`; over the art a rim along the card's lit edges and a falloff toward the
+lower right, a triangle fan whose per-vertex alpha WebGL interpolates and canvas ignores.
+The shelf is fitted to the room above the verdict's pill (`roomBelowCard` from
+`verdictLine`, `ui/trackMetrics.ts`, the function PlayScene places the verdict with), so on
+a 4:3 tablet there is none. The egg and the bubble wrap opt out, and the paintbrush stands
+free (`framed: false`). **Subject size has a band**: half to twice the cast's median, from an
+audit of all thirty-two at lap 0; the bug (`BUG_SIZE`) and the hotel bell (`BELL.size`) were
+below it and were raised about their contact points, and the window, above it by design, is
+left for a decision. See `docs/STAGING.md`.
+
 Every sub-screen header is one row: the back puck at `safe.top + 66 * s`, its title at 56 in the
 display face beside it, and every scene's `s` is `min(safe.width / 720, safe.height / 1150)` — one
 divisor, so the shared puck row does not shift size between the map and Settings on a tablet.
@@ -888,6 +902,7 @@ src/
     star.ts            The star glyph
     keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
+    trackMetrics.ts    The block's metrics and the verdict line, without Phaser, for the stage to keep clear of
     finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
     finalePose.ts      Their poses as pure f(t)
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
@@ -912,6 +927,7 @@ src/
   vignettes/
     registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
     rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
+    staging.ts         The household shelf and card light: geometry pure, drawn once per layout
     Vignette.ts        The contract a vignette implements
     *Vignette.ts       One per act: all geometry, palette and motion
     *Motion.ts         Pure curves, no Phaser import, unit-tested under node

@@ -3,6 +3,7 @@ import { shade } from '@/ui/colour';
 import { castShadow, faces } from '@/ui/light';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import {
   blow, carryNotes, curtainOpen, noteFor, slideTravel, soundedNotes, TROMBONE_MOTION, tromboneFinale, type TromboneFinale,
@@ -60,7 +61,7 @@ export class TromboneVignette extends HouseholdVignette {
   private notesBefore = 0;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0x3f4468, 0xf2a65a);
+    super(scene, 0x3f4468, 0xf2a65a, { card: FRAME_CARD });
     const look: TromboneLook = tromboneLook(lap);
     this.kit = {
       skin: faces(look.skin), shirt: faces(look.shirt), stripe: look.stripe, braces: faces(look.braces),

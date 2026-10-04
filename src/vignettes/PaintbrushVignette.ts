@@ -5,6 +5,14 @@ import { canvasFinale, brushTravel, CANVAS_MOTION, strokePose, strokeTimes } fro
 import { canvasLook, type CanvasLook, type PaintStroke } from './canvasLooks';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { HouseholdVignette } from './HouseholdVignette';
+import type { StageCard } from './staging';
+
+/**
+ * Where the easel stands, for the staging (`docs/STAGING.md`): the span of its legs, and
+ * their feet at y 210. It has no card — the wall is the paper's own colour — so it stands
+ * free on a short shelf rather than resting a frame on one.
+ */
+const EASEL_FOOTPRINT: StageCard = { x: -70, y: -190, width: 140, height: 400, radius: 0 };
 import { clamp01 } from './motion';
 
 /** The canvas the brush paints on, in the easel's frame. Strokes are authored in this box. */
@@ -20,7 +28,7 @@ export class PaintbrushVignette extends HouseholdVignette {
 
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = canvasLook(lap);
-    super(scene, look.wall, 0xf6e2b8);
+    super(scene, look.wall, 0xf6e2b8, { card: EASEL_FOOTPRINT, framed: false });
     this.look = look;
   }
 

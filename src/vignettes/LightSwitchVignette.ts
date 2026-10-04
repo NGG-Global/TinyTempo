@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { mix } from '@/ui/colour';
 import { fillContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { contactPulse, roomReveal } from './householdMotion';
 import { plant, shape, slab, sparkle } from './householdArt';
 import { lightLook, type LightLook } from './lightLooks';
@@ -12,7 +13,7 @@ export class LightSwitchVignette extends HouseholdVignette {
   private readonly look: LightLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe9e4db, 0xf1cf93);
+    super(scene, 0xe9e4db, 0xf1cf93, { card: FRAME_CARD });
     this.look = lightLook(lap);
   }
 

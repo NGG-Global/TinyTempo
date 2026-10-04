@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab } from './householdArt';
 import { contactPulse, percussionPose, SNARE_ROLL, stickDrop } from './treatMotion';
 import { snareLook, type SnareLook } from './snareLooks';
@@ -10,7 +11,7 @@ export class SnareDrumVignette extends HouseholdVignette {
   /** Which lacquer the shell wears. The roll does not change. */
   private readonly look: SnareLook;
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe9e4d8, 0xf5cb8f);
+    super(scene, 0xe9e4d8, 0xf5cb8f, { card: { ...PANEL_CARD, radius: 36 } });
     this.look = snareLook(lap);
     this.lightMaterial(scene, 'snare');
   }

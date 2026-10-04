@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { shade } from '@/ui/colour';
 import { fillContour, traceContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import { clamp01, easeOut } from './motion';
 import { BRUSH_MOTION, brushFinale, cleanTimes, scrub } from './brushMotion';
@@ -49,7 +50,7 @@ export class ToothbrushVignette extends HouseholdVignette {
   private readonly overlay: Phaser.GameObjects.Graphics;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xeef1ee, 0xdff0f3);
+    super(scene, 0xeef1ee, 0xdff0f3, { card: PANEL_CARD });
     this.look = brushLook(lap);
     this.tool = scene.add.graphics();
     this.overlay = scene.add.graphics();
