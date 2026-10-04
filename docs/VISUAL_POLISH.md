@@ -31,6 +31,33 @@ before Phaser has loaded.
 - Settings retain the same raised paper and coral-block language. Each card has one
   large state and one action, rather than a heading, value and explanation stack.
 
+## The player's turn, as it reads
+
+Four readability changes to the response phase, all presentation: no cue moved, nothing
+scheduled, judged or scored changed.
+
+- **The handover's dim is an edge vignette, not a wash.** The room used to step back under
+  a flat fill of the game's ink at 17%, and over cream and timber a green-black wash read as
+  olive: the scene looked dirty rather than lit differently. `FxKey.vignette`
+  (`ui/feedback.ts`) is one generated soft texture, clear across the middle and whole only
+  in its corners, drawn as a single tinted image at the same depth, on the same `turn.yours`
+  curve. Its tint is a shade of the act's own paper, read from the camera the act's Backdrop
+  painted, so a dark stage darkens without a hue shift. It hangs low and oversized, so its
+  clear middle covers the act and the block together and its bottom edge falls below the
+  frame: the block comes forward because the room above and beside it steps back.
+- **The turn block stands on a patch of sheet** (`docs/TURN_CUE.md`, "The sheet under the
+  rows").
+- **The count-in has a backing** at its own weight, and a floor of 42 rather than 36
+  (`docs/TURN_CUE.md`, "The count's backing").
+- **The verdict word lands on a pill of the act's paper**, drawn with the block from the
+  word's own pose, so Perfect's coral and a miss's muted grey read on wood and on the dark
+  stages; and it pops inside its existing 0.45 s arrive — from a little under size, past
+  it, to rest — so it lands rather than surfaces. No scale under reduced motion.
+- **The Flawless halo is one soft image**, the glow texture the stage's pool is made of,
+  sized to the word; it replaces three fainter offset passes of an ellipse, which frame by
+  frame read as a smeared double image rather than as light. `flawlessPose`'s timing is
+  unchanged.
+
 ## Boundaries
 
 `SceneCurtain` owns only screen-navigation motion. It cancels its tween and update

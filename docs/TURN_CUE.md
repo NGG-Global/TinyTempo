@@ -254,6 +254,31 @@ runs under the act's own coda without touching it. Under reduced motion it is th
 the glints, every ring at once, with no sweep, no sparks and no motion on the word. Nothing
 here is scheduled or tweened; `tests/flourish.test.ts` pins the curves.
 
+## The sheet under the rows
+
+On the table acts — hammer, saw, tomato, cucumber, banana — the block stood directly on
+wood grain or patterned paper, and the grain competed with the sockets and the baton.
+`blockBacking` (`ui/turnBlock.ts`, pure, pinned by `tests/turnBlock.test.ts`) is the patch
+of sheet both rows now stand on: a feathered halo of the act's own paper, so the block sits
+on clear ground whatever is behind it, and inside it a shallow tray a shade toward the ink,
+so the rows read as set into the sheet rather than floating over the grain. It spans the
+face's width from above the shelf to below the face's thickness, is drawn first in the
+block's own pass, and takes the same rattle and lift as the rows, so it moves as one object
+with them — following the face's lift from below only, since the shelf does not lift. The
+act's paper reaches the block as `BlockState.paper`, read by PlayScene from the camera's
+background, which is what the act's `Backdrop` painted. `TRACK` and the width formula are
+untouched: `verdictY`, `turnCallY` and the restart sheet all derive from them.
+
+### The count's backing
+
+The numeral is dressed display text, and dressed type follows the outline rule: dark ink
+has no outline it can carry (`typeStroke`), so it lifts on a pale drop instead — which was
+nothing at all under a quiet "3" over the hammer's wood. A patch of the act's paper now sits
+under each numeral at the numeral's own weight, scaled with the strike so it stamps down
+with it. The weighting and the timing are unchanged; the size floor rose from 36 to 42
+design units (`TURN_CALL`), the "Go!" stays at 54 and is still the strongest, and under the
+face on the 16:9 frame it still clears the safe edge. The count is more legible, not louder.
+
 ## Widening the rows
 
 The owner slot occupies a row's left end, so the rows have to be wide enough for it

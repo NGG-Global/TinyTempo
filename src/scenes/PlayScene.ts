@@ -65,10 +65,10 @@ import { faces } from '@/ui/light';
 import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
-import { Feedback } from '@/ui/feedback';
+import { Feedback, FxKey } from '@/ui/feedback';
 import { flawlessPose, socketGlint } from '@/ui/flourish';
 import { Sheen } from '@/ui/sheen';
-import { arrive, settle, squash } from '@/ui/spring';
+import { arrive, overshoot, settle, squash } from '@/ui/spring';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
@@ -149,6 +149,13 @@ const FINALE_PAYOFF = {
   rollGain: 0.32,
 } as const;
 
+/**
+ * The count-in numeral's size in design units, from the quietest "3" to the "Go!". The
+ * floor rose from 36 to 42 for legibility; "Go!" is unchanged and still the strongest.
+ * Under the face on the 16:9 frame the "Go!" at its strike still clears the safe edge.
+ */
+const TURN_CALL = { min: 42, max: 54 } as const;
+
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
 export class PlayScene extends BaseScene {
   private audio: AudioEngine | null = null;
@@ -216,7 +223,10 @@ export class PlayScene extends BaseScene {
   private accuracy!: Phaser.GameObjects.Text;
   private kept!: Phaser.GameObjects.Text;
   /** The room stepping back as the turn passes, so the block at the thumb comes forward. */
-  private roomDim!: Phaser.GameObjects.Graphics;
+  private roomDim!: Phaser.GameObjects.Image;
+  /** The paper the dim was last tinted from; the act paints the camera, and the dim follows it. */
+  private roomPaper = -1;
+  private flawlessHalo!: Phaser.GameObjects.Image;
   /** This level still shows the guiding ring, because the player has not cleared it yet. */
   private guided = false;
   /**
@@ -554,7 +564,8 @@ export class PlayScene extends BaseScene {
     this.premiumRoot.add([this.premiumPlate, this.premiumLabel, this.premiumPrice]);
     // Under the scrim and over the act: the workshop steps back for the turn, it is not
     // covered over. A vignette's own objects sit at negative depths.
-    this.roomDim = this.add.graphics().setDepth(6).setAlpha(0);
+    this.roomDim = this.add.image(0, 0, FxKey.vignette).setDepth(6).setAlpha(0);
+    this.roomPaper = -1;
     this.scrim = this.add.graphics().setDepth(7).setVisible(false);
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
@@ -563,6 +574,8 @@ export class PlayScene extends BaseScene {
     this.restLabel = label(this, '', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setAlpha(0).setDepth(12);
     this.restShelf = label(this, 'Rest', { size: 18, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.restCall = display(this, '', { size: 40, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    // Under the word, by creation order at the same depth: one soft image is the halo.
+    this.flawlessHalo = this.add.image(0, 0, FxKey.glow).setTint(0xffe7a0).setAlpha(0).setDepth(8);
     this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.keepsakeCard = this.add.graphics().setDepth(11).setVisible(false);
     this.keepsakeLabel = label(this, 'New keepsake', { size: 20, colour: PALETTE.coral }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -684,7 +697,14 @@ export class PlayScene extends BaseScene {
     this.drawAction(0);
     this.actionPressDirty = true;
     this.scrim.clear().fillStyle(0x1a201c, 0.5).fillRect(full.x, full.y, full.width, full.height);
-    this.roomDim.clear().fillStyle(PALETTE.ink, 1).fillRect(full.x, full.y, full.width, full.height);
+    // The handover's dim is an edge vignette, not a wash. A flat fill of the game's ink
+    // over cream and timber read as olive — the scene looked dirty rather than lit
+    // differently. The image is hung low and oversized: its clear middle covers the act
+    // and the block together and its bottom edge falls below the frame, so the room
+    // darkens above and beside them and the block comes forward without getting brighter.
+    // Its tint follows the act's paper, per frame, in `drawBeatTrack`.
+    this.roomDim.setPosition(full.centerX, (safe.top + safe.height * 0.42 + this.trackY) / 2)
+      .setDisplaySize(full.width * 1.45, full.height * 1.55);
     resize(this.accuracy, 34 * s, ink, STYLE.current, false);
     wrapWidth(this.accuracy, Math.min(560 * s, safe.width - 64 * s));
     this.accuracy.setLineSpacing(-4 * s);
@@ -1251,6 +1271,7 @@ export class PlayScene extends BaseScene {
     this.verdict.setAlpha(0);
     this.turnCall.setAlpha(0);
     this.flawless.setAlpha(0);
+    this.flawlessHalo.setAlpha(0);
     this.controller!.start(
       pattern, bpm, this.audio!.context.currentTime, performance.now(),
       // The trombone's note is always the plan. On a route that delays sound by more than
@@ -1569,14 +1590,11 @@ export class PlayScene extends BaseScene {
         this.drawEmptyHearts();
       }
     }
-    // The verdict word rises and fades; one instance, so a quick double replaces rather
-    // than stacks.
-    const said = now - this.verdictAt;
-    if (said >= 0 && said < 0.55) {
-      const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(said, 0.45);
-      this.verdict.setAlpha(alpha * (1 - Math.max(0, (said - 0.35) / 0.2)))
-        .setY(this.verdictY - (1 - rise) * 18 * this.uiScale);
-    } else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
+    // The verdict word rises, pops and fades; one instance, so a quick double replaces
+    // rather than stacks. Its pill is drawn with the block, from the same pose.
+    const verdict = this.verdictPose(now);
+    if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale);
+    else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
       const music = this.audio?.music;
@@ -1718,6 +1736,22 @@ export class PlayScene extends BaseScene {
       }
     }
   }
+  /**
+   * Where the verdict word is in its 0.55 s: the existing arrive, with a short pop inside
+   * it — from a little under size, past it, to rest — so the word lands rather than
+   * surfaces. Null once it has gone. No scale under reduced motion.
+   */
+  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number } | null {
+    const said = now - this.verdictAt;
+    if (!(said >= 0 && said < 0.55)) return null;
+    const still = this.reducedMotion;
+    const { rise, alpha } = still ? { rise: 0, alpha: 1 } : arrive(said, 0.45);
+    return {
+      alpha: alpha * (1 - Math.max(0, (said - 0.35) / 0.2)),
+      y: this.verdictY - (1 - rise) * 18 * this.uiScale,
+      scale: still ? 1 : 0.85 + 0.15 * overshoot(Math.min(1, said / 0.45), 0.4),
+    };
+  }
   private verdictColour(result?: Judgement): number {
     if (!result) return this.definition.ink;
     // A darker grey than the track's, because the word is read against whatever the
@@ -1750,6 +1784,7 @@ export class PlayScene extends BaseScene {
       this.roomDim.setAlpha(0);
       this.turnCall.setAlpha(0);
       this.flawless.setAlpha(0);
+      this.flawlessHalo.setAlpha(0);
       this.setRestWords(null);
       // A pause or summary settles the room; an idle gap retains this attempt's light.
       // A temporarily idle/null plan during a table slide is still the same attempt.
@@ -1764,6 +1799,17 @@ export class PlayScene extends BaseScene {
     const marks = teach ? teach.marks : this.outcomes;
     const { centres, radius } = this.beads(marks.length);
     const turn = handover(plan, now);
+    // The act's paper is whatever its Backdrop painted the camera: the one place the
+    // scene can read it without every act having to say. An act on the game's own paper
+    // paints nothing — the clear colour already is it — and the camera then reports
+    // transparent black, so that reads as the palette's paper. The block's backing and
+    // the room's dim both take their colour from it.
+    const background = this.cameras.main.backgroundColor;
+    const paper = background.alpha === 0 ? PALETTE.paper : background.color;
+    if (paper !== this.roomPaper) {
+      this.roomPaper = paper;
+      this.roomDim.setTint(shade(paper, -0.62));
+    }
     // An extra tap rattles both rows: it answered no beat, so it marks none, and the two
     // rows are one object.
     const rattle = still ? 0 : settle(now - this.extraAt, 90, 18) * 3 * s;
@@ -1800,6 +1846,7 @@ export class PlayScene extends BaseScene {
       still,
       ghost: this.ghostFor(plan, marks, turn, now),
       ink: this.definition.ink,
+      paper,
       landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
       flawless: now - this.flawlessAt,
       rest: rest && {
@@ -1829,10 +1876,31 @@ export class PlayScene extends BaseScene {
         else g.lineStyle(2.5 * s, ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
-    this.drawTurnCall(plan, now);
+    this.drawTurnCall(plan, now, paper);
+    this.drawVerdictPill(now, paper);
     // The workshop steps back as the turn arrives, so the block comes forward without
-    // anything on it having to get brighter.
-    this.roomDim.setAlpha(turn.yours * 0.17);
+    // anything on it having to get brighter. The texture is clear over the middle and
+    // whole only in the corners, so the peak here is the corners' and the room's sides
+    // step back by about what the old flat wash did.
+    this.roomDim.setAlpha(turn.yours * 0.5);
+  }
+
+  /**
+   * A patch of the act's paper under the verdict word, so every grade reads on every
+   * act: coral and the muted grey lost their contrast on wood and on the dark stages,
+   * and the outline rule (`typeStroke`) gives dark ink no outline to carry. It follows
+   * the word's own pose, so it lands and leaves with it.
+   */
+  private drawVerdictPill(now: number, paper: number): void {
+    const pose = this.verdictPose(now);
+    if (!pose || pose.alpha <= 0.01 || this.verdict.text === '') return;
+    const s = this.uiScale;
+    const w = this.verdict.width * pose.scale + 28 * s;
+    const h = 38 * s * 1.3 * pose.scale;
+    const x = this.viewport.safe.centerX - w / 2;
+    const y = pose.y - h / 2;
+    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
+    this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
   }
 
   /**
@@ -1856,7 +1924,7 @@ export class PlayScene extends BaseScene {
    * "Go!" *replaces* the "1" in place rather than arriving on the beat it announces:
    * the block's property still holds, and by the downbeat nothing new appears.
    */
-  private drawTurnCall(plan: RoundPlan | null, now: number): void {
+  private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
     const call = plan && turnCount(plan, now);
     if (!plan || !call) {
       if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
@@ -1873,8 +1941,19 @@ export class PlayScene extends BaseScene {
       // numeral warms from the act's ink toward coral one strike at a time, so the count
       // is the row's colour arriving rather than a caption in a third colour.
       this.turnCall.setText(go ? 'Go!' : String(call.count));
-      resize(this.turnCall, (36 + 18 * call.weight) * s, mix(this.definition.ink, PALETTE.coral, pose.heat));
+      resize(this.turnCall, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s, mix(this.definition.ink, PALETTE.coral, pose.heat));
     }
+    // A patch of the act's paper under the numeral, at the numeral's own weight and
+    // stamped down with it. Dark ink has no outline to carry (`typeStroke`) and its pale
+    // drop was nothing on the hammer's wood at "3": this is the backing the dressed type
+    // cannot be, and it makes the count legible without making it louder.
+    const size = (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s;
+    const pw = Math.max(this.turnCall.width * pose.scale + 18 * s, size * 1.3);
+    const ph = size * 1.2 * pose.scale;
+    const px = this.viewport.safe.centerX - pw / 2;
+    const py = this.turnCallY + pose.rise * s - ph / 2;
+    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
+    this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
     // A strike rather than an entrance: each numeral drops in oversized and stamps down to
     // size on its beat, leaning alternate ways so three strikes read as three, and the
     // "Go!" stands up straight. All of it is f(age) from the clock the beat is on.
@@ -1904,19 +1983,21 @@ export class PlayScene extends BaseScene {
     const pose = flawlessPose(age, still);
     if (!pose) {
       if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
+      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
       return;
     }
     const s = this.uiScale;
     this.flawless.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
       .setY(this.verdictY + pose.rise * s);
     if (pose.glow > 0.01) {
-      // A warm halo behind the word: Graphics cannot blur, so three fainter passes.
+      // A warm halo behind the word: one soft image, the texture the stage's pool is made
+      // of, sized to the word. It used to be three fainter offset passes of an ellipse,
+      // since Graphics cannot blur, and frame by frame those read as a smeared double
+      // image rather than as light.
       const w = this.flawless.width * pose.scale;
-      for (let i = 3; i >= 1; i--) {
-        this.marks.fillStyle(0xffe7a0, pose.glow * 0.09 * i)
-          .fillEllipse(this.viewport.safe.centerX, this.verdictY + pose.rise * s, w * (0.7 + 0.25 * i), 60 * s * (0.8 + 0.3 * i));
-      }
-    }
+      this.flawlessHalo.setPosition(this.viewport.safe.centerX, this.verdictY + pose.rise * s)
+        .setDisplaySize(w * 2, 170 * s * pose.scale).setAlpha(pose.glow * 0.8);
+    } else if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
     if (still) return;
     // One burst per socket as the band reaches it, from where that socket is drawn.
     while (this.flawlessSwept < centres.length && socketGlint(age, this.flawlessSwept, centres.length) >= 0) {

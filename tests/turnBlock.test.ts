@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  batonAt, batonCrossing, batonTrail, blockGeometry, blockWidth, columnRoom, dropLine, faceHeat, faceLift, glyphFlip,
+  batonAt, batonCrossing, batonTrail, blockBacking, blockGeometry, blockWidth, columnRoom, dropLine, faceHeat, faceLift, glyphFlip,
   landingRipple, landingSquash, restTiles, socketFuse, socketPop, tileGrowth, TRACK,
 } from '../src/ui/turnBlock';
 import type { Handover } from '../src/game/beatTrack';
@@ -13,6 +13,23 @@ const turn = (runway: number, yours = 0): Handover => ({ runway, yours });
 
 describe('where the two rows sit', () => {
   const geo = (width = 600, s = 1) => blockGeometry(360, 1000, width, s);
+
+  it('stands both rows on one patch of sheet, wider than the face and under its thickness', () => {
+    const g = geo();
+    const back = blockBacking(g, 1);
+    expect(back.x).toBeLessThan(g.face.x);
+    expect(back.x + back.width).toBeGreaterThan(g.face.x + g.face.width);
+    expect(back.y).toBeLessThan(g.shelf.y);
+    expect(back.y + back.height).toBeGreaterThan(g.face.y + g.face.height + TRACK.plateDepth);
+    expect(back.centerX).toBeCloseTo(g.face.centerX);
+    // The face lifts into the thumb; the shelf does not. The backing follows from below only.
+    const lifted = blockBacking(g, 1, TRACK.faceLift);
+    expect(lifted.y).toBe(back.y);
+    expect(lifted.height).toBe(back.height - TRACK.faceLift);
+    // Scaled lengths scale together.
+    const half = blockBacking(geo(600, 0.5), 0.5);
+    expect(half.width).toBeCloseTo((back.width - 600) / 2 + 600 * 1);
+  });
 
   it('leaves the answer row exactly where the beat track already was', () => {
     // The thumb zone does not move. The shelf is added above it, not in place of it.

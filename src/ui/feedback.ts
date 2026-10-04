@@ -9,7 +9,7 @@ import { STYLE } from '@/config/style';
  * One persistent emitter per preset per scene, fired with `explode`, so a burst costs
  * no allocation and the scene destroys them once at shutdown.
  */
-export const FxKey = Object.freeze({ dot: 'fx-dot', chip: 'fx-chip', glow: 'fx-glow' });
+export const FxKey = Object.freeze({ dot: 'fx-dot', chip: 'fx-chip', glow: 'fx-glow', vignette: 'fx-vignette' });
 
 export function generateFeedbackTextures(scene: Phaser.Scene): void {
   if (!scene.textures.exists(FxKey.dot)) {
@@ -39,6 +39,26 @@ export function generateFeedbackTextures(scene: Phaser.Scene): void {
       pool.addColorStop(0.82, 'rgba(255,255,255,0.22)');
       pool.addColorStop(1, 'rgba(255,255,255,0)');
       ctx.fillStyle = pool;
+      ctx.fillRect(0, 0, size, size);
+      texture.refresh();
+    }
+  }
+  // The glow's inverse: clear across the middle, darkening toward the edges and wholly so
+  // in the corners. One tinted image stretched over the frame is the handover's dim — the
+  // room's edges step back and the act and the block stay in the light — for the same
+  // reason the pool is an image: a true falloff, one textured quad, no gradient drawn per
+  // frame and no shader pass.
+  if (!scene.textures.exists(FxKey.vignette)) {
+    const size = 256;
+    const texture = scene.textures.createCanvas(FxKey.vignette, size, size);
+    if (texture) {
+      const ctx = texture.getContext();
+      const edge = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+      edge.addColorStop(0, 'rgba(255,255,255,0)');
+      edge.addColorStop(0.5, 'rgba(255,255,255,0)');
+      edge.addColorStop(0.78, 'rgba(255,255,255,0.45)');
+      edge.addColorStop(1, 'rgba(255,255,255,1)');
+      ctx.fillStyle = edge;
       ctx.fillRect(0, 0, size, size);
       texture.refresh();
     }
