@@ -1,12 +1,14 @@
 import Phaser from 'phaser';
 import { setMusicBed } from '@/audio/musicBed';
 import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, stopTheme, toggleMute } from '@/audio/sharedAudio';
+import { createImpactBuffers } from '@/audio/hammerSounds';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
+import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { tutorialSeen } from '@/game/TutorialRun';
@@ -43,6 +45,8 @@ const MENU = {
  */
 export class MenuScene extends BaseScene {
   private illustration!: HammerNailVignette;
+  /** The hammer's hit, synthesized once per AudioContext for the knock a stray tap lands. */
+  private knockVoice: { context: AudioContext; buffer: AudioBuffer } | null = null;
   private sign!: Phaser.GameObjects.Container;
   private ropes!: Phaser.GameObjects.Graphics;
   private board!: Phaser.GameObjects.Graphics;
@@ -96,6 +100,7 @@ export class MenuScene extends BaseScene {
     this.busy = false;
     this.pressedAt = this.puckPressedAt = -Infinity;
     this.puckPressed = null;
+    this.knockVoice = null;
     this.muted = outputSilent(this);
     // Read, not stored: a player whose old save already three-starred a keepsake's level
     // sees the dot on their first launch after the Scrapbook shipped, and never again once
@@ -319,9 +324,30 @@ export class MenuScene extends BaseScene {
       return;
     }
     if (Phaser.Geom.Rectangle.Contains(this.tutorialRect, tap.x, tap.y)) { void this.play(true); return; }
-    // Anything else is a tap that stays on the title screen, and on a cold start it is
-    // the first gesture the page has had — which is all a browser was waiting for.
+    // Anything else is a tap that stays on the title screen: the hammer answers it. On a
+    // cold start it is also the first gesture the page has had — which is all a browser
+    // was waiting for.
+    this.knock();
     this.openTheme();
+  }
+  /**
+   * The title illustration answers a tap off every control with a blow on the nail.
+   *
+   * The blow is drawn at once, and its voice is the act's own hit through the engine's
+   * effects bus, so the mute puck and the Effects level govern it like any voice in a
+   * level. The voice is a stinger rather than `setSounds`: the engine's sound set belongs
+   * to whichever level set it, and the menu has no business replacing it. On a cold start
+   * the context is still suspended; a source started on a suspended context plays the
+   * moment `openTheme`'s resume lands, so the first tap knocks late rather than silently.
+   */
+  private knock(): void {
+    this.illustration.knock(performance.now() / 1000);
+    vibrate('tap');
+    const audio = sharedAudio(this);
+    if (this.knockVoice?.context !== audio.context) {
+      this.knockVoice = { context: audio.context, buffer: createImpactBuffers(audio.context).hit };
+    }
+    audio.playStinger(audio.context.currentTime, this.knockVoice.buffer, 0.65);
   }
   /**
    * Play the theme, if the platform will let us yet.

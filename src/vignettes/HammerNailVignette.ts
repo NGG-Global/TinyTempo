@@ -13,13 +13,15 @@ import { shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
-import { anticipation, clamp01, easeOut, HAMMER_MOTION, nailHeight, recoil } from './hammerMotion';
+import { anticipation, clamp01, easeOut, HAMMER_MOTION, KNOCK, knockDepth, nailHeight, recoil } from './hammerMotion';
 import { hammerLook, type HammerLook } from './hammerLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** How far above the bench the hammer's raised head reaches, in stage units, with a little air. */
 const HAMMER_REACH = 520;
+/** How long the nail takes to move to a new depth after a blow. */
+const DEPTH_EASE_SEC = 0.085;
 
 export const WORKSHOP = {
   paper: 0xeee8d8, ink: 0x243e35, muted: 0x788074, sun: 0xdfc37f,
@@ -56,6 +58,9 @@ export class HammerNailVignette implements Vignette {
   private depthFrom = 0;
   private depthTo = 0;
   private depthAt = -100;
+  private depthSec = DEPTH_EASE_SEC;
+  /** The title screen's last knock, on the scene's clock; -Infinity on a screen never tapped and in every level. */
+  private lastKnock = -Infinity;
   private strikeAt = -100;
   private impactX = 310;
   private impactY = -203;
@@ -170,6 +175,8 @@ export class HammerNailVignette implements Vignette {
     this.plan = plan;
     this.depth = this.depthFrom = this.depthTo = 0;
     this.depthAt = this.strikeAt = -100;
+    this.depthSec = DEPTH_EASE_SEC;
+    this.lastKnock = -Infinity;
     this.bend = 0;
     this.finishAt = null;
     this.finishDone = false;
@@ -185,10 +192,11 @@ export class HammerNailVignette implements Vignette {
       this.setDepth(0, now);
     }
   }
-  private setDepth(value: number, now: number): void {
+  private setDepth(value: number, now: number, overSec = DEPTH_EASE_SEC): void {
     this.depthFrom = this.depth;
     this.depthTo = clamp01(value);
     this.depthAt = now;
+    this.depthSec = overSec;
   }
   public onDemonstrationBeat(time: number): void {
     if (time <= this.lastDemoStrike) return;
@@ -200,6 +208,18 @@ export class HammerNailVignette implements Vignette {
   public onPlayerHit(now: number): void {
     if (!isPlayerTurn(this.phase)) return;
     this.strike(now, 1);
+  }
+  /**
+   * The title screen's blow: a tap anywhere that is not a control. The cover never holds a
+   * plan, so this goes round `onPlayerHit`'s turn gate. The nail takes the first knock and
+   * holds under the rest; `update` lets it back up once the knocks have stopped
+   * (`knockDepth`), and `reset` clears it, so a level's hammer never inherits one.
+   */
+  public knock(now: number): void {
+    this.lastKnock = now;
+    this.strike(now, 1);
+    const depth = knockDepth(0);
+    if (this.depthTo !== depth) this.setDepth(depth, now);
   }
   public onAccuracy(result: Judgement, now: number): void {
     if (this.phase === 'respond' && result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction.perfect(now);
@@ -240,7 +260,11 @@ export class HammerNailVignette implements Vignette {
         if (cue.kind === 'action' && cue.time <= now) this.onDemonstrationBeat(cue.time);
       }
     }
-    this.depth = this.depthFrom + (this.depthTo - this.depthFrom) * easeOut((now - this.depthAt) / 0.085);
+    if (this.lastKnock !== -Infinity) {
+      const depth = knockDepth(now - this.lastKnock);
+      if (depth !== this.depthTo) this.setDepth(depth, now, KNOCK.riseSec);
+    }
+    this.depth = this.depthFrom + (this.depthTo - this.depthFrom) * easeOut((now - this.depthAt) / this.depthSec);
     if (this.finishAt !== null && now >= this.finishAt && !this.finishDone) {
       this.finishDone = true;
       this.strike(this.finishAt, this.successful ? 1.6 : 0.7);

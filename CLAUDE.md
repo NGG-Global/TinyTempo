@@ -422,6 +422,12 @@ seamless 64 s loop, and an MP3 cannot loop on its own ends** — the encoder pad
 the encoder writes it with a 0.1 s head and the loop's opening copied after its end, and
 `themeLoop` finds the music's start in the decode and loops exactly `THEME.loopSec` from
 `THEME.seamSec` (0.1 s) into it, past the encoder's smear of the first frames.
+**The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
+(`MenuScene.knock` → `HammerNailVignette.knock`, round `onPlayerHit`'s turn gate, since the
+cover has no plan), voiced by the act's own hit as a stinger on the effects bus rather than
+through `setSounds`, which belongs to the level that set it. The nail gives `KNOCK.depth` on
+the first knock and no more on the rest, and `knockDepth` (`hammerMotion.ts`) lets it back up
+`KNOCK.restSec` after the last; `reset` clears it, so a level's hammer never inherits one.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
 menu's PLAY tap. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
