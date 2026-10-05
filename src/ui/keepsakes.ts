@@ -15,6 +15,7 @@ import { DOOR_LOOKS } from '../vignettes/doorLooks';
 import { EGG_LOOKS } from '../vignettes/eggLooks';
 import { FISHERMAN_LOOKS } from '../vignettes/fishermanLooks';
 import { HAMMER_LOOKS } from '../vignettes/hammerLooks';
+import { ICE_CREAM_LOOKS } from '../vignettes/iceCreamLooks';
 import { LIGHT_LOOKS } from '../vignettes/lightLooks';
 import { PAPER_CONTOURS, type PaperShape } from '../vignettes/paperMotion';
 import { POPCORN_LOOKS } from '../vignettes/popcornLooks';
@@ -734,6 +735,33 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       p.line([[-9, -8], [0, 34], [9, -8]], 2.4, 0x8cc1df);
       p.line([[-23, -8], [0, 34], [23, -8]], 2.4, 0x8cc1df);
       glint(p, 26, -24, 9);
+    });
+  },
+  // Level 291's: the strawberry scoop on its waffle cone, before the first lick.
+  'icecream-cone': p => {
+    const look = ICE_CREAM_LOOKS[0]!;
+    p.fill(look.body).disc(0, -14, 25);
+    p.fill(look.second).poly([[-21, 0], [21, 0], [0, 42]]);
+    p.detail(() => {
+      p.fill(look.body).oval(-12, 3, 6, 5, false).oval(4, 4, 6, 6, false).oval(16, 7, 3, 7, false);
+      p.line([[-14, 6], [6, 30]], 2, shade(look.second, -0.3));
+      p.line([[1, 4], [10, 18]], 2, shade(look.second, -0.3));
+      p.line([[14, 6], [-6, 30]], 2, shade(look.second, -0.3));
+      p.line([[-1, 4], [-10, 18]], 2, shade(look.second, -0.3));
+      p.fill(look.light).oval(-9, -24, 8, 5, false);
+      glint(p, 18, -30, 8);
+    });
+  },
+  // Level 324's: cherry over lemon on a wooden stick.
+  'icecream-pop': p => {
+    const look = ICE_CREAM_LOOKS[1]!;
+    p.fill(0xe8c48a).box(-5, 14, 10, 28, 5);
+    p.fill(look.body).box(-19, -40, 38, 60, 11);
+    p.detail(() => {
+      p.fill(look.second).box(-17, -4, 34, 22, 9, false);
+      p.fill(0xffffff, 0.5).box(-12, -33, 6, 44, 3, false);
+      p.fill(look.body).oval(19, 8, 3, 6, false);
+      glint(p, 22, -34, 8);
     });
   },
 };

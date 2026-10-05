@@ -36,12 +36,16 @@ function recorder() {
 
 describe('the prospector', () => {
   it('joins at level 227, past every keepsake players could hold, and digs a different gem each lap', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('prospector');
+    expect(VIGNETTES[31]?.id).toBe('prospector');
     for (let level = 1; level < 227; level++) expect(levelSpec(level).vignette).not.toBe('prospector');
-    for (const keepsake of KEEPSAKES.filter(k => k.vignette !== 'prospector')) expect(keepsake.level).toBeLessThan(227);
+    const earlier = new Set(VIGNETTES.slice(0, 31).map(v => v.id));
+    for (const keepsake of KEEPSAKES.filter(k => earlier.has(k.vignette))) expect(keepsake.level).toBeLessThan(227);
+    // Its era is two whole laps, 227–290; ice cream's era from 291 carries 33 acts, so its
+    // first two laps, and both keepsakes, stay where they were.
     for (let lap = 0; lap < 4; lap++) {
-      expect(actLevel('prospector', lap)).toBe(227 + 32 * lap);
-      expect(levelSpec(227 + 32 * lap)).toMatchObject({ vignette: 'prospector', lap });
+      const level = lap < 2 ? 227 + 32 * lap : 323 + 33 * (lap - 2);
+      expect(actLevel('prospector', lap)).toBe(level);
+      expect(levelSpec(level)).toMatchObject({ vignette: 'prospector', lap });
     }
     expect(PROSPECTOR_LOOKS.map(look => look.gem)).toEqual(['gold', 'diamond', 'emerald']);
     expect(prospectorLook(3)).toBe(PROSPECTOR_LOOKS[0]);

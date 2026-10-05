@@ -98,11 +98,12 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Thirty-two vignettes rotate by registry order, **in eras**: `levelSpec` places a level
+Thirty-three vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
 did, from level 51 the first twenty-eight, from level 107 the first twenty-nine,
-from level 165 the first thirty-one, and from level 227 all thirty-two,
+from level 165 the first thirty-one, from level 227 the first thirty-two, and from
+level 291 all thirty-three,
 each era opening on the acts it added. The paintbrush is act 29: one stroke a
 beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
 or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
@@ -123,6 +124,13 @@ in a canyon, a diamond in a timbered mine, an emerald in a green cliff, by lap
 (`prospectorLooks.ts`), each with its own words and its own prospector — and failure an
 empty hollow and a puff of grit. Synthesized voices in `audio/prospectorSounds.ts`. See
 `docs/PROSPECTOR.md`.
+Ice cream is act 33, from level 291 — two whole 32-act laps past 227, the first era boundary
+past the prospector's keepsakes on 227 and 259. A lick a beat, voiced by the one recorded
+slurp (`sfx/lick.wav`, cut so its main transient is the start, and centred); **only judged
+hits wear the treat down**, up to `LICKABLE`, and the coda finishes it on success — a grin and
+a tongue the treat's colour — or drops what is left on the floor. A waffle cone, an ice pop
+and a lollipop by lap (`iceCreamLooks.ts`), each with its own words, place and licker. See
+`docs/ICE_CREAM.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.

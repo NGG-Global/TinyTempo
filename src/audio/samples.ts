@@ -4,7 +4,7 @@ import type { Voice } from './AudioEngine';
  * The recorded one-shots.
  *
  * Every other sound in the game is synthesized at runtime, which is what kept the download
- * to one music track. Recorded acts are the exception: a nose blow, a stomp, a snip, a grunt, two
+ * to one music track. Recorded acts are the exception: a nose blow, a stomp, a snip, a grunt, a lick, two
  * wipes, a trombone's two notes and two endings, and a clap with the three rooms that
  * answer it, delivered as recordings, because a
  * voice can be *performed* in a way a few lines of oscillator maths cannot reach. They are an enhancement over a working game, never a
@@ -37,6 +37,9 @@ export const SAMPLE_URLS = {
   clapSuccess: new URL('../../sfx/clap-success.mp3', import.meta.url).href,
   clapPartial: new URL('../../sfx/clap-partial.mp3', import.meta.url).href,
   clapFail: new URL('../../sfx/clap-fail.mp3', import.meta.url).href,
+  // The ice cream act's lick, cut and centred from the delivered slurp in sfx/masters/
+  // so its first transient is the beat (docs/ICE_CREAM.md).
+  lick: new URL('../../sfx/lick.wav', import.meta.url).href,
 } as const;
 
 export type SampleName = keyof typeof SAMPLE_URLS;

@@ -110,7 +110,7 @@ describe('saw presentation curves', () => {
     expect(VIGNETTES.map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
       'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler', 'fisherman', 'scratch', 'trombone',
-      'clap', 'snare', 'bongos', 'slushy', 'apple', 'barber', 'popcorn', 'toothbrush', 'paintbrush', 'nose', 'dish', 'prospector',
+      'clap', 'snare', 'bongos', 'slushy', 'apple', 'barber', 'popcorn', 'toothbrush', 'paintbrush', 'nose', 'dish', 'prospector', 'icecream',
     ]);
     expect([1, 2, 3, 4, 5, 6, 7, 8, 9, 26, 34, 50].map(level => levelSpec(level).vignette))
       .toEqual(['hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper', 'hammer', 'paper', 'apple']);
