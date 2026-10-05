@@ -1,12 +1,22 @@
 import type Phaser from 'phaser';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { contactPulse } from './householdMotion';
 import { HOME_INK, plant, shape, slab, sparkle } from './householdArt';
 import { backSoonCard, bellboyArrival } from './errandMotion';
 import { bellLook, type BellLook } from './bellLooks';
 import { clamp01 } from './motion';
 
-const BELL = { x: 0, y: -10 } as const;
+/**
+ * The bell, and its size on the counter. `size` was raised from 1 to 1.4 by the staging
+ * audit (`docs/STAGING.md`): at 1 the bell was the second-smallest subject in the cast,
+ * a tenth of its card, the one thing the player taps lost on a lobby counter. It scales
+ * about the base, which stays on the marble top, and it clears the register on the left
+ * and the card holder on the right at this size.
+ */
+const BELL = { x: 0, y: -10, size: 1.4 } as const;
+/** The bell's base, in offsets from `BELL`: the point that stands on the counter. */
+const BELL_BASE = 34;
 
 /** A desk bell rings on every beat. A clean round brings the bell boy; a rough one brings nobody. */
 export class HotelBellVignette extends HouseholdVignette {
@@ -14,7 +24,7 @@ export class HotelBellVignette extends HouseholdVignette {
   private readonly look: BellLook;
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = bellLook(lap);
-    super(scene, look.paper, look.glow);
+    super(scene, look.paper, look.glow, { card: FRAME_CARD });
     this.look = look;
   }
 
@@ -72,27 +82,31 @@ export class HotelBellVignette extends HouseholdVignette {
   }
 
   private bell(g: Phaser.GameObjects.Graphics, press: number, age: number, ending: number): void {
-    const { x, y } = BELL;
+    const k = BELL.size;
+    // Offsets are authored at size 1 from (BELL.x, BELL.y) and scaled about the base, so
+    // the bell grows up off the marble rather than sinking into it.
+    const X = (dx: number): number => BELL.x + dx * k;
+    const Y = (dy: number): number => BELL.y + BELL_BASE + (dy - BELL_BASE) * k;
     const dull = ending >= 0 && !this.successful;
     const chrome = dull ? 0xb6b6b0 : this.look.metal;
-    g.fillStyle(HOME_INK, 0.18).fillEllipse(x + 8, y + 34, 150, 22);
-    slab(g, x - 66, y + 20, 132, 14, 0x2f2f33, 6, 0x1c1c1f);
-    g.fillStyle(chrome).fillEllipse(x, y + 20, 128, 24);
-    g.lineStyle(3, 0x7c8489).strokeEllipse(x, y + 20, 128, 24);
+    g.fillStyle(HOME_INK, 0.18).fillEllipse(X(8), Y(34), 150 * k, 22 * k);
+    slab(g, X(-66), Y(20), 132 * k, 14 * k, 0x2f2f33, 6 * k, 0x1c1c1f);
+    g.fillStyle(chrome).fillEllipse(X(0), Y(20), 128 * k, 24 * k);
+    g.lineStyle(3, 0x7c8489).strokeEllipse(X(0), Y(20), 128 * k, 24 * k);
     // The dome, its lit crown, and the plunger with visible travel.
-    g.fillStyle(chrome).beginPath().arc(x, y + 14, 56, Math.PI, 0, false).closePath().fillPath();
-    g.lineStyle(3, 0x7c8489).beginPath().arc(x, y + 14, 56, Math.PI, 0, false).strokePath();
-    g.fillStyle(0xffffff, dull ? 0.25 : 0.65).fillEllipse(x - 20, y - 18, 34, 18);
-    g.fillStyle(0x8e969c, 0.5).fillEllipse(x + 22, y - 2, 40, 22);
-    g.fillStyle(0x2f2f33).fillRect(x - 5, y - 58 + press * 8, 10, 18);
-    g.fillStyle(dull ? 0x9a9a95 : 0xe6ebee).fillCircle(x, y - 58 + press * 8, 11);
-    g.lineStyle(2, 0x6f777c).strokeCircle(x, y - 58 + press * 8, 11);
+    g.fillStyle(chrome).beginPath().arc(X(0), Y(14), 56 * k, Math.PI, 0, false).closePath().fillPath();
+    g.lineStyle(3, 0x7c8489).beginPath().arc(X(0), Y(14), 56 * k, Math.PI, 0, false).strokePath();
+    g.fillStyle(0xffffff, dull ? 0.25 : 0.65).fillEllipse(X(-20), Y(-18), 34 * k, 18 * k);
+    g.fillStyle(0x8e969c, 0.5).fillEllipse(X(22), Y(-2), 40 * k, 22 * k);
+    g.fillStyle(0x2f2f33).fillRect(X(-5), Y(-58 + press * 8), 10 * k, 18 * k);
+    g.fillStyle(dull ? 0x9a9a95 : 0xe6ebee).fillCircle(X(0), Y(-58 + press * 8), 11 * k);
+    g.lineStyle(2, 0x6f777c).strokeCircle(X(0), Y(-58 + press * 8), 11 * k);
     if (!this.still && age >= 0 && age < 0.45) {
       const p = age / 0.45;
       for (let i = 0; i < 2; i++) {
-        const r = 66 + p * 40 + i * 14;
+        const r = (66 + p * 40 + i * 14) * k;
         g.lineStyle(3 - i, 0xf3d27c, (1 - p) * (1 - i * 0.4));
-        g.beginPath().arc(x, y + 12, r, Math.PI * 1.1, Math.PI * 1.9).strokePath();
+        g.beginPath().arc(X(0), Y(12), r, Math.PI * 1.1, Math.PI * 1.9).strokePath();
       }
     }
   }

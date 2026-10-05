@@ -10,7 +10,7 @@ export class DoorbellVignette extends HouseholdVignette {
   private readonly look: DoorLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xf0e5d7, 0xf0cd9b);
+    super(scene, 0xf0e5d7, 0xf0cd9b, { card: { x: -327, y: -246, width: 654, height: 478, radius: 22 } });
     this.look = doorLook(lap);
     this.lightMaterial(scene, 'porch');
   }

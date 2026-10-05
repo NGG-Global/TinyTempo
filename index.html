@@ -377,9 +377,14 @@
           contact.textContent = 'Please tell us: ' + ADDRESS;
           contact.removeAttribute('hidden');
         }
+        // Capture phase: an exception while the bundle evaluates bubbles to the window, but
+        // a script or stylesheet that fails to load fires on its element and does not, and
+        // left the spinner turning with no address.
         window.addEventListener('error', function (event) {
-          stranded((event && event.message) || 'unknown error');
-        });
+          var target = event && event.target;
+          var resource = target && target !== window && (target.src || target.href);
+          stranded((event && event.message) || (resource ? 'could not load ' + String(resource).split('/').pop() : 'unknown error'));
+        }, true);
       })();
     </script>
 

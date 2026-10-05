@@ -70,7 +70,16 @@ directly over the previous finale — so node y is no longer linear in the level
 step. The dock's trail ends in a flag. See `docs/FINALES.md`. An **open** gate's posts are
 laid with the road, under the stops (`drawOpenGates`), since they reach into the first
 level's star plate; and a haze in the top area's colour sits behind the header
-(`drawHaze`), so nothing on the road reads as part of the sign or the pucks.
+(`drawHaze`), so nothing on the road reads as part of the sign or the pucks. **A stop's
+colours are `puckColours`** (`ui/roadLayout.ts`): frontier coral, then a cleared stop in a
+settled mid-tone of the area's road, then locked and preview, and every number clears
+`OUTLINE_CONTRAST` on its puck — a preview's is drawn whole in its faintest legible colour,
+never faded by alpha. **One ambient layer per area** (`ui/mapAmbience.ts`) — pollen, lamp
+glow, dust, snow, fireflies — is a fixed pool of 40 world-anchored images posed as pure
+`f(seed, t, view)`, under every prop and stop, off under reduced motion and on blur. **The
+frontier hops on beat 1 of the music**: `ui/musicPulse.ts` turns `MusicSystem.playheadAt`
+(the loop's position across its rate history, read at the heard clock) into a bar pose, and
+falls back to the frame clock at 120 BPM, never freezing. See `docs/VISUAL_POLISH.md`.
 
 **Stars are a currency the road spends.** Every area after the first is closed until the
 player's total stars reach `starsRequired(area)` (`game/stars.ts`, knobs in
@@ -126,7 +135,13 @@ on one enormous kernel; the toothbrush brushes sixteen teeth once round, and a c
 rinses the foam and sweeps a gleam across them. Their demonstrations snip the air, hop a
 kernel back into the pan and scrub without cleaning. See `docs/BARBER_POPCORN_TOOTHBRUSH.md`.
 Presentation lives inside the vignette; the rhythm controller, judge and scorer
-stay authoritative, as `docs/VERTICAL_SLICE.md` sets out.
+stay authoritative, as `docs/VERTICAL_SLICE.md` sets out. **Impact is the act's alone**: a
+Perfect player hit and a clean task's coda blow kick the act's stage through the optional
+`Vignette.punch` (`ui/punch.ts`, 3 units settling in 120 ms, after `translate`), never the
+camera, block, verdict or headline; a struck subject gives through `contactGive`
+(`ui/spring.ts`); material bits (`splinters`, `droplets`, `rings`, `flakes`) are `Feedback`
+presets, which a household act fires with `throwBits`. All of it is off under reduced
+motion. The act-by-act audit is in `docs/VISUAL_POLISH.md`.
 
 Every act carries more than one look. `LevelSpec.lap` counts how many earlier levels
 the act played, PlayScene passes it to `create(scene, lap)`,
@@ -207,6 +222,20 @@ reactions and the curtain. Its four recordings are the sample bank's first MP3s,
 as every other act does in its own `update`. `Vignette.translate` is the
 between-task slide and is an absolute offset from that home, applied by PlayScene
 right after `update`; an act that skips the re-anchor walks off screen.
+
+**A household act stands on a shelf and takes the key light** (`vignettes/staging.ts`). It
+names its card in its `super` call (`FRAME_CARD`, `PANEL_CARD` or its own rectangle), and
+`HouseholdVignette` paints two Graphics inside the stage, once per `layout`, never per frame:
+under the art a shelf with the card's wall shadow, its own shadow and a contact seam, all
+from `castShadow`; over the art a rim along the card's lit edges and a falloff toward the
+lower right, a triangle fan whose per-vertex alpha WebGL interpolates and canvas ignores.
+The shelf is fitted to the room above the verdict's pill (`roomBelowCard` from
+`verdictLine`, `ui/trackMetrics.ts`, the function PlayScene places the verdict with), so on
+a 4:3 tablet there is none. The egg and the bubble wrap opt out, and the paintbrush stands
+free (`framed: false`). **Subject size has a band**: half to twice the cast's median, from an
+audit of all thirty-two at lap 0; the bug (`BUG_SIZE`) and the hotel bell (`BELL.size`) were
+below it and were raised about their contact points, and the window, above it by design, is
+left for a decision. See `docs/STAGING.md`.
 
 Every sub-screen header is one row: the back puck at `safe.top + 66 * s`, its title at 56 in the
 display face beside it, and every scene's `s` is `min(safe.width / 720, safe.height / 1150)` — one
@@ -422,13 +451,32 @@ seamless 64 s loop, and an MP3 cannot loop on its own ends** — the encoder pad
 the encoder writes it with a 0.1 s head and the loop's opening copied after its end, and
 `themeLoop` finds the music's start in the decode and loops exactly `THEME.loopSec` from
 `THEME.seamSec` (0.1 s) into it, past the encoder's smear of the first frames.
+**The title is on the theme's beat**: the theme was measured at a steady 120 BPM with its
+first downbeat on the music's start (`THEME.bpm`), and `ThemeMusic.playheadAt` drives the
+tempo beads and a silent hammer blow on beat 1 of every bar through the same `musicPulse`,
+on the frame clock until the theme sounds; a beat blow never sinks the nail, and reduced
+motion has none. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
+(`MenuScene.knock` → `HammerNailVignette.knock`, round `onPlayerHit`'s turn gate, since the
+cover has no plan), voiced by the act's own hit as a stinger on the effects bus rather than
+through `setSounds`, which belongs to the level that set it. The nail gives `KNOCK.depth` on
+the first knock and no more on the rest, and `knockDepth` (`hammerMotion.ts`) lets it back up
+`KNOCK.restSec` after the last; `reset` clears it, so a level's hammer never inherits one.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
 menu's PLAY tap. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
 reuse the one source, a level fades it out and starts a fresh source on its own
 downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
 the track from a scene without going through the bed is how a leftover level
-and the menu overlap.
+and the menu overlap. **The level owns the bus gain from the moment it is named**:
+`setMusicBed('level')` puts a gain the map's hush was fading to zero back to the track's,
+because under reduced motion the curtain beats `bedFadeSec` and the hush's early return
+leaves the gain where it found it — a level played with its stems and metronome at zero.
+And **a reused level loop takes the shell's mix** on the way back: the shell branch fades
+every stem in (`stemCount`) and `stopMetronome` ends the click, so the road after a level is
+the road before it. Both are pinned in `tests/musicBed.test.ts`. **A wrap width is written
+only when it changes** (`wrapWidth`, `ui/type.ts`): Phaser's `setWordWrapWidth` re-rasterises
+on every call, and `layout()` runs once per frame of an Android URL-bar collapse;
+`balanceWrap` remembers its answer for the same copy, size and room.
 
 Output latency is corrected in two places, and they do not overlap.
 `AudioClock` maps a tap onto the sample the player is **hearing**: from
@@ -873,6 +921,7 @@ src/
     star.ts            The star glyph
     keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
+    trackMetrics.ts    The block's metrics and the verdict line, without Phaser, for the stage to keep clear of
     finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
     finalePose.ts      Their poses as pure f(t)
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
@@ -897,6 +946,7 @@ src/
   vignettes/
     registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
     rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
+    staging.ts         The household shelf and card light: geometry pure, drawn once per layout
     Vignette.ts        The contract a vignette implements
     *Vignette.ts       One per act: all geometry, palette and motion
     *Motion.ts         Pure curves, no Phaser import, unit-tested under node

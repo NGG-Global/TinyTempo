@@ -14,6 +14,7 @@ import { clearProgress, loadProgress } from '@/game/progress';
 import { redrawToday } from '@/game/objectives';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard } from '@/playgames/dailyTempo';
 import { achievementsOffered, openAchievements } from '@/playgames/achievementSync';
+import { repairCloudBinding } from '@/playgames/cloudSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
@@ -29,7 +30,7 @@ import { Sheen } from '@/ui/sheen';
 import { arrive } from '@/ui/spring';
 import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
 import { drawSwitch, SWITCH } from '@/ui/switch';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { formatOffset } from './CalibrateScene';
 
 /** Design-unit metrics. Sections are labelled bands of rows, not a flat list of cards. */
@@ -466,7 +467,7 @@ export class SettingsScene extends BaseScene {
     resize(this.texts.premium!, 44 * s, SHELL.cream);
     this.texts.premium!.setPosition(medal.x + medal.r + 24 * s, medal.y - 20 * s);
     resize(this.texts.premiumTerms!, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
-    this.texts.premiumTerms!.setWordWrapWidth(width - (medal.x + medal.r + 24 * s - store.x) - 28 * s, false);
+    wrapWidth(this.texts.premiumTerms!, width - (medal.x + medal.r + 24 * s - store.x) - 28 * s);
     this.texts.premiumTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 14 * s);
     this.texts.premiumBadge!.setPosition(store.right - 104 * s, store.y + 4 * s);
     const buyH = Math.max(100 * s, control);
@@ -601,7 +602,7 @@ export class SettingsScene extends BaseScene {
     this.hits.push({ name: 'help', rect: helpRect, pinned: false });
 
     // A store or reset message, under the last section rather than over a row.
-    this.texts.notice!.setWordWrapWidth(width - 40 * s, false);
+    wrapWidth(this.texts.notice!, width - 40 * s);
     resize(this.texts.notice!, 25 * s, PALETTE.coral, STYLE.current, false);
     this.texts.notice!.setPosition(left + width / 2, y + 18 * s);
     y += this.notice === '' ? 12 * s : 56 * s;
@@ -1138,6 +1139,10 @@ export class SettingsScene extends BaseScene {
     const cleared = clearProgress();
     clearHealth();
     redrawToday();
+    // A cloud binding that cannot be read stops Saved Games until it is replaced, and this
+    // is the one place a player can replace it. A readable binding is left alone: on a
+    // signed-in device the next sync merges the cloud copy back, since the cloud only adds.
+    repairCloudBinding();
     this.notice = cleared ? '' : 'Couldn’t reset.';
     this.refreshCopy();
     this.layout();

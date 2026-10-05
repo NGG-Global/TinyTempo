@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab } from './householdArt';
 import { BONGO_BEAT, BONGO_FAIL, contactPulse, percussionPose, reveal } from './treatMotion';
 import { bongoLook, type BongoLook } from './bongoLooks';
@@ -10,7 +11,7 @@ export class BongosVignette extends HouseholdVignette {
   /** Which pair of drums. The beat does not change. */
   private readonly look: BongoLook;
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xf0e3c9, 0xf8b77c);
+    super(scene, 0xf0e3c9, 0xf8b77c, { card: PANEL_CARD });
     this.look = bongoLook(lap);
   }
 

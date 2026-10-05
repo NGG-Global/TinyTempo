@@ -68,6 +68,16 @@ export class ThemeMusic {
 
   public get ready(): boolean { return this.buffer !== null; }
   public get playing(): boolean { return this.source !== null; }
+  /** The context time the playing source began at the music's start; null when none is playing. */
+  private startedAt: number | null = null;
+  /**
+   * Where the theme is at context time `t`, in seconds from its first downbeat; null while
+   * it is not playing. Every pass after the first restarts `THEME.loopSec` later in the
+   * same bar position, since the loop is whole bars, so the beat phase needs no wrap.
+   */
+  public playheadAt(t: number): number | null {
+    return this.source === null || this.startedAt === null || !Number.isFinite(t) ? null : t - this.startedAt;
+  }
 
   /**
    * The title screen is up: load the track if this is the first time, then play it.
@@ -175,6 +185,8 @@ export class ThemeMusic {
     source.onended = () => { source.disconnect(); if (this.source === source) this.source = null; };
     try {
       source.start(0, loop?.offset ?? 0);
+      // `start(0)` begins as soon as possible, which is the context's current time.
+      this.startedAt = this.context.currentTime;
     } catch {
       // A route that rejects a start costs the theme, never the menu it is playing under.
       source.disconnect();

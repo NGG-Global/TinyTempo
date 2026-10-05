@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { cubicContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import { clamp01 } from './motion';
 import { consumed, contactPulse, FREEZE_AT, reveal } from './treatMotion';
@@ -13,7 +14,7 @@ export class SlushyVignette extends HouseholdVignette {
   private readonly look: SlushyLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe4eee5, 0xc8e9df);
+    super(scene, 0xe4eee5, 0xc8e9df, { card: PANEL_CARD });
     this.look = slushyLook(lap);
   }
 

@@ -50,6 +50,16 @@ export function squash(age: number, duration: number, amount: number): number {
   return Math.sin(age / duration * Math.PI) * amount;
 }
 
+/**
+ * A struck subject's give: squat by `amount` of its height, a little wider, back within
+ * `sec`. The nail, the fruit and the egg take it on contact, about the point where they rest,
+ * so the blow reads as landing on something. Callers zero it under reduced motion.
+ */
+export const CONTACT_GIVE = Object.freeze({ amount: 0.06, sec: 0.1 });
+export function contactGive(age: number, strength = 1, exaggeration = 1): number {
+  return squash(age, CONTACT_GIVE.sec, CONTACT_GIVE.amount * strength * exaggeration);
+}
+
 /** A pull-back before an event: rises to `amount` and returns to 0 exactly at the event. */
 export function anticipate(until: number, duration: number, amount: number): number {
   if (until <= 0 || until >= duration) return 0;

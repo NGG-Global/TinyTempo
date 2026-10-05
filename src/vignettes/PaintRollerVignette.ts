@@ -1,6 +1,8 @@
 import type Phaser from 'phaser';
+import type { Judgement } from '@/rhythm/judge';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import {
   PAINT_GRID, rollerPass, rollerReturn, stripeColumns, type PaintImage,
@@ -25,7 +27,7 @@ export class PaintRollerVignette extends HouseholdVignette {
   private readonly lap: number;
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = rollerLook(lap);
-    super(scene, look.paper, look.glow);
+    super(scene, look.paper, look.glow, { card: FRAME_CARD });
     this.look = look;
     this.lap = lap;
   }
@@ -35,6 +37,16 @@ export class PaintRollerVignette extends HouseholdVignette {
   private stripeX(index: number): number {
     const { from, to } = stripeColumns(index, this.stripes);
     return WALL.left + ((from + to) / 2) * CELL.w;
+  }
+
+  public override onAccuracy(result: Judgement, now: number): void {
+    const before = this.hitTimes.length;
+    super.onAccuracy(result, now);
+    // A judged hit flicks a few drops of the stripe's paint off the sleeve as it lands.
+    if (this.hitTimes.length > before && before < this.stripes - 1) {
+      const palette = this.image.palette;
+      this.throwBits('droplets', this.stripeX(before), WALL.top + 14, palette.slice(1, 4), 4);
+    }
   }
 
   protected draw(now: number, ending: number): void {

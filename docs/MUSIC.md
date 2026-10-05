@@ -430,3 +430,16 @@ Driven in headless Chromium at 393×851: the theme starts on the first tap with 
 points above, fades to 0.551, and leaves on PLAY at the instant the shell bed starts, with
 no overlap and no gap. Not settled here: whether the seam is inaudible on a handset's own
 decoder, and the level match by ear.
+
+## The bed hand-offs that went wrong
+
+Two hand-offs between scenes left the loop in the wrong state, and both are now pinned by
+`tests/musicBed.test.ts`. A level started while the map's hush was still fading the bus to
+zero — under reduced motion the curtain is quicker than `bedFadeSec` — and the hush's early
+return, which deliberately leaves the gain to whoever superseded it, left it at zero: the
+level's stems and metronome played silently for the whole run. `setMusicBed('level')` now
+restores the track gain when it finds the bus at zero, since PlayScene never touches the
+bus itself. And the map, which reuses a leftover level's sources rather than restarting
+them, inherited the level's mix — the stems it had earned and the click bar under them —
+instead of every stem and no click; the shell branch now fades the missing stems in
+(`MusicSystem.stemCount`) and ends the click (`MusicSystem.stopMetronome`).

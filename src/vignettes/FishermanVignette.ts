@@ -3,6 +3,7 @@ import { mix, shade } from '@/ui/colour';
 import { castShadow, faces, type Faces } from '@/ui/light';
 import { fishermanLook, type FishermanLook } from './fishermanLooks';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import {
   bigFish, fishingOutcome, haulFinale, junkFor, rodHeave, shadowRise, type BigFish, type FishingOutcome, type HaulFinale,
@@ -51,7 +52,7 @@ export class FishermanVignette extends HouseholdVignette {
   private outcome: FishingOutcome = 'fail';
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xdfeaf0, 0xf4e6bd);
+    super(scene, 0xdfeaf0, 0xf4e6bd, { card: FRAME_CARD });
     this.look = fishermanLook(lap);
     const look = this.look;
     this.man = {

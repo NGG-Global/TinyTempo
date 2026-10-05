@@ -7,6 +7,9 @@ import { socketGlint, sweepBand } from './flourish';
 import { drawHammerMark, drawTapMark } from './icons';
 import { drawPanel } from './panel';
 import { squash } from './spring';
+import { TRACK } from './trackMetrics';
+
+export { TRACK, VERDICT_REACH, verdictLine } from './trackMetrics';
 
 /**
  * The turn block: two rows at the thumb that say whose turn it is, and one token that
@@ -29,54 +32,6 @@ import { squash } from './spring';
  * that breaks.
  */
 
-/**
- * The block's metrics, in design units at scale 1. The sockets are deliberately larger
- * than the map's area pips: this is the only thing on screen that says whose turn it is,
- * so it has to read at arm's length rather than merely be present.
- */
-export const TRACK = {
-  beadGap: 58,
-  beadRadius: 19,
-  plateHeight: 72,
-  plateDepth: 7,
-  plateRadius: 28,
-  pipGap: 30,
-  pipRadius: 6,
-
-  shelfHeight: 46,
-  shelfRadius: 22,
-  /** The shelf is this much narrower per side, so the face reads as the object in front. */
-  shelfInset: 24,
-  shelfBeadRadius: 12,
-  /** Clear space between the shelf's bottom edge and the face's top. */
-  rowGap: 14,
-
-  ownerSlotRadius: 26,
-  /** Slot centre, measured in from its row's left edge. */
-  ownerInset: 46,
-  /** Clear space between the owner slot's edge and the first column's. */
-  slotClearance: 10,
-  batonRadius: 26,
-  /** How far the face rises into the thumb once the turn has passed. */
-  faceLift: 15,
-  /** How far the baton bows out, over the columns it is handing across. */
-  batonBow: 60,
-
-  /** The breather's bar tiles on the face: height, corner, gap, and the right-hand inset. */
-  tileHeight: 44,
-  tileRadius: 12,
-  tileGap: 10,
-  tileInset: 22,
-  /** A tile's beat dots, and their pitch; in the last bar they grow to `pipRadius`. */
-  tileDot: 5,
-  tileDotPitch: 0.2,
-  /**
-   * The narrowest the block is while a breather's tiles are on it, so four bars of four
-   * dots stay readable on a short pattern's block. The breather task's own plan carries it
-   * from the rest through its response, so nothing moves inside the task.
-   */
-  restWidth: 560,
-} as const;
 
 /**
  * A deep terracotta, deliberately not `PALETTE.coral`. The socket ring has to stay
@@ -164,6 +119,24 @@ export function blockGeometry(centreX: number, trackY: number, width: number, s:
   };
 }
 
+/** Clear sheet around the two rows that the backing covers, per side, in design units. */
+const BACKING_PAD = 14;
+
+/**
+ * The patch of sheet both rows sit on. On the table acts the block stood directly on wood
+ * grain or patterned paper, and the grain competed with the sockets and the baton; this
+ * is the ground they stand on instead. It spans the face's width — the shelf is inset
+ * inside it — from above the shelf to below the face's thickness, and follows the face's
+ * lift from below, since the shelf does not lift. `TRACK` is untouched: `verdictY`,
+ * `turnCallY` and the restart sheet are all derived from it.
+ */
+export function blockBacking(geo: BlockGeometry, s: number, lift = 0): BlockRect {
+  const pad = BACKING_PAD * s;
+  const top = geo.shelf.y - pad;
+  const bottom = geo.face.y + geo.face.height - lift + TRACK.plateDepth * s + pad;
+  return rect(geo.face.x - pad, top, geo.face.width + pad * 2, Math.max(0, bottom - top));
+}
+
 /** The guiding ring, for the one level that still teaches where the sockets are. */
 export interface Ghost {
   readonly index: number;
@@ -188,6 +161,8 @@ export interface BlockState {
   readonly ghost: Ghost | null;
   /** The act's ink, for the bar through a missed socket. */
   readonly ink: number;
+  /** The act's paper, for the backing behind both rows; the game's own paper when omitted. */
+  readonly paper?: number;
   /** Seconds since the turn arrived in the player's hand; -Infinity before it has. */
   readonly landed: number;
   /** Seconds since every beat of the task was judged Perfect; omitted or -Infinity otherwise. */
@@ -350,6 +325,7 @@ export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s:
   const { turn, still, rattle } = state;
   const heat = faceHeat(turn, still);
   const lift = faceLift(turn, still);
+  drawBacking(g, geo, s, state, lift, rattle);
   drawShelf(g, geo, s, state, rattle);
   const face = drawFace(g, geo, s, state, heat, lift, rattle);
   drawOwnerSlots(g, geo, s, turn, face, lift, rattle);
@@ -364,6 +340,7 @@ export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s:
  */
 function drawRestBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, rest: BlockRest): void {
   const last = rest.bar >= rest.bars - 1;
+  drawBacking(g, geo, s, state, 0, 0);
   drawShelf(g, geo, s, state, 0, last);
   const fill = mix(PALETTE.paper, SHELL.wood, 0.16);
   const plate = new Phaser.Geom.Rectangle(geo.face.x, geo.face.y, geo.face.width, geo.face.height);
@@ -403,6 +380,26 @@ function drawRestBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: nu
   // In the last bar the baton goes back to the hammer slot, over the face it was handed
   // to: the turn is about to be theirs again. Under reduced motion it is simply there.
   if (last) drawBaton(g, geo, s, { runway: 1 - rest.returning, yours: 0 }, state.still, 0, 0, -Infinity);
+}
+
+/**
+ * The sheet under both rows: a feathered halo of the act's own paper, so the block sits on
+ * a patch of clear ground whatever is behind it, and a shallow tray a shade toward the ink
+ * inside it, so the rows read as set into the sheet rather than floating over the grain.
+ * Graphics cannot blur, so the feather is two steps. Drawn first, in the block's own pass,
+ * and offset by the same rattle and lift, so it moves as one object with the rows.
+ */
+function drawBacking(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, lift: number, rattle: number): void {
+  const paper = state.paper ?? PALETTE.paper;
+  const back = blockBacking(geo, s, lift);
+  if (back.width <= 0 || back.height <= 0) return;
+  const x = back.x + rattle;
+  const r = Math.min((TRACK.plateRadius + BACKING_PAD) * s, back.height / 2);
+  const feather = 12 * s;
+  g.fillStyle(paper, 0.26).fillRoundedRect(x - feather, back.y - feather, back.width + feather * 2, back.height + feather * 2, r + feather);
+  g.fillStyle(paper, 0.55).fillRoundedRect(x, back.y, back.width, back.height, r);
+  g.fillStyle(mix(paper, state.ink, 0.1), 0.72).fillRoundedRect(x, back.y, back.width, back.height, r);
+  g.lineStyle(1.5 * s, mix(paper, state.ink, 0.5), 0.16).strokeRoundedRect(x, back.y, back.width, back.height, r);
 }
 
 /** The demonstration's row: a plank recessed into the scene, and the beats landing on it. */

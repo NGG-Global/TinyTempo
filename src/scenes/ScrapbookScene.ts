@@ -19,7 +19,7 @@ import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { drawStar, drawStarSeat, STAR_PRIZE } from '@/ui/star';
-import { balanceWrap, body, display, label, resize } from '@/ui/type';
+import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 
 /**
  * Design-unit metrics. A page per act, two to a spread: a sheet of kraft with its
@@ -198,7 +198,8 @@ export class ScrapbookScene extends BaseScene {
     resize(this.infoName, 34 * s, PALETTE.ink);
     this.infoName.setPosition(this.infoRect.centerX, this.infoRect.y + 48 * s);
     resize(this.infoWhere, 23 * s, PALETTE.muted, STYLE.current, false);
-    this.infoWhere.setWordWrapWidth(width - 48 * s, false).setPosition(this.infoRect.centerX, this.infoRect.y + 78 * s);
+    wrapWidth(this.infoWhere, width - 48 * s);
+    this.infoWhere.setPosition(this.infoRect.centerX, this.infoRect.y + 78 * s);
 
     const top = safe.top + 122 * s;
     this.bandRect.setTo(left - 16 * s, top, width + 32 * s, this.infoRect.y - 22 * s - top);

@@ -84,6 +84,14 @@ export class MusicSystem {
   private origin: number | null = null;
   private leadInFrames = 0;
   private rate = 1;
+  /**
+   * Where the loop's playhead stands at each rate change, in source seconds: a piecewise
+   * line from context time to source time, so the beat can be read on any rate history.
+   * The map reuses a level's sources, whose rate moved bar by bar and went back to 1 at an
+   * arbitrary instant, so "the downbeat plus whole bars" is not where the music is there.
+   * Bookkeeping only: nothing that sounds reads it.
+   */
+  private playhead: { at: number; position: number; rate: number }[] = [];
   private generation = 0;
   public constructor(private readonly context: AudioContext, destination: AudioNode) {
     this.level = this.track.gain;
@@ -104,6 +112,8 @@ export class MusicSystem {
   public get activeSources(): number { return this.sources.length; }
   /** How many stems are heard, or scheduled to be, of the loaded track. */
   public get activeLayers(): number { return this.layers; }
+  /** How many stems the loaded track has: what the shell hears, and the most a level can earn. */
+  public get stemCount(): number { return this.buffers.length; }
   /** Whether the metronome bar is looping with the track. */
   public get metronome(): boolean { return this.click !== null; }
   public get startTime(): number | null { return this.origin; }
@@ -244,6 +254,7 @@ export class MusicSystem {
         this.click = { source, gain };
       }
       this.origin = at;
+      this.playhead = [{ at, position: -pickupSeconds(MUSIC.sourceBpm, MUSIC.pickupBeats), rate: 1 }];
       this.generation++;
       return this.downbeatTime!;
     } catch (error) { this.stop(); throw error; }
@@ -293,6 +304,30 @@ export class MusicSystem {
     for (const source of this.sources) source.playbackRate.setValueAtTime(rate, when);
     this.click?.source.playbackRate.setValueAtTime(rate, when);
     this.rate = rate;
+    this.markRate(rate, when);
+  }
+  /**
+   * Where the loop is at context time `t`, in source seconds from its first downbeat, and
+   * the rate it is playing at there; null while nothing is playing. The loop is whole bars
+   * at `MUSIC.sourceBpm`, so the position's beat phase is the music's, across every wrap.
+   */
+  public playheadAt(t: number): { readonly position: number; readonly rate: number } | null {
+    if (this.origin === null || this.playhead.length === 0 || !Number.isFinite(t)) return null;
+    let anchor = this.playhead[0]!;
+    for (const next of this.playhead) { if (next.at <= t) anchor = next; else break; }
+    return { position: anchor.position + (t - anchor.at) * anchor.rate, rate: anchor.rate };
+  }
+  private markRate(rate: number, when: number): void {
+    if (this.playhead.length === 0) return;
+    // A change replaces any that was set for the same instant or later.
+    const kept = this.playhead.filter(a => a.at < when);
+    const before = kept.at(-1) ?? this.playhead[0]!;
+    kept.push({ at: when, position: before.position + (when - before.at) * before.rate, rate });
+    // Everything before the last change already in effect is history no reader needs.
+    const now = this.context.currentTime;
+    let from = 0;
+    for (let i = 0; i < kept.length; i++) if (kept[i]!.at <= now) from = i;
+    this.playhead = kept.slice(from);
   }
   public setGain(value: number, rampSec: number = MUSIC.gainRampSec): void {
     if (this.disposed) return;
@@ -327,6 +362,20 @@ export class MusicSystem {
     parameter.linearRampToValueAtTime(to, Math.max(start, endAt));
     this.level = to;
   }
+  /**
+   * Silence the metronome bar and leave the stems running. The map inherits a level's
+   * sources rather than restarting them, and the click is the one thing of the level's
+   * that must not come with them.
+   */
+  public stopMetronome(): void {
+    if (!this.click) return;
+    const { source, gain } = this.click;
+    source.onended = null;
+    try { source.stop(); } catch { /* A source that never started cannot be stopped. */ }
+    source.disconnect();
+    gain.disconnect();
+    this.click = null;
+  }
   public stop(): void {
     const sources = this.click ? [...this.sources, this.click.source] : this.sources;
     for (const source of sources) {
@@ -338,6 +387,7 @@ export class MusicSystem {
     this.click = null;
     this.sources = [];
     this.origin = null;
+    this.playhead = [];
   }
   /** Drops the loaded track's stems and their gains; the click bar is the context's and stays. */
   private release(): void {

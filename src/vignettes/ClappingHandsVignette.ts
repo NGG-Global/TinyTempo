@@ -69,7 +69,7 @@ export class ClappingHandsVignette extends HouseholdVignette {
   private outcome: ClapOutcome = 'fail';
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe7d5bd, ROOM.warm);
+    super(scene, 0xe7d5bd, ROOM.warm, { card: { x: -352, y: -250, width: 704, height: 500, radius: 24 } });
     const look: ClapLook = clapLook(lap);
     this.hands = { skin: faces(look.skin), nail: look.nail, sleeve: faces(look.sleeve), cuff: look.cuff };
   }

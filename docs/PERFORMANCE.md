@@ -92,6 +92,30 @@ whether or not anything changed.
 
 Across a replayed level, text rasters at the 95th-percentile frame fell from 6 to 2.
 
+### The map's ambience, measured before and after
+
+`ui/mapAmbience.ts` adds a fixed pool of 32 motes and 8 lamp glows to the map
+(`docs/VISUAL_POLISH.md`, "The map"). The same harness measured it on the 393×851 phone
+viewport. It timed the whole game step (update plus render submission) for 12 s on an idle
+map. The before build is the commit before the change, served from a worktree. Each side ran
+twice, one after the other, never at the same time.
+
+| Area | Before, mean / p95 (ms) | After, mean / p95 (ms) |
+|---|---|---|
+| Grass (pollen) | 6.85 / 10.8 and 6.79 / 10.3 | 7.50 / 11.8 and 7.30 / 11.9 |
+| Pavement (lamp glows) | 7.94 / 11.6 and 7.62 / 10.6 | 7.88 / 11.2 and 7.88 / 11.4 |
+| Dusk (fireflies, additive) | 6.32 / 9.9 and 6.58 / 9.8 | 7.09 / 11.7 and 7.05 / 10.4 |
+
+The cost is about 0.5–0.7 ms a frame on this core where motes are drawn, and within noise on
+Pavement, whose lamps are a few large images rather than 32 small ones. On the
+two-to-four-times-slower handset estimated above, that is roughly 1–3 ms of the 16.7 ms
+budget. The "after" figures also include the frontier hop reading the music's playhead
+once a frame, which is a refresh of the clock and a short walk of the rate history.
+Nothing grows with the length of the road or the time spent on the map. The pool is built
+once on entry. Posing a mote allocates a few short-lived objects (its seed and its pose), about a hundred a frame in all, which the young generation collects cheaply. Under
+reduced motion or a blurred window, every image is hidden and the pose loop does not run.
+The fill-rate cost on a real GPU was not measured here (the harness renders in software).
+
 ## Looked at and left
 
 - **Particle emitters are created on first use.** Measured: about 2.7 ms for the first

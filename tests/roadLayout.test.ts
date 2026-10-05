@@ -5,13 +5,12 @@ import { isAreaFinale, mapLastLevel } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
 import { PALETTE, SHELL } from '../src/config/theme';
 import { AREAS } from '../src/game/levels';
-import { contrastRatio, typeStroke } from '../src/ui/colour';
+import { contrastRatio, OUTLINE_CONTRAST, typeStroke } from '../src/ui/colour';
 import { STAR_PRIZE } from '../src/ui/star';
 import { stripBounds } from '../src/ui/navigation';
 import { pathIndexAt, pathXAt, smoothPath } from '../src/ui/path';
 import {
-  beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook,
-  GATE, gatePlateTop, mapWindow, nodeRises, nodeYs, ROAD, roomAbove, seamBelow, signpostAt, worldHeight,
+  beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE, gatePlateTop, mapWindow, nodeRises, nodeYs, ROAD, roomAbove, seamBelow, signpostAt, worldHeight, puckColours, shownColour,
 } from '../src/ui/roadLayout';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -247,6 +246,40 @@ describe('what the map now writes and seats, on every area', () => {
   it('rings an empty crown seat so it reads on every area\'s road', () => {
     for (const area of AREAS) {
       expect(contrastRatio(crownHollow(area.road), area.road), area.name).toBeGreaterThanOrEqual(3);
+    }
+  });
+});
+
+describe('how each stop is painted', () => {
+  const frontier = { fill: PALETTE.coral, number: SHELL.cream };
+  const states = ['frontier', 'cleared', 'locked', 'preview'] as const;
+
+  it('gives every number on every stop in every area at least the outline contrast, as shown', () => {
+    for (const area of AREAS) {
+      for (const state of states) {
+        const c = puckColours(area, state, frontier);
+        const shown = shownColour(c.fill, c.number, c.numberAlpha);
+        expect(contrastRatio(c.fill, shown), `${area.name} ${state}`).toBeGreaterThanOrEqual(OUTLINE_CONTRAST);
+      }
+    }
+  });
+
+  it('settles a cleared stop: lighter against its ground than the old ink fill, on every area', () => {
+    for (const area of AREAS) {
+      const cleared = puckColours(area, 'cleared', frontier).fill;
+      // The old fill was the area's ink, which on Dusk is its light tone.
+      expect(contrastRatio(cleared, area.ground), area.name).toBeLessThan(contrastRatio(area.ink, area.ground));
+    }
+  });
+
+  it('keeps the frontier coral and the preview the faintest number on the road', () => {
+    for (const area of AREAS) {
+      expect(puckColours(area, 'frontier', frontier).fill).toBe(PALETTE.coral);
+      const contrast = (state: 'cleared' | 'locked' | 'preview') => {
+        const c = puckColours(area, state, frontier);
+        return contrastRatio(c.fill, shownColour(c.fill, c.number, c.numberAlpha));
+      };
+      expect(contrast('preview'), area.name).toBeLessThanOrEqual(contrast('locked'));
     }
   });
 });

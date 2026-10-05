@@ -1,10 +1,19 @@
 import type Phaser from 'phaser';
+import type { Judgement } from '@/rhythm/judge';
 import { STYLE } from '@/config/style';
 import { faces } from '@/ui/light';
 import { canvasFinale, brushTravel, CANVAS_MOTION, strokePose, strokeTimes } from './canvasMotion';
 import { canvasLook, type CanvasLook, type PaintStroke } from './canvasLooks';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { HouseholdVignette } from './HouseholdVignette';
+import type { StageCard } from './staging';
+
+/**
+ * Where the easel stands, for the staging (`docs/STAGING.md`): the span of its legs, and
+ * their feet at y 210. It has no card — the wall is the paper's own colour — so it stands
+ * free on a short shelf rather than resting a frame on one.
+ */
+const EASEL_FOOTPRINT: StageCard = { x: -70, y: -190, width: 140, height: 400, radius: 0 };
 import { clamp01 } from './motion';
 
 /** The canvas the brush paints on, in the easel's frame. Strokes are authored in this box. */
@@ -20,7 +29,7 @@ export class PaintbrushVignette extends HouseholdVignette {
 
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = canvasLook(lap);
-    super(scene, look.wall, 0xf6e2b8);
+    super(scene, look.wall, 0xf6e2b8, { card: EASEL_FOOTPRINT, framed: false });
     this.look = look;
   }
 
@@ -50,6 +59,17 @@ export class PaintbrushVignette extends HouseholdVignette {
     if (ending >= 0 && this.successful && !this.still) {
       const a = Math.sin(clamp01((ending - 0.7) / 0.7) * Math.PI);
       sparkle(g, CANVAS.x + CANVAS.w - 28, CANVAS.y + CANVAS.h - 28, 12 * a, a);
+    }
+  }
+
+  public override onAccuracy(result: Judgement, now: number): void {
+    const before = this.hitTimes.length;
+    super.onAccuracy(result, now);
+    // A judged hit lays its stroke, and the loaded brush spits a few drops where it lands.
+    if (this.hitTimes.length > before) {
+      const stroke = this.look.strokes[Math.min(before, this.look.strokes.length - 1)];
+      const start = stroke?.points[0];
+      if (stroke && start) this.throwBits('droplets', start[0], start[1], [stroke.colour, stroke.ink], 3);
     }
   }
 

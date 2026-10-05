@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { shade } from '@/ui/colour';
 import { fillContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
+import { PANEL_CARD } from './staging';
 import { shape, slab } from './householdArt';
 import {
   BOWL, CROWN, demoHop, flight, HEAP, launchPoint, launchTimes, PAN, panJolt, POPCORN_MOTION, popcornFinale,
@@ -31,7 +32,7 @@ export class PopcornVignette extends HouseholdVignette {
   private readonly look: PopcornLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xf1ebdc, 0xf6dfa6);
+    super(scene, 0xf1ebdc, 0xf6dfa6, { card: PANEL_CARD });
     this.look = popcornLook(lap);
     this.lightMaterial(scene, 'hob');
   }

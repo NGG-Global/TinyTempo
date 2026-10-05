@@ -93,6 +93,7 @@ export function setOrientationPromptVisible(visible: boolean): void {
  * a portrait-designed game sideways and should be.
  */
 export function isTouchPrimary(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
   return window.matchMedia('(pointer: coarse)').matches;
 }
 

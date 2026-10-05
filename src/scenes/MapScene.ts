@@ -29,7 +29,7 @@ import { FxKey } from '@/ui/feedback';
 import { dashes, pathIndexAt, pathXAt, smoothPath, type Point } from '@/ui/path';
 import {
   beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE,
-  gatePlateTop, mapWindow, masteryGroove, nodeYs, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
+  gatePlateTop, mapWindow, masteryGroove, nodeYs, puckColours, ridgeAt, ROAD, seamBelow, signpostAt, worldHeight, type FinaleStopLook, type Signpost,
 } from '@/ui/roadLayout';
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
@@ -41,8 +41,10 @@ import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
-import { body, display, label, resize } from '@/ui/type';
+import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { RouteNotice } from '@/ui/routeNotice';
+import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
+import { AMBIENCE_BY_AREA, MapAmbience, type AmbienceBand } from '@/ui/mapAmbience';
 import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
@@ -90,7 +92,8 @@ const MAP = {
    */
   cullMargin: 260,
   /** The frontier puck hops once a bar at the game's own tempo. */
-  hopSec: 1.6,
+  /** How long the frontier is off the ground, landing on each bar line. */
+  hopSec: 0.32,
   sign: { width: 340, height: 92, top: 20, ropeInset: 40 },
   /**
    * The star gate's motion: a barrier across the road at the foot of a closed area (its
@@ -152,6 +155,10 @@ export class MapScene extends BaseScene {
   private firstBand = 0;
   private strips: Strip[] = [];
   private pulse!: Phaser.GameObjects.Graphics;
+  /** Each area's ambient layer, a fixed pool; with where its bands and lamps are, from the bake. */
+  private ambience!: MapAmbience;
+  private ambienceBands: AmbienceBand[] = [];
+  private lampHeads: { x: number; y: number; k: number }[] = [];
   private touch!: Phaser.GameObjects.Graphics;
   private glow!: Phaser.GameObjects.Image;
   private fibre!: Phaser.GameObjects.TileSprite;
@@ -352,6 +359,10 @@ export class MapScene extends BaseScene {
     }));
     // The frontier puck lives here, under the numbers, so it can hop without a baked copy beneath.
     this.pulse = this.add.graphics().setDepth(3);
+    this.ambience = new MapAmbience(this);
+    this.ambienceFocused = true;
+    this.ambienceBands = [];
+    this.lampHeads = [];
     this.touch = this.add.graphics().setDepth(5);
     this.numbers = Array.from({ length: this.shown }, (_, i) => display(this, String(this.first + i), { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(4));
     const areas = Math.floor((this.first + this.shown - 2) / PROGRESSION.areaSize) - this.firstBand + 1;
@@ -437,6 +448,8 @@ export class MapScene extends BaseScene {
     this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUp, this);
     this.input.on(Phaser.Input.Events.POINTER_WHEEL, this.wheel, this);
     window.addEventListener('blur', this.cancelDrag);
+    window.addEventListener('blur', this.hideAmbience);
+    window.addEventListener('focus', this.showAmbience);
     window.addEventListener('touchcancel', this.cancelDrag);
     window.addEventListener('pointercancel', this.cancelDrag);
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
@@ -526,6 +539,15 @@ export class MapScene extends BaseScene {
       strip.bottom = bounds[j]!.bottom;
     });
     this.frontierIndex = -1;
+    this.lampHeads = [];
+    this.ambienceBands = this.areaTitles.map((_, k) => {
+      const band = this.band(k);
+      return {
+        top: band.atTop ? 0 : seamBelow(this.nodes[band.to + 1]!.y, s),
+        bottom: band.atBottom ? this.worldHeight : seamBelow(this.nodes[band.from]!.y, s),
+        kind: AMBIENCE_BY_AREA[(this.firstBand + k) % AMBIENCE_BY_AREA.length]!,
+      };
+    });
     for (const strip of this.strips) {
       this.drawTerrain(strip.ground.clear(), s, strip);
       const g = strip.detail.clear();
@@ -856,6 +878,8 @@ export class MapScene extends BaseScene {
         if (box.top < this.crestTop + CREST.swell * s * 2) continue;
         if (this.stages.some(st => box.left < st.right && box.right > st.left && box.top < st.bottom && box.bottom > st.top)) continue;
         this.prop(g, kind, variant, x, foot, k, area);
+        // The lamp's lit glass, where the ambience breathes a glow.
+        if (kind === 1 && variant === 0) this.lampHeads.push({ x, y: foot - 103 * k, k });
       }
     }
   }
@@ -963,17 +987,13 @@ export class MapScene extends BaseScene {
       : { r, size };
     // A frontier behind a closed star gate is drawn as a locked stop: the barrier
     // standing in the road below it is what says why.
-    if (state === 'frontier' && this.heldBy(level) === null) return { ...big(MAP.nodeRadius * 1.1 * s, 34 * s), depth: 10, fill: PALETTE.coral, number: SHELL.cream, state };
-    if (state === 'cleared') return { ...big(MAP.nodeRadius * s, 30 * s), depth: 8, fill: area.ink, number: area.paper, state };
-    if (state === 'preview') {
-      return {
-        ...big(MAP.nodeRadius * 0.72 * s, 22 * s), depth: 3,
-        fill: mix(area.paper, area.ground, 0.62),
-        number: mix(area.ink, area.ground, 0.38),
-        state,
-      };
-    }
-    return { ...big(MAP.nodeRadius * 0.84 * s, 26 * s), depth: 5, fill: mix(area.paper, area.ground, 0.42), number: mix(area.ink, area.ground, 0.12), state: 'locked' };
+    const held = state === 'frontier' && this.heldBy(level) !== null;
+    const shown = held ? 'locked' : state;
+    const colours = puckColours(area, shown, { fill: PALETTE.coral, number: SHELL.cream });
+    if (shown === 'frontier') return { ...big(MAP.nodeRadius * 1.1 * s, 34 * s), depth: 10, fill: colours.fill, number: colours.number, state };
+    if (shown === 'cleared') return { ...big(MAP.nodeRadius * s, 30 * s), depth: 8, fill: colours.fill, number: colours.number, state };
+    if (shown === 'preview') return { ...big(MAP.nodeRadius * 0.72 * s, 22 * s), depth: 3, fill: colours.fill, number: colours.number, state };
+    return { ...big(MAP.nodeRadius * 0.84 * s, 26 * s), depth: 5, fill: colours.fill, number: colours.number, state: 'locked' };
   }
 
   /** How a finale's stop is drawn, from the state its puck is drawn in, or null for an ordinary stop. */
@@ -1113,7 +1133,7 @@ export class MapScene extends BaseScene {
       const { area } = areaOf(level);
       const node = this.nodes[i]!;
       const p = this.puckOf(i);
-      const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1).setAlpha(p.state === 'preview' ? 0.58 : 1);
+      const text = this.numbers[i]!.setPosition(node.x, node.y).setScale(1).setAlpha(1);
       resize(text, p.size, p.number, STYLE.current, p.state === 'cleared' || p.state === 'frontier');
       const plateY = node.y + p.r + (p.depth + 24) * s;
       // Planted, not carried: the stage stands in the ground even under the hopping frontier.
@@ -1657,7 +1677,7 @@ export class MapScene extends BaseScene {
     resize(this.restTitle, 68 * s, PALETTE.ink);
     this.restTitle.setPosition(this.restRect.centerX, top + 148 * s);
     resize(this.restWait, 28 * s, PALETTE.muted, STYLE.current, false);
-    this.restWait.setWordWrapWidth(width - 56 * s, false);
+    wrapWidth(this.restWait, width - 56 * s);
     this.restWait.setPosition(this.restRect.centerX, top + 194 * s);
 
     let y = top + head;
@@ -1688,9 +1708,9 @@ export class MapScene extends BaseScene {
         drawPanel(c, chip, s, { fill: PALETTE.coral, depth: 8, press: tipPress, radius: 20 });
         go.setPosition(chip.centerX, chip.centerY + 8 * s * tipPress * 0.8);
         // The title yields to the chip rather than running under it.
-        title.setWordWrapWidth(Math.max(120 * s, chip.x - 12 * s - title.x), false);
+        wrapWidth(title, Math.max(120 * s, chip.x - 12 * s - title.x));
       } else {
-        title.setWordWrapWidth(r.right - 24 * s - title.x, false);
+        wrapWidth(title, r.right - 24 * s - title.x);
       }
       const copy = this.restTexts.tipCopy!;
       const compact = tipH < tipFull;
@@ -1698,7 +1718,7 @@ export class MapScene extends BaseScene {
       if (!compact) {
         copy.setText(this.restTipLevel === null ? HEALTH_COPY.firstEmptyMastered : HEALTH_COPY.firstEmpty);
         resize(copy, 23 * s, PALETTE.muted, STYLE.current, false);
-        copy.setWordWrapWidth(r.width - 52 * s, false);
+        wrapWidth(copy, r.width - 52 * s);
         copy.setPosition(r.x + 26 * s, lineY + 40 * s);
       }
       y += tipH + gap;
@@ -1769,7 +1789,7 @@ export class MapScene extends BaseScene {
       const copyX = markX + markR + 24 * s;
       // The copy stops where the price chip starts, so the longest locale cannot run under it.
       resize(this.restTexts.premiumTerms!, 21 * s, shade(BRASS, -0.62), STYLE.current, false);
-      this.restTexts.premiumTerms!.setWordWrapWidth(premium.right - 40 * s - pw - copyX, false);
+      wrapWidth(this.restTexts.premiumTerms!, premium.right - 40 * s - pw - copyX);
       this.restTexts.premium!.setPosition(copyX, premium.centerY - 20 * s + premiumSink);
       this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 13 * s + premiumSink);
       c.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + 3 * s + premiumSink, pw, ph, 14 * s);
@@ -1791,7 +1811,8 @@ export class MapScene extends BaseScene {
     y += backH;
 
     const note = this.restTexts.note!;
-    note.setText(this.restNote).setWordWrapWidth(width - 56 * s, false);
+    note.setText(this.restNote);
+    wrapWidth(note, width - 56 * s);
     note.setPosition(this.restRect.centerX, y + 24 * s);
   }
 
@@ -2021,6 +2042,21 @@ export class MapScene extends BaseScene {
     }
   }
 
+  /**
+   * The shell music's beat, read from the heard clock and the loop's playhead, which carries
+   * the rate history a reused level loop brings back with it. The frame clock at the music's
+   * tempo stands in while nothing plays, so the hop never freezes.
+   */
+  private musicPulse(frameSec: number): Pulse {
+    const audio = currentAudio(this);
+    if (audio && audio.context.state === 'running' && audio.music.activeSources > 0) {
+      audio.clock.refresh();
+      const head = audio.music.playheadAt(audio.clock.now());
+      if (head) return pulseAt(head.position, MUSIC.sourceBpm, head.rate, frameSec);
+    }
+    return pulseAt(null, MUSIC.sourceBpm, 1, frameSec);
+  }
+
   public override update(_time: number, delta: number): void {
     this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
     if (!this.drag && Math.abs(this.velocity) > 1) {
@@ -2054,8 +2090,11 @@ export class MapScene extends BaseScene {
     const frontier = this.nodes[this.frontierIndex];
     if (frontier) {
       const p = this.puckOf(this.frontierIndex);
-      const beat = (now % MAP.hopSec);
-      const lift = still || beat >= 0.32 ? 0 : Math.sin(Math.PI * beat / 0.32) * 10 * s * ex;
+      // Off the ground for the `hopSec` before each bar line and down on beat 1 of the music the
+      // player is hearing, rather than on a 1.6 s cycle of its own that drifted across the bar.
+      const bar = barPose(this.musicPulse(now));
+      const beat = bar.sinceBarSec;
+      const lift = still || bar.untilBarSec >= MAP.hopSec ? 0 : Math.sin(Math.PI * (1 - bar.untilBarSec / MAP.hopSec)) * 10 * s * ex;
       const { area } = areaOf(this.first + this.frontierIndex);
       // A finale's crown, baked into its stage, is its plate.
       if (!this.finaleTexts.has(this.frontierIndex)) this.drawStars(g, frontier.x, frontier.y - lift + p.r + (p.depth + 24) * s, 0, area, s);
@@ -2099,6 +2138,9 @@ export class MapScene extends BaseScene {
     // Every frame, because the scroll moves on inertia and under a thumb alike, and the
     // test is a dozen comparisons against numbers the strips already carry.
     this.cullStrips();
+    this.ambience.setShown(!still && this.ambienceFocused);
+    const { full } = this.viewport;
+    this.ambience.update(now, { left: full.x, top: this.scrollY, width: full.width, height: full.height }, s, this.ambienceBands, this.lampHeads);
     // Presses redraw only while live, then one frame at rest.
     const press = pressAmount(now, this.pressedAt);
     if (press > 0.001 || this.pressDirty) { this.drawDock(s, Math.max(0, press)); this.pressDirty = press > 0.001; }
@@ -2304,6 +2346,10 @@ export class MapScene extends BaseScene {
     this.openLevel(this.first + index);
   }
   private readonly cancelDrag = (): void => { this.drag = null; this.velocity = 0; };
+  /** Out of focus the ambience stops posing and hides, and nothing about it runs. */
+  private ambienceFocused = true;
+  private readonly hideAmbience = (): void => { this.ambienceFocused = false; };
+  private readonly showAmbience = (): void => { this.ambienceFocused = true; };
 
   private wheel(pointer: Phaser.Input.Pointer, _objects: Phaser.GameObjects.GameObject[], _dx: number, dy: number): void {
     if (this.curtain.active || this.restShown || pointer.y < this.hudHeight || pointer.y >= this.footerTop) return;
@@ -2339,6 +2385,8 @@ export class MapScene extends BaseScene {
     this.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.pointerUp, this);
     this.input.off(Phaser.Input.Events.POINTER_WHEEL, this.wheel, this);
     window.removeEventListener('blur', this.cancelDrag);
+    window.removeEventListener('blur', this.hideAmbience);
+    window.removeEventListener('focus', this.showAmbience);
     window.removeEventListener('touchcancel', this.cancelDrag);
     window.removeEventListener('pointercancel', this.cancelDrag);
     this.restSheen.destroy();

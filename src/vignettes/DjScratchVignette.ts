@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { mix, shade } from '@/ui/colour';
 import { castShadow, faces } from '@/ui/light';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import { faderCut, meterLevel, scratchFinale, scratchPush, SCRATCH_MOTION, type ScratchFinale } from './scratchMotion';
 import { scratchLook, type ScratchLook } from './scratchLooks';
@@ -40,7 +41,7 @@ export class DjScratchVignette extends HouseholdVignette {
   private readonly hands: ScratchHands;
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = scratchLook(lap);
-    super(scene, look.paper, look.glow);
+    super(scene, look.paper, look.glow, { card: FRAME_CARD });
     this.look = look;
     this.lightMaterial(scene, 'booth');
     this.hands = { skin: faces(0xc98a5e), nail: 0xf1d3bd, sleeve: faces(look.sleeve), band: look.band };

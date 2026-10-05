@@ -28,3 +28,25 @@ export function nailHeight(depth: number): number {
   // At full depth the top face (height + 10) sits exactly on the wood surface.
   return 213 * (1 - clamp01(depth)) - 10;
 }
+
+/**
+ * The title screen's hammer is a toy, not a task: a tap anywhere that is not a control
+ * lands a blow. The nail gives a little on the first knock and no more on the rest — a
+ * screen that judges nothing never drives it home — and, left alone, eases back up.
+ */
+export const KNOCK = {
+  /** How far the first knock sinks the nail: about one scored hit's share on a four-target task. */
+  depth: 0.19,
+  /** How long the nail stays down after the last knock before it rises. */
+  restSec: 2,
+  /** How long the rise back takes. A release, not the strike's snap. */
+  riseSec: 0.45,
+} as const;
+
+/**
+ * Where the nail belongs, given how long since the last knock: down while the knocks
+ * keep coming, up once they have stopped. `Infinity` is a screen never tapped.
+ */
+export function knockDepth(sinceLastKnockSec: number): number {
+  return sinceLastKnockSec >= 0 && sinceLastKnockSec < KNOCK.restSec ? KNOCK.depth : 0;
+}

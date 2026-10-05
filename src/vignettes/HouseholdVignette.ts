@@ -5,11 +5,13 @@ import type { Phase } from '@/game/RoundController';
 import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
 import { Backdrop } from '@/ui/backdrop';
+import { Feedback, type Preset } from '@/ui/feedback';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
 import { acceptDemoBeat, turnOpen } from './motion';
 import type { GrooveLevel } from '@/game/groove';
 import { GrooveReaction, type GrooveMaterial } from '@/ui/grooveReaction';
+import { drawCardLight, drawGround, roomBelowCard, shelfFor, type StagingOptions } from './staging';
 
 /** Lifecycle only. Each act owns its art; the round controller owns every verdict. */
 export abstract class HouseholdVignette implements Vignette {
@@ -20,6 +22,10 @@ export abstract class HouseholdVignette implements Vignette {
   public onGroove(level: GrooveLevel, now: number): void { this.grooveReaction?.show(level, now); }
   protected readonly stage: Phaser.GameObjects.Container;
   protected readonly art: Phaser.GameObjects.Graphics;
+  /** Under the art: the shelf the card rests on and the shadows it throws. Drawn in `layout`. */
+  private readonly shelfLayer: Phaser.GameObjects.Graphics;
+  /** Over the art: the card's lit rim and its falloff away from the light. Drawn in `layout`. */
+  private readonly lightLayer: Phaser.GameObjects.Graphics;
   private readonly backdrop: Backdrop;
   protected plan: RoundPlan | null = null;
   protected phase: Phase = 'idle';
@@ -42,15 +48,28 @@ export abstract class HouseholdVignette implements Vignette {
    */
   private baseX = 0;
   private baseY = 0;
+  /** Material particles in the stage's own space, made on an act's first burst. */
+  private bursts: Feedback | null = null;
+  private readonly fxScene: Phaser.Scene;
   protected get still(): boolean { return reducedMotion(); }
   protected get watching(): boolean { return this.phase === 'prepare' || this.phase === 'demonstrate'; }
   protected get strokes(): number { return this.watching ? this.demoTimes.length : this.taps; }
 
-  public constructor(scene: Phaser.Scene, paper: number, glow: number) {
+  /**
+   * `staging` names the act's card, which the base class grounds on a shelf and lights
+   * from the shared key light (`vignettes/staging.ts`, `docs/STAGING.md`). An act with
+   * no card gets neither; one that stands on a surface of its own passes `ground: false`.
+   * Nothing is drawn here: the stage's layers are created now, in order, and painted by
+   * `layout`, once per viewport, never per frame.
+   */
+  public constructor(scene: Phaser.Scene, private readonly paper: number, private readonly glow: number, private readonly staging: StagingOptions = {}) {
+    this.fxScene = scene;
     this.backdrop = new Backdrop(scene, paper, glow, { glowAlpha: 0.45 });
     this.stage = scene.add.container(0, 0).setDepth(-10);
+    this.shelfLayer = scene.add.graphics();
     this.art = scene.add.graphics();
-    this.stage.add(this.art);
+    this.lightLayer = scene.add.graphics();
+    this.stage.add([this.shelfLayer, this.art, this.lightLayer]);
   }
 
   public layout(viewport: Viewport): void {
@@ -62,6 +81,13 @@ export abstract class HouseholdVignette implements Vignette {
     this.baseY = (top + bottom) / 2;
     this.stage.setPosition(this.baseX, this.baseY).setScale(scale);
     this.backdrop.layout(viewport);
+    const card = this.staging.card;
+    if (card) {
+      const shelf = this.staging.ground === false ? null : shelfFor(card, roomBelowCard(card, this.baseY, scale, safe.bottom, ui));
+      const framed = this.staging.framed !== false;
+      if (this.staging.ground !== false) drawGround(this.shelfLayer, card, shelf, this.paper, this.glow, framed);
+      if (framed) drawCardLight(this.lightLayer, card, this.glow);
+    }
   }
 
   public reset(plan: RoundPlan): void {
@@ -121,6 +147,22 @@ export abstract class HouseholdVignette implements Vignette {
     this.grooveReaction?.update(now, this.plan, this.still);
   }
   protected abstract draw(now: number, ending: number): void;
+  /**
+   * A burst of material bits at a point in the art's own units, fired by a judged contact.
+   * Over the art and under the card light, so the light falls on what was thrown. Nothing
+   * under reduced motion; counts stay in the range the presets were tuned for.
+   */
+  protected throwBits(preset: Preset, x: number, y: number, tint: number | number[], count: number): void {
+    if (this.still) return;
+    if (!this.bursts) {
+      this.bursts = new Feedback(this.fxScene, 0, this.stage);
+      // `Feedback` adds each emitter to the stage as it is made, at the top; under the light.
+      this.stage.bringToTop(this.lightLayer);
+    }
+    this.bursts.burst(preset, x, y, tint, count);
+    this.stage.bringToTop(this.lightLayer);
+  }
   public translate(offset: number): void { if (!this.still) this.stage.x += offset; }
-  public destroy(): void { this.stage.destroy(true); this.backdrop.destroy(); }
+  public punch(dy: number): void { if (!this.still) this.stage.y += dy; }
+  public destroy(): void { this.bursts?.destroy(); this.bursts = null; this.stage.destroy(true); this.backdrop.destroy(); }
 }

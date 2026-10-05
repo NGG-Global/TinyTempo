@@ -1,6 +1,7 @@
 import type Phaser from 'phaser';
 import { faces } from '@/ui/light';
 import { HouseholdVignette } from './HouseholdVignette';
+import { FRAME_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { pileFinale, staplerClose, staplerJaw } from './errandMotion';
 import { staplerLook, type StaplerLook } from './staplerLooks';
@@ -19,7 +20,7 @@ export class StaplerVignette extends HouseholdVignette {
   /** Which stapler, and which leather. The jaw does not change. */
   private readonly look: StaplerLook;
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe9e3d8, 0xf1d6a2);
+    super(scene, 0xe9e3d8, 0xf1d6a2, { card: FRAME_CARD });
     this.look = staplerLook(lap);
   }
 

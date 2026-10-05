@@ -13,13 +13,16 @@ import { shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
-import { anticipation, clamp01, easeOut, HAMMER_MOTION, nailHeight, recoil } from './hammerMotion';
+import { contactGive } from '@/ui/spring';
+import { anticipation, clamp01, easeOut, HAMMER_MOTION, KNOCK, knockDepth, nailHeight, recoil } from './hammerMotion';
 import { hammerLook, type HammerLook } from './hammerLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** How far above the bench the hammer's raised head reaches, in stage units, with a little air. */
 const HAMMER_REACH = 520;
+/** How long the nail takes to move to a new depth after a blow. */
+const DEPTH_EASE_SEC = 0.085;
 
 export const WORKSHOP = {
   paper: 0xeee8d8, ink: 0x243e35, muted: 0x788074, sun: 0xdfc37f,
@@ -56,7 +59,12 @@ export class HammerNailVignette implements Vignette {
   private depthFrom = 0;
   private depthTo = 0;
   private depthAt = -100;
+  private depthSec = DEPTH_EASE_SEC;
+  /** The title screen's last knock, on the scene's clock; -Infinity on a screen never tapped and in every level. */
+  private lastKnock = -Infinity;
   private strikeAt = -100;
+  /** The cover's next bar line, on the clock `update` is given; null when it plays no beat. */
+  private coverBar: number | null = null;
   private impactX = 310;
   private impactY = -203;
   private strength = 1;
@@ -170,6 +178,9 @@ export class HammerNailVignette implements Vignette {
     this.plan = plan;
     this.depth = this.depthFrom = this.depthTo = 0;
     this.depthAt = this.strikeAt = -100;
+    this.depthSec = DEPTH_EASE_SEC;
+    this.lastKnock = -Infinity;
+    this.coverBar = null;
     this.bend = 0;
     this.finishAt = null;
     this.finishDone = false;
@@ -185,10 +196,11 @@ export class HammerNailVignette implements Vignette {
       this.setDepth(0, now);
     }
   }
-  private setDepth(value: number, now: number): void {
+  private setDepth(value: number, now: number, overSec = DEPTH_EASE_SEC): void {
     this.depthFrom = this.depth;
     this.depthTo = clamp01(value);
     this.depthAt = now;
+    this.depthSec = overSec;
   }
   public onDemonstrationBeat(time: number): void {
     if (time <= this.lastDemoStrike) return;
@@ -200,6 +212,34 @@ export class HammerNailVignette implements Vignette {
   public onPlayerHit(now: number): void {
     if (!isPlayerTurn(this.phase)) return;
     this.strike(now, 1);
+  }
+  /**
+   * The title screen's blow: a tap anywhere that is not a control. The cover never holds a
+   * plan, so this goes round `onPlayerHit`'s turn gate. The nail takes the first knock and
+   * holds under the rest; `update` lets it back up once the knocks have stopped
+   * (`knockDepth`), and `reset` clears it, so a level's hammer never inherits one.
+   */
+  public knock(now: number): void {
+    this.lastKnock = now;
+    this.strike(now, 1);
+    const depth = knockDepth(0);
+    if (this.depthTo !== depth) this.setDepth(depth, now);
+  }
+  /**
+   * The title's beat: `nextBar` is when the theme's next bar line is heard, on the clock
+   * `update` is given, so the hammer winds up into it with the same `anticipation` a cued
+   * blow takes. Null stops it and leaves the idle sway. The cover only.
+   */
+  public coverBeat(nextBar: number | null): void {
+    this.coverBar = this.cover ? nextBar : null;
+  }
+  /**
+   * A blow on the theme's beat 1. The same strike a cue lands, and the nail stays where it
+   * is: a bar of the title is not a tap, and a nail that sank every two seconds would be
+   * driven home before anyone had read the sign.
+   */
+  public beatStrike(at: number): void {
+    if (this.cover) this.strike(at, 0.8);
   }
   public onAccuracy(result: Judgement, now: number): void {
     if (this.phase === 'respond' && result.kind === 'hit' && result.grade === 'Perfect') this.grooveReaction.perfect(now);
@@ -240,7 +280,11 @@ export class HammerNailVignette implements Vignette {
         if (cue.kind === 'action' && cue.time <= now) this.onDemonstrationBeat(cue.time);
       }
     }
-    this.depth = this.depthFrom + (this.depthTo - this.depthFrom) * easeOut((now - this.depthAt) / 0.085);
+    if (this.lastKnock !== -Infinity) {
+      const depth = knockDepth(now - this.lastKnock);
+      if (depth !== this.depthTo) this.setDepth(depth, now, KNOCK.riseSec);
+    }
+    this.depth = this.depthFrom + (this.depthTo - this.depthFrom) * easeOut((now - this.depthAt) / this.depthSec);
     if (this.finishAt !== null && now >= this.finishAt && !this.finishDone) {
       this.finishDone = true;
       this.strike(this.finishAt, this.successful ? 1.6 : 0.7);
@@ -250,7 +294,7 @@ export class HammerNailVignette implements Vignette {
     let angle = age < HAMMER_MOTION.recoilSec ? recoil(age) : 0.55;
     const next = this.phase === 'demonstrate' || this.phase === 'prepare'
       ? this.plan?.cues.find(cue => cue.kind === 'action' && cue.time > now)?.time : undefined;
-    const upcoming = this.finishAt !== null && !this.finishDone ? this.finishAt : next;
+    const upcoming = this.finishAt !== null && !this.finishDone ? this.finishAt : next ?? this.coverBar;
     if (upcoming !== undefined && upcoming !== null && upcoming - now < HAMMER_MOTION.anticipationSec) angle = anticipation(upcoming - now, angle);
     if (this.phase === 'idle') angle += Math.sin(now * 1.25) * 0.025;
     if (this.finishDone && !this.successful) {
@@ -270,6 +314,10 @@ export class HammerNailVignette implements Vignette {
     this.shadow.setPosition(340 - Math.sin(angle) * 25, 10).setScale(1 + pressure * 0.25, 1 - pressure * 0.2).setAlpha(0.8 + pressure * 0.2);
     this.wood.y = this.bench.y = this.reducedMotion ? 0 : pressure * 1.6;
     this.drawNail(now);
+    // The nail gives under the face: shorter and a little wider for a few frames, about its
+    // foot in the timber, so the blow reads as landing on something rather than beside it.
+    const give = this.reducedMotion ? 0 : contactGive(age, 1.5 * this.strength, exaggeration);
+    this.nail.setScale(1 + give * 0.5, 1 - give).setPosition(310 * -give * 0.5, 0);
     this.drawDust(age);
     // The spotlight opens toward the player's side across the handover, so it has
     // finished moving before the downbeat it announces rather than starting there.
@@ -326,4 +374,5 @@ export class HammerNailVignette implements Vignette {
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
   /** Scene supplies absolute musical slide progress; never owns a transition timer. */
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
 }

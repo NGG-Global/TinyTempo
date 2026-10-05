@@ -289,7 +289,7 @@ export class SawTimberVignette implements Vignette {
   private chips(): void {
     if (this.reducedMotion) return;
     const c = Math.cos(TILT), s = Math.sin(TILT);
-    this.bursts.burst('chips', TIMBER_X + CUT_X * c, TIMBER_Y + CUT_X * s - 6, [this.wood.sawdust, this.wood.lit], 6);
+    this.bursts.burst('splinters', TIMBER_X + CUT_X * c, TIMBER_Y + CUT_X * s - 6, [this.wood.sawdust, this.wood.lit], 6);
   }
 
   public onAccuracy(result: Judgement, now: number): void {
@@ -613,5 +613,6 @@ export class SawTimberVignette implements Vignette {
   }
 
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
 }

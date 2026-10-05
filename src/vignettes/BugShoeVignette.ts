@@ -15,6 +15,19 @@ import { bugLook, type BugLook } from './bugLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { clamp01, easeOut, isPlayerTurn, turnOpen } from './motion';
 
+
+/**
+ * The bug's size against the shoe. Raised from 1 to 1.75 by the staging audit
+ * (`docs/STAGING.md`): at 1 it was the smallest subject in the cast, about a tenth of the
+ * frame, a purple dot under a sneaker four times its length. It scales its own Graphics,
+ * whose origin is the body's centre, so the rest height scales with it and the feet stay
+ * on the floor the sole lands on; the outline is divided back out, so it carries the same
+ * weight as the shoe's. The stomp, the dodge and the contact stops do not move.
+ */
+const BUG_SIZE = 1.75;
+/** Where the body's centre rests above the floor at size 1. */
+const BUG_REST_Y = -24;
+
 export const GARDEN = { paper: 0xe4e7ce, ink: 0x303f43, tile: 0xb8c2a0, plum: 0x8b6085, cream: 0xfff5dc, coral: 0xd87d62 };
 export function shoeLift(age: number): number { return 245 * easeOut((age - 0.035) / 0.28); }
 
@@ -198,15 +211,15 @@ export class BugShoeVignette implements Vignette {
     this.shadow.setPosition(this.contactX, 7).setScale(1 - lift / 1000, 1).setAlpha(1 - lift / 400);
     this.stage.setPosition(this.baseX, this.baseY + (this.reducedMotion ? 0 : squash * 2 * this.scale));
     let x = this.previousX + (this.contactX - this.previousX) * easeOut(age / 0.18);
-    let y = -24 - Math.abs(Math.sin(now * 9)) * (this.reducedMotion ? 0 : 3);
+    let y = BUG_REST_Y * BUG_SIZE - Math.abs(Math.sin(now * 9)) * (this.reducedMotion ? 0 : 3);
     if (!this.hit && age < 0.4) x += 150 * easeOut(age / 0.15);
     if (this.finished) {
       x = this.contactX + (this.successful ? -118 : 207) * easeOut(age / 0.5);
-      y = -24 - (this.successful ? 110 : 0) * easeOut(age / 0.5) - Math.sin(clamp01(age / 0.5) * Math.PI) * 100;
+      y = BUG_REST_Y * BUG_SIZE - (this.successful ? 110 : 0) * easeOut(age / 0.5) - Math.sin(clamp01(age / 0.5) * Math.PI) * 100;
     }
     const g = this.bug.clear();
     const compression = this.hit ? Math.min(0.9, squash * 0.72) : 0;
-    g.setPosition(x, y).setScale(1 + compression, 1 - compression);
+    g.setPosition(x, y).setScale(BUG_SIZE * (1 + compression), BUG_SIZE * (1 - compression));
     g.lineStyle(4, GARDEN.ink);
     for (let i = -1; i <= 1; i++) {
       const wiggle = Math.sin(now * 14 + i) * 5;
@@ -214,7 +227,7 @@ export class BugShoeVignette implements Vignette {
       g.lineBetween(i * 15, -2, i * 23 + 5, -16 - wiggle);
     }
     const body = faces(this.look.body);
-    const line = STYLE.current.outline * 1.4;
+    const line = STYLE.current.outline * 1.4 / BUG_SIZE;
     if (line > 0) g.lineStyle(line, body.edge, 1).strokeEllipse(0, 0, 72, 40);
     g.fillStyle(body.shade).fillEllipse(0, 2, 72, 40);
     g.fillStyle(body.face).fillEllipse(0, 0, 72, 40);
@@ -228,7 +241,7 @@ export class BugShoeVignette implements Vignette {
     // The bug's own contact shadow, drawn here rather than into its Graphics so the
     // squash on impact does not squash the shadow with it.
     const bugDrop = castShadow(5);
-    a.fillStyle(GARDEN.ink, bugDrop.alpha * (1 - clamp01(-y / 160))).fillEllipse(x + bugDrop.dx, 6, 66, 12, 10);
+    a.fillStyle(GARDEN.ink, bugDrop.alpha * (1 - clamp01((BUG_REST_Y * BUG_SIZE - y - BUG_REST_Y) / 160))).fillEllipse(x + bugDrop.dx, 6, 66 * BUG_SIZE, 12 * BUG_SIZE, 10);
     if (age >= 0 && age < 0.22) {
       const p = age / 0.22;
       this.accents.lineStyle(3, GARDEN.cream, 1 - p).strokeEllipse(this.contactX, 2, 210 + p * 180, 14 + p * 22);
@@ -260,5 +273,6 @@ export class BugShoeVignette implements Vignette {
   }
 
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
   public destroy(): void { this.bursts.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
 }

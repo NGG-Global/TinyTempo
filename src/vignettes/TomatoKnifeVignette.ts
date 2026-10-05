@@ -10,6 +10,7 @@ import { Backdrop } from '@/ui/backdrop';
 import { shade } from '@/ui/colour';
 import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
+import { contactGive } from '@/ui/spring';
 import type { Vignette } from './Vignette';
 import {
   acceptDemoBeat, advanceSlice, clamp01, cutFraction, easeOut, juiceFall, knifeLift, knifeWindup,
@@ -266,7 +267,7 @@ export class TomatoKnifeVignette implements Vignette {
   private takeSlice(now: number, targets: number): void {
     // Pulp thrown off the blade. The falling juice beside this stays hand drawn: it is
     // scaled by the task's own tempo, which a particle's fixed lifetime cannot follow.
-    if (!this.reducedMotion) this.bursts.burst('dust', this.cutTo, -RY, [this.fruit.flesh, this.fruit.fleshRing, this.fruit.seed], 6);
+    if (!this.reducedMotion) this.bursts.burst('droplets', this.cutTo, -RY, [this.fruit.flesh, this.fruit.fleshRing, this.fruit.seed], 6);
     this.sliceAt.push(now);
     this.sliceFrom.push(this.cutTo);
     // Off chops so far decide how crooked this slice lands; deterministic per slice.
@@ -360,6 +361,10 @@ export class TomatoKnifeVignette implements Vignette {
     this.produce.setPosition(0, this.reducedMotion ? 0 : press * 1.4);
     this.poseKnife(now, beat, age);
     this.drawTomato();
+    // The fruit gives under the blade: squat and a little wider for a few frames, about the
+    // cut face on the board, so the knife stays on the face it is cutting.
+    const give = this.reducedMotion ? 0 : contactGive(age, 1, STYLE.current.exaggeration);
+    this.tomatoG.setScale(1 + give * 0.5, 1 - give).setPosition(this.cut * -give * 0.5, 0);
     this.drawSlices(now, beat);
     this.drawMarks(now);
     this.drawJuice(beat, age);
@@ -536,5 +541,6 @@ export class TomatoKnifeVignette implements Vignette {
   }
 
   public translate(offset: number): void { this.stage.x += this.reducedMotion ? 0 : offset; }
+  public punch(dy: number): void { this.stage.y += this.reducedMotion ? 0 : dy; }
   public destroy(): void { this.bursts.destroy(); this.wall.destroy(); this.stage.destroy(true); this.backdrop.destroy(); }
 }

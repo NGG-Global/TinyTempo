@@ -2,7 +2,7 @@ import { breadcrumb } from '@/core/errors';
 import type { Progress } from '@/game/progress';
 import { syncAchievements } from './achievementSync';
 import { playGames } from './boot';
-import { cloudStoreOn, createCloudSync, localCloudSave, type CloudSync, type CloudSyncOutcome } from './cloudSave';
+import { cloudStoreOn, createCloudSync, localCloudSave, type CloudSync, type CloudSyncOutcome, cloudBindingDamaged, CLOUD_STORE_KEY } from './cloudSave';
 import { stubPlayGames } from './playGames';
 
 /**
@@ -46,6 +46,20 @@ export function cloudSync(): CloudSync {
     onEvent: (event, data) => breadcrumb(event, data),
   });
   return instance;
+}
+
+/**
+ * Drop a cloud binding that can no longer be read, so the next sync starts from an empty
+ * one. Only a damaged binding: a readable one names the device's owner and holds the
+ * shelved saves of players who signed in before, and none of that is Reset's to destroy.
+ * Returns whether anything was removed.
+ */
+export function repairCloudBinding(storage: Storage | null = safeStorage()): boolean {
+  try {
+    if (!cloudBindingDamaged(storage?.getItem(CLOUD_STORE_KEY) ?? null)) return false;
+    storage?.removeItem(CLOUD_STORE_KEY);
+    return storage !== null;
+  } catch { return false; }
 }
 
 /** Reconcile now. Never rejects. */

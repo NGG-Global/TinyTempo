@@ -16,6 +16,10 @@ The visual review enlarged the tool and raised the timber horizon to 68% of the 
 
 After resolution, a 70% or better result gets a flush nail, stronger thock/ring and brief sparkle. Lower results get a bent nail and a descending metal resonance. Both finish within the scene. The extra finishing blow is an unscored coda; it never changes the engine's result. Another nail cycles the existing patterns at 100 BPM. ↻ repeats the current pattern, including during playback/ending; ♪ toggles the master gain. Their hit regions remain at least 48 CSS px.
 
+## The title screen
+
+The same act, constructed with `cover = true`, is the title illustration: it never receives a plan, and its hammer idles. A tap anywhere on the title screen that is not a control — not a puck, Play, How to play or an open objectives card — lands a blow (`MenuScene.knock` → `HammerNailVignette.knock`). The strike, the dust and the shake are the level's own; the voice is the act's synthesized hit, played as a stinger through the engine's effects bus so the mute puck and the Effects level govern it, and the engine's level sound set is left alone. The nail gives `KNOCK.depth` on the first knock and no more on any that follow, since a screen that judges nothing never drives it home, and `knockDepth` (`hammerMotion.ts`, pure) lets it ease back up over `KNOCK.riseSec` once `KNOCK.restSec` has passed without a knock. `knock` goes round `onPlayerHit`'s turn gate because the cover has no turn, and `reset` clears the knock so a level's hammer never inherits one. On a cold start the context is still suspended; the source is started regardless and plays when the same tap's resume lands, so the first tap knocks late rather than silently.
+
 ## Ownership and timing
 
 - `src/vignettes/HammerNailVignette.ts`: object graph, responsive layout, depth animation, anticipatory strikes, immediate contact/recoil, dust, vibration and endings. It consumes outcomes without judging them.
