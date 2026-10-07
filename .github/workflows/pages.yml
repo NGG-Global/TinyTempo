@@ -4,10 +4,16 @@ name: GitHub Pages
 # Privacy Policy and Terms of Service the Play Console listing needs. Enable
 # Pages in the repository settings with Source set to GitHub Actions. After
 # the first successful run the public URLs are:
-#   https://ngg-global.github.io/TinyTempo/
-#   https://ngg-global.github.io/TinyTempo/privacy/
-#   https://ngg-global.github.io/TinyTempo/terms/
-#   https://ngg-global.github.io/TinyTempo/legal/
+#   https://tinytempo.games/
+#   https://tinytempo.games/privacy/
+#   https://tinytempo.games/terms/
+#   https://tinytempo.games/legal/
+#
+# The custom domain is set in Settings → Pages; an Actions deploy ignores a
+# CNAME file. Every github.io/TinyTempo URL 301s to it, so the canonicals,
+# og:url, sitemap and robots.txt in legal/ must name tinytempo.games: pointing
+# Google at the github.io URLs is what Search Console reported as "Page with
+# redirect".
 
 on:
   push:
