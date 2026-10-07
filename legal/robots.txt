@@ -1,3 +1,3 @@
 User-agent: *
 Allow: /
-Sitemap: https://ngg-global.github.io/TinyTempo/sitemap.xml
+Sitemap: https://tinytempo.games/sitemap.xml
