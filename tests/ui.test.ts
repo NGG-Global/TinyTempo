@@ -147,6 +147,11 @@ describe('workshop contrast', () => {
     // Every dark one loses it; each used to carry a near-black border at under 2:1.
     expect(refused).toBe(VIGNETTES.length + AREAS.length - 1);
   });
+  it('copies every area into the lists below, so none is left out of them', () => {
+    // The copies keep this file off the vignette registry's Phaser import at call sites that
+    // only need colours; this keeps them from drifting from `AREAS`.
+    expect(AREAS.map(area => area.name)).toEqual(['Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle']);
+  });
   it('keeps empty stars readable on their plate', () => {
     const areas = [
       { name: 'Grass', ground: 0xb0bb91, ink: 0x2c4629, paper: 0xf4f0e2 },
@@ -154,6 +159,10 @@ describe('workshop contrast', () => {
       { name: 'Sand', ground: 0xe3c88f, ink: 0x5a4224, paper: 0xfff7e6 },
       { name: 'Snow', ground: 0xdfe8f0, ink: 0x2d4759, paper: 0xffffff },
       { name: 'Dusk', ground: 0x433856, ink: 0xf3e7d8, paper: 0x2a2236 },
+      { name: 'Garden', ground: 0x9cc47a, ink: 0x24401f, paper: 0xf7f6e9 },
+      { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
+      { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
+      { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
     ] as const;
     for (const area of areas) {
       const plate = shade(area.paper, -0.03);
@@ -174,6 +183,10 @@ describe('workshop contrast', () => {
       { name: 'Sand', ground: 0xe3c88f, ink: 0x5a4224, paper: 0xfff7e6 },
       { name: 'Snow', ground: 0xdfe8f0, ink: 0x2d4759, paper: 0xffffff },
       { name: 'Dusk', ground: 0x433856, ink: 0xf3e7d8, paper: 0x2a2236 },
+      { name: 'Garden', ground: 0x9cc47a, ink: 0x24401f, paper: 0xf7f6e9 },
+      { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
+      { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
+      { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
     ] as const;
     for (const area of areas) {
       const fill = mix(area.paper, area.ground, 0.62);
@@ -190,6 +203,10 @@ describe('workshop contrast', () => {
       { name: 'Sand', ground: 0xe3c88f, ink: 0x5a4224, paper: 0xfff7e6 },
       { name: 'Snow', ground: 0xdfe8f0, ink: 0x2d4759, paper: 0xffffff },
       { name: 'Dusk', ground: 0x433856, ink: 0xf3e7d8, paper: 0x2a2236 },
+      { name: 'Garden', ground: 0x9cc47a, ink: 0x24401f, paper: 0xf7f6e9 },
+      { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
+      { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
+      { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
     ] as const;
     for (const area of areas) {
       const fill = mix(area.paper, area.ground, 0.42);

@@ -50,9 +50,12 @@ describe('which levels are finales', () => {
     expect(areaFinale(size)).toMatchObject({ level: size, area: 1, areaName: 'Grass', nextAreaName: 'Pavement' });
     expect(areaFinale(2 * size)).toMatchObject({ area: 2, areaName: 'Pavement', nextAreaName: 'Sand' });
     expect(areaFinale(3 * size)).toMatchObject({ area: 3, areaName: 'Sand', nextAreaName: 'Snow' });
+    // Dusk hands over to the four areas added after the first five, then the lap ends.
+    expect(areaFinale(5 * size)).toMatchObject({ area: 5, areaName: 'Dusk', nextAreaName: 'Garden' });
+    expect(areaFinale(8 * size)).toMatchObject({ area: 8, areaName: 'Village', nextAreaName: 'Castle', treatment: FINALE_TREATMENTS.Village });
     // The last area of a lap hands over to the first area's second lap.
     const lap = AREAS.length * size;
-    expect(areaFinale(lap)).toMatchObject({ areaName: 'Dusk', nextAreaName: 'Grass II' });
+    expect(areaFinale(lap)).toMatchObject({ areaName: 'Castle', nextAreaName: 'Grass II' });
     expect(areaFinale(lap + size)).toMatchObject({ areaName: 'Grass II', treatment: FINALE_TREATMENTS.Grass });
     for (let level = 1; level <= LAST; level++) if (!isAreaFinale(level)) expect(areaFinale(level)).toBeNull();
   });

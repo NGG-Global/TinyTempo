@@ -36,8 +36,8 @@ presents it without changing level timing or judgement rules. See
 `docs/TUTORIAL.md`.
 
 - **The map** is an endless scrollable road grouped into ten-level areas:
-  Grass, Pavement, Sand, Snow, Dusk, then the same five again numbered II, III
-  and so on. It renders a bounded window of levels, not the whole road.
+  Grass, Pavement, Sand, Snow, Dusk, Garden, Swamp, Village and Castle, then the
+  same nine again numbered II, III and so on. It renders a bounded window of levels, not the whole road.
 - **A level** is one vignette and three to eight tasks. A task is a demonstration
   phrase and then the player's response, back to back on the bar line — nothing
   waits between the two, and nothing waits between one task and the next. One

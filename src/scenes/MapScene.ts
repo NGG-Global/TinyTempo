@@ -46,6 +46,7 @@ import { RouteNotice } from '@/ui/routeNotice';
 import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { AMBIENCE_BY_AREA, MapAmbience, type AmbienceBand } from '@/ui/mapAmbience';
 import { BakedLayer } from '@/ui/bakedLayer';
+import { drawGroundMotif, drawProp } from '@/ui/mapScenery';
 import type { DrawingBounds } from '@/ui/graphicsBounds';
 import { resizedScroll, scrollStep, STRIP_RASTER, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -890,11 +891,8 @@ export class MapScene extends BaseScene {
     }
   }
 
-  /** A quiet repeating motif per area, so a band reads as ground rather than paint. */
+  /** A quiet repeating motif per area (`drawGroundMotif`), so a band reads as ground rather than paint. */
   private drawTexture(g: Phaser.GameObjects.Graphics, area: Area, band: number, top: number, bottom: number, s: number, strip: Strip): void {
-    const kind = band % 5;
-    const ink = shade(area.ground, -0.14);
-    const pale = shade(area.ground, 0.16);
     const rows = Math.max(1, Math.floor((bottom - top) / (76 * s)));
     for (let r = 0; r < rows; r++) {
       const y = bottom - (r + 0.5) * (bottom - top) / rows;
@@ -908,26 +906,7 @@ export class MapScene extends BaseScene {
         const x = this.viewport.full.x + (c + 0.5 + (MapScene.noise(band * 31 + r * 7 + c) - 0.5) * 0.6) * this.viewport.full.width / 5;
         // Keep the motif off the road so it never fights the ribbon for attention.
         if (Math.abs(x - this.roadXAt(y)) < MAP.roadWidth * s * 1.3) continue;
-        const n = MapScene.noise(band * 13 + r * 5 + c);
-        if (kind === 0) {
-          g.lineStyle(2.5 * s, ink, 0.5);
-          for (let t = -1; t <= 1; t++) g.lineBetween(x + t * 7 * s, y + 6 * s, x + t * 10 * s, y - (10 + n * 8) * s);
-        } else if (kind === 1) {
-          // Staggered slabs, courses offset by row, so it reads as laid paving.
-          const off = (r % 2 ? 26 : -8) * s;
-          g.fillStyle(shade(area.ground, -0.07), 0.5).fillRoundedRect(x - 36 * s + off, y - 17 * s, 70 * s, 33 * s, 4 * s);
-          g.fillStyle(pale, 0.28).fillRect(x - 33 * s + off, y - 14 * s, 64 * s, 3 * s);
-        } else if (kind === 2) {
-          g.lineStyle(2.4 * s, ink, 0.32);
-          g.beginPath();
-          for (let a = 0; a <= 8; a++) g[a === 0 ? 'moveTo' : 'lineTo'](x - 36 * s + a * 9 * s, y + Math.sin(a * 0.8 + jitter * 6) * 5 * s);
-          g.strokePath();
-        } else if (kind === 3) {
-          g.fillStyle(pale, 0.7).fillEllipse(x, y, (56 + n * 30) * s, 17 * s, 10);
-        } else {
-          g.fillStyle(shade(area.ground, -0.22), 0.55).fillEllipse(x, y, (18 + n * 12) * s, (11 + n * 5) * s, 8);
-          g.fillStyle(pale, 0.35).fillEllipse(x - 3 * s, y - 3 * s, 8 * s, 5 * s, 6);
-        }
+        drawGroundMotif(g, area, x, y, s, MapScene.noise(band * 13 + r * 5 + c), jitter, r);
       }
     }
   }
@@ -1034,7 +1013,6 @@ export class MapScene extends BaseScene {
       // of a stretch of road have to be the same ones on the way back down it.
       const level = this.first + i;
       const { area } = areaOf(level);
-      const kind = Math.floor((level - 1) / PROGRESSION.areaSize) % 5;
       const gapLeft = roadX - safe.left;
       const gapRight = safe.right - roadX;
       const sides: number[] = [];
@@ -1053,97 +1031,10 @@ export class MapScene extends BaseScene {
         const box = { left: x - 40 * k, right: x + 40 * k, top: foot - 132 * k, bottom: foot + 10 * k };
         if (box.top < this.crestTop + CREST.swell * s * 2) continue;
         if (this.stages.some(st => box.left < st.right && box.right > st.left && box.top < st.bottom && box.bottom > st.top)) continue;
-        this.prop(g, kind, variant, x, foot, k, area);
-        // The lamp's lit glass, where the ambience breathes a glow.
-        if (kind === 1 && variant === 0) strip.lamps.push({ x, y: foot - 103 * k, k });
+        // A lamp's lit glass or a torch's flame, where the ambience breathes a glow.
+        const light = drawProp(g, area, variant, x, foot, k);
+        if (light) strip.lamps.push({ ...light, k });
       }
-    }
-  }
-
-  /** Two silhouettes per area, so a band has variety without a sprite sheet. */
-  private prop(g: Phaser.GameObjects.Graphics, kind: number, variant: number, x: number, y: number, k: number, area: Area): void {
-    const ink = shade(area.ink, 0.06);
-    const quad = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number, dx: number, dy: number): void => {
-      g.fillTriangle(ax, ay, bx, by, cx, cy);
-      g.fillTriangle(ax, ay, cx, cy, dx, dy);
-    };
-    const shadow = castShadow(6);
-    g.fillStyle(0x1a1410, shadow.alpha).fillEllipse(x + shadow.dx * k, y + shadow.dy * k, (variant ? 62 : 74) * k, 19 * k, 10);
-    if (kind === 0 && variant === 0) {
-      // Pine: stacked canopy, each tier hazed a little further toward the sky.
-      g.fillStyle(shade(0x4a6b3a, -0.15)).fillRect(x - 5 * k, y - 26 * k, 10 * k, 28 * k);
-      for (let t = 0; t < 3; t++) {
-        const w = (52 - t * 12) * k;
-        const cy = y - (26 + t * 30) * k;
-        g.fillStyle(mix(0x4a6b3a, area.sky, t * 0.14)).fillTriangle(x - w / 2, cy, x + w / 2, cy, x, cy - 42 * k);
-      }
-      g.fillStyle(0xffffff, 0.16).fillTriangle(x - 22 * k, y - 26 * k, x - 4 * k, y - 26 * k, x - 13 * k, y - 62 * k);
-    } else if (kind === 0) {
-      // Round bush, to break up a run of conifers.
-      g.fillStyle(shade(0x4a6b3a, -0.2)).fillRect(x - 4 * k, y - 16 * k, 8 * k, 18 * k);
-      g.fillStyle(0x5b7d45).fillCircle(x - 14 * k, y - 28 * k, 19 * k);
-      g.fillStyle(0x5b7d45).fillCircle(x + 13 * k, y - 24 * k, 16 * k);
-      g.fillStyle(mix(0x5b7d45, area.sky, 0.1)).fillCircle(x - 1 * k, y - 42 * k, 22 * k);
-      g.fillStyle(0xffffff, 0.14).fillCircle(x - 8 * k, y - 50 * k, 9 * k);
-    } else if (kind === 1 && variant === 0) {
-      // Street lamp: the only tall vertical in a flat band, so it sells the light direction.
-      g.fillStyle(ink).fillRect(x - 4 * k, y - 106 * k, 8 * k, 106 * k);
-      g.fillStyle(ink).fillEllipse(x, y, 24 * k, 8 * k, 8);
-      g.fillStyle(0xf6e6bc, 0.18).fillTriangle(x, y - 96 * k, x - 40 * k, y + 4 * k, x + 40 * k, y + 4 * k);
-      g.fillStyle(ink);
-      quad(x - 5 * k, y - 128 * k, x + 5 * k, y - 128 * k, x + 19 * k, y - 104 * k, x - 19 * k, y - 104 * k);
-      g.fillStyle(0xf6e6bc, 0.95).fillRoundedRect(x - 14 * k, y - 106 * k, 28 * k, 7 * k, 3 * k);
-    } else if (kind === 1) {
-      // Bollard and litter bin: low street furniture at kerb height.
-      g.fillStyle(ink).fillRoundedRect(x - 26 * k, y - 46 * k, 20 * k, 48 * k, 6 * k);
-      g.fillStyle(shade(ink, 0.3), 0.5).fillRect(x - 22 * k, y - 40 * k, 4 * k, 36 * k);
-      g.fillStyle(shade(area.ground, -0.32)).fillRoundedRect(x + 2 * k, y - 34 * k, 30 * k, 36 * k, 5 * k);
-      g.fillStyle(ink, 0.8).fillRoundedRect(x, y - 38 * k, 34 * k, 7 * k, 3 * k);
-    } else if (kind === 2 && variant === 0) {
-      // Cactus.
-      const green = 0x6f8f5a;
-      g.fillStyle(green).fillRoundedRect(x - 11 * k, y - 96 * k, 22 * k, 96 * k, 11 * k);
-      g.fillStyle(green).fillRoundedRect(x + 6 * k, y - 74 * k, 26 * k, 15 * k, 7 * k);
-      g.fillStyle(green).fillRoundedRect(x + 19 * k, y - 96 * k, 14 * k, 30 * k, 7 * k);
-      g.fillStyle(shade(green, 0.22), 0.7).fillRoundedRect(x - 7 * k, y - 90 * k, 5 * k, 78 * k, 3 * k);
-    } else if (kind === 2) {
-      // Rock cluster with a dry shrub.
-      const rock = shade(area.ground, -0.3);
-      g.fillStyle(rock).fillEllipse(x - 12 * k, y - 14 * k, 46 * k, 32 * k, 10);
-      g.fillStyle(shade(rock, 0.14)).fillEllipse(x + 14 * k, y - 10 * k, 32 * k, 22 * k, 10);
-      g.fillStyle(shade(rock, 0.26), 0.6).fillEllipse(x - 18 * k, y - 22 * k, 20 * k, 11 * k, 8);
-      g.lineStyle(2.4 * k, shade(0x8a7a4a, -0.1), 0.8);
-      for (let t = -1; t <= 1; t++) g.lineBetween(x + 20 * k, y - 18 * k, x + (20 + t * 14) * k, y - (42 + Math.abs(t) * -8) * k);
-    } else if (kind === 3 && variant === 0) {
-      // Snow-capped fir.
-      g.fillStyle(shade(0x3f5a4a, -0.1)).fillRect(x - 5 * k, y - 22 * k, 10 * k, 24 * k);
-      for (let t = 0; t < 3; t++) {
-        const w = (54 - t * 13) * k;
-        const cy = y - (22 + t * 28) * k;
-        g.fillStyle(mix(0x3f5a4a, area.sky, 0.1 + t * 0.12)).fillTriangle(x - w / 2, cy, x + w / 2, cy, x, cy - 40 * k);
-        g.fillStyle(0xffffff, 0.8).fillTriangle(x - w / 3.4, cy - 22 * k, x + w / 3.4, cy - 22 * k, x, cy - 40 * k);
-      }
-    } else if (kind === 3) {
-      // Drift banked against a marker post: the pole gives the drift its scale.
-      g.fillStyle(shade(area.ink, 0.1)).fillRect(x + 12 * k, y - 76 * k, 6 * k, 78 * k);
-      g.fillStyle(0xd2604a).fillRect(x + 12 * k, y - 76 * k, 6 * k, 18 * k);
-      g.fillStyle(0xffffff, 0.92).fillEllipse(x - 4 * k, y - 8 * k, 84 * k, 40 * k, 12);
-      g.fillStyle(mix(0xffffff, area.sky, 0.5), 0.9).fillEllipse(x + 6 * k, y + 2 * k, 62 * k, 24 * k, 10);
-    } else if (variant === 0) {
-      // Dusk lantern: a warm pool is the one warm note in a cool band.
-      g.fillStyle(ink).fillRect(x - 3 * k, y - 88 * k, 6 * k, 88 * k);
-      g.fillStyle(0xe8b878, 0.22).fillCircle(x, y - 94 * k, 40 * k);
-      g.fillStyle(0xf0c98a).fillRoundedRect(x - 12 * k, y - 110 * k, 24 * k, 30 * k, 9 * k);
-      g.fillStyle(ink).fillRoundedRect(x - 15 * k, y - 116 * k, 30 * k, 8 * k, 4 * k);
-      g.fillStyle(0xe8b878, 0.16).fillEllipse(x, y + 2 * k, 96 * k, 26 * k, 10);
-    } else {
-      // Standing stone, catching the last of the light on one face.
-      const stone = shade(area.ground, 0.12);
-      g.fillStyle(stone);
-      quad(x - 20 * k, y, x + 22 * k, y, x + 14 * k, y - 86 * k, x - 12 * k, y - 94 * k);
-      g.fillStyle(shade(stone, 0.2), 0.55);
-      quad(x - 20 * k, y, x - 4 * k, y, x - 2 * k, y - 90 * k, x - 12 * k, y - 94 * k);
-      g.fillStyle(shade(area.ink, 0.05), 0.35).fillEllipse(x + 2 * k, y - 2 * k, 52 * k, 14 * k, 8);
     }
   }
 

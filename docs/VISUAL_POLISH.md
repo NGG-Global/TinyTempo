@@ -65,7 +65,7 @@ scheduled, judged or scored changed.
   the coral frontier. `puckColours` (`ui/roadLayout.ts`) now fills it with the area's road
   mixed 45% toward whichever of ink and paper is darker, deepened only as far as the lighter
   one needs to clear `OUTLINE_CONTRAST` on it. The order at a glance is frontier, then
-  cleared, then locked and preview, on all five areas. On Dusk, where paper and ink are
+  cleared, then locked and preview, on every area. On Dusk, where paper and ink are
   inverted, this gives a warm mid-brown under a cream number. The brass star plates are
   unchanged.
 - **Every number on the road clears the contrast floor.** A preview's number used to be
@@ -73,7 +73,9 @@ scheduled, judged or scored changed.
   mix toward the ink that reaches 3.15:1. `tests/roadLayout.test.ts` checks every state on
   every area.
 - **One ambient layer per area** (`ui/mapAmbience.ts`): pollen on Grass, a slow glow
-  breathing on Pavement's lamps, dust on Sand, snowfall on Snow, fireflies at Dusk. It is a
+  breathing on Pavement's lamps, dust on Sand, snowfall on Snow, fireflies at Dusk, petals in
+  the Garden, mist over the Swamp, leaves tumbling (the one shape that turns) through the
+  Village, and embers rising off the Castle, whose torches glow as the lamps do. It is a
   fixed pool of 32 motes and 8 lamp glows, made once. Each mote's place is a pure function of
   its seed, the time and the view, wrapped round only off screen. Every mote is anchored to
   the world, so it keeps its place on the ground as the road scrolls. It sits at depth 0.75,
