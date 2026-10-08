@@ -80,6 +80,11 @@ presents it without changing level timing or judgement rules. See
 
 ## Music
 
+The original score is by [Alon Attaly](https://www.linkedin.com/in/alon-attaly-718898287),
+credited in Settings → Credits and in the footer of every page of the website. Both
+read from `src/config/credits.ts`; the site cannot import it, so
+`tests/credits.test.ts` checks its pages carry the same name and link.
+
 Two gameplay tracks, each normalized at load into an exact 120 BPM whole-bar
 loop whose origin is the first downbeat: `bgm/mix/tiny-tempo.mp3` (2.4 MB, 60
 bars) as one premix, and track B (54 bars) as six stem MP3s a level brings in one
@@ -210,6 +215,10 @@ paths the Play Console listing should use:
 - Game: `https://tinytempo.games/`
 - Privacy Policy: `https://tinytempo.games/privacy/`
 - Terms of Service: `https://tinytempo.games/terms/`
+
+Every page's footer carries the score's credit, the same name and link as
+Settings → Credits (`src/config/credits.ts`, checked by `tests/credits.test.ts`),
+and the homepage's structured data names the composer as `musicBy`.
 
 The legal pages state the current product as it is in code: on-device progress,
 optional AdMob rewarded ads, optional Google Play heart refill and Premium

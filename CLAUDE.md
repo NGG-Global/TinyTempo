@@ -454,6 +454,9 @@ chapter out before it starts the one asked for. The second premix carries 0.1 s 
 in front, written by the encoder: its masters start on the downbeat, and an MP3 whose first
 transient sits in the opening granule is where decoders disagree most about the encoder
 delay; the head puts its opening hit in the same detection regime as the first track's.
+**The score is credited, in two places that cannot share code**: Settings → Credits reads
+`config/credits.ts`, and every footer under `legal/` prints the same name and link, which
+`tests/credits.test.ts` checks, since the website is published apart from the bundle.
 **The title screen has a second track, and the screens it opens keep it.** `audio/ThemeMusic.ts`
 plays `bgm/theme/home-page.mp3` on `MenuScene`, with its own player rather than a mode inside
 `MusicSystem`, because every guarantee that system makes is about a beat grid a level is
@@ -879,6 +882,7 @@ src/
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
     support.ts         The address a player writes to; mirrored in the legal pages
+    credits.ts         The score's credit, for Settings; mirrored in every website footer
     analytics.ts       Whether a provider is attached, and the consent it starts under
     diagnostics.ts     Sentry DSN and release; empty DSN keeps reporting off
     style.ts           The workshop treatment: outline, exaggeration, faces, grain

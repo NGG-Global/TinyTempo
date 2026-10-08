@@ -3,6 +3,7 @@ import { setAnalyticsConsent } from '@/analytics/boot';
 import { currentAudio, ensureScreenMusic, resetCalibration, setBusVolume } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, onRouteChange } from '@/audio/audioRoute';
 import { ROUTE_LABELS } from '@/game/routeCalibration';
+import { CREDITS } from '@/config/credits';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -49,7 +50,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -182,7 +183,7 @@ export class SettingsScene extends BaseScene {
     // ones, `eyebrow(index)` kept reading the dead batch, and `Text.setColor` threw
     // inside `create` and took the whole game down on the way back from Calibrate.
     // Replacing the array rather than clearing it makes that unreachable by construction.
-    this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']
+    this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help', 'Credits']
       .map(caption => this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     this.buildTexts();
     // Earbuds in or out while Settings is open: the timing row names the new route and its value.
@@ -246,6 +247,10 @@ export class SettingsScene extends BaseScene {
       help: rowTitle('Contact us'),
       helpNote: rowNote('Report a problem, or ask for a hand'),
       helpGo: chip('Open'),
+      // The person first, their work under it: a credit names someone.
+      credit: rowTitle(CREDITS.score.name),
+      creditNote: rowNote(CREDITS.score.role),
+      creditGo: chip('Profile'),
       analytics: rowTitle('Share usage data'),
       // Kept short on purpose: the switch starts 150 units from the card's right edge, so
       // a note has about 450 design units — roughly forty characters at this size — before
@@ -602,8 +607,9 @@ export class SettingsScene extends BaseScene {
       delete this.rows.adPrivacyRow;
     }
 
-    // HELP — last, because it is where someone looks once something has gone wrong, and
-    // by then they have already scrolled past everything that might have prevented it.
+    // HELP — the last section with anything to do, because it is where someone looks once
+    // something has gone wrong, and by then they have already scrolled past everything that
+    // might have prevented it. Only the credits follow it, and they ask nothing of anyone.
     y += SETTINGS.sectionGap * s;
     eyebrow(6);
     const help = plate(row);
@@ -615,6 +621,22 @@ export class SettingsScene extends BaseScene {
     this.rows.help = helpRect;
     this.texts.helpGo!.setPosition(helpRect.centerX - 14 * s, helpRect.centerY);
     this.hits.push({ name: 'help', rect: helpRect, pinned: false });
+
+    // CREDITS — the people whose work is in the game beyond its code, each a row whose chip
+    // opens a page of their own choosing (`config/credits.ts`, mirrored on the website).
+    y += SETTINGS.sectionGap * s;
+    eyebrow(7);
+    const credit = plate(row);
+    this.rows.creditCard = credit;
+    this.texts.credit!.setPosition(left + 28 * s, credit.centerY - 15 * s);
+    this.texts.creditNote!.setPosition(left + 28 * s, credit.centerY + 19 * s);
+    // Measured: "Profile" is a letter longer than "Open", and at the chips' 150 it ran
+    // into the chevron. The caption sits 14 left of centre, so this leaves it 18 clear.
+    const creditW = Math.max(150 * s, control, this.texts.creditGo!.width + 80 * s);
+    const creditRect = new Phaser.Geom.Rectangle(credit.right - 26 * s - creditW, credit.centerY - control / 2, creditW, control);
+    this.rows.credit = creditRect;
+    this.texts.creditGo!.setPosition(creditRect.centerX - 14 * s, creditRect.centerY);
+    this.hits.push({ name: 'credit', rect: creditRect, pinned: false });
 
     // A store or reset message, under the last section rather than over a row.
     wrapWidth(this.texts.notice!, width - 40 * s);
@@ -762,6 +784,12 @@ export class SettingsScene extends BaseScene {
       const sink = 8 * s * sunk('help') * 0.8;
       drawChevron(g, this.rows.help.right - 30 * s, this.rows.help.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.helpGo!.setPosition(this.rows.help.centerX - 14 * s, this.rows.help.centerY + sink);
+    }
+    if (this.rows.credit) {
+      drawPanel(g, this.rows.credit, s, { fill: SHELL.cream, depth: 8, press: sunk('credit'), radius: 18 });
+      const sink = 8 * s * sunk('credit') * 0.8;
+      drawChevron(g, this.rows.credit.right - 30 * s, this.rows.credit.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.creditGo!.setPosition(this.rows.credit.centerX - 14 * s, this.rows.credit.centerY + sink);
     }
     if (this.rows.reset) {
       drawPanel(g, this.rows.reset, s, {
@@ -1020,8 +1048,9 @@ export class SettingsScene extends BaseScene {
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
       case 'reset': this.resetTapped(); return;
-      case 'privacy': openLegal(LEGAL.privacy); return;
-      case 'terms': openLegal(LEGAL.terms); return;
+      case 'credit': openPage(CREDITS.score.url); return;
+      case 'privacy': openPage(LEGAL.privacy); return;
+      case 'terms': openPage(LEGAL.terms); return;
     }
   }
 
@@ -1223,10 +1252,10 @@ export class SettingsScene extends BaseScene {
 }
 
 /**
- * Opens a legal page outside the game. `_blank` is what a Capacitor WebView hands to the
- * system browser, and what a desktop browser opens in a tab; `noopener` is required
- * because the opened page would otherwise hold a handle on this one.
+ * Opens a page outside the game — a legal page or a credit's. `_blank` is what a Capacitor
+ * WebView hands to the system browser, and what a desktop browser opens in a tab; `noopener`
+ * is required because the opened page would otherwise hold a handle on this one.
  */
-function openLegal(url: string): void {
+function openPage(url: string): void {
   try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* a blocked popup costs nothing here */ }
 }

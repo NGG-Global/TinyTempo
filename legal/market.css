@@ -1863,6 +1863,10 @@ main {
   max-width: 28ch;
 }
 
+.footer-brand .credit {
+  margin-top: 0.55rem;
+}
+
 .footer-brand .brand-name {
   color: var(--ink);
   font-size: 1.05rem;
