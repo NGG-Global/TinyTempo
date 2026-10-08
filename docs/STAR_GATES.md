@@ -90,8 +90,9 @@ drop the new stars leave their sockets on the plate one at a time, arc up and ac
 screen, and land on the tally's star. Each landing steps the count, rings the star and
 ticks the engine's count voice; the gate's plate counts along with it. The landing that
 meets the requirement lifts the bar on a damped spring and fades it, leaving the posts,
-and the frontier turns coral. When the last star has settled the world is rebaked with
-the collection as it now stands.
+and the frontier turns coral. When the last star has settled, the strips holding the
+finished level and the frontier are painted again with the collection as it now stands; the
+rest of the road keeps its raster (`MapScene.rebake`).
 
 The curve is pure (`src/ui/starFlight.ts`, `tests/starFlight.test.ts`): a quadratic
 arc whose control point sits above the higher end, so a star thrown down to the bench
@@ -102,6 +103,7 @@ already right and a met gate is simply open.
 Two things in the scene follow from this. **Everything that reads the collection while
 a flight is on reads the shown count**, not the stored one — the held frontier, the live
 gate's sign, the dock — so nothing opens before the star that opens it has landed. And
-**the gate being worked toward is drawn live** (`liveGate`), in the same per-frame
-Graphics as the frontier's hop, rather than baked with the rest of the world, because it
-is the one thing on the road that changes during a visit.
+**the gate being worked toward is drawn live** (`liveGate`), on its own layer rather than
+painted with the rest of the world, because it is the one thing on the road that changes
+during a visit. It is drawn again only while its count or its bar moves, and is a raster
+the rest of the time (`drawLiveGate`).

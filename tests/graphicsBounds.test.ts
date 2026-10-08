@@ -1,7 +1,7 @@
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { BOUNDS_FRINGE, drawingBounds, GRAPHICS_COMMAND as C } from '../src/ui/graphicsBounds';
+import { BOUNDS_FRINGE, drawingBounds, GRAPHICS_COMMAND as C, sameDrawing } from '../src/ui/graphicsBounds';
 
 /**
  * A baked layer is exactly as large as `drawingBounds` says, so a bound that is short clips
@@ -82,5 +82,22 @@ describe('the bounds', () => {
     expect(drawingBounds([C.save, C.translate, 5, 5, C.fillRect, 0, 0, 10, 10, C.restore])).toBeNull();
     expect(drawingBounds([C.rotate, 0.3, C.fillRect, 0, 0, 10, 10])).toBeNull();
     expect(drawingBounds([99, C.fillRect, 0, 0, 10, 10])).toBeNull();
+  });
+});
+
+describe('an unchanged redraw', () => {
+  it('is recognised, so it keeps its raster', () => {
+    const drawing = [C.fillStyle, 0xff0000, 1, C.fillRect, 10, 20, 30, 40];
+    expect(sameDrawing(drawing, [...drawing])).toBe(true);
+    expect(sameDrawing([], [])).toBe(true);
+  });
+
+  it('is told apart from a moved, recoloured or longer one', () => {
+    const drawing = [C.fillStyle, 0xff0000, 1, C.fillRect, 10, 20, 30, 40];
+    expect(sameDrawing(drawing, [C.fillStyle, 0xff0000, 1, C.fillRect, 10, 21, 30, 40])).toBe(false);
+    expect(sameDrawing(drawing, [C.fillStyle, 0xff0001, 1, C.fillRect, 10, 20, 30, 40])).toBe(false);
+    expect(sameDrawing(drawing, [...drawing, C.fillRect, 0, 0, 1, 1])).toBe(false);
+    // A press that sinks a puck by a fraction of a unit is a change.
+    expect(sameDrawing([C.lineTo, 5, 5.25], [C.lineTo, 5, 5.2500001])).toBe(false);
   });
 });

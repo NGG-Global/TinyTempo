@@ -13,6 +13,17 @@
  * it live", never "draw it wrong". No Phaser import, so it is tested under node.
  */
 
+/**
+ * Whether two command buffers draw the same thing. A layout redraws its chrome whether or
+ * not anything moved — once per frame of an Android URL-bar collapse — and an identical
+ * redraw keeps its raster rather than paying for another.
+ */
+export function sameDrawing(a: readonly number[], b: readonly number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 /** Phaser 4's command ids (`gameobjects/graphics/Commands.js`). Pinned by `tests/graphicsBounds.test.ts`. */
 export const GRAPHICS_COMMAND = {
   arc: 0,

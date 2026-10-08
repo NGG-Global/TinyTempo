@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { drawingBounds, type DrawingBounds } from '@/ui/graphicsBounds';
+import { drawingBounds, sameDrawing, type DrawingBounds } from '@/ui/graphicsBounds';
 
 /**
  * A Graphics rasterised once and shown as one image, instead of tessellated on every frame.
@@ -68,10 +68,18 @@ function watchContext(renderer: Phaser.Renderer.Canvas.CanvasRenderer | Phaser.R
   });
 }
 
-function sameCommands(a: readonly number[], b: readonly number[]): boolean {
-  if (a.length !== b.length) return false;
-  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
-  return true;
+/**
+ * Rasterise the first of `layers` that is shown and has settled, if any: one a frame, so no
+ * frame carries more than one raster. True when one was baked.
+ */
+export function bakeOne(layers: readonly BakedLayer[]): boolean {
+  for (const layer of layers) {
+    if (layer.visible && layer.ready) {
+      layer.bake();
+      return true;
+    }
+  }
+  return false;
 }
 
 export class BakedLayer {
@@ -128,7 +136,7 @@ export class BakedLayer {
    * nothing — the raster stays; otherwise the Graphics shows until the next bake.
    */
   public invalidate(): this {
-    if (this.baked && sameCommands(this.graphics.commandBuffer as number[], this.source)) {
+    if (this.baked && sameDrawing(this.graphics.commandBuffer as number[], this.source)) {
       this.follow();
       return this;
     }

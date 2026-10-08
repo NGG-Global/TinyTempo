@@ -47,7 +47,7 @@ import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { AMBIENCE_BY_AREA, MapAmbience, type AmbienceBand } from '@/ui/mapAmbience';
 import { BakedLayer } from '@/ui/bakedLayer';
 import type { DrawingBounds } from '@/ui/graphicsBounds';
-import { resizedScroll, scrollStep, stripBounds, stripInView } from '@/ui/navigation';
+import { resizedScroll, scrollStep, STRIP_RASTER, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
@@ -93,14 +93,6 @@ const MAP = {
    * scale, so roughly 175.
    */
   cullMargin: 260,
-  /**
-   * A strip is drawn as a raster once it has one (`ui/bakedLayer.ts`), so the camera pays for
-   * an image rather than re-tessellating thousands of commands every frame. Strips within
-   * `prefetch` screen heights of the view are painted and rasterised ahead of it, one a frame;
-   * a raster further than `keep` screens away is freed, which is what bounds the memory to a
-   * few screens of road however long the window is.
-   */
-  prefetch: 0.35, keep: 0.75,
   /** The frontier puck hops once a bar at the game's own tempo. */
   /** How long the frontier is off the ground, landing on each bar line. */
   hopSec: 0.32,
@@ -703,8 +695,9 @@ export class MapScene extends BaseScene {
   /**
    * One raster a frame, at most, and the frees that cost nothing. On screen first, since each
    * of those is a whole strip tessellated every frame until it is done; then the chrome that
-   * has settled; then the strips just past the screen, painted and rasterised before the
-   * camera gets there. A raster too far from the view to come back soon is freed.
+   * has settled; then the strips just past the screen (`STRIP_RASTER.prefetch`), painted and
+   * rasterised before the camera gets there. A raster further than `STRIP_RASTER.keep` is
+   * freed, which is what bounds the memory to a few screens of road however long the window.
    */
   private bakeNext(): void {
     const height = this.viewport.full.height;
@@ -722,14 +715,14 @@ export class MapScene extends BaseScene {
       if (stripInView(strip, this.scrollY, height, margin) && (raster(strip.ground) || raster(strip.detail))) break;
     }
     for (const layer of this.chrome) if (layer.visible && raster(layer)) break;
-    const ahead = MAP.prefetch * height;
+    const ahead = STRIP_RASTER.prefetch * height;
     for (const strip of near) {
       if (done) break;
       if (!stripInView(strip, this.scrollY, height, margin + ahead)) continue;
       if (!strip.painted) { this.paintStrip(strip); done = true; break; }
       if (raster(strip.ground) || raster(strip.detail)) break;
     }
-    const keep = margin + MAP.keep * height;
+    const keep = margin + STRIP_RASTER.keep * height;
     for (const strip of this.strips) {
       if (stripInView(strip, this.scrollY, height, keep)) continue;
       strip.ground.evict();

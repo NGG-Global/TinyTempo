@@ -18,6 +18,7 @@ import { repairCloudBinding } from '@/playgames/cloudSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
+import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
@@ -85,6 +86,13 @@ export class SettingsScene extends BaseScene {
   private controls!: Phaser.GameObjects.Graphics;
   private pinned!: Phaser.GameObjects.Graphics;
   private backMark!: Phaser.GameObjects.Graphics;
+  /**
+   * The sections, their controls and the pinned back puck and Done: some 17,000 commands
+   * that change only on a press, a slide or a switch, so each is a raster at rest
+   * (`ui/bakedLayer.ts`) and live only while it moves.
+   */
+  private layers: BakedLayer[] = [];
+  private primed = false;
   private sheen!: Sheen;
   private headline!: Phaser.GameObjects.Text;
   private eyebrows: Phaser.GameObjects.Text[] = [];
@@ -165,6 +173,8 @@ export class SettingsScene extends BaseScene {
     this.sheen = new Sheen(this, 3);
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
+    this.layers = [this.controls, this.plates, this.pinned].map(graphics => new BakedLayer(this, graphics));
+    this.primed = false;
     this.headline = display(this, 'Settings', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
     // Assigned, never appended to. A field initializer runs once per scene *instance*
     // while `build` runs once per *entry*, and Phaser keeps the instance and destroys the
@@ -344,6 +354,11 @@ export class SettingsScene extends BaseScene {
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
     this.pressDirty = true;
+    // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
+    if (!this.primed) {
+      this.primed = true;
+      for (const layer of this.layers) layer.bake();
+    }
   }
 
   /**
@@ -607,6 +622,7 @@ export class SettingsScene extends BaseScene {
     this.texts.notice!.setPosition(left + width / 2, y + 18 * s);
     y += this.notice === '' ? 12 * s : 56 * s;
 
+    this.layers[1]?.invalidate();
     this.drawBandControls(0);
     return y - this.bandRect.y;
   }
@@ -754,6 +770,7 @@ export class SettingsScene extends BaseScene {
       resize(this.texts.reset!, 23 * s, this.resetArmed ? SHELL.cream : PALETTE.ink, STYLE.current, false);
       this.texts.reset!.setY(this.rows.reset.centerY + 8 * s * sunk('reset') * 0.8);
     }
+    this.layers[0]?.invalidate();
   }
 
   private drawPinned(press: number, doneRect?: Phaser.Geom.Rectangle): void {
@@ -767,11 +784,13 @@ export class SettingsScene extends BaseScene {
       drawBack(this.backMark, back.rect.centerX, back.rect.centerY + puckSink(s, p), CHROME.puckRadius * s * 0.44, PALETTE.ink);
     }
     const done = doneRect ?? this.hits.find(h => h.name === 'done')?.rect;
-    if (!done) return;
-    const p = this.pressed === 'done' ? press : 0;
-    drawPanel(g, done, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: p, hero: true });
-    resize(this.texts.done!, 50 * s, SHELL.cream);
-    this.texts.done!.setPosition(done.centerX, done.centerY + CHROME.block.depth * s * p * 0.8);
+    if (done) {
+      const p = this.pressed === 'done' ? press : 0;
+      drawPanel(g, done, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: p, hero: true });
+      resize(this.texts.done!, 50 * s, SHELL.cream);
+      this.texts.done!.setPosition(done.centerX, done.centerY + CHROME.block.depth * s * p * 0.8);
+    }
+    this.layers[2]?.invalidate();
   }
 
   private refreshCopy(): void {
@@ -835,6 +854,7 @@ export class SettingsScene extends BaseScene {
     }
     this.placeSheen();
     this.sheen.update(now, !monetization().premium() && this.storeInView());
+    bakeOne(this.layers);
     const age = now - this.enteredAt;
     if (age < 1.1) {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(age, 0.7);
@@ -889,7 +909,8 @@ export class SettingsScene extends BaseScene {
 
   /** The band's camera holds the scroll, so a scroll moves nothing and relays out nothing. */
   private applyScroll(): void {
-    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + this.scrollY);
+    // On a whole pixel, so the sections' raster is shown as it was drawn rather than resampled.
+    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + Math.round(this.scrollY));
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {

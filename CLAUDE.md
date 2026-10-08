@@ -680,8 +680,26 @@ budget, ~85% of it spent off the top and bottom of the screen. The bake is now c
 strips of `MAP.stripLevels` levels (`stripBounds` in `ui/navigation.ts`, which
 `tests/navigation.test.ts` pins as a true tiling — a gap is a screen-wide band of missing
 ground) and `cullStrips` draws only the strips the camera can reach, with the level
-numbers, since each `Text` carries its own texture. Two things follow for anyone editing
-the map's drawing. Each strip has a **ground layer under every strip's detail layer**, so
+numbers, since each `Text` carries its own texture. **And what the camera can reach is a
+raster, not a Graphics** (`ui/bakedLayer.ts`): culling still left ~72,000 vertices a frame of
+road that only moves with the camera — three-quarters of the main thread, and twice the bake
+once a save passes level 21 and the window fills to 48 stops, which is why later levels
+lagged. A `BakedLayer` rasterises its Graphics once through Phaser's *canvas* renderer (a 2D
+canvas antialiases paths; a WebGL render target is not multisampled) and shows the image in
+its place, beside it in the display list so depth order holds. The Graphics stays as the
+fallback — before the raster, for a drawing `ui/graphicsBounds.ts` cannot bound (a gradient,
+a canvas transform), and after a lost context — so **call `invalidate()` after a redraw is
+complete**, never before it: it compares the commands with the raster's and keeps an
+identical one. Strips are painted when they near the view (`paintStrip`), the on-screen ones
+rasterised in the entry frame under the curtain (`prime`) and the rest one a frame
+(`bakeNext`, `STRIP_RASTER`), and a far raster is freed: 29–35 MB of texture at the most.
+A text placed by a strip (number, plaque title, finale plate) shows only once that strip is
+painted; numbers and the out-of-hearts sheet's text are made on demand; a landed flight
+repaints only the strips holding its level and the frontier; and the camera scrolls on whole
+pixels so a raster at rest is never resampled. The Scrapbook (a layer per page, culled to
+its band), Settings and the title screen's pucks and buttons use the same layer. A level's
+act does not: its art changes on beats and taps, and a raster on those frames is a hitch.
+See `docs/PERFORMANCE.md`. Two things follow for anyone editing the map's drawing. Each strip has a **ground layer under every strip's detail layer**, so
 the terrain of the strip above can never land on a prop standing across the seam below it.
 And within the ground layer strips are painted bottom to top, so anything that overhangs a
 seam is claimed by the strip holding its **topmost** extent (`MAP.overhang`) and hangs
@@ -789,7 +807,7 @@ GPU fill-rate limits, or the URL bar collapsing mid-frame.
 - **Vite 8** — bundles with **Rolldown**, not Rollup
 - **npm**
 
-Four version-specific traps, all of which cost time if assumed away:
+Five version-specific traps, all of which cost time if assumed away:
 
 1. **TypeScript 7 removed `baseUrl`.** Entries in `paths` must be relative
    (`"@/*": ["./src/*"]`).
@@ -808,6 +826,11 @@ Four version-specific traps, all of which cost time if assumed away:
    every object the other cameras do, so `ignore()` both ways, and note that a
    `setScrollFactor(0)` object lands offset by the second camera's viewport
    origin.
+5. **Phaser 4 keeps a camera's scroll in the matrix `preRender` builds.** A camera
+   that is never pre-rendered, such as one made only to render something into a
+   canvas, ignores `scrollX`/`scrollY`: a `renderCanvas` call through it draws at
+   the object's own world coordinates, and a raster of anything far from the
+   origin comes out blank. Offset the object instead (`BakedLayer.bake`).
 
 ## Project layout
 
@@ -906,7 +929,7 @@ src/
     BootScene.ts       Input tuning, orientation guard
     PreloadScene.ts    Texture generation and font registration
     MenuScene.ts       Title; owns the first audio gesture
-    MapScene.ts        The endless road: a bounded window, baked into culled strips
+    MapScene.ts        The endless road: a bounded window, painted into culled, rasterised strips
     PlayScene.ts       One level: hosts a vignette, never judges
     SettingsScene.ts   Labelled sections, scrolling under a camera viewport
     CalibrateScene.ts  Tap offset: the latency measurement on its own screen
@@ -924,6 +947,8 @@ src/
     panel.ts           Slabs and pucks with thickness, dressed per treatment
     path.ts            Catmull-Rom smoothing, dash spacing, x at a y on a climbing road
     arcDetail.ts       Graphics arcs with as many points as their radius needs; pure, installed in main.ts
+    bakedLayer.ts      A Graphics rasterised once through the canvas renderer and shown as an image
+    graphicsBounds.ts  What a Graphics' command buffer covers, and whether two draw the same; pure
     roadLayout.ts      The map's stops, seams, finale room and stage, gate plate and crest; pure
     spring.ts          Physical motion as pure f(t): spring, overshoot, squash, settle
     star.ts            The star glyph

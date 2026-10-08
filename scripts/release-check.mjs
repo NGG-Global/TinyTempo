@@ -31,6 +31,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Kept mastery: a flawless replay', text: 'IN THE POCKET AGAIN', source: 'src/scenes/PlayScene.ts' },
   { feature: 'Restart sheet', text: 'Restart from the beginning?', source: 'src/ui/restartSheet.ts' },
   { feature: 'Restart sheet, out of hearts', text: 'Get a heart and restart this level.', source: 'src/ui/restartSheet.ts' },
+  { feature: 'Rasterised map, Scrapbook and menus', text: 'baked:', source: 'src/ui/bakedLayer.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */
