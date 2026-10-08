@@ -16,6 +16,7 @@ import { shade } from '@/ui/colour';
 import { drawBack } from '@/ui/icons';
 import { drawKeepsake } from '@/ui/keepsakes';
 import { scrollStep } from '@/ui/navigation';
+import { BakedLayer } from '@/ui/bakedLayer';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { drawStar, drawStarSeat, STAR_PRIZE } from '@/ui/star';
@@ -78,7 +79,17 @@ export class ScrapbookScene extends BaseScene {
   private backdrop!: Backdrop;
   private band!: Phaser.GameObjects.Container;
   private bandCamera!: Phaser.Cameras.Scene2D.Camera;
-  private pages!: Phaser.GameObjects.Graphics;
+  /**
+   * A layer per page, and the band each covers. Phaser re-tessellates every Graphics it
+   * renders, every frame, and culls nothing by position: the whole book as one Graphics was
+   * every keepsake on every page — some 7 ms a frame on a desktop core, for the two or three
+   * pages in view. Split, the pages off the band are not drawn at all (`applyScroll`), and
+   * the ones on it are rasters once `update` has baked them (`ui/bakedLayer.ts`).
+   */
+  private pageArt: BakedLayer[] = [];
+  private pageSpans: { top: number; bottom: number }[] = [];
+  /** The page each slot's card sits on, so its caption is culled with it. */
+  private slotPage: number[] = [];
   private highlight!: Phaser.GameObjects.Graphics;
   private pinned!: Phaser.GameObjects.Graphics;
   private backMark!: Phaser.GameObjects.Graphics;
@@ -104,6 +115,8 @@ export class ScrapbookScene extends BaseScene {
   private backDirty = false;
   /** Every value the page bake reads. A URL-bar collapse changes none of them, so it skips the bake. */
   private bakeKey = '';
+  /** The pages on the band are rasterised in the frame the scene opens in, under the curtain. */
+  private primed = false;
 
   public constructor() { super(SceneKey.Scrapbook); }
 
@@ -122,15 +135,19 @@ export class ScrapbookScene extends BaseScene {
     this.band = this.add.container(0, 0).setDepth(1);
     this.bandCamera = this.cameras.add(0, 0, 1, 1, false, 'pages');
     this.cameras.main.ignore(this.band);
-    this.pages = this.add.graphics();
-    this.highlight = this.add.graphics();
-    this.band.add([this.pages, this.highlight]);
-
     const progress = loadProgress();
     const pages = scrapbookPages();
+    const art = pages.map(() => this.add.graphics());
+    this.pageSpans = pages.map(() => ({ top: 0, bottom: 0 }));
+    this.highlight = this.add.graphics();
+    this.band.add([...art, this.highlight]);
+    // After the Graphics are in the band, so each raster is placed beside its own page.
+    this.pageArt = art.map(graphics => new BakedLayer(this, graphics));
+    this.primed = false;
     this.slots = pages.flatMap(page => page.keepsakes.map(keepsake => ({
       keepsake, owned: ownsKeepsake(progress, keepsake), rect: new Phaser.Geom.Rectangle(),
     })));
+    this.slotPage = pages.flatMap((page, i) => page.keepsakes.map(() => i));
     this.titles = pages.map(page => {
       const title = VIGNETTES.find(v => v.id === page.vignette)!.title;
       const text = label(this, title, { size: 22, colour: SHELL.cream }).setOrigin(0, 0.5);
@@ -212,6 +229,10 @@ export class ScrapbookScene extends BaseScene {
     this.applyScroll();
     this.drawHighlight();
     this.drawPinned(0);
+    if (!this.primed) {
+      this.primed = true;
+      this.pageArt.forEach(art => { if (art.visible) art.bake(); });
+    }
   }
 
   /** The pages, drawn once per real change of size. Returns the height they take. */
@@ -232,7 +253,6 @@ export class ScrapbookScene extends BaseScene {
     const key = `${left}|${width}|${s}|${this.bandRect.y}`;
     if (key === this.bakeKey) return height;
     this.bakeKey = key;
-    const g = this.pages.clear();
     let slot = 0;
     let y = this.bandRect.y + 8 * s;
     pages.forEach((page, i) => {
@@ -240,6 +260,9 @@ export class ScrapbookScene extends BaseScene {
       const spread = Math.floor(i / cols);
       if (col === 0 && i > 0) y += spreads[spread - 1]! + gap;
       const x = left + col * (pageW + gap);
+      const g = this.pageArt[i]!.graphics.clear();
+      // The tape stands above the page's edge and the panel's shadow falls below it.
+      this.pageSpans[i] = { top: y - 16 * s, bottom: y + spreads[spread]! + 24 * s };
       drawPanel(g, new Phaser.Geom.Rectangle(x, y, pageW, spreads[spread]!), s, { fill: INK.page, depth: 6, radius: 14 });
       // The act's name on a strip of tape laid across the page's top edge, a little askew.
       const title = this.titles[i]!;
@@ -267,6 +290,7 @@ export class ScrapbookScene extends BaseScene {
         caption.setPosition(entry.rect.centerX, entry.rect.bottom + 8 * s);
         slot++;
       });
+      this.pageArt[i]!.invalidate();
     });
     return height;
   }
@@ -334,6 +358,14 @@ export class ScrapbookScene extends BaseScene {
 
   public override update(_time: number, delta: number): void {
     this.stepScroll(delta);
+    // One page a frame, as it scrolls into the band; one well off it gives its raster back.
+    const top = this.bandRect.y + this.scrollY, bottom = top + this.bandRect.height;
+    let baked = false;
+    this.pageArt.forEach((art, i) => {
+      const span = this.pageSpans[i]!;
+      if (!baked && art.visible && art.ready) baked = art.bake();
+      else if (span.bottom < top - this.bandRect.height || span.top > bottom + this.bandRect.height) art.evict();
+    });
     const press = pressAmount(performance.now() / 1000, this.backPressedAt);
     if (press > 0.001 || this.backDirty) {
       this.drawPinned(Math.max(0, press));
@@ -355,7 +387,17 @@ export class ScrapbookScene extends BaseScene {
   }
 
   private applyScroll(): void {
-    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + this.scrollY);
+    // On a whole pixel, so a page's raster is shown as it was drawn rather than resampled.
+    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + Math.round(this.scrollY));
+    // Only the pages the band shows are drawn, with their titles and captions.
+    const top = this.bandRect.y + this.scrollY, bottom = top + this.bandRect.height;
+    const shown = this.pageSpans.map(span => span.bottom > top && span.top < bottom);
+    this.pageArt.forEach((art, i) => { if (art.visible !== shown[i]) art.setVisible(shown[i]!); });
+    this.titles.forEach((title, i) => { if (title.visible !== shown[i]) title.setVisible(shown[i]!); });
+    this.captions.forEach((caption, k) => {
+      const on = shown[this.slotPage[k]!] === true;
+      if (caption.visible !== on) caption.setVisible(on);
+    });
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
