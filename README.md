@@ -36,8 +36,8 @@ presents it without changing level timing or judgement rules. See
 `docs/TUTORIAL.md`.
 
 - **The map** is an endless scrollable road grouped into ten-level areas:
-  Grass, Pavement, Sand, Snow, Dusk, then the same five again numbered II, III
-  and so on. It renders a bounded window of levels, not the whole road.
+  Grass, Pavement, Sand, Snow, Dusk, Garden, Swamp, Village and Castle, then the
+  same nine again numbered II, III and so on. It renders a bounded window of levels, not the whole road.
 - **A level** is one vignette and three to eight tasks. A task is a demonstration
   phrase and then the player's response, back to back on the bar line — nothing
   waits between the two, and nothing waits between one task and the next. One
@@ -79,6 +79,11 @@ presents it without changing level timing or judgement rules. See
   resolves rather than when the summary draws.
 
 ## Music
+
+The original score is by [Alon Attaly](https://www.linkedin.com/in/alon-attaly-718898287),
+credited in Settings → Credits and in the footer of every page of the website. Both
+read from `src/config/credits.ts`; the site cannot import it, so
+`tests/credits.test.ts` checks its pages carry the same name and link.
 
 Two gameplay tracks, each normalized at load into an exact 120 BPM whole-bar
 loop whose origin is the first downbeat: `bgm/mix/tiny-tempo.mp3` (2.4 MB, 60
@@ -210,6 +215,10 @@ paths the Play Console listing should use:
 - Game: `https://tinytempo.games/`
 - Privacy Policy: `https://tinytempo.games/privacy/`
 - Terms of Service: `https://tinytempo.games/terms/`
+
+Every page's footer carries the score's credit, the same name and link as
+Settings → Credits (`src/config/credits.ts`, checked by `tests/credits.test.ts`),
+and the homepage's structured data names the composer as `musicBy`.
 
 The legal pages state the current product as it is in code: on-device progress,
 optional AdMob rewarded ads, optional Google Play heart refill and Premium

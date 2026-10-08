@@ -3,6 +3,7 @@ import { setAnalyticsConsent } from '@/analytics/boot';
 import { currentAudio, ensureScreenMusic, resetCalibration, setBusVolume } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, onRouteChange } from '@/audio/audioRoute';
 import { ROUTE_LABELS } from '@/game/routeCalibration';
+import { CREDITS } from '@/config/credits';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
@@ -18,6 +19,7 @@ import { repairCloudBinding } from '@/playgames/cloudSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
+import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
@@ -48,7 +50,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -85,6 +87,13 @@ export class SettingsScene extends BaseScene {
   private controls!: Phaser.GameObjects.Graphics;
   private pinned!: Phaser.GameObjects.Graphics;
   private backMark!: Phaser.GameObjects.Graphics;
+  /**
+   * The sections, their controls and the pinned back puck and Done: some 17,000 commands
+   * that change only on a press, a slide or a switch, so each is a raster at rest
+   * (`ui/bakedLayer.ts`) and live only while it moves.
+   */
+  private layers: BakedLayer[] = [];
+  private primed = false;
   private sheen!: Sheen;
   private headline!: Phaser.GameObjects.Text;
   private eyebrows: Phaser.GameObjects.Text[] = [];
@@ -165,6 +174,8 @@ export class SettingsScene extends BaseScene {
     this.sheen = new Sheen(this, 3);
     this.pinned = this.add.graphics().setDepth(4);
     this.backMark = this.add.graphics().setDepth(6);
+    this.layers = [this.controls, this.plates, this.pinned].map(graphics => new BakedLayer(this, graphics));
+    this.primed = false;
     this.headline = display(this, 'Settings', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(5);
     // Assigned, never appended to. A field initializer runs once per scene *instance*
     // while `build` runs once per *entry*, and Phaser keeps the instance and destroys the
@@ -172,7 +183,7 @@ export class SettingsScene extends BaseScene {
     // ones, `eyebrow(index)` kept reading the dead batch, and `Text.setColor` threw
     // inside `create` and took the whole game down on the way back from Calibrate.
     // Replacing the array rather than clearing it makes that unreachable by construction.
-    this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help']
+    this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help', 'Credits']
       .map(caption => this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     this.buildTexts();
     // Earbuds in or out while Settings is open: the timing row names the new route and its value.
@@ -236,6 +247,10 @@ export class SettingsScene extends BaseScene {
       help: rowTitle('Contact us'),
       helpNote: rowNote('Report a problem, or ask for a hand'),
       helpGo: chip('Open'),
+      // The person first, their work under it: a credit names someone.
+      credit: rowTitle(CREDITS.score.name),
+      creditNote: rowNote(CREDITS.score.role),
+      creditGo: chip('Profile'),
       analytics: rowTitle('Share usage data'),
       // Kept short on purpose: the switch starts 150 units from the card's right edge, so
       // a note has about 450 design units — roughly forty characters at this size — before
@@ -344,6 +359,11 @@ export class SettingsScene extends BaseScene {
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
     this.pressDirty = true;
+    // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
+    if (!this.primed) {
+      this.primed = true;
+      for (const layer of this.layers) layer.bake();
+    }
   }
 
   /**
@@ -587,8 +607,9 @@ export class SettingsScene extends BaseScene {
       delete this.rows.adPrivacyRow;
     }
 
-    // HELP — last, because it is where someone looks once something has gone wrong, and
-    // by then they have already scrolled past everything that might have prevented it.
+    // HELP — the last section with anything to do, because it is where someone looks once
+    // something has gone wrong, and by then they have already scrolled past everything that
+    // might have prevented it. Only the credits follow it, and they ask nothing of anyone.
     y += SETTINGS.sectionGap * s;
     eyebrow(6);
     const help = plate(row);
@@ -601,12 +622,29 @@ export class SettingsScene extends BaseScene {
     this.texts.helpGo!.setPosition(helpRect.centerX - 14 * s, helpRect.centerY);
     this.hits.push({ name: 'help', rect: helpRect, pinned: false });
 
+    // CREDITS — the people whose work is in the game beyond its code, each a row whose chip
+    // opens a page of their own choosing (`config/credits.ts`, mirrored on the website).
+    y += SETTINGS.sectionGap * s;
+    eyebrow(7);
+    const credit = plate(row);
+    this.rows.creditCard = credit;
+    this.texts.credit!.setPosition(left + 28 * s, credit.centerY - 15 * s);
+    this.texts.creditNote!.setPosition(left + 28 * s, credit.centerY + 19 * s);
+    // Measured: "Profile" is a letter longer than "Open", and at the chips' 150 it ran
+    // into the chevron. The caption sits 14 left of centre, so this leaves it 18 clear.
+    const creditW = Math.max(150 * s, control, this.texts.creditGo!.width + 80 * s);
+    const creditRect = new Phaser.Geom.Rectangle(credit.right - 26 * s - creditW, credit.centerY - control / 2, creditW, control);
+    this.rows.credit = creditRect;
+    this.texts.creditGo!.setPosition(creditRect.centerX - 14 * s, creditRect.centerY);
+    this.hits.push({ name: 'credit', rect: creditRect, pinned: false });
+
     // A store or reset message, under the last section rather than over a row.
     wrapWidth(this.texts.notice!, width - 40 * s);
     resize(this.texts.notice!, 25 * s, PALETTE.coral, STYLE.current, false);
     this.texts.notice!.setPosition(left + width / 2, y + 18 * s);
     y += this.notice === '' ? 12 * s : 56 * s;
 
+    this.layers[1]?.invalidate();
     this.drawBandControls(0);
     return y - this.bandRect.y;
   }
@@ -747,6 +785,12 @@ export class SettingsScene extends BaseScene {
       drawChevron(g, this.rows.help.right - 30 * s, this.rows.help.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.helpGo!.setPosition(this.rows.help.centerX - 14 * s, this.rows.help.centerY + sink);
     }
+    if (this.rows.credit) {
+      drawPanel(g, this.rows.credit, s, { fill: SHELL.cream, depth: 8, press: sunk('credit'), radius: 18 });
+      const sink = 8 * s * sunk('credit') * 0.8;
+      drawChevron(g, this.rows.credit.right - 30 * s, this.rows.credit.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.creditGo!.setPosition(this.rows.credit.centerX - 14 * s, this.rows.credit.centerY + sink);
+    }
     if (this.rows.reset) {
       drawPanel(g, this.rows.reset, s, {
         fill: this.resetArmed ? PALETTE.coral : SHELL.cream, depth: 8, press: sunk('reset'), radius: 18,
@@ -754,6 +798,7 @@ export class SettingsScene extends BaseScene {
       resize(this.texts.reset!, 23 * s, this.resetArmed ? SHELL.cream : PALETTE.ink, STYLE.current, false);
       this.texts.reset!.setY(this.rows.reset.centerY + 8 * s * sunk('reset') * 0.8);
     }
+    this.layers[0]?.invalidate();
   }
 
   private drawPinned(press: number, doneRect?: Phaser.Geom.Rectangle): void {
@@ -767,11 +812,13 @@ export class SettingsScene extends BaseScene {
       drawBack(this.backMark, back.rect.centerX, back.rect.centerY + puckSink(s, p), CHROME.puckRadius * s * 0.44, PALETTE.ink);
     }
     const done = doneRect ?? this.hits.find(h => h.name === 'done')?.rect;
-    if (!done) return;
-    const p = this.pressed === 'done' ? press : 0;
-    drawPanel(g, done, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: p, hero: true });
-    resize(this.texts.done!, 50 * s, SHELL.cream);
-    this.texts.done!.setPosition(done.centerX, done.centerY + CHROME.block.depth * s * p * 0.8);
+    if (done) {
+      const p = this.pressed === 'done' ? press : 0;
+      drawPanel(g, done, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: p, hero: true });
+      resize(this.texts.done!, 50 * s, SHELL.cream);
+      this.texts.done!.setPosition(done.centerX, done.centerY + CHROME.block.depth * s * p * 0.8);
+    }
+    this.layers[2]?.invalidate();
   }
 
   private refreshCopy(): void {
@@ -835,6 +882,7 @@ export class SettingsScene extends BaseScene {
     }
     this.placeSheen();
     this.sheen.update(now, !monetization().premium() && this.storeInView());
+    bakeOne(this.layers);
     const age = now - this.enteredAt;
     if (age < 1.1) {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(age, 0.7);
@@ -889,7 +937,8 @@ export class SettingsScene extends BaseScene {
 
   /** The band's camera holds the scroll, so a scroll moves nothing and relays out nothing. */
   private applyScroll(): void {
-    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + this.scrollY);
+    // On a whole pixel, so the sections' raster is shown as it was drawn rather than resampled.
+    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + Math.round(this.scrollY));
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
@@ -999,8 +1048,9 @@ export class SettingsScene extends BaseScene {
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
       case 'reset': this.resetTapped(); return;
-      case 'privacy': openLegal(LEGAL.privacy); return;
-      case 'terms': openLegal(LEGAL.terms); return;
+      case 'credit': openPage(CREDITS.score.url); return;
+      case 'privacy': openPage(LEGAL.privacy); return;
+      case 'terms': openPage(LEGAL.terms); return;
     }
   }
 
@@ -1202,10 +1252,10 @@ export class SettingsScene extends BaseScene {
 }
 
 /**
- * Opens a legal page outside the game. `_blank` is what a Capacitor WebView hands to the
- * system browser, and what a desktop browser opens in a tab; `noopener` is required
- * because the opened page would otherwise hold a handle on this one.
+ * Opens a page outside the game — a legal page or a credit's. `_blank` is what a Capacitor
+ * WebView hands to the system browser, and what a desktop browser opens in a tab; `noopener`
+ * is required because the opened page would otherwise hold a handle on this one.
  */
-function openLegal(url: string): void {
+function openPage(url: string): void {
   try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* a blocked popup costs nothing here */ }
 }

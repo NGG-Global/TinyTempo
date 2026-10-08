@@ -81,6 +81,34 @@ export const FINALE_TREATMENTS: Readonly<Record<string, FinaleTreatment>> = Obje
     ribbon: 0x2a2236, ribbonInk: 0xf6d98a,
     confetti: [0xf2b35a, 0xf6d98a, 0xe0703d, 0xf3e7d8],
   }),
+  // A garden party: rose, cream, leaf and sunflower.
+  Garden: Object.freeze({
+    id: 'garden', motif: 'bunting',
+    pennants: [0xe0607e, 0xfff4dc, 0x5b8c3a, 0xf2c14e],
+    ribbon: 0x8e2f4c, ribbonInk: 0xfff4dc,
+    confetti: [0xf4a3b4, 0xfff4dc, 0xf2c14e, 0x8fbf5a],
+  }),
+  // Lanterns over the water, in the fireflies' greens and golds.
+  Swamp: Object.freeze({
+    id: 'swamp', motif: 'lanterns',
+    pennants: [0xc8d96f, 0xf2c14e, 0x7fae5a, 0xe8b04a],
+    ribbon: 0x2f3d24, ribbonInk: 0xe9f0c8,
+    confetti: [0xc8d96f, 0xf2c14e, 0x9aa86a, 0xe9f0c8],
+  }),
+  // A harvest fair: brick, gold, a blue for the sky, and cream.
+  Village: Object.freeze({
+    id: 'village', motif: 'bunting',
+    pennants: [0xc8553d, 0xf2c14e, 0x2e6f95, 0xfff4dc],
+    ribbon: 0x6e3420, ribbonInk: 0xfff4dc,
+    confetti: [0xc8553d, 0xe0913a, 0xf2c14e, 0xfff4dc],
+  }),
+  // Heraldry: crimson, gold and royal blue, the cycle's last and grandest.
+  Castle: Object.freeze({
+    id: 'castle', motif: 'bunting',
+    pennants: [0x9e2a2b, 0xf2c14e, 0x1f3a6e, 0xfff4dc],
+    ribbon: 0x1f3a6e, ribbonInk: 0xf2c14e,
+    confetti: [0x9e2a2b, 0xf2c14e, 0x1f3a6e, 0xfff4dc],
+  }),
 });
 
 export function finaleTreatment(level: number): FinaleTreatment {

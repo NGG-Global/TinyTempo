@@ -44,8 +44,9 @@ describe('the result’s words', () => {
     expect(nextGateChip(20, 25)).toMatchObject({ text: 'Sand is open', open: true });
     expect(nextGateChip(20, 24)).toMatchObject({ text: 'Sand opens at 25', open: false });
     expect(nextGateChip(10, 3)).toMatchObject({ text: 'Pavement opens at 12', open: false, ground: AREAS[1]!.ground });
-    // The areas cycle, and a repeat carries its numeral.
-    expect(nextGateChip(50, 0).text).toMatch(/^Grass II opens at \d+$/);
+    // Dusk opens onto Garden; the areas then cycle, and a repeat carries its numeral.
+    expect(nextGateChip(50, 0)).toMatchObject({ text: expect.stringMatching(/^Garden opens at \d+$/), ground: AREAS[5]!.ground });
+    expect(nextGateChip(90, 0).text).toMatch(/^Grass II opens at \d+$/);
   });
 
   it('keeps every area’s chip readable: its ink on its own ground', () => {

@@ -28,6 +28,9 @@ beside "Mute".
   premium held, rather than sitting there as a control that cannot act.
 - **Progress** — the level, and the one control with no undo, which arms before
   it fires.
+- **Credits** — last, after Help: the original score's composer, whose chip opens
+  the page `src/config/credits.ts` names. The website's footers carry the same
+  credit, and `tests/credits.test.ts` keeps the two in step.
 
 The sections scroll between a pinned title and a pinned Done. **The scrolling band
 is clipped by its own camera, not by a mask.** Phaser 4 dropped WebGL geometry

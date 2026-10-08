@@ -52,7 +52,7 @@ nothing new. Only the finale rows of `tests/fixtures/levels-choreography.json` m
 A finale is one `FinaleStage` in PlayScene, created from `areaFinale(level)`, and PlayScene
 only tells it *when* — the opening's downbeat, the clear. It never decides *what*.
 
-- **The environment.** A line of pennants (lanterns on Dusk) is strung over the act for the
+- **The environment.** A line of pennants (lanterns on Dusk and Swamp) is strung over the act for the
   whole level, under the room dim, so it steps back for the player's turn with the rest of
   the workshop. Each pennant swings at its own phase; a clear throws them up.
 - **The title card.** It drops in on ropes where the result plaque will later hang —
@@ -124,6 +124,10 @@ frames.
 2. A new *kind* of decoration is a new `FinaleMotif` and one more case in
    `FinaleStage.drawLine`. PlayScene does not change.
 3. An area with no entry wears `DEFAULT_TREATMENT`.
+
+Nine areas have their own: Grass, Pavement, Sand, Snow and Dusk, and the four appended after
+them (`AREAS` in `src/game/levels.ts`) — Garden's rose-and-leaf bunting, Swamp's green and
+gold lanterns, Village's harvest bunting and Castle's heraldic crimson, gold and royal blue.
 
 ## Analytics
 

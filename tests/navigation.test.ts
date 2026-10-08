@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resizedScroll, scrollStep, stripBounds, stripInView } from '../src/ui/navigation';
+import { resizedScroll, scrollStep, STRIP_RASTER, stripBounds, stripInView } from '../src/ui/navigation';
 
 describe('map navigation motion', () => {
   it('preserves the world point at the viewport centre across a resize', () => {
@@ -101,5 +101,21 @@ describe('the map bake, cut into strips', () => {
     expect(seen.size).toBe(strips.length);
     // And the point of the exercise: most of the bake is off on any given frame.
     expect(drawn / samples).toBeLessThan(strips.length * 0.4);
+  });
+});
+
+describe('the strips rasterised ahead of the camera', () => {
+  it('are kept until well past where they were made', () => {
+    // A strip baked ahead is inside the kept band with room to spare, so the camera can
+    // turn back without a strip being freed and rasterised again on alternate frames.
+    expect(STRIP_RASTER.prefetch).toBeGreaterThan(0);
+    expect(STRIP_RASTER.keep - STRIP_RASTER.prefetch).toBeGreaterThanOrEqual(0.25);
+    const height = 1559, margin = 260;
+    const strip = { top: 3000, bottom: 3606 };
+    for (let scroll = 0; scroll < 6000; scroll += 37) {
+      if (stripInView(strip, scroll, height, margin + STRIP_RASTER.prefetch * height)) {
+        expect(stripInView(strip, scroll, height, margin + STRIP_RASTER.keep * height), `scroll ${scroll}`).toBe(true);
+      }
+    }
   });
 });

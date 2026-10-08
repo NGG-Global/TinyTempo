@@ -15,6 +15,7 @@ import { tutorialSeen } from '@/game/TutorialRun';
 import { loadProgress, seenScrapbook } from '@/game/progress';
 import { ownedKeepsakes } from '@/game/scrapbook';
 import { MaterialKey } from '@/textures/materials';
+import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { shade } from '@/ui/colour';
 import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { drawGear } from '@/ui/gear';
@@ -69,6 +70,14 @@ export class MenuScene extends BaseScene {
   private curtain!: SceneCurtain;
   private enteredAt = 0;
   private uiScale = 1;
+  /**
+   * The block, the "How to play" plank and the pucks: static between presses, so each is a
+   * raster at rest (`ui/bakedLayer.ts`) rather than ~5,000 commands tessellated a frame.
+   * The sign is not: it drifts on its ropes all the time, and a raster turned every frame
+   * would be resampled every frame.
+   */
+  private layers: BakedLayer[] = [];
+  private primed = false;
   private ceilingY = 0;
   private buttonRect = new Phaser.Geom.Rectangle();
   private boardRect = new Phaser.Geom.Rectangle();
@@ -132,6 +141,8 @@ export class MenuScene extends BaseScene {
     this.tutorialSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7);
     this.tutorialLabel = display(this, 'How to play', { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
     this.pucks = this.add.graphics();
+    this.layers = [this.button, this.tutorialButton, this.pucks].map(graphics => new BakedLayer(this, graphics));
+    this.primed = false;
     this.objectivesCard = new ObjectivesCard(this);
 
     this.taps = new TapInput(this, tap => this.handleTap(tap));
@@ -186,12 +197,18 @@ export class MenuScene extends BaseScene {
     resize(this.playLabel, 40 * s, SHELL.cream);
     this.tutorialRect.setTo(safe.centerX - 200 * s, this.buttonRect.y - this.controlSize - 24 * s, 400 * s, this.controlSize);
     drawPanel(this.tutorialButton.clear(), this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
+    this.layers[1]!.invalidate();
     placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
     resize(this.tutorialLabel, 32 * s, SHELL.cream);
     this.objectivesAt = { x: safe.left + 56 * s, y: this.tutorialRect.centerY };
     this.drawPucks(s, 0);
     this.objectivesCard.layout(safe, full, s);
+    // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
+    if (!this.primed) {
+      this.primed = true;
+      for (const layer of this.layers) layer.bake();
+    }
   }
 
   private drawPucks(s: number, press: number): void {
@@ -219,6 +236,7 @@ export class MenuScene extends BaseScene {
       }
     }
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), r * 0.52, PALETTE.ink, 1);
+    this.layers[2]?.invalidate();
   }
 
   /** The block sinks on the tap and springs back: one press, one rebound, then still. */
@@ -234,6 +252,7 @@ export class MenuScene extends BaseScene {
     const iconX = labelX - this.playLabel.displayWidth / 2 - 34 * s;
     g.fillStyle(0x000000, 0.18).fillCircle(iconX, r.centerY + sink, 22 * s);
     drawPlay(g, iconX + 2 * s, r.centerY + sink, 12 * s, SHELL.cream);
+    this.layers[0]?.invalidate();
   }
 
   /**
@@ -307,6 +326,7 @@ export class MenuScene extends BaseScene {
       g.fillStyle(f.face, 1).fillCircle(x, this.beadRow.y, r);
       g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, this.beadRow.y - r * 0.35, r * 0.3);
     }
+    bakeOne(this.layers);
   }
 
   private handleTap(tap: Tap): void {

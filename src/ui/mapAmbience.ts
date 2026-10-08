@@ -3,8 +3,10 @@ import { FxKey } from './feedback';
 
 /**
  * One quiet ambient layer per area on the map: pollen over the grass, a breathing glow on
- * the street lamps, dust over the sand, snowfall, and fireflies at dusk. The frontier's hop
- * and its ring used to be the only life on the road.
+ * the street lamps, dust over the sand, snowfall, fireflies at dusk, petals in the garden,
+ * mist over the swamp, leaves tumbling through the village and embers rising off the
+ * castle's torches (which glow, as the lamps do). The frontier's hop and its ring used to be
+ * the only life on the road.
  *
  * Bounded by construction: a fixed pool of `AMBIENCE.motes` images and `AMBIENCE.lamps`
  * glows, made once and never more, so nothing grows with the length of the road or the
@@ -30,8 +32,8 @@ export const AMBIENCE = Object.freeze({
 });
 
 /** Which ambience an area carries, by its index in `AREAS`: the same index the props use. */
-export type AmbienceKind = 'pollen' | 'lamps' | 'dust' | 'snow' | 'fireflies';
-export const AMBIENCE_BY_AREA: readonly AmbienceKind[] = Object.freeze(['pollen', 'lamps', 'dust', 'snow', 'fireflies']);
+export type AmbienceKind = 'pollen' | 'lamps' | 'dust' | 'snow' | 'fireflies' | 'petals' | 'mist' | 'leaves' | 'embers';
+export const AMBIENCE_BY_AREA: readonly AmbienceKind[] = Object.freeze(['pollen', 'lamps', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers']);
 
 /** The rectangle of world the camera shows. */
 export interface AmbienceView { readonly left: number; readonly top: number; readonly width: number; readonly height: number }
@@ -46,6 +48,9 @@ export interface MotePose {
   readonly tint: number;
   /** Whether it glows (additive) rather than lies on the paint. */
   readonly glow: boolean;
+  /** A tumbling leaf is the irregular flake, turned; everything else is the round dot. */
+  readonly flake: boolean;
+  readonly angle: number;
 }
 
 /** `value` wrapped into `[from, from + span)`. */
@@ -70,7 +75,7 @@ export function motePose(kind: AmbienceKind, i: number, t: number, view: Ambienc
   const spanX = view.width + m * 2, spanY = view.height + m * 2;
   const fromX = view.left - m, fromY = view.top - m;
   const phase = c * Math.PI * 2;
-  let dx = 0, dy = 0, alpha = 1, scale = 0.3, tint = 0xffffff, glow = false;
+  let dx = 0, dy = 0, alpha = 1, scale = 0.3, tint = 0xffffff, glow = false, flake = false, angle = 0;
   switch (kind) {
     case 'pollen':
       // Drifting down and across on a light breeze, turning as it goes.
@@ -96,13 +101,39 @@ export function motePose(kind: AmbienceKind, i: number, t: number, view: Ambienc
       alpha = Math.max(0, Math.sin(t * (1.1 + b) + phase)) ** 1.5;
       scale = 0.26 + 0.12 * b; tint = 0xf4f0a0; glow = true;
       break;
+    case 'petals':
+      // Falling slower than leaves and swaying wider, pink and white.
+      dx = 8 * s * t + Math.sin(t * 1.4 + phase) * 18 * s;
+      dy = 9 * s * t + Math.cos(t * 1.1 + phase) * 5 * s;
+      alpha = 0.75; scale = 0.2 + 0.12 * b; tint = c < 0.5 ? 0xf7b8c6 : 0xfff1f0;
+      break;
+    case 'mist':
+      // Large, faint and slow: a bank drifting across the water, never a mote.
+      dx = 6 * s * t + Math.sin(t * 0.13 + phase) * 30 * s;
+      dy = Math.sin(t * 0.09 + phase) * 10 * s;
+      alpha = 0.12 + 0.06 * (1 + Math.sin(t * 0.3 + phase)) / 2; scale = 1.1 + 1.0 * b; tint = 0xe8f0d8;
+      break;
+    case 'leaves':
+      // Tumbling down on the wind, turning over as they go.
+      dx = 14 * s * t + Math.sin(t * 1.2 + phase) * 22 * s;
+      dy = 16 * s * t + Math.cos(t * 2.1 + phase) * 4 * s;
+      alpha = 0.85; scale = 0.18 + 0.1 * b; tint = c < 0.34 ? 0xd9622b : c < 0.67 ? 0xe9a23b : 0xb8452f;
+      flake = true; angle = t * (1.2 + b) + phase;
+      break;
+    case 'embers':
+      // Rising off the torches, wavering, and going out.
+      dx = Math.sin(t * 0.8 + phase) * 10 * s;
+      dy = -(14 + 10 * b) * s * t;
+      alpha = Math.max(0, Math.sin(t * (2.2 + b) + phase)) * 0.9;
+      scale = 0.1 + 0.08 * b; tint = 0xffa64d; glow = true;
+      break;
   }
   return {
     // Homes are laid out on the world, one per span, and wrapped into the view's span: the
     // view moving changes which copy is shown, never where on the ground it stands.
     x: wrap(a * spanX + dx, fromX, spanX),
     y: wrap(b * spanY + dy, fromY, spanY),
-    alpha, scale, tint, glow,
+    alpha, scale, tint, glow, flake, angle,
   };
 }
 
@@ -156,8 +187,11 @@ export class MapAmbience {
       const { pose, band } = posed;
       const alpha = pose.alpha * seamFade(pose.y, band.top, band.bottom, s);
       if (alpha <= 0.01) { image.setVisible(false); return; }
-      image.setVisible(true).setPosition(pose.x, pose.y).setScale(pose.scale * s * 2).setAlpha(alpha).setTint(pose.tint)
-        .setBlendMode(pose.glow ? 'ADD' : 'NORMAL');
+      // The flake is 14 px against the dot's 32, so it is scaled up to the same size.
+      const texture = pose.flake ? FxKey.flake : FxKey.dot;
+      if (image.texture.key !== texture) image.setTexture(texture);
+      image.setVisible(true).setPosition(pose.x, pose.y).setScale(pose.scale * s * 2 * (pose.flake ? 32 / 14 : 1)).setAlpha(alpha).setTint(pose.tint)
+        .setRotation(pose.angle).setBlendMode(pose.glow ? 'ADD' : 'NORMAL');
     });
     let lit = 0;
     for (const lamp of lamps) {

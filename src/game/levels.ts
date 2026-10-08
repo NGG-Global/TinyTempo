@@ -48,13 +48,33 @@ export interface LevelSpec {
   readonly starAccuracy: readonly [number, number, number];
 }
 
-/** Map areas cycle forever; repeats gain a numeral (GRASS II). */
+/**
+ * Map areas cycle forever; repeats gain a numeral (GRASS II). An area is a look and a name,
+ * nothing more: star gates count areas by index (`game/stars.ts`), analytics by number, and
+ * no save stores a name, so a new area changes only how the road past it is dressed.
+ *
+ * **Append, never insert.** Levels 1–50 are the first five, as they always were; the four
+ * added later run 51–90, and the cycle repeats from 91. Inserting would re-dress roads
+ * players have already walked. An area's index is also what picks its terrain motif and
+ * props in `MapScene` and its ambience (`AMBIENCE_BY_AREA`), and its name its finale
+ * (`FINALE_TREATMENTS`), so a new one needs all three; `tests/finale.test.ts` and
+ * `tests/mapAmbience.test.ts` fail without them. Every palette is held to the same
+ * contrast rules as the first five (`tests/roadLayout.test.ts`, `tests/resultCopy.test.ts`).
+ */
 export const AREAS: readonly Area[] = Object.freeze([
   { name: 'Grass', sky: 0xe7ead5, ground: 0xb0bb91, road: 0xd3b58c, ink: 0x2c4629, paper: 0xf4f0e2 },
   { name: 'Pavement', sky: 0xe8e4de, ground: 0xbdb7ae, road: 0x7a746f, ink: 0x35322f, paper: 0xf5f2ee },
   { name: 'Sand', sky: 0xf5e9cc, ground: 0xe3c88f, road: 0xc48f5b, ink: 0x5a4224, paper: 0xfff7e6 },
   { name: 'Snow', sky: 0xe9eff5, ground: 0xdfe8f0, road: 0x9eb4c6, ink: 0x2d4759, paper: 0xffffff },
   { name: 'Dusk', sky: 0x615475, ground: 0x433856, road: 0xb48d70, ink: 0xf3e7d8, paper: 0x2a2236 },
+  // A clipped lawn and a pale gravel path: greener and brighter than Grass's meadow.
+  { name: 'Garden', sky: 0xedf3dd, ground: 0x9cc47a, road: 0xe2d2b4, ink: 0x24401f, paper: 0xf7f6e9 },
+  // Olive moss under a hazy sky, crossed on a boardwalk.
+  { name: 'Swamp', sky: 0xd6dcc8, ground: 0x7f8c5e, road: 0x8a6a4a, ink: 0x162012, paper: 0xeef0e0 },
+  // Autumn fields and a cobbled lane.
+  { name: 'Village', sky: 0xf4e8d8, ground: 0xc69a6c, road: 0x9b8b7d, ink: 0x3d2414, paper: 0xfbf0e3 },
+  // Slate under a cool sky, and pale flagstones up to the gate: the cycle's last area.
+  { name: 'Castle', sky: 0xd3d9e4, ground: 0x7f8ea3, road: 0xa8a2a6, ink: 0x141a29, paper: 0xeef1f6 },
 ]);
 
 /**

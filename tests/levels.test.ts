@@ -149,6 +149,12 @@ describe('level progression', () => {
     expect(areaOf(1).name).toBe('Grass'); expect(areaOf(10).name).toBe('Grass');
     expect(areaOf(11).name).toBe('Pavement'); expect(areaOf(20).name).toBe('Pavement');
     expect(areaOf(21).name).toBe('Sand');
+    // Appended, never inserted: the first fifty levels keep the five areas they always had,
+    // and the four added later follow Dusk before the cycle comes round.
+    expect([1, 11, 21, 31, 41, 51, 61, 71, 81].map(level => areaOf(level).name))
+      .toEqual(['Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle']);
+    expect(areaOf(90).name).toBe('Castle');
+    expect(areaOf(91).name).toBe('Grass II');
     expect(areaOf(AREAS.length * 10 + 1).name).toBe('Grass II');
     expect(areaOf(AREAS.length * 20 + 5).name).toBe('Grass III');
   });

@@ -1,5 +1,8 @@
 # Music: two premixed gameplay loops, and the title theme
 
+The original score is by Alon Attaly. The credit is in Settings → Credits and on every
+page of the website, from `src/config/credits.ts`.
+
 Two gameplay tracks, each one premixed MP3 from its own WAV stems, each normalised at load
 into an exact whole-bar loop at 120 BPM, and one of them decoded at a time. Track A is the
 seven-stem workshop loop this document was written for, and every measurement below is

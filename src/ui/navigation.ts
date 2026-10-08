@@ -52,6 +52,14 @@ export function stripBounds(count: number, levels: number, worldHeight: number, 
 }
 
 /**
+ * How far ahead of the view the map paints and rasterises its strips, and how far behind
+ * it lets a raster go, both in screen heights past the cull margin. `keep` has to clear
+ * `prefetch` by a margin of its own, or a strip rasterised ahead of the camera is freed on
+ * the next frame and rasterised again on the one after: a raster a frame, for nothing.
+ */
+export const STRIP_RASTER = { prefetch: 0.35, keep: 0.75 } as const;
+
+/**
  * Whether a strip is close enough to the camera to be worth drawing. `margin` has to
  * clear the tallest thing a strip can stand past its own edge, or that thing pops in.
  */
