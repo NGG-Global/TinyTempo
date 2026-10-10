@@ -110,6 +110,13 @@ scheduled, judged or scored changed.
 
 ## Impact during play
 
+- **The hit** (`ui/hitPose.ts`, drawn by `drawBlock`): a Perfect is answered at its socket
+  with a shockwave ring, rays for the first instant, a flash on the socket and the plate, and
+  a hop of the baton; a Good keeps the flash and a faint ring; the verdict word is struck
+  like a count numeral. A flawless task's flourish ends in a chorus: every socket rings
+  together, the plate lights, the baton lands again, confetti goes up. Both are `f(age)`
+  from the audio clock. See `docs/TURN_CUE.md`.
+
 - **Contact punch** (`ui/punch.ts`): the act's stage kicks down `PUNCH.reach` (3 design
   units, times the treatment's exaggeration and the scene's scale) on a contact and settles
   within 120 ms, with one small rebound. It moves the act's stage container and nothing

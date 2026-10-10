@@ -186,6 +186,15 @@ export class Feedback {
     return emitter;
   }
 
+  /**
+   * Build a preset's emitter before its first burst. An emitter and its particle pool are
+   * otherwise made on the first `burst`, which for the sparks was the first Perfect of a
+   * level: the frame the player is reading for the answer to their first tap.
+   */
+  public prime(preset: Preset, tint: number | number[], particles = 24): void {
+    this.emitter(preset, tint).reserve(particles);
+  }
+
   /** Fire a burst at a point. Counts scale with the treatment's exaggeration. */
   public burst(preset: Preset, x: number, y: number, tint: number | number[], count: number): void {
     const n = Math.round(count * STYLE.current.exaggeration);

@@ -1,9 +1,10 @@
 import Phaser from 'phaser';
 import { PALETTE, SHELL } from '@/config/theme';
-import { fuse, type Handover, type Mark } from '@/game/beatTrack';
+import { fuse, type Handover, type Mark, type PulseBall } from '@/game/beatTrack';
 import { clamp01, easeInOutCubic, easeOut } from '@/vignettes/motion';
 import { mix, shade } from './colour';
-import { socketGlint, sweepBand } from './flourish';
+import { chorusRing, FLAWLESS, plateGlow, socketGlint, sweepBand } from './flourish';
+import { HIT, hitPose, type HitPose } from './hitPose';
 import { drawHammerMark, drawTapMark } from './icons';
 import { drawPanel } from './panel';
 import { squash } from './spring';
@@ -153,8 +154,12 @@ export interface BlockState {
   readonly played: number;
   readonly marks: readonly Mark[];
   readonly turn: Handover;
-  /** The socket the player just answered, and how far into its swell. */
-  readonly struck: { readonly index: number; readonly amount: number };
+  /**
+   * The socket the player just answered, and how far into its swell. With `age` (seconds
+   * since the strike) and `perfect`, the hit's own answer — ring, rays, flash and the
+   * baton's hop (`ui/hitPose.ts`) — is drawn at that socket.
+   */
+  readonly struck: { readonly index: number; readonly amount: number; readonly age?: number; readonly perfect?: boolean };
   /** Both rows shake together: an extra tap answered no beat, so it marks none. */
   readonly rattle: number;
   readonly still: boolean;
@@ -169,6 +174,8 @@ export interface BlockState {
   readonly flawless?: number;
   /** A breather in progress: the face carries its bar tiles instead of the sockets. */
   readonly rest?: BlockRest | null;
+  /** The pulse ball, for the lesson and the levels that still teach; omitted or null otherwise. */
+  readonly pulse?: PulseBall | null;
 }
 
 /**
@@ -325,11 +332,58 @@ export function drawBlock(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s:
   const { turn, still, rattle } = state;
   const heat = faceHeat(turn, still);
   const lift = faceLift(turn, still);
+  const hit = hitPose(state.struck.age ?? -Infinity, state.struck.perfect ?? false, still);
   drawBacking(g, geo, s, state, lift, rattle);
   drawShelf(g, geo, s, state, rattle);
-  const face = drawFace(g, geo, s, state, heat, lift, rattle);
+  const face = drawFace(g, geo, s, state, heat, lift, rattle, hit);
   drawOwnerSlots(g, geo, s, turn, face, lift, rattle);
-  drawBaton(g, geo, s, turn, still, lift, rattle, state.landed);
+  // A flawless task's chorus lands the baton again: the same ring and squash it arrived with.
+  const flawless = state.flawless ?? -Infinity;
+  const landed = flawless >= FLAWLESS.chorusAt ? Math.min(state.landed, flawless - FLAWLESS.chorusAt) : state.landed;
+  drawBaton(g, geo, s, turn, still, lift, rattle, landed, hit);
+  if (state.pulse) drawPulse(g, geo, s, state, state.pulse, lift, rattle);
+}
+
+/**
+ * How high a hop lifts above the line between its landings, in design units: a short hop
+ * along a row, which must stay under the lesson's label above the shelf, and a higher one
+ * for the change of rows, which is the hop that matters.
+ */
+const HOP = { along: 16, across: 30 } as const;
+/** Where the ball enters from, above its first bead, in design units. */
+const ENTRY_DROP = 90;
+
+/**
+ * The pulse ball: on the shelf's beads through the example, on the face's sockets through
+ * the answer, with a shadow growing on the landing it is coming to. Drawn last, over the
+ * baton: it is the thing the eye follows.
+ */
+function drawPulse(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState, ball: PulseBall, lift: number, rattle: number): void {
+  const r = Math.max(6 * s, state.socketRadius * 0.72);
+  // The ball rests *on* a bead or a socket, not over it, so the mark underneath stays
+  // legible and a ball at rest never reads as a smaller mark of its own.
+  const seat = state.socketRadius * 0.55 + r * 0.6;
+  const point = (on: { row: 'shelf' | 'face'; index: number }): { x: number; y: number } => ({
+    x: geo.face.centerX + (state.centres[on.index] ?? 0) + rattle,
+    y: (on.row === 'shelf' ? geo.shelfCentreY : geo.faceCentreY - lift) - seat,
+  });
+  const to = point(ball.to);
+  const from = ball.from ? point(ball.from) : { x: to.x, y: to.y - ENTRY_DROP * s };
+  const hop = ball.from && ball.from.row !== ball.to.row ? HOP.across : HOP.along;
+  const x = from.x + (to.x - from.x) * ball.t;
+  const y = from.y + (to.y - from.y) * ball.t - ball.height * hop * s;
+  // The shadow is on the landing the ball is coming to, and it is what says "next".
+  if (ball.t < 1 || ball.landedAge < 0.2) {
+    const near = ball.t;
+    g.fillStyle(PALETTE.ink, ball.alpha * (0.12 + 0.2 * near)).fillEllipse(to.x, to.y + seat + 2 * s, r * (1.2 + 1.2 * near), r * (0.5 + 0.4 * near));
+  }
+  // A squash as it lands, the same give every struck thing on the block has.
+  const sq = state.still ? 0 : squash(ball.landedAge, 0.16, 0.22);
+  const w = r * 2 * (1 + sq), h = r * 2 * (1 - sq);
+  g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.5), ball.alpha).fillEllipse(x, y + 2.5 * s, w, h);
+  g.fillStyle(PALETTE.coral, ball.alpha).fillEllipse(x, y, w, h);
+  g.lineStyle(2.4 * s, mix(PALETTE.coral, PALETTE.ink, 0.45), ball.alpha).strokeEllipse(x, y, w, h);
+  g.fillStyle(SHELL.cream, 0.55 * ball.alpha).fillEllipse(x - r * 0.25, y - r * 0.3, w * 0.36, h * 0.26);
 }
 
 /**
@@ -451,11 +505,14 @@ function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
 /** The player's row, and the sockets they answer into. Returns the face's own fill. */
 function drawFace(
   g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, state: BlockState,
-  heat: number, lift: number, rattle: number,
+  heat: number, lift: number, rattle: number, hit: HitPose | null,
 ): number {
   const rest = mix(PALETTE.paper, SHELL.wood, 0.16);
   const hot = mix(PALETTE.paper, PALETTE.coral, 0.54);
-  const fill = mix(rest, hot, easeOut(heat));
+  // The plate brightens with a hit and with the flawless chorus, and cools: the row answers
+  // the player, not only the socket.
+  const glow = Math.max((hit?.flash ?? 0) * 0.22, plateGlow(state.flawless ?? -Infinity) * 0.3);
+  const fill = mix(mix(rest, hot, easeOut(heat)), SHELL.cream, glow);
   const plate = new Phaser.Geom.Rectangle(geo.face.x + rattle, geo.face.y - lift, geo.face.width, geo.face.height);
   drawPanel(g, plate, s, { fill, depth: TRACK.plateDepth + lift / s, radius: TRACK.plateRadius });
   if (state.turn.yours > 0.01) {
@@ -492,6 +549,7 @@ function drawFace(
       g.fillStyle(PALETTE.ink, 0.35).fillCircle(x, y + 2 * s, disc);
       g.fillStyle(SHELL.cream, 1).fillCircle(x, y, disc);
       g.lineStyle(4.6 * s, SOCKET_RING, 1).strokeCircle(x, y, r);
+      if (i === state.struck.index && hit) drawHit(g, x, y, state.socketRadius, s, hit);
     } else {
       g.fillStyle(shade(PALETTE.ink, -0.1), 0.3).fillCircle(x, y, r);
       g.fillStyle(mix(fill, RECESS, 0.26), 1).fillCircle(x, y + 2 * s, r * 0.92);
@@ -514,6 +572,35 @@ function drawFace(
     g.lineStyle(4 * s, SHELL.cream, ghost.alpha).strokeCircle(gx, y, radius);
   }
   return fill;
+}
+
+/**
+ * The hit's own answer at its socket: the shockwave leaving it, the rays of the first
+ * instant and the flash cooling on the socket. Drawn over the struck socket's own ring, so
+ * the mark the row keeps is untouched once the answer has faded.
+ */
+function drawHit(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, s: number, hit: HitPose): void {
+  if (hit.flash > 0.01) {
+    g.fillStyle(SHELL.sun, hit.flash * 0.75).fillCircle(x, y, radius * (0.95 + 0.3 * hit.flash));
+    g.fillStyle(SHELL.cream, hit.flash * 0.5).fillCircle(x, y, radius * 0.6);
+  }
+  if (hit.rays.alpha > 0.01) {
+    const inner = radius * (1.25 + 1.3 * hit.rays.reach);
+    for (let k = 0; k < HIT.rayCount; k++) {
+      const a = (k / HIT.rayCount) * Math.PI * 2 - Math.PI / 2;
+      // Alternate lengths, so eight rays read as a burst rather than a cog.
+      const outer = inner + radius * (k % 2 === 0 ? 1.5 : 0.9) * (0.5 + 0.9 * hit.rays.reach);
+      g.lineStyle((3.2 - 2 * hit.rays.reach) * s, k % 2 === 0 ? SHELL.sun : SHELL.cream, hit.rays.alpha)
+        .lineBetween(x + Math.cos(a) * inner, y + Math.sin(a) * inner, x + Math.cos(a) * outer, y + Math.sin(a) * outer);
+    }
+  }
+  if (hit.ring.alpha > 0.01) {
+    // Sun and cream, never coral: the plate under the ring has warmed to coral by now, and
+    // coral on coral is the invisibility the socket ring's own colour exists to avoid.
+    const reach = radius * (1.1 + 2.6 * hit.ring.spread);
+    g.lineStyle((5.5 - 4 * hit.ring.spread) * s, SHELL.sun, hit.ring.alpha).strokeCircle(x, y, reach);
+    g.lineStyle(2.2 * s, SHELL.cream, hit.ring.alpha * 0.8).strokeCircle(x, y, reach * 0.84);
+  }
 }
 
 /**
@@ -540,14 +627,25 @@ function drawFlawless(
       g.fillStyle(SHELL.cream, band.alpha).fillRect(left, plate.y + inset, right - left, plate.height - inset * 2);
     }
   }
+  // Once the sweep has counted the sockets off, the whole row answers at once: one ring
+  // from every socket together, under reduced motion a brief flash of each instead.
+  const chorus = state.still ? { spread: 1, alpha: 0 } : chorusRing(age);
+  const glowAll = state.still ? plateGlow(age) : 0;
   for (let i = 0; i < state.centres.length; i++) {
-    const glint = state.still ? Math.min(1, age / 0.4) : socketGlint(age, i, state.centres.length);
-    if (glint < 0 || glint >= 1) continue;
     const x = geo.face.centerX + state.centres[i]! + state.rattle;
     const r = state.socketRadius;
-    const fade = (1 - glint) ** 1.4;
-    g.lineStyle((5 - 3 * glint) * s, 0xffe7a0, fade * 0.85).strokeCircle(x, y, r * (1.05 + 1.6 * glint));
-    g.fillStyle(SHELL.cream, fade * 0.45).fillCircle(x, y, r * 0.9);
+    const glint = state.still ? Math.min(1, age / 0.4) : socketGlint(age, i, state.centres.length);
+    if (glint >= 0 && glint < 1) {
+      const fade = (1 - glint) ** 1.4;
+      g.lineStyle((5 - 3 * glint) * s, 0xffe7a0, fade * 0.85).strokeCircle(x, y, r * (1.05 + 1.6 * glint));
+      g.fillStyle(SHELL.cream, fade * 0.45).fillCircle(x, y, r * 0.9);
+    }
+    if (chorus.alpha > 0.01) {
+      const reach = r * (1.1 + 3 * chorus.spread);
+      g.lineStyle((5 - 3.5 * chorus.spread) * s, SHELL.sun, chorus.alpha).strokeCircle(x, y, reach);
+      g.lineStyle(2 * s, SHELL.cream, chorus.alpha * 0.6).strokeCircle(x, y, reach * 0.8);
+    }
+    if (glowAll > 0.01) g.fillStyle(SHELL.sun, glowAll * 0.6).fillCircle(x, y, r * 1.1);
   }
 }
 
@@ -586,11 +684,14 @@ function drawOwnerSlots(
  */
 function drawBaton(
   g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number, turn: Handover, still: boolean, lift: number, rattle: number, landed: number,
+  hit: HitPose | null = null,
 ): void {
   const t = batonCrossing(turn, still);
   const at = batonAt(geo, s, t, lift, still);
   const x = at.x + rattle;
-  const y = at.y;
+  // A Perfect hops the token once in its slot: the drummer's nod, on the beat it landed.
+  const bob = hit && turn.yours > 0.99 ? hit.bob : { lift: 0, squash: 0 };
+  const y = at.y - bob.lift * s;
   const arc = at.arc;
   const r = TRACK.batonRadius * s * (1 + 0.16 * arc);
 
@@ -613,7 +714,7 @@ function drawBaton(
   }
   // Wider than tall for an instant as it lands, then round again; Graphics has no
   // rotation for an ellipse, and a landing is the one moment the squash is on an axis.
-  const sq = landingSquash(landed, still);
+  const sq = landingSquash(landed, still) + bob.squash;
   const w = r * 2 * (1 + sq), h = r * 2 * (1 - sq);
   g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillEllipse(x, y + 3 * s, w, h);
   g.fillStyle(PALETTE.coral, 1).fillEllipse(x, y, w, h);

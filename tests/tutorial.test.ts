@@ -154,7 +154,39 @@ describe('the pass on their own', () => {
     const words = coach(run, plan.end + 1);
     expect(words.heading).toBe('Too early');
     expect(words.copy).toContain('hammer’s turn');
-    expect(words).toMatchObject({ action: 'Try again', next: 'try' });
+    // No downbeat was found: back to the scaffold, where the answer sounds under the thumb.
+    expect(words).toMatchObject({ action: 'Tap along again', next: 'along' });
+  });
+
+  it('sends a pass that found no downbeat back to tapping along, and one that found some back to itself', () => {
+    const silent = new TutorialRun();
+    const silentPlan = beginOnce(silent, 'try');
+    missAll(silent);
+    expect(silent.complete()).toBe('silent');
+    expect(coach(silent, silentPlan.end + 1)).toMatchObject({ action: 'Tap along again', next: 'along' });
+    const partial = new TutorialRun();
+    const partialPlan = beginOnce(partial, 'try');
+    partial.judged(hit(0));
+    partial.judged(omission(1));
+    partial.judged(omission(2));
+    expect(partial.complete()).toBe('partial');
+    expect(coach(partial, partialPlan.end + 1)).toMatchObject({ action: 'Try again', next: 'try' });
+    // Tapping along never sends anyone further back than itself.
+    const along = new TutorialRun();
+    const alongPlan = beginOnce(along, 'along');
+    missAll(along);
+    expect(along.complete()).toBe('silent');
+    expect(coach(along, alongPlan.end + 1)).toMatchObject({ action: 'Try again', next: 'along' });
+  });
+
+  it('says there is no pause, in words, before the player is ever judged', () => {
+    const run = new TutorialRun();
+    const plan = run.watch(0);
+    const said = [plan.demo + 0.1, plan.targets[0]! + 0.1, plan.end].map(now => coach(run, now).copy).join(' ');
+    expect(said).toMatch(/no pause/i);
+    const judged = new TutorialRun();
+    const judgedPlan = beginOnce(judged, 'try');
+    expect(coach(judged, judgedPlan.demo + 0.1).copy).toMatch(/no pause/i);
   });
 
   it('says "Not yet" the moment a tap lands in the hammer’s turn, and lets it go by the player’s bar', () => {
@@ -229,7 +261,8 @@ describe('the pass on their own', () => {
       run.complete();
       expect(run.tries).toBe(attempt);
       const words = coach(run, plan.end + 1);
-      expect(words.action).toBe(attempt < TUTORIAL.offerPlayAfter ? 'Try again' : 'Let’s play');
+      // A silent bar on their own goes back to the scaffold until the way on is offered.
+      expect(words.action).toBe(attempt < TUTORIAL.offerPlayAfter ? 'Tap along again' : 'Let’s play');
     }
     expect(run.step).toBe('try');
     expect(run.offersPlay).toBe(true);
