@@ -18,13 +18,15 @@ prospector's third and later looks move from 291/323 to 323/356; neither carries
 | --- | --- | --- | --- | --- | --- |
 | 0 | 291 | Strawberry scoop on a waffle cone | Ice cream parlour, a bob | Ice cream | Waffle cone |
 | 1 | 324 | Cherry-over-lemon ice pop | Beach, curls | Ice pop | Cherry ice pop |
-| 2 | 357 | Grape swirl lollipop | Sweet shop, a bun | Lollipop | — |
+| 2 | 391 | Grape swirl lollipop | Sweet shop, a bun | Lollipop | — |
 
-Laps then repeat every 33 levels. The treat changes what the act is, so it changes the words
+Its era, 291–356, is two whole 33-act laps; the frog and glasses' era from 357 carries 35
+acts, so the lollipop arrives on 391 and laps then repeat every 35 levels
+(`docs/FROG_AND_GLASSES.md`). The treat changes what the act is, so it changes the words
 (`VignetteDefinition.looks`): the map and the intro never announce ice cream over a lollipop.
 Every rough ending reads *Dropped it!*, with its own second line per treat.
 
-Development previews: `?debug&level=291`, `?debug&level=324`, `?debug&level=357`. A fresh
+Development previews: `?debug&level=291`, `?debug&level=324`, `?debug&level=391`. A fresh
 save meets the one-time triplet introduction on the same act first.
 
 ## The beat and the treat

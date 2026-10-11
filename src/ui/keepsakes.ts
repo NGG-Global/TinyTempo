@@ -14,6 +14,8 @@ import { CURL_LOOKS } from '../vignettes/curlLooks';
 import { DOOR_LOOKS } from '../vignettes/doorLooks';
 import { EGG_LOOKS } from '../vignettes/eggLooks';
 import { FISHERMAN_LOOKS } from '../vignettes/fishermanLooks';
+import { FROG_LOOKS } from '../vignettes/frogLooks';
+import { GLASSES_LOOKS } from '../vignettes/glassesLooks';
 import { HAMMER_LOOKS } from '../vignettes/hammerLooks';
 import { ICE_CREAM_LOOKS } from '../vignettes/iceCreamLooks';
 import { LIGHT_LOOKS } from '../vignettes/lightLooks';
@@ -762,6 +764,67 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       p.fill(0xffffff, 0.5).box(-12, -33, 6, 44, 3, false);
       p.fill(look.body).oval(19, 8, 3, 6, false);
       glint(p, 22, -34, 8);
+    });
+  },
+  // Level 357's: the green pond frog on its lily pad, before its first croak.
+  'frog-pond-frog': p => {
+    const look = FROG_LOOKS[0]!, frog = look.singer;
+    p.fill(look.pad).oval(0, 33, 40, 8);
+    p.fill(frog.body).disc(-16, -21, 11).disc(16, -21, 11);
+    p.fill(frog.flank).oval(-25, 21, 13, 11).oval(25, 21, 13, 11);
+    p.fill(frog.body).oval(0, 6, 30, 26);
+    p.detail(() => {
+      p.line([[0, 33], [-20, 39]], 1.6, shade(look.pad, -0.25));
+      p.fill(frog.belly).oval(0, 15, 17, 13, false);
+      p.fill(0xffffff).disc(-16, -22, 7.5).disc(16, -22, 7.5);
+      p.fill(frog.iris).disc(-15, -21, 4, false).disc(17, -21, 4, false);
+      p.line(arc(0, -6, 17, 6, 0.35, Math.PI - 0.35), 2.4);
+      p.fill(0xf2897a, 0.5).oval(-21, -2, 5, 3, false).oval(21, -2, 5, 3, false);
+      glint(p, 30, -32, 7);
+    });
+  },
+  // Level 358's: a sparkling flute from the evening party, bubbles still rising.
+  'glasses-party-flute': p => {
+    const look = GLASSES_LOOKS[0]!;
+    p.fill(0xeef6f8).oval(0, 34, 17, 4);
+    p.fill(0xeef6f8).bar(0, 2, 0, 33, 4);
+    p.fill(0xeef6f8).poly([[-13, -40], [13, -40], [10, -12], [3, 0], [-3, 0], [-10, -12]]);
+    p.detail(() => {
+      p.fill(look.drink).poly([[-11, -29], [11, -29], [8.5, -12], [2.5, -2], [-2.5, -2], [-8.5, -12]], false);
+      p.line([[-11, -29], [11, -29]], 2.4, look.drinkLight);
+      for (const [x, y] of [[-3, -8], [2, -14], [-4, -20], [4, -24]] as const) p.fill(0xffffff, 0.9).disc(x, y, 1.4, false);
+      p.line([[-8, -36], [-6, -14]], 2.2, 0xffffff);
+      glint(p, 22, -30, 8);
+    });
+  },
+  // Level 392's: a jar of fireflies from the moonlit pond.
+  'frog-firefly-jar': p => {
+    p.fill(0xdcebf0).box(-25, -26, 50, 64, 14);
+    p.fill(0xa58e62).box(-27, -38, 54, 14, 5);
+    p.detail(() => {
+      p.fill(0x2a3a5c, 0.85).box(-21, -22, 42, 56, 11, false);
+      for (const [x, y] of [[-9, -6], [8, -14], [4, 14], [-6, 22], [12, 4]] as const) {
+        p.fill(0xf6f29a, 0.35).disc(x, y, 6.5, false);
+        p.fill(0xfdfbc8).disc(x, y, 2.6, false);
+      }
+      p.line([[-12, 34], [-4, 14], [6, 8]], 2.4, 0x5d8a4a);
+      for (const x of [-12, 0, 12]) p.fill(0x6a5636).disc(x, -31, 1.8, false);
+      p.line([[-17, -16], [-17, 22]], 2.4, 0xffffff);
+      glint(p, 28, -30, 7);
+    });
+  },
+  // Level 393's: pink lemonade in a tumbler from the terrace, its lemon on the rim.
+  'glasses-lemonade': p => {
+    const look = GLASSES_LOOKS[1]!;
+    p.fill(0xeef6f8).poly([[-25, -32], [25, -32], [21, 38], [-21, 38]]);
+    p.detail(() => {
+      p.fill(look.drink).poly([[-22, -12], [22, -12], [19, 33], [-19, 33]], false);
+      p.line([[-22, -12], [22, -12]], 2.6, look.drinkLight);
+      p.fill(0xffffff, 0.6).box(-15, -16, 13, 11, 3, false).box(3, -14, 11, 10, 3, false);
+      p.fill(0xf7e06a).disc(21, -30, 11);
+      p.fill(0xfff6c4).disc(21, -30, 7.5, false);
+      p.line([[-18, -26], [-15, 28]], 2.4, 0xffffff);
+      glint(p, -30, -34, 7);
     });
   },
 };

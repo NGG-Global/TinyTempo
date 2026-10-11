@@ -42,12 +42,16 @@ function recorder(body: number) {
 
 describe('ice cream', () => {
   it('joins at level 291, past every keepsake players could hold, and licks a different treat each lap', () => {
-    expect(VIGNETTES.at(-1)?.id).toBe('icecream');
+    expect(VIGNETTES[32]?.id).toBe('icecream');
     for (let level = 1; level < 291; level++) expect(levelSpec(level).vignette).not.toBe('icecream');
-    for (const keepsake of KEEPSAKES.filter(k => k.vignette !== 'icecream')) expect(keepsake.level).toBeLessThan(291);
+    const earlier = new Set(VIGNETTES.slice(0, 32).map(v => v.id));
+    for (const keepsake of KEEPSAKES.filter(k => earlier.has(k.vignette))) expect(keepsake.level).toBeLessThan(291);
+    // Its era is two whole laps, 291–356; the frog and glasses era from 357 carries 35 acts,
+    // so its first two laps, and both keepsakes, stay where they were.
     for (let lap = 0; lap < 4; lap++) {
-      expect(actLevel('icecream', lap)).toBe(291 + 33 * lap);
-      expect(levelSpec(291 + 33 * lap)).toMatchObject({ vignette: 'icecream', lap });
+      const level = lap < 2 ? 291 + 33 * lap : 391 + 35 * (lap - 2);
+      expect(actLevel('icecream', lap)).toBe(level);
+      expect(levelSpec(level)).toMatchObject({ vignette: 'icecream', lap });
     }
     expect(ICE_CREAM_LOOKS.map(look => look.treat)).toEqual(['cone', 'icePop', 'lollipop']);
     expect(iceCreamLook(3)).toBe(ICE_CREAM_LOOKS[0]);

@@ -21,7 +21,8 @@ carries a keepsake.
 | 2 | 323 | Emerald, a mossy green cliff | Emerald seam | — |
 
 Its era, 227–290, is two whole 32-act laps; ice cream's era from 291 carries 33 acts, so
-the emerald arrives on 323 and laps then repeat every 33 levels. Each dig has its own prospector — beard, shirt, overalls,
+the emerald arrives on 323 and laps then repeat every 33 levels, and every 35 from the frog and
+glasses' era at 357. Each dig has its own prospector — beard, shirt, overalls,
 hat — so the second visit is a different place and not a recolour. The gem changes what the
 act is, so it changes the words too (`VignetteDefinition.looks`): the map and the intro
 never announce gold over a diamond. Every failure reads *Nothing but rock.*

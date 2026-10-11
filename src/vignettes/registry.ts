@@ -78,6 +78,12 @@ import { IceCreamVignette } from './IceCreamVignette';
 import { ICE_CREAM_LOOKS } from './iceCreamLooks';
 import { ICE_CREAM_REVEAL_SEC } from './iceCreamMotion';
 import { createIceCreamSounds } from '@/audio/iceCreamSounds';
+import { FrogVignette } from './FrogVignette';
+import { FROG_REVEAL_SEC } from './frogMotion';
+import { createFrogSounds } from '@/audio/frogSounds';
+import { GlassesVignette } from './GlassesVignette';
+import { GLASS_REVEAL_SEC } from './glassesMotion';
+import { createGlassesSounds } from '@/audio/glassesSounds';
 
 export const VIGNETTES: readonly VignetteDefinition[] = [
   {
@@ -304,6 +310,19 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new IceCreamVignette(scene, lap), sounds: createIceCreamSounds,
     looks: ICE_CREAM_LOOKS.map(look => look.copy),
   },
+  // Acts 34 and 35, appended at request. They join at level 357 (`ROTATION`), past every keepsake.
+  {
+    id: 'frog', title: 'Frog & lily pad', intro: 'Ribbit,\nribbit.', ink: HOME_INK,
+    success: ['Three-part\nharmony.', 'The whole pond is singing.'], rough: ['Ker-\nsplash!', 'Off the pad and into the pond.'],
+    endingSec: FROG_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new FrogVignette(scene, lap), sounds: createFrogSounds,
+  },
+  {
+    id: 'glasses', title: 'Raise a glass', intro: 'Clink,\nclink.', ink: HOME_INK,
+    success: ['To good\ntiming!', 'Right on the clink.'], rough: ['Oops.\nSmash.', 'Someone fetch a broom.'],
+    endingSec: GLASS_REVEAL_SEC, endingHoldBeats: 5, successAccuracy: 70,
+    create: (scene, lap) => new GlassesVignette(scene, lap), sounds: createGlassesSounds,
+  },
 ];
 
 /**
@@ -316,7 +335,8 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
  * prospector joins at level 227, after two complete 31-act laps, which is the first such
  * boundary past the nose and dish keepsakes on 196 and 197. Ice cream joins at level 291,
  * after two complete 32-act laps, the first such boundary past the prospector's keepsakes
- * on 227 and 259.
+ * on 227 and 259. The frog and the glasses join together at level 357, after two complete
+ * 33-act laps, the first such boundary past ice cream's keepsakes on 291 and 324.
  *
  * **Appending an act means adding an era here**, at a level past every keepsake players
  * could hold: the tests fail on a registry the last era does not cover.
@@ -331,4 +351,6 @@ export const ROTATION: readonly RotationEra[] = [
   { fromLevel: 227, acts: 32 },
   // Two complete laps of that era preserve the prospector's keepsakes at 227 and 259.
   { fromLevel: 291, acts: 33 },
+  // Two complete laps of that era preserve ice cream's keepsakes at 291 and 324.
+  { fromLevel: 357, acts: 35 },
 ];

@@ -121,6 +121,11 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   // Ice cream joins at level 291, past every keepsake above; lap 0 is the cone, lap 1 the ice pop.
   { id: 'icecream-cone', vignette: 'icecream', lap: 0, name: 'Waffle cone' },
   { id: 'icecream-pop', vignette: 'icecream', lap: 1, name: 'Cherry ice pop' },
+  // The frog and the glasses join at level 357, past every keepsake above: levels 357–358 and 392–393.
+  { id: 'frog-pond-frog', vignette: 'frog', lap: 0, name: 'Pond frog' },
+  { id: 'glasses-party-flute', vignette: 'glasses', lap: 0, name: 'Party flute' },
+  { id: 'frog-firefly-jar', vignette: 'frog', lap: 1, name: 'Firefly jar' },
+  { id: 'glasses-lemonade', vignette: 'glasses', lap: 1, name: 'Lemonade tumbler' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */
