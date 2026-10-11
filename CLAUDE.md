@@ -110,12 +110,12 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
-Thirty-three vignettes rotate by registry order, **in eras**: `levelSpec` places a level
+Thirty-five vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
 did, from level 51 the first twenty-eight, from level 107 the first twenty-nine,
-from level 165 the first thirty-one, from level 227 the first thirty-two, and from
-level 291 all thirty-three,
+from level 165 the first thirty-one, from level 227 the first thirty-two, from
+level 291 the first thirty-three, and from level 357 all thirty-five,
 each era opening on the acts it added. The paintbrush is act 29: one stroke a
 beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
 or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
@@ -143,6 +143,16 @@ hits wear the treat down**, up to `LICKABLE`, and the coda finishes it on succes
 a tongue the treat's colour — or drops what is left on the floor. A waffle cone, an ice pop
 and a lollipop by lap (`iceCreamLooks.ts`), each with its own words, place and licker. See
 `docs/ICE_CREAM.md`.
+The frog and the glasses are acts 34 and 35, from levels 357 and 358 — two whole 33-act laps
+past 291, the first era boundary past ice cream's keepsakes on 291 and 324. The frog croaks a
+beat, its throat sac ballooning on the contact; **only judged hits bring two listeners up out
+of the water**, and the coda either hops them onto their pads to sing a C major triad with it
+or sends it off its pad and into the pond. The glasses clink a beat, rim to rim where
+`glassPose` solves each glass's profile to meet; **only judged hits light the room**, every
+mistake leaves a hairline crack, and the coda either raises them to a "Cheers!" bubble — a
+`Text` made at construction and only posed — or shatters the cracked one onto the cloth.
+Three ponds and three toasts by lap; the drinks are soft ones. Both synthesized. See
+`docs/FROG_AND_GLASSES.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
