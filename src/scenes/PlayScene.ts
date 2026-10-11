@@ -23,7 +23,7 @@ import { addRound, EMPTY_TIMING, timingReport, type TimingReport, type TimingTal
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, numeralStyle, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
@@ -66,9 +66,10 @@ import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback, FxKey } from '@/ui/feedback';
-import { flawlessPose, socketGlint } from '@/ui/flourish';
+import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
+import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
 import { Sheen } from '@/ui/sheen';
-import { arrive, overshoot, settle, squash } from '@/ui/spring';
+import { arrive, settle, squash } from '@/ui/spring';
 import { punch } from '@/ui/punch';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
@@ -102,6 +103,8 @@ const REST_LABEL_DROP = 1.36;
 const TEACH = {
   /** Fraction of the level's own tempo the pass plays at. */
   tempo: 0.75,
+  /** The one line said over the pass: what to watch for, and the fact first players miss. */
+  caption: 'Watch once: their row, then yours. No pause.',
   /**
    * Whole bars, at the teaching tempo: one to count in, one demonstrated, one answered,
    * and one to let it land. Whole bars matter because the music's rate goes back to the
@@ -156,6 +159,8 @@ const FINALE_PAYOFF = {
  * Under the face on the 16:9 frame the "Go!" at its strike still clears the safe edge.
  */
 const TURN_CALL = { min: 42, max: 54 } as const;
+/** The count's words in strike order, "3" first and "Go!" last; one Text each. */
+const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
 export class PlayScene extends BaseScene {
@@ -404,13 +409,23 @@ export class PlayScene extends BaseScene {
   private turnCallY = 0;
   private struckIndex = -1;
   private struckAt = -Infinity;
+  /** Whether the last struck socket was answered Perfect: the hit's ring and rays are its alone. */
+  private struckPerfect = false;
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   private verdictAt = -Infinity;
+  /** The grade the word is showing and the beat it answered, for its pose (`verdictPose`). */
+  private verdictGrade: VerdictGrade = 'Good';
+  private verdictIndex = 0;
   /** The last Perfect, or a clean coda's contact, on the audio clock: when the act's stage was punched. */
   private punchAt = -Infinity;
-  /** The count into the player's turn: "3 2 1 Go!", in the free band under the face. */
-  private turnCall!: Phaser.GameObjects.Text;
+  /**
+   * The count into the player's turn: "3 2 1 Go!", in the free band under the face. One
+   * Text per numeral, dressed once at layout (`numeralStyle`) and only shown on its beat:
+   * re-rasterising one Text per strike put a raster on the downbeat frame, where the
+   * first tap is read.
+   */
+  private turnCalls: Phaser.GameObjects.Text[] = [];
   /**
    * The breather's words: "Halfway" or "Last bar" under the headline, "Rest" on the shelf,
    * and "3 bars to go" in the count-in's place under the face, which is free until the
@@ -428,6 +443,8 @@ export class PlayScene extends BaseScene {
   private flawlessAt = -Infinity;
   /** How many sockets the flawless sweep has passed and thrown sparks from. */
   private flawlessSwept = 0;
+  /** Whether this flourish's chorus has thrown its confetti; once per flourish. */
+  private flawlessChorused = false;
   private headlineColour = SHELL.cream;
   private sequence: TaskSequence | null = null;
   /** Beat-aligned table slide between tasks; the next task and the music's new tempo both start at `next`. */
@@ -528,6 +545,10 @@ export class PlayScene extends BaseScene {
     this.stars = this.add.graphics().setDepth(9);
     this.fx = new Feedback(this, 5);
     this.starFx = new Feedback(this, 12);
+    // The sparks answer the first Perfect and the "Go!"; the confetti a flawless task. Built
+    // here, where a frame is cheap, not on the first beat the player answers.
+    this.fx.prime('sparks', [PALETTE.coral, SHELL.cream]);
+    this.fx.prime('confetti', [PALETTE.coral, SHELL.cream, SHELL.sun], 20);
     this.headline = display(this, this.definition.intro, { size: 88, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.introCaption = display(this, '', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5, 0).setDepth(12);
     this.accuracy = body(this, '', { size: 34, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(11);
@@ -574,7 +595,7 @@ export class PlayScene extends BaseScene {
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
-    this.turnCall = display(this, '', { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
     this.restLabel = label(this, '', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setAlpha(0).setDepth(12);
     this.restShelf = label(this, 'Rest', { size: 18, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.restCall = display(this, '', { size: 40, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
@@ -690,7 +711,11 @@ export class PlayScene extends BaseScene {
     // phase the count can appear in. A resize leaves the numeral dressed at the old
     // scale, so the cache is dropped and the next beat re-dresses it.
     this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
-    this.turnCall.setPosition(safe.centerX, this.turnCallY);
+    this.turnCalls.forEach((text, i) => {
+      const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
+      text.setPosition(safe.centerX, this.turnCallY);
+      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * s, mix(this.definition.ink, PALETTE.coral, heat));
+    });
     this.turnCalled = null;
     this.restCall.setPosition(safe.centerX, this.turnCallY);
     this.restLabel.setX(safe.centerX);
@@ -1122,6 +1147,10 @@ export class PlayScene extends BaseScene {
     for (const target of plan.targets) this.audio!.play(target, 'action');
     this.vignette.reset(plan);
     this.vignette.onPhase('prepare', origin);
+    // Said once, under the act's title, for the one pass that is watched rather than
+    // played: what the ball is about to show. The caption clears when the grid is handed
+    // to the controller, so the level's own task carries no words at the top.
+    this.setIntroCaption(TEACH.caption);
     this.drawTaskMarks();
   }
 
@@ -1149,6 +1178,7 @@ export class PlayScene extends BaseScene {
       // Same deadline the task change uses, on the clock the cues are scheduled against.
       if (!canPlaceNextTask(this.audio!.context.currentTime, teach.taskAt)) { this.interrupt(); return; }
       teach.swapped = true;
+      this.setIntroCaption('');
       // Seen, once the whole cycle has played. Marking it at the start would have spent
       // the one showing on a player who backed out during the count-in.
       markDemonstrationSeen();
@@ -1273,7 +1303,7 @@ export class PlayScene extends BaseScene {
     this.flawlessSwept = 0;
     this.goStruck = false;
     this.verdict.setAlpha(0);
-    this.turnCall.setAlpha(0);
+    this.hideTurnCall();
     this.flawless.setAlpha(0);
     this.flawlessHalo.setAlpha(0);
     this.controller!.start(
@@ -1513,6 +1543,10 @@ export class PlayScene extends BaseScene {
     // objects the scene just destroyed throws, and that throw is reported as a crash
     // on the way out of a level.
     if (this.disposed) return;
+    // The pump keeps the judge honest through a dropped frame; the frame itself also
+    // advances the task, so a phase change or a demonstration beat due this frame is drawn
+    // on it rather than up to a timer interval later.
+    this.tick();
     const now = this.now();
     this.vignette.update(now);
     const slide = this.transition;
@@ -1602,7 +1636,7 @@ export class PlayScene extends BaseScene {
     // The verdict word rises, pops and fades; one instance, so a quick double replaces
     // rather than stacks. Its pill is drawn with the block, from the same pose.
     const verdict = this.verdictPose(now);
-    if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale);
+    if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
     else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
     if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
     if (this.debugMode) {
@@ -1672,6 +1706,9 @@ export class PlayScene extends BaseScene {
       this.demoCount = 0;
       this.struckIndex = -1;
       this.struckAt = this.extraAt = -Infinity;
+      // A judgement that arrived ahead of the phase is presented the moment the turn is
+      // the player's, never left for the next tap to flush.
+      this.releaseHeldJudgements();
     }
   }
   /**
@@ -1696,7 +1733,8 @@ export class PlayScene extends BaseScene {
     if (this.unfailable && result.kind === 'omission') return;
     if (result.index !== null) this.outcomes[result.index] = markFor(result);
     // An extra tap belongs to no beat, so it shakes the whole row rather than marking one.
-    // Held until respond: sinking the nail or flashing Perfect during Watch is the glitch.
+    // The controller begins the response on any judged tap, so a judgement normally finds
+    // the phase already `respond`; one that does not is held for the phase, not the next tap.
     if (this.controller?.phase !== 'respond') {
       this.heldJudgements.push(result);
       return;
@@ -1714,7 +1752,14 @@ export class PlayScene extends BaseScene {
     if (result.kind === 'extra') this.audio?.playAccent(now, 'scrape');
     else if (result.kind === 'omission') this.audio?.playAccent(now, 'judder');
     if (result.kind === 'extra') this.extraAt = now;
-    else if (result.kind === 'hit' && result.index !== null) { this.struckIndex = result.index; this.struckAt = now; }
+    else if (result.kind === 'hit' && result.index !== null) {
+      this.struckIndex = result.index;
+      this.struckAt = now;
+      this.struckPerfect = result.grade === 'Perfect';
+      // The thumb is covering the socket and the sound may be muted: the pulse is the one
+      // channel left that says the tap landed. `HAPTIC.hit` existed for this and was unused.
+      vibrate(result.grade === 'Perfect' ? 'hit' : 'tap');
+    }
     // A Perfect lands with weight: the act's stage gives under it (`ui/punch.ts`). Only the
     // player's own hits — never a demonstration beat, which the player is watching.
     if (result.kind === 'hit' && result.grade === 'Perfect' && !this.intro && !this.teach) this.punchAt = now;
@@ -1734,6 +1779,8 @@ export class PlayScene extends BaseScene {
     const word = result.kind === 'extra' ? 'Miss' : result.grade;
     const colour = this.verdictColour(result);
     this.verdictAt = now;
+    this.verdictGrade = word;
+    this.verdictIndex = result.index ?? this.verdictIndex + 1;
     this.verdict.setText(word);
     resize(this.verdict, 38 * this.uiScale, colour);
     if (result.grade === 'Perfect' && result.kind === 'hit') {
@@ -1749,20 +1796,13 @@ export class PlayScene extends BaseScene {
     }
   }
   /**
-   * Where the verdict word is in its 0.55 s: the existing arrive, with a short pop inside
-   * it — from a little under size, past it, to rest — so the word lands rather than
-   * surfaces. Null once it has gone. No scale under reduced motion.
+   * Where the verdict word is in its hold: a Perfect is struck like the count's numerals,
+   * a Good arrives with its pop, a Miss arrives flat with a shake (`ui/hitPose.ts`). Null
+   * once it has gone.
    */
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number } | null {
-    const said = now - this.verdictAt;
-    if (!(said >= 0 && said < 0.55)) return null;
-    const still = this.reducedMotion;
-    const { rise, alpha } = still ? { rise: 0, alpha: 1 } : arrive(said, 0.45);
-    return {
-      alpha: alpha * (1 - Math.max(0, (said - 0.35) / 0.2)),
-      y: this.verdictY - (1 - rise) * 18 * this.uiScale,
-      scale: still ? 1 : 0.85 + 0.15 * overshoot(Math.min(1, said / 0.45), 0.4),
-    };
+  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number } | null {
+    const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
+    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt };
   }
   private verdictColour(result?: Judgement): number {
     if (!result) return this.definition.ink;
@@ -1794,7 +1834,7 @@ export class PlayScene extends BaseScene {
     // the band: the moment the last beat lands is exactly when a player wants to read it.
     if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) {
       this.roomDim.setAlpha(0);
-      this.turnCall.setAlpha(0);
+      this.hideTurnCall();
       this.flawless.setAlpha(0);
       this.flawlessHalo.setAlpha(0);
       this.setRestWords(null);
@@ -1853,7 +1893,7 @@ export class PlayScene extends BaseScene {
       played: beatsPlayed(plan, now),
       marks,
       turn,
-      struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45) },
+      struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: this.struckPerfect },
       rattle,
       still,
       ghost: this.ghostFor(plan, marks, turn, now),
@@ -1861,6 +1901,9 @@ export class PlayScene extends BaseScene {
       paper,
       landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
       flawless: now - this.flawlessAt,
+      // The ball shows the pulse crossing from their row into yours where the game still
+      // teaches: the first-run pass, the guided level and a new grid's introduction.
+      pulse: (teach || this.guided || this.intro) && !rest ? pulseBall(plan, now, still) : null,
       rest: rest && {
         bar: rest.bar, beat: rest.beat, bars: rest.bars,
         pressAge: now - rest.at, barAge,
@@ -1938,29 +1981,26 @@ export class PlayScene extends BaseScene {
    */
   private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
     const call = plan && turnCount(plan, now);
-    if (!plan || !call) {
-      if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
-      return;
-    }
+    if (!plan || !call) { this.hideTurnCall(); return; }
     const s = this.uiScale;
     const go = call.count === 0;
     const beat = 60 / plan.bpm;
     const still = this.reducedMotion;
     const pose = turnCountPose(call, beat, still);
+    // Each numeral is its own Text, dressed at layout: the numeral warms from the act's
+    // ink toward coral one strike at a time, so the count is the row's colour arriving
+    // rather than a caption in a third colour, and nothing is rasterised on the beat.
+    const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
     if (call.count !== this.turnCalled) {
+      this.hideTurnCall();
       this.turnCalled = call.count;
-      // setFontSize re-measures and re-rasterises, so the size is paid once per beat. The
-      // numeral warms from the act's ink toward coral one strike at a time, so the count
-      // is the row's colour arriving rather than a caption in a third colour.
-      this.turnCall.setText(go ? 'Go!' : String(call.count));
-      resize(this.turnCall, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s, mix(this.definition.ink, PALETTE.coral, pose.heat));
     }
     // A patch of the act's paper under the numeral, at the numeral's own weight and
     // stamped down with it. Dark ink has no outline to carry (`typeStroke`) and its pale
     // drop was nothing on the hammer's wood at "3": this is the backing the dressed type
     // cannot be, and it makes the count legible without making it louder.
     const size = (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s;
-    const pw = Math.max(this.turnCall.width * pose.scale + 18 * s, size * 1.3);
+    const pw = Math.max(turnCall.width * pose.scale + 18 * s, size * 1.3);
     const ph = size * 1.2 * pose.scale;
     const px = this.viewport.safe.centerX - pw / 2;
     const py = this.turnCallY + pose.rise * s - ph / 2;
@@ -1969,7 +2009,7 @@ export class PlayScene extends BaseScene {
     // A strike rather than an entrance: each numeral drops in oversized and stamps down to
     // size on its beat, leaning alternate ways so three strikes read as three, and the
     // "Go!" stands up straight. All of it is f(age) from the clock the beat is on.
-    this.turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
+    turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
       .setY(this.turnCallY + pose.rise * s);
     if (pose.ring.alpha > 0.01) {
       // The ring a strike leaves, drawn on the block's own Graphics so it clears with it.
@@ -1982,6 +2022,11 @@ export class PlayScene extends BaseScene {
       this.goStruck = true;
       if (!still) this.fx.burst('sparks', this.viewport.safe.centerX, this.turnCallY, [PALETTE.coral, SHELL.cream], 12);
     }
+  }
+
+  private hideTurnCall(): void {
+    for (const text of this.turnCalls) if (text.alpha !== 0) text.setAlpha(0);
+    this.turnCalled = null;
   }
 
   /**
@@ -2016,6 +2061,13 @@ export class PlayScene extends BaseScene {
       const x = centreX + centres[this.flawlessSwept]!;
       this.fx.burst('sparks', x, faceY, [SHELL.sun, 0xffe7a0, PALETTE.coral], 6);
       this.flawlessSwept++;
+    }
+    // The chorus: the whole row answers at once, and confetti goes up from the face. The
+    // block draws the rings and the plate's light; this is the part that reaches the emitter.
+    if (!this.flawlessChorused && age >= FLAWLESS.chorusAt) {
+      this.flawlessChorused = true;
+      this.fx.burst('confetti', centreX, faceY - 10 * s, [PALETTE.coral, SHELL.cream, SHELL.sun], 22);
+      vibrate('hit');
     }
   }
 
@@ -2061,6 +2113,7 @@ export class PlayScene extends BaseScene {
       this.tally.flawless++;
       this.flawlessAt = this.now();
       this.flawlessSwept = 0;
+      this.flawlessChorused = false;
       this.verdictAt = -Infinity;
       this.verdict.setAlpha(0);
       vibrate('stamp');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { FLAWLESS, flawlessPose, socketGlint, sweepBand } from '../src/ui/flourish';
+import { chorusRing, FLAWLESS, flawlessPose, plateGlow, socketGlint, sweepBand } from '../src/ui/flourish';
 
 describe('the word for a flawless task', () => {
   it('strikes in oversized from above and settles to rest inside its stamp', () => {
@@ -54,5 +54,36 @@ describe('the light crossing the face', () => {
   it('shows nothing for a flourish that has not happened', () => {
     expect(socketGlint(-Infinity, 0, 3)).toBe(-1);
     expect(socketGlint(Infinity, 0, 3)).toBe(1);
+  });
+});
+
+describe('the chorus', () => {
+  it('answers only once the band has crossed, with every socket\'s ring together and the plate lit', () => {
+    expect(chorusRing(FLAWLESS.chorusAt - 0.01).alpha).toBe(0);
+    expect(plateGlow(FLAWLESS.chorusAt - 0.01)).toBe(0);
+    const landed = chorusRing(FLAWLESS.chorusAt);
+    expect(landed.spread).toBe(0);
+    expect(landed.alpha).toBeGreaterThan(0.7);
+    expect(plateGlow(FLAWLESS.chorusAt)).toBe(1);
+    const mid = chorusRing(FLAWLESS.chorusAt + FLAWLESS.chorus / 2);
+    expect(mid.spread).toBeGreaterThan(0.5);
+    expect(mid.alpha).toBeLessThan(landed.alpha);
+    expect(chorusRing(FLAWLESS.chorusAt + FLAWLESS.chorus).alpha).toBe(0);
+    expect(plateGlow(FLAWLESS.chorusAt + FLAWLESS.chorus)).toBe(0);
+    expect(chorusRing(-Infinity).alpha).toBe(0);
+    expect(chorusRing(Infinity).alpha).toBe(0);
+  });
+
+  it('lands after the last socket has begun its glint, and inside the word\'s hold', () => {
+    expect(socketGlint(FLAWLESS.chorusAt, 4, 5)).toBeGreaterThanOrEqual(0);
+    expect(FLAWLESS.chorusAt + FLAWLESS.chorus).toBeLessThan(FLAWLESS.hold);
+  });
+
+  it('kicks the word once as it lands, and the word is at rest on either side', () => {
+    const before = flawlessPose(FLAWLESS.chorusAt - 0.01)!.scale;
+    const kicked = flawlessPose(FLAWLESS.chorusAt + FLAWLESS.chorus * 0.3)!.scale;
+    expect(before).toBeCloseTo(1, 2);
+    expect(kicked).toBeGreaterThan(1.05);
+    expect(flawlessPose(FLAWLESS.chorusAt + FLAWLESS.chorus * 0.6 + 0.01)!.scale).toBeCloseTo(1, 2);
   });
 });

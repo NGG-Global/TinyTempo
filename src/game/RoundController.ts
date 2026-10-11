@@ -24,11 +24,6 @@ export class RoundController {
   private cueIndex = 0;
   private lastPumpMs = 0;
   /**
-   * A tap that scored in the early window before the response downbeat. The example is
-   * still on the tool, so the action voice and the vignette wait for `respond`.
-   */
-  private heldHit: { readonly renderNow: number } | null = null;
-  /**
    * The trombone's action voice is the plan, not the tap. When set, targets are
    * scheduled with the demonstration and `emitHit` does not play a second take.
    */
@@ -49,7 +44,6 @@ export class RoundController {
     this.result = null;
     this.cueIndex = 0;
     this.lastPumpMs = wallMs;
-    this.heldHit = null;
     this.gridAction = gridAction;
     this.scheduler.schedule(this.plan, gridAction);
     this.setPhase('prepare');
@@ -74,15 +68,15 @@ export class RoundController {
     if (!this.active || !this.plan || !this.judge || !this.healthy(now, wallMs)) return;
     this.lastPumpMs = wallMs;
     const plan = this.plan;
-    // Demonstration cues first, while the rendered phase is still the example. A last
-    // beat that sits inside the stall window of the response downbeat must land on the
-    // tool before a held first tap, or it overwrites the player's strike.
     while (this.cueIndex < plan.cues.length && plan.cues[this.cueIndex]!.time <= now) {
       const cue = plan.cues[this.cueIndex++]!;
+      // A demonstration beat that is due once the player's turn has begun — a dense
+      // pattern's last subdivision, after an early first tap — is already sounding from
+      // the schedule and must never start the example on the tool the player holds.
+      if (cue.kind === 'action' && this.phase === 'respond') continue;
       if (now - cue.time < RHYTHM.stallMs / 1000) this.events.cue(cue);
     }
-    this.setPhase(now < plan.demo ? 'prepare' : now < plan.response ? 'demonstrate' : 'respond');
-    this.releaseHeldHit();
+    this.setPhase(phaseAt(plan, now, this.phase));
     for (const miss of expireTargets(this.judge, now)) this.events.judgement(miss);
     if (now > plan.end + (RHYTHM.goodMs + RHYTHM.deliveryGraceMs) / 1000) {
       this.result = scoreRound(this.judge);
@@ -95,16 +89,16 @@ export class RoundController {
     if (!this.active || !this.plan || !this.judge || !this.healthy(inputSec, wallMs)) return null;
     if (inputSec < this.plan.response - RHYTHM.goodMs / 1000 || inputSec > this.plan.end + RHYTHM.goodMs / 1000) return null;
     const result = judgeTap(this.judge, inputSec);
-    // The early window still scores the first response beat, but the demonstration is
-    // still the rendered phase. Starting the player's strike there snaps the example
-    // back to rest mid-recoil.
-    if (inputSec >= this.plan.response) {
-      this.emitHit(renderNow);
-      this.events.judgement(result);
-    } else {
-      this.events.judgement(result);
-      this.heldHit ??= { renderNow };
-    }
+    // A judged tap is the player's beat, and the response has begun with it — whether
+    // it landed in the early window before the downbeat or in the moments after it that
+    // the pump has not yet ticked through. It used to be held: an early first hit kept
+    // its voice and its picture until the downbeat, and one just after it kept its
+    // verdict until the next tap flushed it, so the first beat of every task answered
+    // somewhere between 20 and 150 ms after the thumb and read as lag. The strike, the
+    // voice and the verdict land on the tap now, as every later beat's always have.
+    this.setPhase('respond');
+    this.emitHit(renderNow);
+    this.events.judgement(result);
     return result;
   }
   public interrupt(reason: string): void {
@@ -112,7 +106,6 @@ export class RoundController {
     this.scheduler.cancel();
     this.judge = null;
     this.result = null;
-    this.heldHit = null;
     this.setPhase('paused');
     this.events.interrupted(reason);
   }
@@ -121,7 +114,6 @@ export class RoundController {
     this.plan = null;
     this.judge = null;
     this.result = null;
-    this.heldHit = null;
     this.phase = 'idle';
   }
   private emitHit(renderNow: number): void {
@@ -130,14 +122,19 @@ export class RoundController {
     // walk the engine past the note the picture is showing.
     if (!this.gridAction) this.sound.play(renderNow, 'action');
   }
-  private releaseHeldHit(): void {
-    if (this.phase !== 'respond' || !this.heldHit) return;
-    this.emitHit(this.heldHit.renderNow);
-    this.heldHit = null;
-  }
   private setPhase(phase: Phase): void {
     if (this.phase !== phase) { this.phase = phase; this.events.phase(phase); }
   }
+}
+
+/**
+ * The phase the clock says a task is in. Phases only move forward inside a task: a tap
+ * judged in the early window has already begun the response, and a tick read a few
+ * milliseconds before the downbeat must not put the example back on the tool for a frame.
+ */
+export function phaseAt(plan: RoundPlan, now: number, current: Phase): Phase {
+  const derived: Phase = now < plan.demo ? 'prepare' : now < plan.response ? 'demonstrate' : 'respond';
+  return current === 'respond' && derived !== 'respond' ? current : derived;
 }
 
 /**

@@ -587,10 +587,33 @@ buzz or sparks — and `level_mastered` fires on the first only. **The save code
 flawless level as 101 and caps the rest at 99**, because a rounded 99.6 came back as a
 mastered 100; an older code's 100 reads as 99.5. See `docs/MASTERY.md`. `Vignette.onGroove?` is an
 optional hook for an act's own reaction; none implements it. See `docs/GROOVE.md`.
-The first run adds one 0.75×
-demonstration pass before level 1's first task and a guiding ring on that level's sockets —
+**A judged tap begins the response.** `RoundController.tap` sets the phase to `respond`
+itself, before the strike and the judgement, and `phaseAt` never moves a task's phase
+backwards: the first hit of a task used to be held — an early one for its voice and picture
+until the downbeat, one just after the downbeat for its verdict until the next tap — and
+read as lag on exactly the beat the player is finding. A demonstration beat still due once
+the response has begun sounds from the schedule and is never handed to the picture.
+`PlayScene.update` runs the scene's tick on every frame as well as the pump, the count's four
+numerals and the verdict word are rasterised at layout (`numeralStyle`, one Text each), and
+the sparks and confetti emitters are built in `build()`, so the downbeat frame carries no
+raster and no construction. **A hit is answered at its socket** (`ui/hitPose.ts`, drawn by
+`drawBlock` from `struck.age`/`struck.perfect`): a Perfect gets a shockwave ring in sun and
+cream (never coral, on a plate that has warmed to coral), rays, a flash on the socket and the
+plate, a hop of the baton and `HAPTIC.hit`; a Good the flash, a faint ring and `tap`; the
+verdict word is struck like a count numeral (`verdictPose`). A flawless task's flourish ends
+in a **chorus** (`FLAWLESS.chorusAt`): every socket rings together, the plate lights, the
+baton lands again, the word kicks, confetti goes up. **The pulse ball** (`pulseBall` in
+`game/beatTrack.ts`, `BlockState.pulse`) lands on every beat of a task — the shelf's beads,
+then one hop onto the first socket on the downbeat, then the sockets — and is drawn only
+where the game teaches: the tutorial, level 1's first-run pass and guided tasks, and a new
+grid's introduction. The first run adds one 0.75×
+demonstration pass before level 1's first task, with one caption under the act's title
+(`TEACH.caption`), and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
-coral on a coral plate is invisible. See `docs/TURN_CUE.md`.
+coral on a coral plate is invisible. See `docs/TURN_CUE.md`. The tutorial's words follow
+the ball and say *no pause* before the player is judged, and a solo pass that found no
+downbeat (*Too early*, *That was your turn*) goes back to **Tap along again**
+(`verdictWords` in `game/TutorialRun.ts`). See `docs/TUTORIAL.md`.
 
 A task is a demonstration phrase and then the player's response, back to back on
 the bar line: nothing waits between them, and nothing waits between one task and

@@ -250,9 +250,58 @@ under a warm halo; a band of light crosses the face left to right (`sweepBand`);
 glints as the band reaches it (`socketGlint`), in the order the fuse lit them, and throws a
 burst of sparks from where it is drawn; and the thumb gets the plaque's `stamp` haptic. The
 hold is 1.5 s, longer than a verdict because it belongs to the task and not to a tap, and it
-runs under the act's own coda without touching it. Under reduced motion it is the word and
-the glints, every ring at once, with no sweep, no sparks and no motion on the word. Nothing
-here is scheduled or tweened; `tests/flourish.test.ts` pins the curves.
+runs under the act's own coda without touching it.
+
+**The chorus.** Once the band has crossed (`FLAWLESS.chorusAt`), the whole row answers at
+once: every socket throws one sun-coloured ring together (`chorusRing`), the plate catches
+the light and cools (`plateGlow`), the baton lands again with the ring and squash it arrived
+with (`drawBlock` feeds `landed` the chorus's age), the word kicks once more, confetti goes
+up from the face and the thumb gets a second, lighter pulse. The sweep counts the sockets
+off one at a time; the chorus is the row saying it together. It lands after the last socket
+has begun its glint and inside the word's hold, which `tests/flourish.test.ts` pins.
+
+Under reduced motion it is the word and the glints, every ring at once, with no sweep, no
+sparks, no confetti and no motion on the word; the chorus is a brief flash of every socket.
+Nothing here is scheduled or tweened; `tests/flourish.test.ts` pins the curves.
+
+## The hit
+
+Before this a Perfect was a word at the shelf, a swell on its socket and a few sparks, and
+it looked exactly like a Good with a different word — while the player's eyes were on the
+act. `ui/hitPose.ts` answers the hit at the socket itself, where the thumb just was, with
+what a struck thing does: a shockwave ring leaving the socket (`HIT.ring`, sun and cream,
+never coral, since the plate under it has warmed to coral by then), eight rays for the first
+instant (`HIT.rays`, alternate lengths so they read as a burst rather than a cog), the socket
+and the plate flashing bright and cooling (`HIT.flash`), and the baton hopping once in its
+slot (`HIT.bob`) — the drummer's nod, on the beat it landed. A Good keeps the flash and a
+faint ring and nothing else, so the two still read apart; a Miss gets nothing here, since
+the bar through the socket already says it. The verdict word is struck too (`verdictPose`):
+a Perfect drops in oversized and stamps down to size, leaning alternate ways by the beat it
+answered, the way the count's numerals land; a Good arrives with its old pop; a Miss arrives
+flat with a shake. Every judged hit pulses the thumb — `HAPTIC.hit` on a Perfect, `tap` on a
+Good — which the haptics setting existed for and nothing in play had used.
+
+The scene passes `struck.age` and `struck.perfect` in `BlockState` and the block draws the
+rest; the tutorial passes the same, so the watched pass shows what a Perfect looks like.
+Everything is `f(age)` from the audio clock and off under reduced motion except the flash.
+`tests/hitPose.test.ts` pins the curves.
+
+### A judged tap begins the response
+
+The first beat of every task used to answer late. A tap judged in the early window before
+the downbeat had its voice and its picture *held* by `RoundController` until the downbeat,
+and one landing a few milliseconds after the downbeat — before the 20 ms pump had ticked the
+phase over — had its verdict held by `PlayScene` until the *next* tap flushed it. The first
+hit of a task therefore reacted somewhere between 20 and 150 ms after the thumb, and read
+as lag on exactly the beat the player is finding. Now a judged tap sets the phase to
+`respond` itself, before the strike and the judgement, and `phaseAt` never moves a task's
+phase backwards; a demonstration beat still due once the response has begun sounds from
+the schedule but is never handed to the picture. `PlayScene.update` also runs the scene's
+tick on every frame, so a phase change or a demonstration beat lands on the frame it is due
+rather than a timer interval later; and the count's four numerals and the verdict word are
+rasterised at layout (`numeralStyle`), with the sparks and confetti emitters built in
+`build()`, so the downbeat frame carries no text raster and no emitter construction.
+`tests/round.test.ts` pins the ordering.
 
 ## The sheet under the rows
 
@@ -323,6 +372,20 @@ longer in wall-clock than the level's own — and keeps the block until the real
 downbeat, so the answered row holds rather than blinking empty a bar early. It
 owns its own row of marks for exactly that reason: `this.outcomes` belongs to the
 task the controller starts at the swap.
+
+**The pulse ball** (`pulseBall` in `game/beatTrack.ts`, drawn by `drawBlock` from
+`BlockState.pulse`) is one ball that lands on every beat of the task: on the shelf's beads as
+the example sounds them, on the face's sockets where the player answers, and — the landing
+that matters — from the shelf's last bead down onto the face's first socket, exactly on the
+downbeat. It is the handover made literal and the oldest timing cue there is: the ball lands,
+you tap. It rests on each landing and takes at most one beat to reach the next, so on a rest
+it waits rather than floats; its shadow grows on the landing it is coming to, so the next
+beat is seen before it is heard; and it sits *on* a bead or socket rather than over it, so
+the mark underneath stays legible. It appears where the game still teaches — this pass, the
+guided level and a new grid's introduction — and in every pass of the tutorial, and nowhere
+else: a level the player has learnt reads the block alone. Under reduced motion it sits on
+each landing and is simply on the next when its beat comes. The pass also carries one line
+under the act's title (`TEACH.caption`): *Watch once: their row, then yours. No pause.*
 
 **The guiding ring** contracts onto the next socket over the beat before it is due,
 on the level that still teaches. The ring says *where*; the beat says *when*, which

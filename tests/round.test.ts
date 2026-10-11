@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
-import { RoundController, pauseShouldShowSummary, type RoundEvents } from '../src/game/RoundController';
+import { RoundController, pauseShouldShowSummary, phaseAt, type RoundEvents } from '../src/game/RoundController';
 import { parsePattern } from '../src/rhythm/patterns';
+import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { RHYTHM } from '../src/config/rhythm';
 
 /** Defaults to a level's opening task, the only one that still carries a count-in. */
@@ -47,21 +48,50 @@ describe('round lifecycle', () => {
     expect(events.phase).toHaveBeenCalledWith('demonstrate');
     expect(events.phase).toHaveBeenCalledWith('respond');
   });
-  it('retains the early first-hit window before the rendered respond phase', () => {
+  it('answers an early first tap on the tap: the strike, the voice and the response begin with it', () => {
     const { round, events, sound, advance } = setup();
     const early = round.plan!.response - 0.1;
     advance(early);
-    // The demonstration now runs right up to the response, so an early first tap lands
-    // while the demonstration is still the rendered phase. It is still eligible.
+    // The demonstration runs right up to the response, so an early first tap lands while
+    // the demonstration is still the rendered phase. It is the player's beat all the same:
+    // holding its voice and picture to the downbeat read as the first hit lagging the thumb.
     const plays = sound.play.mock.calls.length;
     expect(round.phase).toBe('demonstrate');
     expect(round.tap(early, early, early * 1000)?.grade).toBe('Good');
-    expect(events.tap).not.toHaveBeenCalled();
-    expect(sound.play).toHaveBeenCalledTimes(plays);
-    advance(round.plan!.response);
     expect(round.phase).toBe('respond');
     expect(events.tap).toHaveBeenCalledTimes(1);
     expect(sound.play).toHaveBeenCalledTimes(plays + 1);
+    // The phase was announced before the strike, so a scene resetting its row on `respond`
+    // cannot wipe the strike it is about to draw; and the judgement follows the strike.
+    const phaseOrder = vi.mocked(events.phase).mock.invocationCallOrder.at(-1)!;
+    expect(phaseOrder).toBeLessThan(vi.mocked(events.tap).mock.invocationCallOrder[0]!);
+    expect(vi.mocked(events.tap).mock.invocationCallOrder[0]!).toBeLessThan(vi.mocked(events.judgement).mock.invocationCallOrder[0]!);
+    // A tick read before the downbeat never puts the example back on the tool.
+    advance(round.plan!.response - 0.03);
+    expect(round.phase).toBe('respond');
+    expect(vi.mocked(events.phase).mock.calls.filter(call => call[0] === 'respond')).toHaveLength(1);
+    advance(round.plan!.response + 0.05);
+    expect(events.tap).toHaveBeenCalledTimes(1);
+    expect(sound.play).toHaveBeenCalledTimes(plays + 1);
+  });
+  it('begins the response on a tap that lands just after the downbeat, before any tick has', () => {
+    const { round, events, advance } = setup();
+    const response = round.plan!.response;
+    advance(response - 0.01);
+    expect(round.phase).toBe('demonstrate');
+    // The pump has not ticked since the downbeat; the tap itself says the turn has come.
+    expect(round.tap(response + 0.01, response + 0.01, (response + 0.01) * 1000)?.grade).toBe('Perfect');
+    expect(round.phase).toBe('respond');
+    expect(events.tap).toHaveBeenCalledTimes(1);
+    expect(events.judgement).toHaveBeenCalledTimes(1);
+  });
+  it('only moves a task\'s phase forward', () => {
+    const plan = createRoundPlan(1, parsePattern('p', 'X X X X'), 120, 0, 4);
+    expect(phaseAt(plan, plan.demo - 0.1, 'prepare')).toBe('prepare');
+    expect(phaseAt(plan, plan.demo + 0.1, 'prepare')).toBe('demonstrate');
+    expect(phaseAt(plan, plan.response + 0.1, 'demonstrate')).toBe('respond');
+    expect(phaseAt(plan, plan.response - 0.1, 'respond')).toBe('respond');
+    expect(phaseAt(plan, plan.demo - 0.1, 'respond')).toBe('respond');
   });
   it('uses capture time even when a callback is delivered late', () => {
     const { round, advance } = setup();
@@ -97,7 +127,7 @@ describe('round lifecycle', () => {
     expect(round.phase).toBe('paused');
     expect(events.interrupted).toHaveBeenCalledTimes(1);
   });
-  it('lands a late last demonstration beat before a held first tap', () => {
+  it('keeps a late last demonstration beat off the tool once the player has begun', () => {
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
     const round = new RoundController({ play: vi.fn(), cancel: vi.fn() }, events);
     // Last pair is a half beat: at 150 BPM that gap is 200 ms, inside stallMs.
@@ -112,14 +142,13 @@ describe('round lifecycle', () => {
     expect(round.phase).toBe('demonstrate');
     const early = plan.response - 0.05;
     expect(round.tap(early, early, early * 1000)?.kind).toBe('hit');
-    expect(events.tap).not.toHaveBeenCalled();
-    round.tick(plan.response + 0.02, (plan.response + 0.02) * 1000);
+    expect(events.tap).toHaveBeenCalledTimes(1);
     expect(round.phase).toBe('respond');
-    const lastDemoOrder = vi.mocked(events.cue).mock.calls.findIndex(call => call[0].kind === 'action' && call[0].time === lastDemo);
-    expect(lastDemoOrder).toBeGreaterThanOrEqual(0);
-    const cueOrder = vi.mocked(events.cue).mock.invocationCallOrder[lastDemoOrder]!;
-    const tapOrder = vi.mocked(events.tap).mock.invocationCallOrder[0]!;
-    expect(cueOrder).toBeLessThan(tapOrder);
+    round.tick(plan.response + 0.02, (plan.response + 0.02) * 1000);
+    // The beat still sounds — it was scheduled with the phrase — but it is never handed
+    // to the picture, which would have put the example back over the player's strike.
+    expect(vi.mocked(events.cue).mock.calls.some(call => call[0].kind === 'action' && call[0].time === lastDemo)).toBe(false);
+    expect(vi.mocked(events.cue).mock.calls.filter(call => call[0].kind === 'action')).toHaveLength(plan.pattern.hits.length - 1);
   });
   it('invalidates a long stall before recording unfair misses', () => {
     const { round, events } = setup();

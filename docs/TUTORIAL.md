@@ -49,6 +49,18 @@ and none with a pause between the hammer's bar and the player's. Every pass runs
 cycle level 1's first-run pass plays, at 72 BPM: one counted bar, the hammer's bar, the
 count, the answer.
 
+**The ball.** User testing after the count was added said the same thing again: players
+could not tell that their turn starts the beat after the hammer's last. The count says
+*when* in numbers and the block says it in colour and motion, but nothing showed the pulse
+itself carrying on across the bar line. Every pass now draws the pulse ball
+(`pulseBall`, `docs/TURN_CUE.md`): on the hammer's beads as it plays them, then one hop
+down onto the first socket exactly on "Go!", then on each socket the player answers. The
+ball lands, you tap — the cue every karaoke and every approach-note rhythm game relies on,
+and the one thing in the lesson that is literally the same object on their row and on
+yours. The words follow it: *Watch the ball hop along the hammer's row*, *3, 2, 1 — on Go!
+the ball lands in your row*. And the fact first players miss is said outright, more than
+once, before the player is ever judged: **no pause**.
+
 1. **Watch.** The game plays both halves. A sign above names each moment as it happens:
    *Listen*, *Their turn*, **Count down** on the beat the "3" strikes — "3, 2, 1 — and
    the game taps on Go!" — *Your turn* on the downbeat, and *That's the whole game* at
@@ -70,8 +82,12 @@ count, the answer.
      There is no pause.*
    - **Nearly** — some taps landed. *Start on Go! and keep the hammer's spacing.*
 
-   After four judged passes that did not clear, counting the tap-along ones, *Let's play*
-   is offered beside *Try again*, so nobody is held in the lesson. *Skip* is there
+   A pass on their own that found no downbeat at all — **Too early** or **That was your
+   turn** — goes back to **Tap along again** rather than to another silent bar: the
+   scaffold is where the answer sounds under the thumb, and a player who has not located
+   the downbeat is better served hearing it again than guessing again. **Nearly** tries the
+   same pass again. After four judged passes that did not clear, counting the tap-along
+   ones, *Let's play* is offered instead, so nobody is held in the lesson. *Skip* is there
    throughout, and *Watch again* whenever a pass is over.
 
 **A tap in the hammer's turn is named as it lands.** On either judged pass, a tap before
@@ -121,6 +137,9 @@ read while a bar is playing, from the far end of the screen.
 - It does not add a sound to the count. The level's count has no voice, for the reason
   `docs/TURN_CUE.md` gives — a second pulse under the demonstration's own beats — and the
   lesson's count is the level's.
+- It does not show the ball on every level. The ball is a scaffold, like the guiding ring:
+  the lesson, level 1's first-run pass, the guided level and a new grid's introduction have
+  it; a learnt level reads the block alone.
 
 ## State
 
@@ -137,6 +156,7 @@ skipped from — `watch`, `along`, `try` or `done`.
 
 | File | What it holds |
 | --- | --- |
-| `game/TutorialRun.ts` | `TUTORIAL`, the three-pass model, the verdicts, the nudge, `momentOf`, `coach`; no Phaser |
+| `game/TutorialRun.ts` | `TUTORIAL`, the three-pass model, the verdicts, the re-scaffold, the nudge, `momentOf`, `coach`; no Phaser |
+| `game/beatTrack.ts` | `pulseBall`: where the ball is at any moment of a plan; `numeralStyle`: how each numeral is dressed |
 | `scenes/TutorialScene.ts` | The stage: hammer act, the level's block with labels, pointer and count, the sign, the controller |
 | `tests/tutorial.test.ts` | Moments against the count, verdicts from judgements, the nudge, completion storage |

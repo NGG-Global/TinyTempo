@@ -228,27 +228,29 @@ export function coach(run: Pick<TutorialRun, 'step' | 'plan' | 'verdict' | 'trie
     return { heading: 'Not yet', copy: 'That’s the hammer’s turn. Wait for Go!', ...PLAYING, side: 'theirs' };
   }
 
+  // The words follow the ball: it is on their row, it hops, it is on yours — and the one
+  // fact a first player needs is said outright, more than once: there is no pause.
   if (step === 'watch') {
     switch (moment) {
       case 'count':
         return { heading: 'Listen', copy: 'Four clicks, then the hammer plays the top row.', ...PLAYING, side: 'none' };
       case 'theirs':
-        return { heading: 'Their turn', copy: 'The hammer plays four beats on the top row.', ...PLAYING, side: 'theirs' };
+        return { heading: 'Their turn', copy: 'Watch the ball hop along the hammer’s row.', ...PLAYING, side: 'theirs' };
       case 'runway':
-        return { heading: 'Count down', copy: '3, 2, 1 — and the game taps on Go!', ...PLAYING, side: 'handover' };
+        return { heading: 'Count down', copy: '3, 2, 1 — on Go! the ball lands in your row.', ...PLAYING, side: 'handover' };
       case 'yours':
-        return { heading: 'Your turn', copy: 'Tap, tap, rest, tap: the top row’s spacing.', ...PLAYING, side: 'yours' };
+        return { heading: 'Your turn', copy: 'Your row, straight after theirs. No pause.', ...PLAYING, side: 'yours' };
       case 'after':
-        return { heading: 'That’s the whole game', copy: 'Their row, then the count, then you tap on Go!', action: 'Tap along', next: 'along', side: 'none' };
+        return { heading: 'That’s the whole game', copy: 'Their row, then yours on Go! No pause.', action: 'Tap along', next: 'along', side: 'none' };
     }
   }
 
   const along = step === 'along';
   switch (moment) {
     case 'count':
-      return { heading: 'Listen', copy: along ? 'The hammer first. This time you tap too.' : 'The hammer first. Then the count, then Go!', ...PLAYING, side: 'none' };
+      return { heading: 'Listen', copy: along ? 'The hammer first. On Go! you tap with it.' : 'The hammer first. Then the count, then Go!', ...PLAYING, side: 'none' };
     case 'theirs':
-      return { heading: 'Their turn', copy: 'Not yet. The count comes next.', ...PLAYING, side: 'theirs' };
+      return { heading: 'Their turn', copy: 'Not yet. The count, then Go! No pause.', ...PLAYING, side: 'theirs' };
     case 'runway':
       return { heading: 'Count down', copy: '3, 2, 1 — tap on Go!', ...PLAYING, side: 'handover' };
     default:
@@ -263,10 +265,15 @@ export function coach(run: Pick<TutorialRun, 'step' | 'plan' | 'verdict' | 'trie
 function verdictWords(run: Pick<TutorialRun, 'step' | 'verdict' | 'offersPlay'>): Coach {
   const verdict = run.verdict ?? 'clear';
   const along = run.step === 'along';
-  // Another go at the same step, or the way on once enough have been tried.
+  // Another go at the same step, or the way on once enough have been tried. A pass on
+  // their own that found no downbeat at all — every tap in the hammer's turn, or none —
+  // goes back to tapping along, where the answer sounds under the thumb, rather than to
+  // another silent bar; a pass that landed some of them tries again as it was.
+  const lost = !along && (verdict === 'early' || verdict === 'silent');
   const again: Pick<Coach, 'action' | 'next'> = run.offersPlay
     ? { action: 'Let’s play', next: 'play' }
-    : { action: 'Try again', next: along ? 'along' : 'try' };
+    : lost ? { action: 'Tap along again', next: 'along' }
+      : { action: 'Try again', next: along ? 'along' : 'try' };
   switch (verdict) {
     case 'clear':
       return along

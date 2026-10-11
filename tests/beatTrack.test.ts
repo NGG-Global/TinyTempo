@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
+import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, isLastRestBar, markFor, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
 import { PROGRESSION } from '../src/config/progression';
 import { breatherTask, levelSpec, openingBeats } from '../src/game/levels';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
@@ -376,5 +376,77 @@ describe('a flawless task', () => {
 
   it('needs at least one beat to have been answered', () => {
     expect(isFlawless([])).toBe(false);
+  });
+});
+
+describe('the pulse ball', () => {
+  const plan = createRoundPlan(1, parsePattern('p', 'X X - X'), 120, 10, 4);
+  const beat = 60 / plan.bpm;
+  const demoBeats = plan.cues.filter(cue => cue.kind === 'action').map(cue => cue.time);
+
+  it('lands on every beat of the example and every beat of the answer, in order', () => {
+    // On each demonstration beat it has just landed on that bead.
+    demoBeats.forEach((at, i) => {
+      const ball = pulseBall(plan, at + 0.001)!;
+      expect(ball.from).toEqual({ row: 'shelf', index: i });
+      expect(ball.landedAge).toBeCloseTo(0.001, 3);
+    });
+    plan.targets.forEach((at, i) => {
+      const ball = pulseBall(plan, at + 0.001)!;
+      expect(ball.from).toEqual({ row: 'face', index: i });
+    });
+  });
+
+  it('hops from the shelf’s last bead to the face’s first socket, landing exactly on the downbeat', () => {
+    const first = plan.targets[0]!;
+    const before = pulseBall(plan, first - beat * 0.5)!;
+    expect(before.from).toEqual({ row: 'shelf', index: demoBeats.length - 1 });
+    expect(before.to).toEqual({ row: 'face', index: 0 });
+    expect(before.t).toBeCloseTo(0.5, 5);
+    expect(before.height).toBeCloseTo(1, 5);
+    const landing = pulseBall(plan, first - 0.0001)!;
+    expect(landing.t).toBeCloseTo(1, 2);
+    expect(landing.height).toBeCloseTo(0, 1);
+    expect(pulseBall(plan, first)!.from).toEqual({ row: 'face', index: 0 });
+  });
+
+  it('waits on a landing through a rest and hops in the last beat only', () => {
+    // The pattern rests on beat 2: the hop from the second bead to the third is one beat long,
+    // so for the first half of the gap the ball is still on the second bead.
+    const second = demoBeats[1]!, third = demoBeats[2]!;
+    expect(third - second).toBeCloseTo(2 * beat, 6);
+    const resting = pulseBall(plan, second + beat * 0.5)!;
+    expect(resting.t).toBe(0);
+    expect(resting.height).toBe(0);
+    expect(pulseBall(plan, third - beat * 0.5)!.t).toBeCloseTo(0.5, 5);
+  });
+
+  it('enters from above one beat before the first bead, and is nothing before that', () => {
+    expect(pulseBall(plan, demoBeats[0]! - beat - 0.01)).toBeNull();
+    const entering = pulseBall(plan, demoBeats[0]! - beat * 0.5)!;
+    expect(entering.from).toBeNull();
+    expect(entering.to).toEqual({ row: 'shelf', index: 0 });
+    expect(entering.landedAge).toBe(-Infinity);
+  });
+
+  it('holds on the last socket, then fades, then is gone', () => {
+    const last = plan.targets.at(-1)!;
+    const held = pulseBall(plan, last + 0.2)!;
+    expect(held).toMatchObject({ from: { row: 'face', index: 2 }, to: { row: 'face', index: 2 }, t: 1, alpha: 1 });
+    expect(pulseBall(plan, last + 0.6)!.alpha).toBeLessThan(1);
+    expect(pulseBall(plan, last + 2)).toBeNull();
+  });
+
+  it('sits on each landing under reduced motion, with no travel', () => {
+    const first = plan.targets[0]!;
+    const still = pulseBall(plan, first - beat * 0.5, true)!;
+    expect(still.t).toBe(0);
+    expect(still.height).toBe(0);
+    expect(still.from).toEqual({ row: 'shelf', index: demoBeats.length - 1 });
+  });
+
+  it('survives a missing plan and a clock that has not started', () => {
+    expect(pulseBall(null, 5)).toBeNull();
+    expect(pulseBall(plan, Number.NaN)).toBeNull();
   });
 });

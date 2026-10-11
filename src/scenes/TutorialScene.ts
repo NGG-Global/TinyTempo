@@ -9,7 +9,7 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
+import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, numeralStyle, pulseBall, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach, type JudgedStep } from '@/game/TutorialRun';
 import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
@@ -30,6 +30,9 @@ import { VIGNETTES } from '@/vignettes/registry';
 
 /** The words beside the two rows. The level shows none; the lesson is where they belong. */
 const ROW_LABELS = { theirs: 'THE HAMMER', yours: 'YOU' } as const;
+
+/** The count's words in strike order, "3" first and "Go!" last; one Text each. */
+const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 
 /** The step line over the sign, per step. */
 const STEP_LABELS = { watch: '1 / 3 · WATCH', along: '2 / 3 · TAP ALONG', try: '3 / 3 · ON YOUR OWN', done: 'READY' } as const;
@@ -68,8 +71,8 @@ export class TutorialScene extends BaseScene {
   private skipLabel!: Phaser.GameObjects.Text;
   private theirsLabel!: Phaser.GameObjects.Text;
   private yoursLabel!: Phaser.GameObjects.Text;
-  /** The count under the face, "3", "2", "1", "Go!", exactly as a level strikes it. */
-  private turnCall!: Phaser.GameObjects.Text;
+  /** The count under the face, "3", "2", "1", "Go!", exactly as a level strikes it: one Text each, dressed at layout. */
+  private turnCalls: Phaser.GameObjects.Text[] = [];
   private turnCallY = 0;
   private turnCalled: number | null = null;
   private sign = new Phaser.Geom.Rectangle();
@@ -132,7 +135,7 @@ export class TutorialScene extends BaseScene {
     // level puts it.
     this.theirsLabel = label(this, ROW_LABELS.theirs, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
     this.yoursLabel = label(this, ROW_LABELS.yours, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
-    this.turnCall = display(this, '', { size: 46, colour: VIGNETTES[0]!.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(13);
+    this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: VIGNETTES[0]!.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(13));
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.curtain = new SceneCurtain(this);
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => { void this.startWatch(); }));
@@ -175,8 +178,12 @@ export class TutorialScene extends BaseScene {
     // The same offset under the face a level uses, so the count is met here where it
     // will be met there. The size is set per numeral in `drawTurnCall`.
     this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
-    this.turnCall.setPosition(safe.centerX, this.turnCallY);
-    this.turnCalled = null;
+    this.turnCalls.forEach((text, i) => {
+      const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
+      text.setPosition(safe.centerX, this.turnCallY);
+      resize(text, (36 + 18 * weight) * s, mix(VIGNETTES[0]!.ink, PALETTE.coral, heat));
+    });
+    this.hideTurnCall();
     this.action.setTo(safe.centerX - 280 * s, safe.bottom - 194 * s, 560 * s, Math.max(100 * s, this.target));
     this.replay.setTo(safe.centerX - 180 * s, safe.bottom - this.target, 360 * s, this.target);
     this.replayLabel.setPosition(this.replay.centerX, this.replay.centerY);
@@ -275,6 +282,11 @@ export class TutorialScene extends BaseScene {
     this.marks = plan.pattern.hits.map(() => 'pending');
     this.struckIndex = -1;
     this.struckAt = this.rattleAt = -Infinity;
+    this.hideTurnCall();
+  }
+
+  private hideTurnCall(): void {
+    for (const text of this.turnCalls) if (text.alpha !== 0) text.setAlpha(0);
     this.turnCalled = null;
   }
 
@@ -420,17 +432,20 @@ export class TutorialScene extends BaseScene {
       centres, socketRadius: radius,
       played: live ? beatsPlayed(plan, now) : 0,
       marks, turn,
-      struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45) },
+      struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: marks[this.struckIndex] === 'perfect' },
       rattle, still,
       ghost: live ? this.ghostFor(plan!, marks, turn.yours, now) : null,
       ink: VIGNETTES[0]!.ink,
       landed: live && plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
+      // The ball is the lesson's one cue for *when*: it is on their row, then on yours.
+      pulse: live ? pulseBall(plan, now, still) : null,
     });
     const lift = faceLift(turn, still);
     const theirsAlpha = 1 - 0.5 * turn.yours;
     // Each label starts at its slot's left edge and reads toward the columns.
     const slotEdge = TRACK.ownerSlotRadius * s;
-    this.theirsLabel.setPosition(geo.shelfSlot.x - slotEdge + rattle, geo.shelf.y - 22 * s).setAlpha(theirsAlpha);
+    // High enough that the ball's hop along the shelf passes under it.
+    this.theirsLabel.setPosition(geo.shelfSlot.x - slotEdge + rattle, geo.shelf.y - 30 * s).setAlpha(theirsAlpha);
     // Below the plate's thickness, which grows with the lift, not just below its face.
     this.yoursLabel.setPosition(geo.faceSlot.x - slotEdge + rattle, geo.face.y + geo.face.height + (TRACK.plateDepth + 20) * s);
     this.drawTurnCall(live ? plan : null, now, still);
@@ -470,20 +485,16 @@ export class TutorialScene extends BaseScene {
    */
   private drawTurnCall(plan: RoundPlan | null, now: number, still: boolean): void {
     const call = plan && turnCount(plan, now);
-    if (!plan || !call) {
-      if (this.turnCall.alpha !== 0) this.turnCall.setAlpha(0);
-      return;
-    }
+    if (!plan || !call) { this.hideTurnCall(); return; }
     const s = this.s;
-    const go = call.count === 0;
     const pose = turnCountPose(call, 60 / plan.bpm, still);
     const ink = mix(VIGNETTES[0]!.ink, PALETTE.coral, pose.heat);
+    const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
     if (call.count !== this.turnCalled) {
+      this.hideTurnCall();
       this.turnCalled = call.count;
-      this.turnCall.setText(go ? 'Go!' : String(call.count));
-      resize(this.turnCall, (36 + 18 * call.weight) * s, ink);
     }
-    this.turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
+    turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
     if (pose.ring.alpha > 0.01) {
       const reach = (30 + 70 * pose.ring.spread) * s;
       this.block.lineStyle((5 - 3.5 * pose.ring.spread) * s, ink, pose.ring.alpha)

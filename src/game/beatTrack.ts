@@ -220,6 +220,18 @@ const BEAT_EPSILON = 1e-9;
 
 // `beats` is annotated because `RHYTHM` is `as const`: the default would otherwise fix
 // the parameter's type at the literal 3 and no other count could be passed, not even in a test.
+/**
+ * What a numeral of the count looks like, from its count alone: how far its ink has
+ * warmed toward coral and how present it is. Fixed per numeral, which is what lets a
+ * scene rasterise "3", "2", "1" and "Go!" once at layout and only show them on the beat —
+ * a text re-rasterised on the downbeat was paid for on the frame the first tap is read.
+ */
+export function numeralStyle(count: number, beats: number = RHYTHM.turnCountBeats): { readonly heat: number; readonly weight: number } {
+  if (!(beats > 0)) return { heat: 1, weight: 1 };
+  const c = Math.min(beats, Math.max(0, count));
+  return { heat: clamp01((beats - c) / beats), weight: (beats - c + 1) / (beats + 1) };
+}
+
 export function turnCount(plan: RoundPlan | null, now: number, beats: number = RHYTHM.turnCountBeats): TurnCount | null {
   if (!plan || !Number.isFinite(now) || beats < 1) return null;
   const first = plan.targets[0] ?? plan.response;
@@ -242,7 +254,7 @@ export function turnCount(plan: RoundPlan | null, now: number, beats: number = R
   return {
     count,
     age: Math.max(0, now - (first - count * beat)),
-    weight: (beats - count + 1) / (beats + 1),
+    weight: numeralStyle(count, beats).weight,
   };
 }
 
@@ -285,7 +297,7 @@ const DROP = 26;
 
 export function turnCountPose(call: TurnCount, beat: number, still: boolean, beats: number = RHYTHM.turnCountBeats): TurnCountPose {
   const go = call.count === 0;
-  const heat = beats > 0 ? clamp01((beats - call.count) / beats) : 1;
+  const { heat } = numeralStyle(call.count, beats);
   // The "Go!" leaves rather than blinking out, over the back of its own hold; the numerals
   // are replaced in place by the next strike and never leave on their own.
   const leaving = go ? 1 - clamp01((call.age - beat * GO_HOLD_BEATS * 0.45) / (beat * GO_HOLD_BEATS * 0.55)) : 1;
@@ -327,6 +339,81 @@ export function isFlawless(marks: readonly Mark[]): boolean {
  */
 export function fuse(turn: Handover, index: number, stagger = 0.17, ramp = 0.3): number {
   return Math.max(turn.yours, clamp01((turn.runway - index * stagger) / ramp));
+}
+
+/** One place the pulse ball lands: a bead on the shelf or a socket on the face, by column. */
+export interface Landing {
+  readonly row: 'shelf' | 'face';
+  readonly index: number;
+}
+
+/**
+ * The pulse ball: one ball that lands on every beat of the task, on the shelf's beads as
+ * the example sounds them and on the face's sockets where the player answers — and
+ * whose hop from the shelf's last bead to the face's first socket is the handover made
+ * literal.
+ *
+ * Testers watched the baton cross, the sockets light and the count strike, and still
+ * waited for a pause that never comes. The count says *when* in numbers; the block says
+ * it in colour and position; neither shows the pulse itself continuing across the bar
+ * line. A ball that is on their row one beat and on yours the next does, and it is the
+ * oldest timing cue there is: the ball lands, you tap. It rests on each landing and takes
+ * at most one beat to reach the next, so on a rest it waits rather than floating, and
+ * its shadow grows on the landing it is coming to, so the next beat is seen before it
+ * is heard. For the lesson, level 1 and a new grid's introduction only: a level the
+ * player has learnt reads the block alone.
+ *
+ * A function of the plan and the audio clock, like everything else on the block: no cue
+ * is added or moved. Under reduced motion the ball sits on each landing and is simply on
+ * the next when its beat comes.
+ */
+export interface PulseBall {
+  /** Where the ball is coming from; null for its entrance, dropping onto the first bead. */
+  readonly from: Landing | null;
+  readonly to: Landing;
+  /** 0 at `from`, 1 landed on `to`. */
+  readonly t: number;
+  /** The hop's height, 0 at either end and 1 at its top. */
+  readonly height: number;
+  /** Seconds since the ball last landed; -Infinity before its first landing. */
+  readonly landedAge: number;
+  /** 1 through the task, fading once the last beat has been answered. */
+  readonly alpha: number;
+}
+
+/** How long the ball holds on the last landing before it fades, and the fade, in seconds. */
+const BALL_LINGER = 0.45;
+const BALL_FADE = 0.3;
+
+export function pulseBall(plan: RoundPlan | null, now: number, still = false): PulseBall | null {
+  if (!plan || !Number.isFinite(now)) return null;
+  const landings: { readonly at: number; readonly on: Landing }[] = [];
+  let shelf = 0;
+  for (const cue of plan.cues) if (cue.kind === 'action') landings.push({ at: cue.time, on: { row: 'shelf', index: shelf++ } });
+  plan.targets.forEach((at, index) => landings.push({ at, on: { row: 'face', index } }));
+  const first = landings[0], last = landings.at(-1);
+  if (!first || !last) return null;
+  const beat = 60 / plan.bpm;
+  if (now < first.at - beat) return null;
+  const alpha = 1 - clamp01((now - last.at - BALL_LINGER) / BALL_FADE);
+  if (alpha <= 0) return null;
+  // The landing just made, if any, and the one coming.
+  let made = -1;
+  while (made + 1 < landings.length && landings[made + 1]!.at <= now) made++;
+  const next = landings[made + 1];
+  const prev = landings[made];
+  if (!next) return { from: prev!.on, to: prev!.on, t: 1, height: 0, landedAge: now - prev!.at, alpha };
+  // The hop is a beat at most: the ball waits on its landing through a rest.
+  const hop = Math.min(beat, prev ? next.at - prev.at : beat);
+  const t = still ? 0 : clamp01((now - (next.at - hop)) / hop);
+  return {
+    from: prev?.on ?? null,
+    to: next.on,
+    t,
+    height: still ? 0 : Math.sin(Math.PI * t),
+    landedAge: prev ? now - prev.at : -Infinity,
+    alpha,
+  };
 }
 
 /**
