@@ -58,6 +58,27 @@ export const RHYTHM = {
    * inside the tap's own judgement stays on the tap.
    */
   gridVoiceLagMs: 100,
+  /**
+   * How long the AudioContext may sit outside `running` before the level is paused.
+   *
+   * A Bluetooth rebuffer suspends it for a frame, and `tick` waits that out. A context that
+   * stays suspended — audio focus taken by another app, a device that idles its output —
+   * stops every clock the level runs on, and waiting it out was waiting forever: the picture
+   * stood still, nothing was judged and nothing on screen said to tap. Past this the level
+   * pauses, and Resume is the gesture that brings the context back.
+   */
+  suspendedPauseMs: 750,
+  /**
+   * How far past the coda's own end, on the wall clock, the result may be held waiting for
+   * the audio clock to arrive there.
+   *
+   * The result opens when the heard clock reaches the end of the last coda. That clock
+   * follows the device's output stream, and a stream that stops reporting progress — seen
+   * as "the game freezes when a level ends" — left a finished, saved level on its last frame
+   * for good. The level is already scored and saved by then, so nothing is lost by opening
+   * the plaque on time from the wall clock instead.
+   */
+  resultGraceMs: 1500,
   goodPoints: 70,
   extraPenalty: 25,
 } as const;

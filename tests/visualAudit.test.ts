@@ -112,9 +112,13 @@ describe('the hammer on a short-for-its-width frame', () => {
     // On a 4:3 tablet the raised head touched the title sign and lay across the caption.
     const act = source('src/vignettes/HammerNailVignette.ts');
     const layout = between(act, 'public layout(viewport: Viewport, benchY?: number, headroom?: number): void {', 'this.stage.setPosition');
-    expect(layout).toContain('(this.baseY - headroom) / HAMMER_REACH');
+    expect(layout).toContain('(this.baseY - room) / HAMMER_REACH');
     // Only ever smaller than the cover's own scale: a phone keeps the pose it had.
-    expect(layout).toMatch(/Math\.min\(scale, \(this\.baseY - headroom\) \/ HAMMER_REACH\)/);
+    expect(layout).toMatch(/Math\.min\(scale, \(this\.baseY - room\) \/ HAMMER_REACH\)/);
+    // In a level the head stays under the household acts' band, below the two-line intro
+    // headline it crossed on a tablet; the cover keeps the headroom its caller passes.
+    expect(layout).toContain('headroom ?? (this.cover ? undefined : safe.top + PLAY_HEADROOM * ui)');
+    expect(act).toContain('const PLAY_HEADROOM = 320;');
     expect(source('src/scenes/MenuScene.ts')).toContain('this.illustration.layout(this.viewport, undefined, safe.top + (MENU.sign.top + MENU.sign.height + 36) * s);');
     const tutorial = between(source('src/scenes/TutorialScene.ts'), 'protected override layout(): void {', 'this.stepLabel.setPosition');
     // The caption is placed before the act is laid out under it.

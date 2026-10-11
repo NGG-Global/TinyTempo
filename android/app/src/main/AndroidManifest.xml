@@ -1,8 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- android:appCategory="game" is what keeps the portrait lock on a tablet. An app
+         targeting API 36 has screenOrientation ignored on any display of sw600dp or more,
+         and games are the documented exception (developer.android.com, "Behavior changes:
+         Apps targeting Android 16"). Without it a tablet ran the game at 2048 x 1280
+         logical units in landscape, with every screen laid out for portrait. See
+         docs/TABLETS.md. Ignored below API 26, where the lock always held. -->
     <application
         android:name=".TinyTempoApplication"
+        android:appCategory="game"
         android:allowBackup="true"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"

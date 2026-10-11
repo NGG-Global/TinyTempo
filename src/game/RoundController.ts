@@ -144,3 +144,24 @@ export function phaseAt(plan: RoundPlan, now: number, current: Phase): Phase {
 export function pauseShouldShowSummary(phase: Phase, hasOutcome: boolean): boolean {
   return phase === 'result' && hasOutcome;
 }
+
+/**
+ * Whether the level's result is due. It opens when the heard clock reaches the end of the
+ * last coda (`audioDue`), or, should that clock stop advancing, `RHYTHM.resultGraceMs` after
+ * the wall clock says the coda ended (`wallDueMs`, from `performance.now()`). The level is
+ * scored and saved before either, so opening on the wall clock loses nothing.
+ */
+export function resultDue(audioNow: number, audioDue: number, wallNowMs: number, wallDueMs: number): boolean {
+  if (audioNow >= audioDue) return true;
+  return Number.isFinite(wallDueMs) && wallNowMs >= wallDueMs + RHYTHM.resultGraceMs;
+}
+
+/**
+ * Whether a suspended AudioContext has been out long enough to pause the level: `since` is
+ * when it was first seen outside `running` (`performance.now()`), or null while it runs.
+ * A frame's rebuffer is waited out; a suspension longer than `RHYTHM.suspendedPauseMs`
+ * stops every clock the level runs on, and only a gesture brings it back.
+ */
+export function suspendedTooLong(since: number | null, nowMs: number): boolean {
+  return since !== null && nowMs - since >= RHYTHM.suspendedPauseMs;
+}
