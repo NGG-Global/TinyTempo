@@ -81,6 +81,8 @@ import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { FinaleStage } from '@/ui/finaleStage';
 import { VIGNETTES } from '@/vignettes/registry';
+import { ENDLESS } from '@/config/endless';
+import { endlessUnlocked } from '@/game/endless';
 import { definitionForLap, type Vignette } from '@/vignettes/Vignette';
 import { easeInOutCubic, easeOut } from '@/vignettes/motion';
 
@@ -2197,6 +2199,12 @@ export class PlayScene extends BaseScene {
     this.levelRun?.finish(outcome, accuracy, this.mastery);
     this.levelCleared = outcome.cleared;
     this.saveFailed = outcome.cleared && !saveProgress(outcome.progress);
+    // Level 100 cleared for the first time opens Endless Mode (`docs/ENDLESS_MODE.md`). The
+    // map says so with a dot on the mode's puck; the result keeps its own finale payoff.
+    if (this.spec.level === ENDLESS.unlockLevel && outcome.cleared && !this.saveFailed && !endlessUnlocked(before) && endlessUnlocked(outcome.progress)) {
+      breadcrumb('endless unlocked', { level: this.spec.level });
+      track('endless_unlocked', { source: 'level' });
+    }
     // The player is told, but nobody else was: a device whose storage is blocked loses
     // every level it clears, and that is invisible from the outside without this.
     if (this.saveFailed) {

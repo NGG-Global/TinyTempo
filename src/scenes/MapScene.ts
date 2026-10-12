@@ -36,6 +36,11 @@ import { drawGear } from '@/ui/gear';
 import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
 import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
+import { EndlessCard } from '@/ui/endlessCard';
+import { ENDLESS } from '@/config/endless';
+import { endlessUnlocked } from '@/game/endless';
+import { endlessRecord, loadEndlessProgress, markEndlessUnlockSeen, saveEndlessProgress } from '@/game/endlessProgress';
+import { endlessLeaderboardOffered, openEndlessLeaderboard } from '@/playgames/endless';
 import { castShadow, faces } from '@/ui/light';
 import { BRASS, drawDisc, drawPanel, placeSurface, surface } from '@/ui/panel';
 import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
@@ -301,6 +306,15 @@ export class MapScene extends BaseScene {
   private objectivesAt = { x: 0, y: 0 };
   private objectives!: ObjectivesState;
   private objectivesCard!: ObjectivesCard;
+  /**
+   * Endless Mode's door: a puck under the objectives', with a padlock until level 100 is
+   * cleared and a coral dot once it has been, until the card is opened (`docs/ENDLESS_MODE.md`).
+   */
+  private endlessAt = { x: 0, y: 0 };
+  private endlessCard!: EndlessCard;
+  private endlessBusy = false;
+  /** Whether the mode's unlock dot is still owed, read once per entry and cleared by the card. */
+  private endlessUnlockSeen = true;
   /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
   private routeNotice!: RouteNotice;
   private stopWatchingRoute: (() => void) | null = null;
@@ -335,7 +349,7 @@ export class MapScene extends BaseScene {
   private enteredAt = 0;
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'back' | 'setup' | 'mute' | 'objectives' | null = null;
+  private puckPressed: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   /** Read per use, so a preference change applies mid-scene. */
@@ -433,6 +447,9 @@ export class MapScene extends BaseScene {
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
     this.objectivesCard = new ObjectivesCard(this, 30);
+    this.endlessCard = new EndlessCard(this, 30);
+    this.endlessBusy = false;
+    this.endlessUnlockSeen = loadEndlessProgress().seenUnlock;
     // Under the objectives card and the rest sheet, over the road. Assigned on every entry.
     this.routeNotice = new RouteNotice(this, 12);
     this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) this.refreshRouteNotice(); });
@@ -534,6 +551,7 @@ export class MapScene extends BaseScene {
     this.hudHeight = safe.top + 144 * s;
     this.footerTop = safe.bottom - 210 * s;
     this.objectivesCard.layout(safe, full, s);
+    this.endlessCard.layout(safe, full, s);
     this.worldHeight = worldHeight(this.first, this.shown, s, this.hudHeight);
     // Everything the bake reads, and nothing else. The height of the frame is not in it,
     // which is the point: `layout()` runs on every resize, and on Android the commonest
@@ -1622,8 +1640,9 @@ export class MapScene extends BaseScene {
     this.setupAt = { x: this.muteAt.x - gap, y: this.muteAt.y };
     this.backAt = { x: this.setupAt.x - gap, y: this.muteAt.y };
     this.objectivesAt = { x: safe.left + 56 * s, y: safe.top + 190 * s };
+    this.endlessAt = ENDLESS.available ? { x: this.objectivesAt.x, y: this.objectivesAt.y + gap } : { x: -1000, y: -1000 };
     const g = this.pucks.graphics.clear();
-    const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless') => (this.puckPressed === key ? press : 0);
     for (const [key, at] of [['back', this.backAt], ['setup', this.setupAt], ['mute', this.muteAt]] as const) {
       drawPuck(g, at.x, at.y, s, sinkOf(key));
     }
@@ -1639,6 +1658,20 @@ export class MapScene extends BaseScene {
       const dx = this.objectivesAt.x + r * 0.72, dy = oy - r * 0.72;
       g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
       g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+    }
+    if (ENDLESS.available) {
+      // Endless Mode: the infinity on a puck, padlocked until level 100 is cleared, and a
+      // dot once the unlock is new until the card has been opened.
+      const ey = this.endlessAt.y + puckSink(s, sinkOf('endless'));
+      const unlocked = endlessUnlocked(this.progress);
+      drawPuck(g, this.endlessAt.x, this.endlessAt.y, s, sinkOf('endless'));
+      drawInfinity(g, this.endlessAt.x, ey, r * 0.5, unlocked ? PALETTE.ink : PALETTE.muted, unlocked ? 1 : 0.6);
+      if (!unlocked) drawPadlock(g, this.endlessAt.x + r * 0.5, ey + r * 0.1, 14 * s, PALETTE.ink, SHELL.cream);
+      else if (!this.endlessUnlockSeen) {
+        const dx = this.endlessAt.x + r * 0.72, dy = ey - r * 0.72;
+        g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+        g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+      }
     }
     // A press redraws this every frame, which keeps it live until the puck is back up.
     this.pucks.invalidate();
@@ -2177,6 +2210,7 @@ export class MapScene extends BaseScene {
 
   public override update(_time: number, delta: number): void {
     this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
+    this.endlessCard.update(performance.now() / 1000, this.reducedMotion);
     if (!this.drag && Math.abs(this.velocity) > 1) {
       const step = scrollStep(this.velocity, delta, MAP.friction);
       this.scrollY += step.distance;
@@ -2386,7 +2420,7 @@ export class MapScene extends BaseScene {
     this.velocity = 0;
     this.handleTap(pointer.x, pointer.y);
   }
-  private pressPuck(key: 'back' | 'setup' | 'mute' | 'objectives'): void {
+  private pressPuck(key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless'): void {
     this.puckPressed = key;
     this.puckPressedAt = performance.now() / 1000;
     this.puckDirty = true;
@@ -2395,7 +2429,19 @@ export class MapScene extends BaseScene {
     if (this.curtain.active) return;
     // An open card takes every tap: its Close, or anywhere off it, puts it away.
     if (this.objectivesCard.tap(x, y)) { this.puckDirty = true; return; }
+    const endlessTap = this.endlessCard.tap(x, y);
+    if (endlessTap !== null) {
+      this.puckDirty = true;
+      if (endlessTap === 'start') this.openEndless();
+      else if (endlessTap === 'leaderboard') void this.openEndlessBoard();
+      return;
+    }
     const near = (at: { x: number; y: number }) => Math.abs(x - at.x) < this.controlSize / 2 && Math.abs(y - at.y) < this.controlSize / 2;
+    if (ENDLESS.available && near(this.endlessAt) && !this.restShown) {
+      this.pressPuck('endless');
+      this.showEndlessCard();
+      return;
+    }
     if (near(this.objectivesAt) && !this.restShown) {
       this.pressPuck('objectives');
       this.objectives = markObjectivesSeen(Date.now(), objectiveContext(this.progress));
@@ -2487,6 +2533,34 @@ export class MapScene extends BaseScene {
     this.scrollY += Math.max(-240, Math.min(240, dy)) * this.viewport.unitScale;
     this.clampScroll();
   }
+  /** The Endless card, with what the save and the device know; opening it marks a fresh unlock seen. */
+  private showEndlessCard(): void {
+    const unlocked = endlessUnlocked(this.progress);
+    const stored = loadEndlessProgress();
+    const justUnlocked = unlocked && !stored.seenUnlock;
+    if (justUnlocked) saveEndlessProgress(markEndlessUnlockSeen(stored));
+    this.endlessUnlockSeen = true;
+    track('endless_opened', { unlocked: unlocked ? 1 : 0 });
+    this.endlessCard.show({
+      unlocked, cleared: Math.max(0, this.progress.unlocked - 1), record: endlessRecord(stored),
+      leaderboard: endlessLeaderboardOffered(), justUnlocked,
+    }, performance.now() / 1000);
+  }
+
+  /** Into Endless Mode: no heart, no gate but the unlock; the loop fades out under the curtain as it does for a level. */
+  private openEndless(): void {
+    if (!endlessUnlocked(this.progress) || this.curtain.active) return;
+    this.velocity = 0;
+    hushMusic(this, MUSIC.bedFadeSec);
+    this.curtain.cover(() => this.scene.start(SceneKey.Endless));
+  }
+
+  private async openEndlessBoard(): Promise<void> {
+    if (this.endlessBusy) return;
+    this.endlessBusy = true;
+    try { await openEndlessLeaderboard(); } finally { this.endlessBusy = false; }
+  }
+
   private openLevel(level: number): void {
     if (!canPlayLevel(this.progress, level) || this.heldBy(level) !== null) return;
     if (!canBeginAttempt(this.health, this.progress, level, Date.now(), monetization().premium())) {

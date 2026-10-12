@@ -79,8 +79,14 @@ import java.util.regex.Pattern;
 public class PlayGamesPlugin extends Plugin {
 
     private static final String TAG = "TinyTempoPGS";
-    /** The highest score the game ever sends: 100% in thousandths (see playgames/leaderboard.ts). */
-    private static final long MAX_SCORE = 100_000L;
+    /**
+     * The highest score the game ever sends. Daily Tempo sends 100% in thousandths, at most
+     * 100 000 (playgames/leaderboard.ts); Endless Survival sends a time in milliseconds, at
+     * most six hours (playgames/endlessLeaderboard.ts, ENDLESS.maxRunMs). Each board's own
+     * ceiling is enforced on the TypeScript side; this is the last guard against a value
+     * that is not a score at all.
+     */
+    private static final long MAX_SCORE = 6L * 3_600_000L;
     /** Play's own rule for a snapshot name: 1–100 of the non-URL-reserved characters. */
     private static final Pattern SNAPSHOT_NAME = Pattern.compile("^[A-Za-z0-9._~-]{1,100}$");
     /** Far above the few kilobytes a Tiny Tempo save is, far below Play's 3 MB ceiling. */

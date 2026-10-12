@@ -20,6 +20,14 @@ export const LEADERBOARDS = {
    * decodes it and warns if it ever stops naming that project.
    */
   dailyTempo: 'CgkI0Mey9o8ZEAIQAQ',
+  /**
+   * Endless Survival (`docs/ENDLESS_MODE.md`): survival time in whole milliseconds, on a
+   * leaderboard of the **Time** format, **Larger is better**. Its own leaderboard, never
+   * Daily Tempo's: the two carry different units. **Empty until the Console creates it**,
+   * which leaves submission and the leaderboard button off while the mode itself plays in
+   * full. The id is bound to `ENDLESS.rulesVersion` 1: a new ruleset gets a new leaderboard.
+   */
+  endless: '',
 } as const;
 
 /**

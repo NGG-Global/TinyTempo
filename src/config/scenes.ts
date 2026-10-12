@@ -16,6 +16,7 @@ export const SceneKey = {
   Support: 'support',
   Tutorial: 'tutorial',
   Scrapbook: 'scrapbook',
+  Endless: 'endless',
 } as const;
 
 export type SceneKey = (typeof SceneKey)[keyof typeof SceneKey];

@@ -65,6 +65,17 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   leaderboard_opened: ['leaderboard', 'result', 'sign_in'],
   practice_started: ['level'],
   practice_completed: ['level', 'accuracy', 'duration_ms'],
+  endless_unlocked: ['source'],
+  endless_opened: ['unlocked'],
+  endless_started: ['rules_version', 'start_bpm'],
+  endless_vignette_finished: ['elapsed_sec', 'step', 'bpm', 'accuracy', 'lives', 'role'],
+  endless_life_lost: ['elapsed_sec', 'lives'],
+  endless_recovered: ['elapsed_sec', 'lives'],
+  endless_finished: ['elapsed_sec', 'vignettes', 'peak_bpm', 'best', 'reason'],
+  endless_abandoned: ['elapsed_sec', 'vignettes', 'reason'],
+  endless_score_posted: ['duration_ms', 'new_best', 'retry', 'rules_version'],
+  endless_score_failed: ['reason', 'retry'],
+  endless_board_opened: ['result', 'sign_in'],
 };
 
 describe('every event the game already fires', () => {

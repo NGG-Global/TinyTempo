@@ -208,21 +208,26 @@ if (declaresGamesV1) {
 }
 
 /*
- * The Daily Tempo leaderboard id (`src/config/leaderboards.ts`). Empty is allowed — it is
- * how a build ships before the leaderboard exists, and the game simply offers no
- * leaderboard. What is not allowed is a value the Games SDK will refuse on every call: the
- * numeric Games project id pasted into the wrong field is the likely one, and it fails as
- * silently as a wrong APP_ID does. The rule is the one `leaderboardId` applies at runtime.
+ * The leaderboard ids (`src/config/leaderboards.ts`): Daily Tempo's and Endless Survival's.
+ * Empty is allowed — it is how a build ships before a leaderboard exists, and the game
+ * simply offers no leaderboard for it. What is not allowed is a value the Games SDK will
+ * refuse on every call: the numeric Games project id pasted into the wrong field is the
+ * likely one, and it fails as silently as a wrong APP_ID does. The rule is the one
+ * `playGamesId` applies at runtime.
  */
 const leaderboards = read('src/config/leaderboards.ts') ?? '';
 const dailyTempo = read('src/config/dailyTempo.ts') ?? '';
-const boardId = /^\s*dailyTempo:\s*'([^']*)'/m.exec(leaderboards)?.[1] ?? '';
+const boardIds = [...leaderboards.matchAll(/^\s*(dailyTempo|endless):\s*'([^']*)'/gm)].map(([, key, id]) => [key, id]);
+const boardId = boardIds.find(([key]) => key === 'dailyTempo')?.[1] ?? '';
 const modeShips = /DAILY_TEMPO_AVAILABLE\s*=\s*true/.test(dailyTempo);
-if (boardId !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(boardId) || /^\d+$/.test(boardId))) {
-  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id the Games SDK will refuse:\n'
-    + `      found    ${boardId}\n`
-    + '    It must be the Leaderboard ID from Play Console → Play Games Services → Leaderboards\n'
-    + `    (letters, digits, - and _), not the numeric Games project id ${PGS_PROJECT_ID}.`);
+const BOARD_NAMES = { dailyTempo: 'Daily Tempo', endless: 'Endless Survival' };
+for (const [key, id] of boardIds) {
+  if (id !== '' && (!/^[A-Za-z0-9_-]{8,64}$/.test(id) || /^\d+$/.test(id))) {
+    notes.push(`src/config/leaderboards.ts has a ${BOARD_NAMES[key]} leaderboard id the Games SDK will refuse:\n`
+      + `      found    ${id}\n`
+      + '    It must be the Leaderboard ID from Play Console → Play Games Services → Leaderboards\n'
+      + `    (letters, digits, - and _), not the numeric Games project id ${PGS_PROJECT_ID}.`);
+  }
 }
 /*
  * A leaderboard id that passes the character rule can still be wrong in a way that fails
@@ -260,12 +265,14 @@ function decodeGamesId(id) {
   }
 }
 const projectOf = id => decodeGamesId(id)?.project ?? null;
-if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOf(boardId) !== PGS_PROJECT_ID) {
-  notes.push('src/config/leaderboards.ts has a Daily Tempo leaderboard id that does not decode to\n'
-    + `    Games project ${PGS_PROJECT_ID}:\n`
-    + `      found    ${boardId}\n`
-    + '    Copy it again with the copy button in Play Console → Play Games Services → Leaderboards;\n'
-    + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every call.');
+for (const [key, id] of boardIds) {
+  if (id !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(id) && projectOf(id) !== PGS_PROJECT_ID) {
+    notes.push(`src/config/leaderboards.ts has a ${BOARD_NAMES[key]} leaderboard id that does not decode to\n`
+      + `    Games project ${PGS_PROJECT_ID}:\n`
+      + `      found    ${id}\n`
+      + '    Copy it again with the copy button in Play Console → Play Games Services → Leaderboards;\n'
+      + '    a retyped id (I/l, O/0, o/0) passes every other check and fails on every call.');
+  }
 }
 /*
  * Achievement ids (`src/config/achievements.ts`), checked the same way. Empty is allowed —
@@ -273,7 +280,14 @@ if (boardId !== '' && /^[A-Za-z0-9_-]{8,64}$/.test(boardId) && projectOf(boardId
  * pasted into one, names this project and would pass; it is caught as a repeat instead.
  */
 const achievementsConfig = read('src/config/achievements.ts') ?? '';
-const seenIds = new Map(boardId === '' ? [] : [[boardId, 'the Daily Tempo leaderboard']]);
+const seenIds = new Map(boardIds.filter(([, id]) => id !== '').map(([key, id]) => [id, `the ${BOARD_NAMES[key]} leaderboard`]));
+// The two leaderboards must not share an id either: the Daily Tempo id pasted into the
+// Endless field would post survival times, in milliseconds, onto a board shown in thousandths.
+if (boardIds.length === 2 && boardIds[0][1] !== '' && boardIds[0][1] === boardIds[1][1]) {
+  notes.push('src/config/leaderboards.ts gives Daily Tempo and Endless Survival the same leaderboard id:\n'
+    + `      found    ${boardIds[0][1]}\n`
+    + '    Endless Survival needs its own Time-format leaderboard; copy its id from its own Console page.');
+}
 for (const [, key, id] of achievementsConfig.matchAll(/key:\s*'([^']+)'[^}]*?id:\s*'([^']*)'/g)) {
   if (id === '') continue;
   if (seenIds.has(id)) {

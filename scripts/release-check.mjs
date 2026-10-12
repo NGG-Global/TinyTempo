@@ -33,6 +33,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Restart sheet, out of hearts', text: 'Get a heart and restart this level.', source: 'src/ui/restartSheet.ts' },
   { feature: 'Rasterised map, Scrapbook and menus', text: 'baked:', source: 'src/ui/bakedLayer.ts' },
   { feature: 'Credits: the original score', text: 'Alon Attaly', source: 'src/config/credits.ts' },
+  { feature: 'Endless Mode', text: 'Run interrupted', source: 'src/scenes/EndlessScene.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */
