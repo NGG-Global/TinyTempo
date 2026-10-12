@@ -97,16 +97,23 @@ describe('the configured achievements', () => {
       return { head: [bytes[0], bytes[2], bytes[i + 1], bytes[i + 3]], project, item: bytes[i + 4] };
     };
     expect(decode(LEADERBOARDS.dailyTempo).item).toBe(1);
-    // The five finales have ids; the Endless five are off until the Console gives them one.
-    expect(ACHIEVEMENTS.slice(0, 5).every(a => a.id !== '')).toBe(true);
-    for (const [n, a] of ACHIEVEMENTS.slice(0, 5).entries()) {
+    // Endless Survival is item 7. The Endless five came from one Console import, which
+    // numbered Bronze 11 and Silver 10: the item numbers record creation order, nothing more.
+    expect(decode(LEADERBOARDS.endless).item).toBe(7);
+    expect(decode(LEADERBOARDS.endless).project).toBe(863268283344n);
+    const items: Record<string, number> = {
+      'clear-10': 2, 'clear-20': 3, 'clear-30': 4, 'clear-40': 5, 'clear-50': 6,
+      'clear-100': 8, 'endless-first-run': 9, 'endless-120s': 11, 'endless-300s': 10, 'endless-600s': 12,
+    };
+    expect(ACHIEVEMENTS.map(a => a.key)).toEqual(Object.keys(items));
+    for (const a of ACHIEVEMENTS) {
       expect(playGamesId(a.id), a.key).toBe(a.id);
       const { head, project, item } = decode(a.id);
       expect(head, a.key).toEqual([0x0a, 0x08, 0x10, 0x10]);
       expect(project, a.key).toBe(863268283344n);
-      expect(item, a.key).toBe(n + 2);
+      expect(item, a.key).toBe(items[a.key]);
     }
-    const all = [LEADERBOARDS.dailyTempo, ...ACHIEVEMENTS.map(a => a.id).filter(id => id !== '')];
+    const all = [LEADERBOARDS.dailyTempo, LEADERBOARDS.endless, ...ACHIEVEMENTS.map(a => a.id)];
     expect(new Set(all).size).toBe(all.length);
   });
 });

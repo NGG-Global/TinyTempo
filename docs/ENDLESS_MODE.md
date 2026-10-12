@@ -16,8 +16,8 @@ Play Games *Time* leaderboard.
 | `src/ui/endlessCard.ts` | The map's door: locked copy, the best, the badges, Start and Leaderboard. |
 | `src/playgames/endlessLeaderboard.ts` | The leaderboard as decisions, pure: the score, the day's best, the pending policy, open. |
 | `src/playgames/endless.ts` | The same wired to the configured id, storage, the adapter and analytics. What scenes call. |
-| `src/config/leaderboards.ts` | `LEADERBOARDS.endless`, empty until the Console creates the board. |
-| `src/config/achievements.ts` | `clear-100` and the four Endless achievements, appended, ids empty until created. |
+| `src/config/leaderboards.ts` | `LEADERBOARDS.endless`: `CgkI0Mey9o8ZEAIQBw`, item 7 of the Games project. |
+| `src/config/achievements.ts` | `clear-100` and the four Endless achievements, appended, with their Console ids. |
 | `tests/endless.test.ts`, `tests/fixtures/endless-rules-v1.json` | The pinned ruleset: the pool and the first forty steps. |
 
 ## The rules, as shipped (rules version 1)
@@ -113,8 +113,8 @@ owed an achievement for a run it cannot find.
 **Its own Play Games leaderboard**, never Daily Tempo's: the Console board is created with
 the **Time** format and **Larger is better**, so a submitted 66 032 renders as 1:06.03. The
 score is the survival time in whole milliseconds, nothing packed into it; equal times tie.
-`LEADERBOARDS.endless` holds the id and is empty until the Console has created the board —
-submission and both leaderboard buttons are off until then, and the mode plays in full.
+`LEADERBOARDS.endless` holds the id, `CgkI0Mey9o8ZEAIQBw`. An empty or malformed id would
+turn submission and both leaderboard buttons off, and the mode would still play in full.
 
 One Play Games leaderboard is daily, weekly and all-time at once, and **a submission is
 filed into the daily and weekly windows current when it arrives**. Every policy follows
@@ -145,7 +145,7 @@ the client. There is no server here; if the board ever carried prizes it would n
 
 ## Achievements
 
-Five appended to `ACHIEVEMENTS`, ids empty until the Console creates them: `clear-100`
+Five appended to `ACHIEVEMENTS`, with the ids the Console import gave them: `clear-100`
 (level 100 cleared, from the road's save) and `endless-first-run`, `endless-120s`,
 `endless-300s`, `endless-600s` (from the device's Endless record). `hasEarned` takes the
 facts — the save, and the record — and `syncAchievements` reads the record from the device

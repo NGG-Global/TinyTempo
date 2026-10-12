@@ -2,7 +2,7 @@
 
 Two Google Play Games Services leaderboards on top of the existing v2 authentication
 (`docs/PLAY_GAMES.md`), which they use and do not change: Daily Tempo's, described here, and
-**Endless Survival's**, which is `LEADERBOARDS.endless` (empty until the Console creates it),
+**Endless Survival's**, which is `LEADERBOARDS.endless` (`CgkI0Mey9o8ZEAIQBw`),
 `src/playgames/endlessLeaderboard.ts` and `src/playgames/endless.ts`, and is described in
 `docs/ENDLESS_MODE.md`. The two differ in units — thousandths of a percent against
 milliseconds — so they are two boards, never one, and `scripts/check-android-config.mjs`

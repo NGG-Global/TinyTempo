@@ -125,10 +125,10 @@ the first demonstration downbeat to the fatal response's bar line; an interrupte
 (background, orientation, a stall, lost audio) is **invalidated once** and records nothing.
 The device record (`tiny-tempo.endless.v1`) is per rules version, monotonic, idempotent by
 run id, and in no save code or cloud snapshot. The leaderboard is its own Play Games *Time*
-board (`LEADERBOARDS.endless`, empty until created), milliseconds, and a time that could not
+board (`LEADERBOARDS.endless`, item 7), milliseconds, and a time that could not
 be sent is retried **only on the Play Games day it was played**, because a submission is
 filed into the windows current when it arrives. **Any change to `ENDLESS` is a new rules
-version and a new leaderboard.** Five achievements were appended, ids empty; the config is a
+version and a new leaderboard.** Five achievements were appended with their Console ids (items 8–12); the config is a
 union of three rule shapes and `hasEarned` takes the save and the Endless record.
 
 Thirty-five vignettes rotate by registry order, **in eras**: `levelSpec` places a level
@@ -424,7 +424,7 @@ nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
 past a finale is owed it on their first signed-in launch. v2's `unlock` queues offline and
 ignores repeats, so `playgames/achievementSync.ts` hands every earned one over once a
 session — after a *saved* result (an unlock cannot be taken back) and at boot once signed
-in — and keeps no ledger. All five ids are set and pinned by `tests/achievements.test.ts`; an
+in — and keeps no ledger. All ten ids are set and pinned by `tests/achievements.test.ts`; an
 empty id leaves an achievement off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
 
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is

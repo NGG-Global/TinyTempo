@@ -39,14 +39,14 @@ export const ACHIEVEMENTS: readonly AchievementConfig[] = Object.freeze([
   { key: 'clear-30', clearLevel: 30, id: 'CgkI0Mey9o8ZEAIQBA' },
   { key: 'clear-40', clearLevel: 40, id: 'CgkI0Mey9o8ZEAIQBQ' },
   { key: 'clear-50', clearLevel: 50, id: 'CgkI0Mey9o8ZEAIQBg' },
-  // Appended with Endless Mode (`docs/ENDLESS_MODE.md`). Ids empty until the Console has
-  // them: each is off, and the local badge of the same milestone works regardless.
+  // Appended with Endless Mode (`docs/ENDLESS_MODE.md`), imported to the Console together.
+  // The import numbered Bronze 11 and Silver 10: creation order, not a swap of meaning.
   // Century of Tempo: the level that opens Endless Mode, cleared.
-  { key: 'clear-100', clearLevel: 100, id: '' },
+  { key: 'clear-100', clearLevel: 100, id: 'CgkI0Mey9o8ZEAIQCA' },
   // Going On and On: one valid Endless run finished, however short.
-  { key: 'endless-first-run', endlessRuns: 1, id: '' },
+  { key: 'endless-first-run', endlessRuns: 1, id: 'CgkI0Mey9o8ZEAIQCQ' },
   // Bronze, Silver and Golden Tempo: two, five and ten minutes survived.
-  { key: 'endless-120s', endlessMs: 120_000, id: '' },
-  { key: 'endless-300s', endlessMs: 300_000, id: '' },
-  { key: 'endless-600s', endlessMs: 600_000, id: '' },
+  { key: 'endless-120s', endlessMs: 120_000, id: 'CgkI0Mey9o8ZEAIQCw' },
+  { key: 'endless-300s', endlessMs: 300_000, id: 'CgkI0Mey9o8ZEAIQCg' },
+  { key: 'endless-600s', endlessMs: 600_000, id: 'CgkI0Mey9o8ZEAIQDA' },
 ]);

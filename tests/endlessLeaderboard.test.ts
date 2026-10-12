@@ -96,8 +96,8 @@ describe('the score', () => {
     expect(endlessScoreTag(1, TODAY)).toMatch(/^[A-Za-z0-9_.~-]+$/);
   });
 
-  it('has its own leaderboard, empty until the Console creates it, never Daily Tempo\'s', () => {
-    expect(endlessLeaderboardId(LEADERBOARDS.endless)).toBeNull();
+  it('has its own leaderboard, never Daily Tempo\'s', () => {
+    expect(endlessLeaderboardId(LEADERBOARDS.endless)).toBe(LEADERBOARDS.endless);
     expect(LEADERBOARDS.endless).not.toBe(LEADERBOARDS.dailyTempo);
     expect(endlessLeaderboardId('863268283344')).toBeNull();
     expect(endlessLeaderboardId(ID)).toBe(ID);
