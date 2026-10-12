@@ -1,4 +1,5 @@
 import { ACHIEVEMENTS } from '@/config/achievements';
+import { endlessRecord, loadEndlessProgress, type EndlessRecord } from '@/game/endlessProgress';
 import type { Progress } from '@/game/progress';
 import { playGames } from './boot';
 import { achievementsFrom, createAchievementSync, type AchievementSync } from './achievements';
@@ -9,8 +10,10 @@ import { stubPlayGames } from './playGames';
  * adapter. Scenes use this and nothing below it — no scene names an achievement id.
  *
  * Two calls: `syncAchievements(progress)` after anything that can clear a level (PlayScene's
- * record step) and at boot once signed in, never awaited; and `openAchievements()` from the
- * Settings button.
+ * record step), after a finished Endless run (`EndlessScene`'s record step) and at boot
+ * once signed in, never awaited; and `openAchievements()` from the Settings button. The
+ * Endless record is read from the device at each sync, so a sync from the road also
+ * carries an Endless milestone earned while signed out.
  */
 
 let instance: AchievementSync | null = null;
@@ -25,8 +28,8 @@ export function achievementSync(): AchievementSync {
   return instance;
 }
 
-export function syncAchievements(progress: Progress) {
-  return achievementSync().sync(progress);
+export function syncAchievements(progress: Progress, endless: EndlessRecord = endlessRecord(loadEndlessProgress())) {
+  return achievementSync().sync({ progress, endless });
 }
 
 export function openAchievements() {

@@ -14,6 +14,7 @@ import { SupportScene } from '@/scenes/SupportScene';
 import { TransferScene } from '@/scenes/TransferScene';
 import { TutorialScene } from '@/scenes/TutorialScene';
 import { ScrapbookScene } from '@/scenes/ScrapbookScene';
+import { EndlessScene } from '@/scenes/EndlessScene';
 
 /**
  * Builds the Phaser game configuration.
@@ -146,6 +147,6 @@ export function createGameConfig(): Phaser.Types.Core.GameConfig {
     /** Console banner is useful while developing, noise in production. */
     banner: import.meta.env.DEV,
 
-    scene: [BootScene, PreloadScene, MenuScene, MapScene, PlayScene, SettingsScene, CalibrateScene, TransferScene, SupportScene, TutorialScene, ScrapbookScene],
+    scene: [BootScene, PreloadScene, MenuScene, MapScene, PlayScene, SettingsScene, CalibrateScene, TransferScene, SupportScene, TutorialScene, ScrapbookScene, EndlessScene],
   };
 }

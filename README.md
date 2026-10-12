@@ -77,6 +77,13 @@ presents it without changing level timing or judgement rules. See
 - **Progress** — unlocked level and best accuracy per level — is saved in
   localStorage by `src/game/progress.ts`, recorded the instant the last task
   resolves rather than when the summary draws.
+- **Endless Mode** opens once level 100 is cleared, from a puck on the map: one
+  continuous session that cycles through the acts the road introduced by then,
+  one rhythm task per act with exactly two bars between, tempo climbing from
+  130 to 150 BPM, three Groove Lives, and the time survived as the score —
+  kept on the device and posted to its own Play Games *Time* leaderboard once
+  that exists. No heart, no ad, no account needed. See
+  [Endless Mode](docs/ENDLESS_MODE.md).
 
 ## Music
 

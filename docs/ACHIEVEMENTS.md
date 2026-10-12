@@ -2,11 +2,11 @@
 
 Google Play Games Services achievements, on the existing v2 authentication
 (`docs/PLAY_GAMES.md`), which they use and do not change. The first five mark the five area
-finales.
+finales; five more, appended with Endless Mode, mark level 100 and the mode's milestones.
 
 | File | What it holds |
 | --- | --- |
-| `src/config/achievements.ts` | Each achievement: its key, the level that earns it, its Console id (empty until created). |
+| `src/config/achievements.ts` | Each achievement: its key, the level that earns it, its Console id (an empty one leaves it off). |
 | `src/playgames/achievements.ts` | What a save has earned, and the sync to Play Games. Pure. |
 | `src/playgames/achievementSync.ts` | The same, wired to the config and the installed adapter. What scenes call. |
 | `src/playgames/playGames.ts`, `native.ts` | `unlockAchievement` and `showAchievements` on the existing adapter and bridge. |
@@ -26,6 +26,26 @@ finales.
 *Clearing*, not reaching: level 10 opens when level 9 is cleared, but the achievement is for
 finishing the finale itself, so the unlock popup lands on the same result screen as the
 "Area complete" ribbon across the plaque.
+
+## The Endless five
+
+| Key | Earned by | Console title |
+| --- | --- | --- |
+| `clear-100` | Clearing level 100, which opens Endless Mode | Century of Tempo |
+| `endless-first-run` | One valid Endless run finished, however short | Going On and On |
+| `endless-120s` | A valid Endless run of two minutes or more | Bronze Tempo |
+| `endless-300s` | Five minutes | Silver Tempo |
+| `endless-600s` | Ten minutes | Golden Tempo |
+
+All five were created in one Console import and carry their ids: items 8 to 12 of the Games
+project, where the import numbered Bronze Tempo 11 and Silver Tempo 10 — the order it created
+them in, which `tests/achievements.test.ts` pins as it is. The local badge of each milestone
+works whether or not Play Games is there. `clear-100` is read from the road's save like the finales. The Endless four are
+read from the device's Endless record (`game/endlessProgress.ts`): `hasEarned` takes the
+facts — the save and the record — and `syncAchievements` reads the record at every sync, so
+a milestone earned signed out is handed over by the next sync from anywhere. An interrupted
+or abandoned run writes no record and so earns nothing. The config is a union of three
+shapes (`clearLevel`, `endlessMs`, `endlessRuns`), append-only as before.
 
 ## Earned is derived; unlocking is re-sent
 

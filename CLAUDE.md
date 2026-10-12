@@ -110,6 +110,27 @@ from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everyt
 reads the collection reads the shown count**, so nothing opens before the star that opens
 it has landed. See `docs/STAR_GATES.md`.
 
+**Endless Mode is a ruleset, not a level** (`config/endless.ts`, `game/endless.ts`,
+`scenes/EndlessScene.ts`, `docs/ENDLESS_MODE.md`). It opens when level 100 is *cleared*
+(`endlessUnlocked`, read from the road's save, stored nowhere) and costs nothing: no heart,
+no attempt, no ad. A run is a sequence of steps — one act, one rhythm task, the act's coda,
+then **exactly two bars** that are the next plan's lead-in — generated as a pure function of
+`(seed, rulesVersion, index)` in bounded memory, from the pool of acts the rotation places
+on levels 1–100 (`eligibleActs`, read from `ROTATION`, pinned in
+`tests/fixtures/endless-rules-v1.json`). Tempo (130→150 BPM in even steps), the clear bar
+(75→90%, compared strictly against the unrounded accuracy) and the tier follow the *planned*
+clock, never the player, and change only on the interlude's downbeat with the stems. Three
+Groove Lives, moved once per act in `applyAccuracy`. The ranked time is the audio grid from
+the first demonstration downbeat to the fatal response's bar line; an interrupted run
+(background, orientation, a stall, lost audio) is **invalidated once** and records nothing.
+The device record (`tiny-tempo.endless.v1`) is per rules version, monotonic, idempotent by
+run id, and in no save code or cloud snapshot. The leaderboard is its own Play Games *Time*
+board (`LEADERBOARDS.endless`, item 7), milliseconds, and a time that could not
+be sent is retried **only on the Play Games day it was played**, because a submission is
+filed into the windows current when it arrives. **Any change to `ENDLESS` is a new rules
+version and a new leaderboard.** Five achievements were appended with their Console ids (items 8–12); the config is a
+union of three rule shapes and `hasEarned` takes the save and the Endless record.
+
 Thirty-five vignettes rotate by registry order, **in eras**: `levelSpec` places a level
 with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
 registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
@@ -403,7 +424,7 @@ nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
 past a finale is owed it on their first signed-in launch. v2's `unlock` queues offline and
 ignores repeats, so `playgames/achievementSync.ts` hands every earned one over once a
 session — after a *saved* result (an unlock cannot be taken back) and at boot once signed
-in — and keeps no ledger. All five ids are set and pinned by `tests/achievements.test.ts`; an
+in — and keeps no ledger. All ten ids are set and pinned by `tests/achievements.test.ts`; an
 empty id leaves an achievement off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
 
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is
@@ -911,6 +932,7 @@ src/
     progression.ts     The one difficulty curve and its knobs
     dailyTempo.ts      Whether the Daily Tempo mode exists; everything built for it reads this
     leaderboards.ts    Play Games leaderboard ids and the daily reset clock
+    endless.ts         Endless Mode's ruleset: versioned; any change is a new leaderboard
     achievements.ts    Play Games achievements: key, the level that earns it, Console id
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
@@ -954,6 +976,8 @@ src/
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
     musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
+    endless.ts         Endless Mode: the unlock, the pool, the step generator, the schedule, lives, the ranked time; pure
+    endlessProgress.ts The device's Endless record per ruleset: best, badges, run count; one key
   input/
     TapInput.ts        Unified pointer taps, original DOM timestamp preserved
     HorizontalDragBehaviour.ts   Unused starter code; do not reintroduce
@@ -970,6 +994,8 @@ src/
     achievementSync.ts The achievements wired to config and the installed adapter
     cloudSave.ts       Saved Games: the CloudSaveV1 schema, merge, account binding and sync; pure
     cloudSync.ts       Saved Games wired to storage and the adapter: debounce, resume, support line
+    endlessLeaderboard.ts  Endless Survival: the score, the day's best, the same-day pending policy, open; pure
+    endless.ts         The same wired to the configured id, storage and analytics
   rhythm/
     patterns.ts        Seeded pattern vocabulary by tier
     RhythmScheduler.ts Absolute-time cue scheduling
@@ -985,6 +1011,7 @@ src/
     TransferScene.ts   The save code: show it, copy it, restore from one
     SupportScene.ts    The address, and the details worth sending with it
     ScrapbookScene.ts  The keepsakes, a page per act, found or in silhouette
+    EndlessScene.ts    Endless Mode: one loop, one act at a time, two bars between, three lives
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -1010,6 +1037,7 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
+    endlessCard.ts     Endless Mode's door on the map: locked copy, the best, the badges, Start, Leaderboard
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

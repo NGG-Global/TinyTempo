@@ -8,6 +8,8 @@ import {
   achievementsFrom, createAchievementSync, earnedAchievements, hasEarned, newlyEarned,
   type Achievement, type AchievementDeps,
 } from '../src/playgames/achievements';
+import { EMPTY_RECORD, recordEndlessRun, EMPTY_ENDLESS_PROGRESS, type EndlessRecord } from '../src/game/endlessProgress';
+import { ENDLESS } from '../src/config/endless';
 import { playGamesId } from '../src/playgames/ids';
 import {
   NOT_SHOWN, NOT_UNLOCKED, SIGNED_OUT, SNAPSHOT_FAILED, createPlayGames, stubPlayGames,
@@ -57,11 +59,21 @@ function sync(over: Omit<Partial<AchievementDeps>, 'games'> & { games?: PlayGame
 }
 
 describe('the configured achievements', () => {
-  it('are the five area finales, in order, with distinct keys', () => {
-    expect(ACHIEVEMENTS.map(a => a.clearLevel)).toEqual([10, 20, 30, 40, 50]);
-    expect(ACHIEVEMENTS.every(a => isAreaFinale(a.clearLevel))).toBe(true);
+  it('begin with the five area finales, in order, untouched, with distinct keys', () => {
+    const finales = ACHIEVEMENTS.slice(0, 5);
+    expect(finales.map(a => ('clearLevel' in a ? a.clearLevel : null))).toEqual([10, 20, 30, 40, 50]);
+    expect(finales.every(a => 'clearLevel' in a && isAreaFinale(a.clearLevel))).toBe(true);
+    expect(finales.map(a => a.key)).toEqual(['clear-10', 'clear-20', 'clear-30', 'clear-40', 'clear-50']);
     expect(new Set(ACHIEVEMENTS.map(a => a.key)).size).toBe(ACHIEVEMENTS.length);
     for (const a of ACHIEVEMENTS) expect(a.key).toMatch(/^[a-z][a-z0-9-]{1,23}$/);
+  });
+
+  it('are followed by the Endless Mode five, appended, on the mode\'s own numbers', () => {
+    const appended = ACHIEVEMENTS.slice(5);
+    expect(appended.map(a => a.key)).toEqual(['clear-100', 'endless-first-run', 'endless-120s', 'endless-300s', 'endless-600s']);
+    expect(appended[0]).toMatchObject({ clearLevel: ENDLESS.unlockLevel });
+    expect(appended[1]).toMatchObject({ endlessRuns: 1 });
+    expect(appended.slice(2).map(a => ('endlessMs' in a ? a.endlessMs : null))).toEqual(ENDLESS.milestonesSec.map(sec => sec * 1000));
   });
 
   it('carry either no id yet or one the game will use — never a malformed one', () => {
@@ -85,15 +97,61 @@ describe('the configured achievements', () => {
       return { head: [bytes[0], bytes[2], bytes[i + 1], bytes[i + 3]], project, item: bytes[i + 4] };
     };
     expect(decode(LEADERBOARDS.dailyTempo).item).toBe(1);
-    for (const [n, a] of ACHIEVEMENTS.entries()) {
+    // Endless Survival is item 7. The Endless five came from one Console import, which
+    // numbered Bronze 11 and Silver 10: the item numbers record creation order, nothing more.
+    expect(decode(LEADERBOARDS.endless).item).toBe(7);
+    expect(decode(LEADERBOARDS.endless).project).toBe(863268283344n);
+    const items: Record<string, number> = {
+      'clear-10': 2, 'clear-20': 3, 'clear-30': 4, 'clear-40': 5, 'clear-50': 6,
+      'clear-100': 8, 'endless-first-run': 9, 'endless-120s': 11, 'endless-300s': 10, 'endless-600s': 12,
+    };
+    expect(ACHIEVEMENTS.map(a => a.key)).toEqual(Object.keys(items));
+    for (const a of ACHIEVEMENTS) {
       expect(playGamesId(a.id), a.key).toBe(a.id);
       const { head, project, item } = decode(a.id);
       expect(head, a.key).toEqual([0x0a, 0x08, 0x10, 0x10]);
       expect(project, a.key).toBe(863268283344n);
-      expect(item, a.key).toBe(n + 2);
+      expect(item, a.key).toBe(items[a.key]);
     }
-    const all = [LEADERBOARDS.dailyTempo, ...ACHIEVEMENTS.map(a => a.id)];
+    const all = [LEADERBOARDS.dailyTempo, LEADERBOARDS.endless, ...ACHIEVEMENTS.map(a => a.id)];
     expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+describe('what the Endless record has earned', () => {
+  const ENDLESS_FIVE: readonly Achievement[] = achievementsFrom(ACHIEVEMENTS.slice(5).map(a => ({ ...a, id: `CgkItest${a.key}` })));
+  const record = (elapsedMs: number): EndlessRecord => recordEndlessRun(EMPTY_ENDLESS_PROGRESS, {
+    runId: 'r', rulesVersion: 1, elapsedMs, vignettes: 3, peakBpm: 130, perfect: 1, good: 1, missed: 1, extras: 0,
+  }).record;
+
+  it('is nothing without a record, and nothing from the road alone', () => {
+    expect(earnedAchievements(road(140), ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100']);
+    expect(earnedAchievements({ progress: road(140), endless: null }, ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100']);
+    expect(earnedAchievements({ progress: road(140), endless: EMPTY_RECORD }, ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100']);
+    expect(hasEarned(road(99), { clearLevel: 100 })).toBe(false);
+    expect(hasEarned(road(100), { clearLevel: 100 })).toBe(true);
+  });
+
+  it('is the first run, then each milestone the best run reached', () => {
+    const facts = (ms: number) => ({ progress: road(100), endless: record(ms) });
+    expect(earnedAchievements(facts(5_000), ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100', 'endless-first-run']);
+    expect(earnedAchievements(facts(119_999), ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100', 'endless-first-run']);
+    expect(earnedAchievements(facts(120_000), ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100', 'endless-first-run', 'endless-120s']);
+    expect(earnedAchievements(facts(600_000), ENDLESS_FIVE).map(a => a.key)).toEqual(['clear-100', 'endless-first-run', 'endless-120s', 'endless-300s', 'endless-600s']);
+    expect(newlyEarned(facts(100_000), facts(300_000), ENDLESS_FIVE).map(a => a.key)).toEqual(['endless-120s', 'endless-300s']);
+  });
+
+  it('is handed to Play Games by the same sync, from the facts it is given', async () => {
+    const c = client();
+    const games = createPlayGames(c.native);
+    await games.refresh();
+    const achievements = sync({ games, achievements: [...FIVE, ...ENDLESS_FIVE] });
+    await expect(achievements.sync({ progress: road(100), endless: record(130_000) })).resolves.toEqual({
+      kind: 'synced', sent: ['clear-10', 'clear-20', 'clear-30', 'clear-40', 'clear-50', 'clear-100', 'endless-first-run', 'endless-120s'],
+    });
+    // A plain progress still syncs the road's; the Endless ones wait for their record.
+    const fresh = sync({ games: createPlayGames(client().native), achievements: [...FIVE, ...ENDLESS_FIVE] });
+    await expect(fresh.sync(road(100))).resolves.toEqual({ kind: 'synced', sent: ['clear-10', 'clear-20', 'clear-30', 'clear-40', 'clear-50', 'clear-100'] });
   });
 });
 
@@ -105,7 +163,7 @@ describe('what a save has earned', () => {
     // The accuracy alone says so, and so does a frontier past the level.
     expect(hasEarned({ unlocked: 10, best: { 10: 60 } }, ten)).toBe(true);
     expect(hasEarned({ unlocked: 11, best: {} }, ten)).toBe(true);
-    expect(earnedAchievements(road(34), FIVE).map(a => a.clearLevel)).toEqual([10, 20, 30]);
+    expect(earnedAchievements(road(34), FIVE).map(a => a.key)).toEqual(['clear-10', 'clear-20', 'clear-30']);
   });
 
   it('is earned by the result that clears the level, and by nothing else', () => {

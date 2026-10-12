@@ -70,7 +70,27 @@ export const SERVICE_EVENTS = [
   'leaderboard_submit_failed',
 ] as const;
 
-export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS, ...SERVICE_EVENTS] as const;
+/**
+ * Endless Mode (`game/endless.ts`, `scenes/EndlessScene.ts`, `playgames/endless.ts`): the
+ * run's own ledger, and its leaderboard beside Daily Tempo's. Every parameter is a number
+ * or a closed string set; nothing identifies the player, and no run-level value is high
+ * enough in cardinality to fill a dimension with noise.
+ */
+export const ENDLESS_EVENTS = [
+  'endless_unlocked',
+  'endless_opened',
+  'endless_started',
+  'endless_vignette_finished',
+  'endless_life_lost',
+  'endless_recovered',
+  'endless_finished',
+  'endless_abandoned',
+  'endless_score_posted',
+  'endless_score_failed',
+  'endless_board_opened',
+] as const;
+
+export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS, ...SERVICE_EVENTS, ...ENDLESS_EVENTS] as const;
 
 export type AnalyticsEvent = typeof ANALYTICS_EVENTS[number];
 export type GameplayEvent = typeof GAMEPLAY_EVENTS[number];
@@ -373,7 +393,29 @@ export interface AnalyticsPayloads {
   };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
+  /** Level 100 was cleared for the first time on this device: the mode opened. */
+  readonly endless_unlocked: { readonly source: 'level' };
+  /** The map's Endless card was opened, locked or not. */
+  readonly endless_opened: { readonly unlocked: Flag };
+  readonly endless_started: { readonly rules_version: number; readonly start_bpm: number };
+  /** One vignette scored. `elapsed_sec` is the run clock at its start, whole seconds. */
+  readonly endless_vignette_finished: {
+    readonly elapsed_sec: number; readonly step: number; readonly bpm: number; readonly accuracy: number; readonly lives: number; readonly role: EndlessRoleName;
+  };
+  readonly endless_life_lost: { readonly elapsed_sec: number; readonly lives: number };
+  readonly endless_recovered: { readonly elapsed_sec: number; readonly lives: number };
+  /** A valid run ended: lives out. The only event that carries a ranked time. */
+  readonly endless_finished: { readonly elapsed_sec: number; readonly vignettes: number; readonly peak_bpm: number; readonly best: Flag; readonly reason: 'game_over' };
+  /** A run that ended without a ranking, and why. */
+  readonly endless_abandoned: { readonly elapsed_sec: number; readonly vignettes: number; readonly reason: 'user' | 'timing' | 'background' | 'orientation' | 'audio' };
+  /** Leaderboard events, on the same terms as Daily Tempo's; never a player id. */
+  readonly endless_score_posted: { readonly duration_ms: number; readonly new_best: Flag; readonly retry: Flag; readonly rules_version: number };
+  readonly endless_score_failed: { readonly reason: 'offline' | 'timeout' | 'failed' | 'invalid' | 'unavailable'; readonly retry: Flag };
+  readonly endless_board_opened: { readonly result: 'shown' | 'signed_out' | 'failed' | 'invalid' | 'unavailable' | 'unconfigured'; readonly sign_in: Flag };
 }
+
+/** The ten roles an Endless step can play (`config/endless.ts`), as a closed set for the dashboard. */
+export type EndlessRoleName = 'opener' | 'pattern' | 'tempo' | 'endurance' | 'recovery' | 'combination' | 'challenge' | 'finale';
 
 export type AnalyticsSink = <K extends AnalyticsEvent>(event: K, payload: AnalyticsPayloads[K]) => void;
 

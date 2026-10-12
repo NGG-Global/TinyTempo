@@ -51,6 +51,12 @@ export async function bootPlayGames(): Promise<void> {
         const { dailyTempoLeaderboard } = await import('./dailyTempo');
         void dailyTempoLeaderboard().retry();
       } catch { /* the best stays pending for the next chance */ }
+      // An Endless Survival time from earlier today that could not be sent, on the same
+      // terms; one from an earlier day is no longer owed (`playgames/endlessLeaderboard.ts`).
+      try {
+        const { endlessLeaderboard } = await import('./endless');
+        void endlessLeaderboard().retry();
+      } catch { /* the best stays pending for the next chance today */ }
       // Achievements are derived from the save, so a sync is all "catching up" takes: one
       // earned while signed out or offline is handed over now. Play Games ignores repeats.
       try {

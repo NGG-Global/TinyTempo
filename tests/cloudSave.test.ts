@@ -762,7 +762,7 @@ describe('what follows a save', () => {
     synced(await sync());
     expect(imported).toHaveLength(1);
     const achievements = achievementsFrom(ACHIEVEMENTS);
-    expect(achievements.filter(a => hasEarned(imported[0]!, a)).map(a => a.clearLevel)).toEqual([10, 20]);
+    expect(achievements.filter(a => hasEarned(imported[0]!, a)).map(a => a.key)).toEqual(['clear-10', 'clear-20']);
     // Nothing new from the cloud, nothing handed over.
     synced(await sync());
     expect(imported).toHaveLength(1);
