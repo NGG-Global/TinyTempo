@@ -52,20 +52,20 @@
       "tier": 0,
       "grid": null,
       "pattern": "t0-0",
-      "threshold": 76,
-      "start": 11.077
+      "threshold": 75,
+      "start": 7.385
     },
     {
       "index": 2,
       "role": "pattern",
       "vignette": "toothbrush",
       "lap": 1,
-      "bpm": 132,
+      "bpm": 130,
       "tier": 1,
       "grid": null,
       "pattern": "t1-1",
       "threshold": 76,
-      "start": 20.308
+      "start": 12.923
     },
     {
       "index": 3,
@@ -76,8 +76,8 @@
       "tier": 0,
       "grid": null,
       "pattern": "t0-3",
-      "threshold": 77,
-      "start": 31.217
+      "threshold": 76,
+      "start": 20.308
     },
     {
       "index": 4,
@@ -85,11 +85,11 @@
       "vignette": "doorbell",
       "lap": 0,
       "bpm": 132,
-      "tier": 1,
+      "tier": 0,
       "grid": null,
-      "pattern": "t1-2",
-      "threshold": 77,
-      "start": 41.805
+      "pattern": "t0-1",
+      "threshold": 76,
+      "start": 27.367
     },
     {
       "index": 5,
@@ -100,20 +100,20 @@
       "tier": 0,
       "grid": null,
       "pattern": "t0-2",
-      "threshold": 78,
-      "start": 52.714
+      "threshold": 77,
+      "start": 34.639
     },
     {
       "index": 6,
       "role": "combination",
       "vignette": "egg",
       "lap": 2,
-      "bpm": 136,
+      "bpm": 134,
       "tier": 2,
       "grid": null,
       "pattern": "t2-2",
-      "threshold": 78,
-      "start": 63.791
+      "threshold": 77,
+      "start": 42.024
     },
     {
       "index": 7,
@@ -124,308 +124,308 @@
       "tier": 2,
       "grid": null,
       "pattern": "t2-1",
-      "threshold": 79,
-      "start": 74.379
+      "threshold": 77,
+      "start": 49.188
     },
     {
       "index": 8,
       "role": "challenge",
       "vignette": "barber",
       "lap": 0,
-      "bpm": 140,
+      "bpm": 138,
       "tier": 2,
       "grid": null,
       "pattern": "t2-3",
-      "threshold": 79,
-      "start": 84.968
+      "threshold": 78,
+      "start": 56.247
     },
     {
       "index": 9,
       "role": "finale",
       "vignette": "cucumber",
       "lap": 3,
-      "bpm": 140,
+      "bpm": 138,
       "tier": 2,
       "grid": null,
       "pattern": "t2-2",
-      "threshold": 80,
-      "start": 95.253
+      "threshold": 78,
+      "start": 63.203
     },
     {
       "index": 10,
       "role": "opener",
       "vignette": "curl",
       "lap": 0,
-      "bpm": 134,
+      "bpm": 132,
       "tier": 0,
       "grid": null,
       "pattern": "t0-0",
-      "threshold": 80,
-      "start": 103.825
+      "threshold": 78,
+      "start": 68.421
     },
     {
       "index": 11,
       "role": "pattern",
       "vignette": "snare",
       "lap": 2,
-      "bpm": 138,
-      "tier": 2,
+      "bpm": 134,
+      "tier": 1,
       "grid": null,
-      "pattern": "t2-3",
-      "threshold": 81,
-      "start": 112.78
+      "pattern": "t1-3",
+      "threshold": 79,
+      "start": 73.875
     },
     {
       "index": 12,
       "role": "pattern",
       "vignette": "balloon",
       "lap": 2,
-      "bpm": 138,
-      "tier": 3,
+      "bpm": 136,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-1",
-      "threshold": 81,
-      "start": 123.215
+      "pattern": "t2-1",
+      "threshold": 79,
+      "start": 81.039
     },
     {
       "index": 13,
       "role": "tempo",
       "vignette": "window",
       "lap": 0,
-      "bpm": 144,
-      "tier": 1,
+      "bpm": 140,
+      "tier": 0,
       "grid": null,
-      "pattern": "t1-3",
-      "threshold": 82,
-      "start": 137.128
+      "pattern": "t0-3",
+      "threshold": 79,
+      "start": 88.098
     },
     {
       "index": 14,
       "role": "endurance",
       "vignette": "saw",
       "lap": 0,
-      "bpm": 140,
-      "tier": 2,
+      "bpm": 136,
+      "tier": 1,
       "grid": null,
-      "pattern": "t2-1",
-      "threshold": 82,
-      "start": 145.461
+      "pattern": "t1-1",
+      "threshold": 80,
+      "start": 93.241
     },
     {
       "index": 15,
       "role": "recovery",
       "vignette": "slushy",
       "lap": 1,
-      "bpm": 136,
-      "tier": 1,
+      "bpm": 132,
+      "tier": 0,
       "grid": null,
-      "pattern": "t1-2",
-      "threshold": 83,
-      "start": 154.032
+      "pattern": "t0-2",
+      "threshold": 80,
+      "start": 98.535
     },
     {
       "index": 16,
       "role": "combination",
       "vignette": "bubble",
       "lap": 1,
-      "bpm": 142,
-      "tier": 3,
+      "bpm": 140,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-3",
-      "threshold": 83,
-      "start": 164.621
+      "pattern": "t2-3",
+      "threshold": 80,
+      "start": 105.808
     },
     {
       "index": 17,
       "role": "combination",
       "vignette": "light",
       "lap": 3,
-      "bpm": 144,
+      "bpm": 140,
       "tier": 3,
       "grid": null,
-      "pattern": "t3-2",
-      "threshold": 84,
-      "start": 178.142
+      "pattern": "t3-3",
+      "threshold": 81,
+      "start": 112.665
     },
     {
       "index": 18,
       "role": "challenge",
       "vignette": "bug",
       "lap": 3,
-      "bpm": 146,
-      "tier": 4,
+      "bpm": 142,
+      "tier": 3,
       "grid": null,
-      "pattern": "t4-1",
-      "threshold": 85,
-      "start": 191.475
+      "pattern": "t3-1",
+      "threshold": 81,
+      "start": 122.951
     },
     {
       "index": 19,
       "role": "finale",
       "vignette": "apple",
       "lap": 0,
-      "bpm": 148,
-      "tier": 4,
+      "bpm": 142,
+      "tier": 3,
       "grid": null,
-      "pattern": "t4-3",
-      "threshold": 85,
-      "start": 202.982
+      "pattern": "t3-3",
+      "threshold": 82,
+      "start": 131.402
     },
     {
       "index": 20,
       "role": "opener",
       "vignette": "egg",
       "lap": 1,
-      "bpm": 142,
-      "tier": 2,
+      "bpm": 138,
+      "tier": 1,
       "grid": null,
-      "pattern": "t2-2",
-      "threshold": 86,
-      "start": 215.955
+      "pattern": "t1-2",
+      "threshold": 82,
+      "start": 141.542
     },
     {
       "index": 21,
       "role": "pattern",
       "vignette": "scratch",
       "lap": 3,
-      "bpm": 146,
-      "tier": 3,
+      "bpm": 140,
+      "tier": 2,
       "grid": "triplet",
       "pattern": "tr0-1",
-      "threshold": 86,
-      "start": 226.096
+      "threshold": 82,
+      "start": 148.499
     },
     {
       "index": 22,
       "role": "pattern",
       "vignette": "tomato",
       "lap": 0,
-      "bpm": 146,
-      "tier": 4,
+      "bpm": 140,
+      "tier": 3,
       "grid": "triplet",
       "pattern": "tr0-3",
-      "threshold": 87,
-      "start": 235.959
+      "threshold": 83,
+      "start": 155.356
     },
     {
       "index": 23,
       "role": "tempo",
       "vignette": "balloon",
       "lap": 1,
-      "bpm": 150,
-      "tier": 2,
+      "bpm": 144,
+      "tier": 1,
       "grid": null,
-      "pattern": "t2-0",
-      "threshold": 87,
-      "start": 244.178
+      "pattern": "t1-0",
+      "threshold": 83,
+      "start": 160.499
     },
     {
       "index": 24,
       "role": "endurance",
       "vignette": "bell",
       "lap": 2,
-      "bpm": 146,
-      "tier": 3,
+      "bpm": 142,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-3",
-      "threshold": 88,
-      "start": 253.778
+      "pattern": "t2-3",
+      "threshold": 83,
+      "start": 167.166
     },
     {
       "index": 25,
       "role": "recovery",
       "vignette": "doorbell",
       "lap": 1,
-      "bpm": 144,
-      "tier": 3,
+      "bpm": 138,
+      "tier": 1,
       "grid": null,
-      "pattern": "t3-1",
-      "threshold": 88,
-      "start": 266.929
+      "pattern": "t1-1",
+      "threshold": 84,
+      "start": 173.926
     },
     {
       "index": 26,
       "role": "combination",
       "vignette": "bug",
       "lap": 1,
-      "bpm": 150,
-      "tier": 4,
+      "bpm": 144,
+      "tier": 3,
       "grid": null,
-      "pattern": "t4-3",
-      "threshold": 89,
-      "start": 280.262
+      "pattern": "t3-3",
+      "threshold": 84,
+      "start": 180.883
     },
     {
       "index": 27,
       "role": "combination",
       "vignette": "banana",
       "lap": 2,
-      "bpm": 150,
+      "bpm": 144,
       "tier": 4,
       "grid": null,
       "pattern": "t4-0",
-      "threshold": 90,
-      "start": 291.462
+      "threshold": 84,
+      "start": 189.216
     },
     {
       "index": 28,
       "role": "challenge",
       "vignette": "snare",
       "lap": 1,
-      "bpm": 150,
+      "bpm": 148,
       "tier": 4,
       "grid": "triplet",
-      "pattern": "tr1-0",
-      "threshold": 90,
-      "start": 302.662
+      "pattern": "tr0-0",
+      "threshold": 85,
+      "start": 197.549
     },
     {
       "index": 29,
       "role": "finale",
       "vignette": "hammer",
       "lap": 0,
-      "bpm": 150,
+      "bpm": 148,
       "tier": 4,
       "grid": null,
       "pattern": "t4-1",
-      "threshold": 90,
-      "start": 312.262
+      "threshold": 85,
+      "start": 204.036
     },
     {
       "index": 30,
       "role": "opener",
       "vignette": "barber",
       "lap": 2,
-      "bpm": 148,
-      "tier": 3,
+      "bpm": 142,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-0",
-      "threshold": 90,
-      "start": 323.462
+      "pattern": "t2-0",
+      "threshold": 86,
+      "start": 212.144
     },
     {
       "index": 31,
       "role": "pattern",
       "vignette": "slushy",
       "lap": 2,
-      "bpm": 150,
-      "tier": 4,
+      "bpm": 144,
+      "tier": 3,
       "grid": "triplet",
-      "pattern": "tr1-0",
-      "threshold": 90,
-      "start": 336.435
+      "pattern": "tr0-0",
+      "threshold": 86,
+      "start": 218.905
     },
     {
       "index": 32,
       "role": "pattern",
       "vignette": "scratch",
       "lap": 2,
-      "bpm": 150,
+      "bpm": 146,
       "tier": 4,
       "grid": null,
       "pattern": "t4-3",
-      "threshold": 90,
-      "start": 346.035
+      "threshold": 86,
+      "start": 225.571
     },
     {
       "index": 33,
@@ -433,35 +433,35 @@
       "vignette": "bug",
       "lap": 2,
       "bpm": 150,
-      "tier": 3,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-3",
-      "threshold": 90,
-      "start": 358.835
+      "pattern": "t2-3",
+      "threshold": 87,
+      "start": 235.434
     },
     {
       "index": 34,
       "role": "endurance",
       "vignette": "window",
       "lap": 2,
-      "bpm": 150,
-      "tier": 4,
+      "bpm": 146,
+      "tier": 3,
       "grid": null,
-      "pattern": "t4-1",
-      "threshold": 90,
-      "start": 370.035
+      "pattern": "t3-1",
+      "threshold": 87,
+      "start": 240.234
     },
     {
       "index": 35,
       "role": "recovery",
       "vignette": "toothbrush",
       "lap": 2,
-      "bpm": 146,
-      "tier": 3,
+      "bpm": 142,
+      "tier": 2,
       "grid": null,
-      "pattern": "t3-0",
-      "threshold": 90,
-      "start": 381.235
+      "pattern": "t2-0",
+      "threshold": 87,
+      "start": 248.453
     },
     {
       "index": 36,
@@ -472,8 +472,8 @@
       "tier": 4,
       "grid": null,
       "pattern": "t4-2",
-      "threshold": 90,
-      "start": 394.386
+      "threshold": 88,
+      "start": 255.214
     },
     {
       "index": 37,
@@ -484,8 +484,8 @@
       "tier": 4,
       "grid": null,
       "pattern": "t4-1",
-      "threshold": 90,
-      "start": 407.186
+      "threshold": 88,
+      "start": 264.814
     },
     {
       "index": 38,
@@ -496,8 +496,8 @@
       "tier": 4,
       "grid": null,
       "pattern": "t4-3",
-      "threshold": 90,
-      "start": 418.386
+      "threshold": 89,
+      "start": 272.814
     },
     {
       "index": 39,
@@ -508,8 +508,8 @@
       "tier": 4,
       "grid": null,
       "pattern": "t4-2",
-      "threshold": 90,
-      "start": 431.186
+      "threshold": 89,
+      "start": 282.414
     }
   ]
 }

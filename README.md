@@ -79,7 +79,7 @@ presents it without changing level timing or judgement rules. See
   resolves rather than when the summary draws.
 - **Endless Mode** opens once level 100 is cleared, from a puck on the map: one
   continuous session that cycles through the acts the road introduced by then,
-  one rhythm task per act with exactly two bars between, tempo climbing from
+  one rhythm task per act, each act's ending running straight into the next, tempo climbing from
   130 to 150 BPM, three Groove Lives, and the time survived as the score —
   kept on the device and posted to its own Play Games *Time* leaderboard once
   that exists. No heart, no ad, no account needed. See

@@ -12,6 +12,8 @@ import { mergeProgress, recordResult, type Progress } from '../src/game/progress
 import { createJudge, judgeTap } from '../src/rhythm/judge';
 import { scoreRound } from '../src/game/scoring';
 import { secondsPerBeat } from '../src/rhythm/patterns';
+import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
+import { TaskSequence } from '../src/game/TaskSequence';
 import { ROTATION, VIGNETTES } from '../src/vignettes/registry';
 import { placementAt } from '../src/vignettes/rotation';
 import fixture from './fixtures/endless-rules-v1.json';
@@ -180,18 +182,52 @@ describe('the sequence', () => {
     expect(steps.some(s => s.grid === 'sixteenth')).toBe(false);
   });
 
-  it('plans whole bars: a step is its phrase twice, the act\'s ending and two bars, at one tempo', () => {
+  it('plans whole bars: a step is its phrase twice and the act\'s ending, at one tempo, with no rest added', () => {
     for (const step of endlessSteps(60)) {
       const hold = VIGNETTES[step.actIndex]!.endingHoldBeats ?? 1;
       const beats = stepBeats(step.pattern, hold);
       expect(beats % RHYTHM.beatsPerBar).toBe(0);
       expect(step.durationSec).toBeCloseTo(beats * secondsPerBeat(step.bpm), 9);
-      // The interlude is exactly two bars of it.
-      expect(beats).toBeGreaterThanOrEqual(ENDLESS.interludeBars * RHYTHM.beatsPerBar + 8 + 4);
+      // Demonstration and response are whole bars each, and the coda is the only rest:
+      // contact, hold and two slide beats, which complete one bar or two. Nothing more.
+      const phrase = Math.ceil(step.pattern.lengthBeats / RHYTHM.beatsPerBar) * RHYTHM.beatsPerBar;
+      expect(beats).toBe(phrase * 2 + 3 + hold);
+      expect(beats - phrase * 2).toBeLessThanOrEqual(2 * RHYTHM.beatsPerBar);
     }
     const steps = endlessSteps(60);
     for (let i = 1; i < steps.length; i++) {
       expect(steps[i]!.plannedStartSec).toBeCloseTo(steps[i - 1]!.plannedStartSec + steps[i - 1]!.durationSec, 9);
+    }
+  });
+
+  it('lands each act\'s demonstration on the downbeat the last act\'s coda hands over, on the loop\'s bar line', () => {
+    // The scene's own placement, step by step: the plan the controller makes, the ending
+    // `TaskSequence` gives it, and the next plan placed on `ending.next` with no lead-in.
+    let start = 10;
+    let leadBeats: number = ENDLESS.countInBeats;
+    // Source beats of the loop played so far: a rate of bpm/120 makes one beat at the step's
+    // tempo one beat of the loop, so a bar line of the grid is a bar line of the music.
+    let loopBeats = 0;
+    for (const step of endlessSteps(60)) {
+      const plan = createRoundPlan(step.index, step.pattern, step.bpm, start, leadBeats);
+      const hold = VIGNETTES[step.actIndex]!.endingHoldBeats ?? 1;
+      const ending = new TaskSequence(step.bpm, plan.start, 1).ending(plan.end, hold);
+      const beat = secondsPerBeat(step.bpm);
+      // The coda's slide lands on the next demonstration downbeat, a whole number of bars on.
+      const fromDemo = (ending.next - plan.demo) / beat;
+      expect(fromDemo).toBeCloseTo(stepBeats(step.pattern, hold), 6);
+      expect(Math.round(fromDemo) % RHYTHM.beatsPerBar).toBe(0);
+      // The swap is one beat ahead of it: room to place the next plan on the grid.
+      expect(ending.next - ending.swap).toBeCloseTo(beat, 9);
+      // The coda's contact and every slide beat sit on beats of this step's tempo.
+      for (const t of [ending.contact, ending.slide, ending.swap]) { const beats = (t - plan.end) / beat; expect(Math.abs(beats - Math.round(beats))).toBeLessThan(1e-6); }
+      loopBeats += Math.round((ending.next - plan.start) / beat);
+      expect(loopBeats % RHYTHM.beatsPerBar).toBe(0);
+      start = ending.next;
+      leadBeats = 0;
+      // The next plan has no lead-in: its demonstration is its start.
+      const next = createRoundPlan(0, step.pattern, step.bpm, start, leadBeats);
+      expect(next.demo).toBe(start);
     }
   });
 

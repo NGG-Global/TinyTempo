@@ -2,14 +2,15 @@
 
 An arcade survival mode on top of the road, opened by **clearing level 100**. One continuous
 musical session cycles through the acts the road has introduced by then: watch one rhythm,
-copy it, and two bars later a different act is on the stage with its own. Tempo and pattern
+copy it, and as that act's ending lands a different act is on the stage with its own —
+no rest is added between them. Tempo and pattern
 density climb in waves; three **Groove Lives** are the run's whole economy; the score is the
 time survived, kept locally and — once the Console has the leaderboard — posted to a Google
 Play Games *Time* leaderboard.
 
 | File | What it holds |
 | --- | --- |
-| `src/config/endless.ts` | The ruleset: unlock level, rules version and seed, tempo band, threshold ramp, lives, interlude, grids, the step cycle, milestones, the plausibility ceiling. |
+| `src/config/endless.ts` | The ruleset: unlock level, rules version and seed, tempo band, threshold ramp, lives, count-in, grids, the step cycle, milestones, the plausibility ceiling. |
 | `src/game/endless.ts` | The mode as decisions, pure: the unlock, the eligible pool, the step generator, the difficulty schedule, lives, the ranked time, milestones, formatting. |
 | `src/game/endlessProgress.ts` | The device's record per ruleset: best time, badges, run count. `tiny-tempo.endless.v1`. |
 | `src/scenes/EndlessScene.ts` | The run on screen: one loop, one act at a time, the turn block, the leave sheet, the result plaque. |
@@ -35,11 +36,16 @@ Play Games *Time* leaderboard.
   part of the ruleset.
 - **A step** is one act, one rhythm task — demonstration, then the player's response on the
   very next downbeat, judged by the level's own `RoundController`, judge and scorer — then
-  the act's own coda (its contact and hold, completing whole bars as `TaskSequence.ending`
-  requires), then **exactly two bars** of interlude, then the next act's demonstration on
-  the downbeat after them. The interlude is the next plan's lead-in: eight `count`/`ready`
-  cues on the grid, the face carrying two bar tiles and "Get ready" through the last, the
-  count-in's pips and "3, 2, 1, Go!" as a level has them. Nothing is scored in it.
+  the act's own coda — its contact, its hold and two slide beats, which complete one bar or
+  two (`TaskSequence.ending`) — and **nothing else**: the next act's demonstration starts
+  on the downbeat the coda's slide lands on, with no lead-in, exactly as one task follows
+  another inside a level. The coda is the only rest between acts. The outgoing act slides
+  out over the coda's slide beats, the incoming one is built on the swap beat and slides in
+  over the last beat, and its name ("Next", then the act's title) stays up through its
+  demonstration and clears on the player's downbeat. Its voices are synthesized as the
+  previous act resolves, under that coda, not on the swap beat. The run's only lead-in is
+  the four-beat count-in before the first act. (The first build put two bars of interlude
+  here; playtesting found it broke the pacing, and it was removed before release.)
 - **The sequence** is a pure function of `(seed, rulesVersion, index)`. Each step draws
   from its own stream in a fixed order — act, lap, pattern, grid — with these constraints:
   no act repeats within the last six, no pattern repeats back to back, the look (`lap`) is
@@ -63,8 +69,8 @@ Play Games *Time* leaderboard.
     taps. Triplets fit at 150 BPM. Sixteenths fit only under 137 BPM, which the ramp has left
     behind before they are allowed, so **in this ruleset sixteenths never appear**; the rule
     is kept so a change to the tempo band meets them as the ruleset change it is.
-  The tempo changes on the interlude's first downbeat, with the stems, and never inside a
-  step: a demonstration and its response are always at one tempo.
+  The tempo changes on the next act's first demonstration downbeat, with the stems, and
+  never inside a step: a demonstration and its response are always at one tempo.
 - **Groove Lives.** Three to start. A vignette below its bar costs exactly one and ends the
   streak. One at or above 95% extends the streak; the third in a row gives one life back if
   any is missing and resets the streak either way, so a full set banks nothing. A vignette
@@ -73,15 +79,15 @@ Play Games *Time* leaderboard.
   duplicate callback cannot take two.
 - **The ranked time** is `elapsedMs(runStart, runEnd)`: from the first demonstration
   downbeat (after the four-beat count-in, which is not counted) to the end of the fatal
-  response's bar, both grid times on the audio clock, as whole milliseconds. Every interlude
-  between counts; the fatal act's coda does not. The HUD reads the same clock each frame and
+  response's bar, both grid times on the audio clock, as whole milliseconds. Every act's coda
+  before it counts; the fatal act's own coda does not. The HUD reads the same clock each frame and
   truncates to tenths; the plaque shows hundredths.
 - **Milestones.** 120, 300 and 600 seconds earn a local badge once each, shown on the
   card and the plaque; the achievements of the same numbers mirror them where configured.
 - **Music.** The loop started on the count-in runs to the end of the run. It starts on the
   track's first stem with the metronome bar, at the first step's tempo; `advanceLayers`
   moves the stem count per scored act exactly as a level does; `setRate` and `setLayers`
-  are placed on the interlude's downbeat. The track is the unlock level's chapter
+  are placed on the next act's demonstration downbeat. The track is the unlock level's chapter
   (`trackForLevel(100)`), which under `TRACK_CYCLE = ['b']` is track B. Nothing restarts a
   source between acts; an act change is `RoundController.start` on the running grid. The
   act's coda is cut on the swap beat exactly as a level cuts it.
@@ -166,7 +172,7 @@ keeps, and a size check — a deliberate change, not a side effect of this one.
 ## Versioning the competition
 
 Anything in `src/config/endless.ts` is part of the ruleset the board ranks against: the
-seed, the tempo band and ramp, the threshold ramp, the lives, the interlude, the grid rules,
+seed, the tempo band and ramp, the threshold ramp, the lives, the step's shape, the grid rules,
 the cycle, the recent-acts window, the lap range, the milestones, and the pool (which
 follows `ROTATION` through level 100, so a change to the rotation below level 100 is a
 ruleset change too). Changing any of them:
@@ -182,6 +188,12 @@ ruleset change too). Changing any of them:
 `tests/endless.test.ts` fails on an unversioned change: the fixture pins the first forty
 steps of the shipped rules.
 
+**Rules version 1 is fixed at release, not before.** Removing the interlude changed the
+schedule — every planned start, and so the tempo, bar and tier each step reads — but it was
+made before Endless Mode reached any player, so it stayed version 1 and the fixture was
+regenerated. Any time on the Console board from before it was posted by a tester under the
+old pacing; reset the board's scores in the Console before release if any were posted.
+
 ## Analytics
 
 `ENDLESS_EVENTS` in `monetization/analytics.ts`, shaped like every other event and checked
@@ -196,6 +208,6 @@ player id, no tap, nothing high-cardinality.
 The 130→150 band, the five-minute ramp, 75→90, 95 for excellent, three for a recovery, and
 the 30% grid chance are the brief's starting values; the typical competent run of three to
 six minutes is a design hypothesis, not observed. The dump in `tests/fixtures/endless-rules-v1.json`
-is the auditable schedule: step 0 is 24 beats at 130 BPM (11.1 s), the bar reaches 90% at
-step 27 (about 300 s), and the ramp's last stretch alternates tier 4 challenges at 150 BPM
+is the auditable schedule: step 0 is 16 beats at 130 BPM (7.4 s), a step averages about
+7.9 s, the bar reaches 90% at step 41 (about 300 s), and the ramp's last stretch alternates tier 4 challenges at 150 BPM
 with tier 3 recoveries at 146. Every one of those is a ruleset change when it moves.
