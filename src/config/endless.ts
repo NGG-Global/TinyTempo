@@ -39,8 +39,6 @@ export const ENDLESS = {
    * either way — a full set banks nothing.
    */
   lives: { start: 3, max: 3, excellentAccuracy: 95, recoveryStreak: 3 },
-  /** Whole bars between one vignette's coda and the next's demonstration. Exactly this, always. */
-  interludeBars: 2,
   /** The unscored count-in before the first vignette. The clock starts on the demonstration after it. */
   countInBeats: 4,
   /**

@@ -114,12 +114,13 @@ it has landed. See `docs/STAR_GATES.md`.
 `scenes/EndlessScene.ts`, `docs/ENDLESS_MODE.md`). It opens when level 100 is *cleared*
 (`endlessUnlocked`, read from the road's save, stored nowhere) and costs nothing: no heart,
 no attempt, no ad. A run is a sequence of steps — one act, one rhythm task, the act's coda,
-then **exactly two bars** that are the next plan's lead-in — generated as a pure function of
+and **nothing else**: the next act's demonstration starts on the downbeat the coda's slide
+lands on, with no lead-in, as one task follows another in a level — generated as a pure function of
 `(seed, rulesVersion, index)` in bounded memory, from the pool of acts the rotation places
 on levels 1–100 (`eligibleActs`, read from `ROTATION`, pinned in
 `tests/fixtures/endless-rules-v1.json`). Tempo (130→150 BPM in even steps), the clear bar
 (75→90%, compared strictly against the unrounded accuracy) and the tier follow the *planned*
-clock, never the player, and change only on the interlude's downbeat with the stems. Three
+clock, never the player, and change only on the next act's demonstration downbeat with the stems. Three
 Groove Lives, moved once per act in `applyAccuracy`. The ranked time is the audio grid from
 the first demonstration downbeat to the fatal response's bar line; an interrupted run
 (background, orientation, a stall, lost audio) is **invalidated once** and records nothing.
@@ -1011,7 +1012,7 @@ src/
     TransferScene.ts   The save code: show it, copy it, restore from one
     SupportScene.ts    The address, and the details worth sending with it
     ScrapbookScene.ts  The keepsakes, a page per act, found or in silhouette
-    EndlessScene.ts    Endless Mode: one loop, one act at a time, two bars between, three lives
+    EndlessScene.ts    Endless Mode: one loop, one act at a time, coda straight into the next, three lives
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/

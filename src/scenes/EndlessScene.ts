@@ -18,7 +18,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
-import { beatsPlayed, countIn, handover, isLastRestBar, markFor, numeralStyle, restProgress, trackGeometry, turnCount, turnCountPose, type Mark, type RestProgress } from '@/game/beatTrack';
+import { beatsPlayed, countIn, handover, markFor, numeralStyle, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
 import {
   applyAccuracy, createEndlessSequence, elapsedMs, ENDLESS_RULES, formatSurvival, LIVES_START, MILESTONES,
   type EndlessLives, type EndlessRunSummary, type EndlessSequence, type EndlessStep,
@@ -47,7 +47,7 @@ import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive, settle, squash } from '@/ui/spring';
 import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
-import { easeInOutCubic, easeOut } from '@/vignettes/motion';
+import { easeOut } from '@/vignettes/motion';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap, type Vignette, type VignetteDefinition } from '@/vignettes/Vignette';
 
@@ -59,8 +59,8 @@ const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 type AbandonReason = 'user' | 'timing' | 'background' | 'orientation' | 'audio';
 
 /**
- * Endless Mode: one continuous musical session, one rhythm task per act, two bars between
- * acts, three Groove Lives, and a survival clock that is the audio clock's grid and nothing
+ * Endless Mode: one continuous musical session, one rhythm task per act, each act's coda
+ * running straight into the next act's demonstration, three Groove Lives, and a survival clock that is the audio clock's grid and nothing
  * else (`docs/ENDLESS_MODE.md`).
  *
  * The scene presents what `game/endless.ts` decides. It is deliberately not PlayScene: no
@@ -73,9 +73,9 @@ type AbandonReason = 'user' | 'timing' | 'background' | 'orientation' | 'audio';
  * Three rules that are easy to break from inside this file. **The music never restarts
  * between acts**: the loop started on the first count-in runs to the end of the run, its
  * rate and stems moved on bar lines only, and an act change is a plan placed on that grid.
- * **Nothing is scored between acts**: the two bars are the next plan's lead-in, so the
- * controller is idle through them, and the clock keeps counting because they are part of
- * surviving. **A run that is interrupted is not a run**: backgrounding, a stall, the wrong
+ * **Nothing is added between acts**: the outgoing act's coda — its contact, hold and slide,
+ * which complete whole bars — is the only rest, and the next act's demonstration starts on
+ * the downbeat the slide lands on, exactly as one task follows another inside a level. **A run that is interrupted is not a run**: backgrounding, a stall, the wrong
  * orientation or a lost audio context invalidates it, once, with nothing recorded or sent.
  */
 export class EndlessScene extends BaseScene {
@@ -88,7 +88,7 @@ export class EndlessScene extends BaseScene {
   /** The step on stage, and the act drawing it. */
   private step: EndlessStep | null = null;
   private act: { readonly definition: VignetteDefinition; readonly vignette: Vignette; readonly step: EndlessStep } | null = null;
-  /** The step after this one, drawn when this one resolves, so the interlude knows its act. */
+  /** The step after this one, drawn when this one resolves, so its act's voices are made during the coda. */
   private nextStep: EndlessStep | null = null;
   /** Each act's voices, synthesized once per scene life: the swap between acts pays no synthesis. */
   private sounds = new Map<string, VignetteSounds>();
@@ -107,7 +107,7 @@ export class EndlessScene extends BaseScene {
   private saveFailed = false;
   private postingNote = '';
   private layers = OPENING_LAYERS;
-  /** The beat-aligned slide between acts; `next` is the interlude's first downbeat. */
+  /** The beat-aligned slide between acts; `next` is the next act's demonstration downbeat. */
   private transition: { slide: number; swap: number; next: number; swapped: boolean; step: EndlessStep } | null = null;
   private finishUnlock = Infinity;
   private startRequest = 0;
@@ -126,7 +126,6 @@ export class EndlessScene extends BaseScene {
   private headlineY = 0;
   private headlineSize = 0;
   private caption!: Phaser.GameObjects.Text;
-  private restCall!: Phaser.GameObjects.Text;
   // The turn block
   private marks!: Phaser.GameObjects.Graphics;
   private roomDim!: Phaser.GameObjects.Image;
@@ -221,7 +220,6 @@ export class EndlessScene extends BaseScene {
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
-    this.restCall = display(this, '', { size: 40, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.sheet = this.add.graphics().setDepth(40).setVisible(false);
     this.sheetTitle = display(this, 'Leave this run?', { size: 40, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
     this.sheetNote = body(this, 'It ends here and is not ranked.', { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
@@ -311,8 +309,6 @@ export class EndlessScene extends BaseScene {
       resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * s, mix(this.ink, PALETTE.coral, heat));
     });
     this.turnCalled = null;
-    this.restCall.setPosition(safe.centerX, this.turnCallY);
-    resize(this.restCall, 40 * s, this.ink);
     this.roomDim.setPosition(full.centerX, (safe.top + safe.height * 0.42 + this.trackY) / 2)
       .setDisplaySize(full.width * 1.45, full.height * 1.55);
     this.placeSheet();
@@ -414,7 +410,6 @@ export class EndlessScene extends BaseScene {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
       resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * this.uiScale, mix(definition.ink, PALETTE.coral, heat));
     });
-    resize(this.restCall, 40 * this.uiScale, definition.ink);
   }
 
   private soundsFor(definition: VignetteDefinition): VignetteSounds {
@@ -423,7 +418,7 @@ export class EndlessScene extends BaseScene {
     return voices;
   }
 
-  /** One step's plan on the grid: its lead-in (the count-in, or the interlude), then the task. */
+  /** One step's plan on the grid: the run's count-in before the first, nothing before the rest, then the task. */
   private beginStep(step: EndlessStep, startAt: number, leadBeats: number): void {
     const audio = this.audio!;
     // The active route's Tap offset, taken here and nowhere mid-task (see PlayScene.beginPlan).
@@ -453,11 +448,12 @@ export class EndlessScene extends BaseScene {
     const now = this.now();
     this.act?.vignette.onPhase(phase, now);
     if (phase === 'prepare') {
-      // The count-in and the interlude name the act that is coming, as the map does.
+      // The act that is coming is named as it slides in, as the map names a stop. With no
+      // rest between acts that is a single beat, so the name stays up through the
+      // demonstration — which it describes — and goes on the player's downbeat.
       this.setCaption(this.vignettesScored === 0 ? 'First up' : 'Next');
       this.changeHeadline(this.act?.definition.title ?? '');
     }
-    if (phase === 'demonstrate') { this.setCaption(''); this.changeHeadline(''); }
     if (phase === 'respond') {
       this.setCaption('');
       this.changeHeadline('');
@@ -515,8 +511,8 @@ export class EndlessScene extends BaseScene {
   /**
    * One act resolved. The lives move exactly once here, from the unrounded accuracy against
    * the step's bar; the act plays its own coda, the stems answer the result, and either the
-   * next step is placed on the grid — the slide, the swap and two bars of interlude, as one
-   * plan — or the run is over and the clock stops on this response's last bar line.
+   * next step is placed on the grid — the slide and the swap, its demonstration on the
+   * downbeat the slide lands on — or the run is over and the clock stops on this response's last bar line.
    */
   private showResult(result: RoundResult): void {
     if (this.resultTaken || !this.step || !this.act || !this.audio || !this.controller?.plan) return;
@@ -552,6 +548,9 @@ export class EndlessScene extends BaseScene {
       return;
     }
     this.nextStep = this.sequence!.next();
+    // The next act's voices are synthesized now, under this act's coda, where nothing is
+    // judged, rather than at the swap a single beat before its first demonstration beat.
+    this.soundsFor(definitionForLap(VIGNETTES[this.nextStep.actIndex]!, this.nextStep.lap));
     this.audio.playFinish(ending.contact, finish, ending.next);
     this.transition = { ...ending, swapped: false, step: this.nextStep };
     const copy = finish === 'success' ? definition.success : finish === 'partial' && partial ? partial.copy : definition.rough;
@@ -567,12 +566,13 @@ export class EndlessScene extends BaseScene {
       // Read on the context clock, which the cues are scheduled against (see `canPlaceNextTask`).
       if (!canPlaceNextTask(this.audio.context.currentTime, transition.next)) { this.invalidate('timing'); return; }
       transition.swapped = true;
-      // The tempo and the stems move on the interlude's first downbeat, with the grid.
+      // The tempo and the stems move on the next act's first demonstration downbeat, with
+      // the grid, so a demonstration and its response are always at one tempo.
       this.audio.music.setRate(transition.step.bpm / MUSIC.sourceBpm, transition.next);
       this.audio.music.setLayers(this.layers, transition.next);
       // The incoming act is built now, slides in over the beat before `next`, and its plan
-      // leads in for exactly the interlude's bars before its demonstration.
-      this.beginStep(transition.step, transition.next, ENDLESS.interludeBars * RHYTHM.beatsPerBar);
+      // has no lead-in: its demonstration starts on `next`, as a level's next task does.
+      this.beginStep(transition.step, transition.next, 0);
     }
     if (transition && this.now() >= transition.next) this.transition = null;
     if (this.controller?.active) this.controller.tick(this.now(), performance.now());
@@ -819,7 +819,6 @@ export class EndlessScene extends BaseScene {
     if (!phase || phase === 'idle' || phase === 'paused' || this.plaqueShown) {
       this.roomDim.setAlpha(0);
       this.hideTurnCall();
-      this.restCall.setAlpha(0);
       return;
     }
     const { safe } = this.viewport;
@@ -836,24 +835,13 @@ export class EndlessScene extends BaseScene {
     const last = centres.at(-1) ?? 0;
     const span = last + radius + 34 * s;
     const beadSpan = last - (centres[0] ?? 0) + radius * 2;
-    // The interlude: the face carries its two bar tiles, from the plan's own lead cues.
-    const rest = phase === 'prepare' ? restProgress(plan, now, ENDLESS.interludeBars) : null;
-    const floor = rest ? TRACK.restWidth * 0.75 * s : 0;
-    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s), floor), safe.width - 48 * s);
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * s);
     const geo = blockGeometry(safe.centerX, this.trackY, width, s);
-    const beatSec = plan ? 60 / plan.bpm : 0.5;
-    const barAge = rest && rest.beat >= 0 ? now - (rest.at - rest.beat * beatSec) : 0;
-    const lastBar = isLastRestBar(rest);
-    this.setRestWords(rest);
     drawBlock(g, geo, s, {
       centres, socketRadius: radius, played: beatsPlayed(plan, now), marks, turn,
       struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: this.struckPerfect },
       rattle, still, ghost: null, ink: this.ink, paper,
       landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
-      rest: rest && {
-        bar: rest.bar, beat: rest.beat, bars: rest.bars, pressAge: now - rest.at, barAge,
-        returning: !lastBar ? 0 : still ? 1 : easeInOutCubic(Math.min(1, barAge / (beatSec * 0.9))),
-      },
     });
     const pips = countIn(plan, now);
     if (pips !== null) {
@@ -867,13 +855,6 @@ export class EndlessScene extends BaseScene {
     this.drawTurnCall(plan, now, paper);
     this.drawVerdictPill(now, paper);
     this.roomDim.setAlpha(turn.yours * 0.5);
-  }
-
-  /** The line under the face through the interlude: bars to go, then "Get ready". */
-  private setRestWords(rest: RestProgress | null): void {
-    const caption = !rest ? '' : isLastRestBar(rest) ? 'Get ready' : `${rest.bars - rest.bar} bars`;
-    if (this.restCall.text !== caption) this.restCall.setText(caption);
-    this.restCall.setAlpha(caption === '' ? 0 : 1);
   }
 
   private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number } | null {
@@ -980,7 +961,6 @@ export class EndlessScene extends BaseScene {
     this.hideSheet();
     this.hideTurnCall();
     this.roomDim.setAlpha(0);
-    this.restCall.setAlpha(0);
     this.verdict.setAlpha(0);
     this.changeHeadline('');
     this.setCaption('');

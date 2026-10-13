@@ -57,7 +57,7 @@ export interface EndlessStep {
   readonly threshold: number;
   /** Planned seconds into the run at this step's demonstration downbeat. */
   readonly plannedStartSec: number;
-  /** Planned seconds this step takes: demonstration, response, the act's coda and the interlude after. */
+  /** Planned seconds this step takes: demonstration, response and the act's coda, to the next act's downbeat. */
   readonly durationSec: number;
 }
 
@@ -138,12 +138,14 @@ function phraseBeats(pattern: Pattern): number {
 }
 
 /**
- * Whole beats from a step's demonstration downbeat to the next step's: the phrase twice,
+ * Whole beats from a step's demonstration downbeat to the next step's: the phrase twice and
  * the act's ending — contact, its hold and two slide beats, which complete whole bars
- * (`TaskSequence.ending`) — and the interlude's bars.
+ * (`TaskSequence.ending`). Nothing else: the next act's demonstration starts on the downbeat
+ * the coda's slide lands on, as one task follows another inside a level. The coda is the
+ * only rest between acts.
  */
 export function stepBeats(pattern: Pattern, endingHoldBeats: number): number {
-  return phraseBeats(pattern) * 2 + 3 + endingHoldBeats + ENDLESS.interludeBars * RHYTHM.beatsPerBar;
+  return phraseBeats(pattern) * 2 + 3 + endingHoldBeats;
 }
 
 /** What the generator carries from one step to the next. Bounded: `recentActs` acts and one pattern. */
@@ -279,7 +281,7 @@ export function applyAccuracy(state: EndlessLives, accuracy: number, threshold: 
 /**
  * The ranked time: from the first demonstration downbeat to the end of the fatal
  * vignette's response bar, both on the audio clock's grid, as whole milliseconds. Every
- * interlude in between counts; the count-in before the first downbeat does not.
+ * act's coda in between counts; the count-in before the first downbeat does not.
  */
 export function elapsedMs(startSec: number, endSec: number): number {
   if (!Number.isFinite(startSec) || !Number.isFinite(endSec) || endSec < startSec) throw new Error('A run ends after it starts.');

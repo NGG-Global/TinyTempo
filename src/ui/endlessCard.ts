@@ -108,7 +108,7 @@ export class EndlessCard {
     const record = facts.record;
     this.title.setText(facts.unlocked ? (facts.justUnlocked ? 'Unlocked!' : 'How long can you last?') : `Clear level ${ENDLESS.unlockLevel}`);
     this.note.setText(facts.unlocked
-      ? `One rhythm per act, two bars between. ${ENDLESS.lives.start} Groove Lives; a round under the bar costs one.`
+      ? `One rhythm per act, straight into the next. ${ENDLESS.lives.start} Groove Lives; a round under the bar costs one.`
       : `Finish level ${ENDLESS.unlockLevel} on the road to open it. ${Math.min(facts.cleared, ENDLESS.unlockLevel)} of ${ENDLESS.unlockLevel} cleared.`);
     this.best.setText(record.validRuns > 0 ? formatSurvival(record.bestMs, true) : '—');
     this.bestNote.setText(record.validRuns > 0 ? `${record.bestVignettes} acts · ${record.bestBpm} BPM · ${record.validRuns} ${record.validRuns === 1 ? 'run' : 'runs'}` : 'No run yet');
