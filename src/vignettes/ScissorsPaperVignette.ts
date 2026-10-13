@@ -151,7 +151,10 @@ export class ScissorsPaperVignette implements Vignette {
   public layout(viewport: Viewport): void {
     const { safe } = viewport;
     const uiScale = Math.min(safe.width / 720, safe.height / 1150);
-    const top = safe.top + 320 * uiScale, bottom = safe.bottom - 330 * uiScale;
+    // 340 rather than the household acts' 320: this act's intro wraps to two full lines
+    // ("A little / paper magic."), and on a short frame — a tablet, a 16:9 phone — where the
+    // mat is placed at this line, the line's descenders sat on the mat's top edge.
+    const top = safe.top + 340 * uiScale, bottom = safe.bottom - 330 * uiScale;
     this.scale = Math.min(safe.width / 790, safe.height / 1210, (bottom - top) / (MAT.height + 21));
     this.baseX = safe.centerX;
     this.baseY = Math.max(top - MAT.top * this.scale, Math.min(safe.top + safe.height * 0.53, bottom - (MAT.top + MAT.height + 21) * this.scale));

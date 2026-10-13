@@ -117,9 +117,15 @@ export interface AppReviewOptions {
   readonly launchWaitMs?: number;
 }
 
+/**
+ * Every control on the result screen is inert while Continue waits, so the launch's wait
+ * is time the game looks frozen. It was 20 s, which on a device where Play never answers
+ * is exactly "the game freezes when a level ends"; 3 s is long enough for Play to take the
+ * screen when it is going to, and the map loads under its sheet when it is slower.
+ */
 export const REVIEW_WAIT = {
   prepareMs: 1500,
-  launchMs: 20_000,
+  launchMs: 3_000,
 } as const;
 
 /** Resolves to `fallback` if `promise` has not settled within `ms`. */

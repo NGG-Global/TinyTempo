@@ -13,6 +13,7 @@ import { shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
+import { floorSpan } from './floorSpan';
 import { contactGive } from '@/ui/spring';
 import { anticipation, clamp01, easeOut, HAMMER_MOTION, KNOCK, knockDepth, nailHeight, recoil } from './hammerMotion';
 import { hammerLook, type HammerLook } from './hammerLooks';
@@ -21,6 +22,13 @@ import { isPlayerTurn, turnOpen } from './motion';
 
 /** How far above the bench the hammer's raised head reaches, in stage units, with a little air. */
 const HAMMER_REACH = 520;
+/**
+ * In a level, how far below the frame's top the raised head may reach, in UI units: the
+ * band every household act starts at (`HouseholdVignette.layout`), under the level's
+ * two-line intro headline. On a tall phone the hammer never comes near it. On a tablet,
+ * where the act scales to the frame's height, the head crossed the headline's second line.
+ */
+const PLAY_HEADROOM = 320;
 /** How long the nail takes to move to a new depth after a blow. */
 const DEPTH_EASE_SEC = 0.085;
 
@@ -158,9 +166,18 @@ export class HammerNailVignette implements Vignette {
     this.baseY = benchY ?? safe.top + safe.height * 0.68;
     // The cover reserves the sign above the tool; gameplay retains its large pose.
     const scale = this.cover ? Math.min(safe.width / 720, safe.height / 1550) : Math.min(safe.width / 650, safe.height / 1000);
-    this.scale = headroom === undefined ? scale : Math.max(0.3, Math.min(scale, (this.baseY - headroom) / HAMMER_REACH));
+    const ui = Math.min(safe.width / 720, safe.height / 1150);
+    const room = headroom ?? (this.cover ? undefined : safe.top + PLAY_HEADROOM * ui);
+    this.scale = room === undefined ? scale : Math.max(0.3, Math.min(scale, (this.baseY - room) / HAMMER_REACH));
     this.baseX = safe.centerX - 350 * this.scale;
     this.stage.setPosition(this.baseX, this.baseY).setScale(this.scale);
+    // Only the floor this frame can reveal: under the canvas renderer the sprite owns a
+    // canvas its full size, and a fixed 5700 x 2500 one was 57 MB on the title screen.
+    const floor = floorSpan(viewport.full, this.baseX, this.baseY, this.scale);
+    if (this.bench.x !== floor.x || this.bench.width !== floor.width || this.bench.height !== floor.height) {
+      // The grain stays where it lay when the sprite started at -2500.
+      this.bench.setX(floor.x).setSize(floor.width, floor.height).setTilePosition((floor.x + 2500) / this.bench.tileScaleX, 0);
+    }
     this.backdrop.layout(viewport);
     const wood = faces(this.look.wood);
     const g = this.wood.clear();

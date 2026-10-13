@@ -16,7 +16,7 @@ import { LAYOUT } from '@/config/design';
 import { RHYTHM } from '@/config/rhythm';
 import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
-import { RoundController, pauseShouldShowSummary, type Phase } from '@/game/RoundController';
+import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
 import { addRound, EMPTY_TIMING, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
@@ -455,6 +455,15 @@ export class PlayScene extends BaseScene {
   private attempts = 0;
   private demoCount = 0;
   private finishUnlock = Infinity;
+  /**
+   * When `finishUnlock` falls on the wall clock (`performance.now()`), read as the coda
+   * starts: the result opens from this if the heard clock stops short of it (`resultDue`).
+   */
+  private finishWallMs = Infinity;
+  /** When the AudioContext was first seen outside `running`, or null while it runs. */
+  private suspendedSince: number | null = null;
+  /** The stalled-clock report goes out once per visit; one freeze is one report. */
+  private stallReported = false;
   private startRequest = 0;
   private disposed = false;
   private starting = false;
@@ -525,6 +534,9 @@ export class PlayScene extends BaseScene {
     this.transition = null;
     this.replay = null;
     this.replayOffset = null;
+    this.finishWallMs = Infinity;
+    this.suspendedSince = null;
+    this.stallReported = false;
     const data = this.sys.settings.data as { level?: number; autoStart?: boolean } | undefined;
     const requested = data?.level ?? (import.meta.env.DEV ? Number(new URLSearchParams(location.search).get('level')) : 0);
     this.spec = levelSpec(Number.isInteger(requested) && requested >= 1 ? requested : 1);
@@ -1026,7 +1038,7 @@ export class PlayScene extends BaseScene {
     this.vignette.pause();
     this.accuracy.setText('');
     this.setAction('');
-    this.finishUnlock = Infinity;
+    this.finishUnlock = this.finishWallMs = Infinity;
     this.demoCount = 0;
     if (this.blocked()) return;
     this.starting = true;
@@ -1296,7 +1308,7 @@ export class PlayScene extends BaseScene {
     syncClockCalibration(this.audio!.clock);
     this.attempts++;
     this.demoCount = 0;
-    this.finishUnlock = Infinity;
+    this.finishUnlock = this.finishWallMs = Infinity;
     this.accuracy.setText('');
     this.outcomes = pattern.hits.map(() => 'pending');
     this.heldJudgements = [];
@@ -1409,10 +1421,20 @@ export class PlayScene extends BaseScene {
     if (this.audio.context.state !== 'running') {
       // A Bluetooth rebuffer can suspend the context for a frame when the player first
       // sounds. Interrupting here ended the response while the demonstration — whose
-      // voices were already scheduled — had played in time.
+      // voices were already scheduled — had played in time. A context that stays out is
+      // another thing: every clock the level runs on has stopped, and only a gesture
+      // brings it back, so the level pauses and Resume is that gesture.
       this.audio.recover();
+      const wall = performance.now();
+      this.suspendedSince ??= wall;
+      if (suspendedTooLong(this.suspendedSince, wall) && !this.summaryShown && this.controller !== null && this.controller.phase !== 'idle' && this.controller.phase !== 'paused') {
+        breadcrumb('audio suspended', { state: this.audio.context.state, level: this.spec.level });
+        this.suspendedSince = null;
+        this.interrupt();
+      }
       return;
     }
+    this.suspendedSince = null;
     this.audio.clock.refresh();
     if (this.teach) this.teachTick(this.now());
     const transition = this.transition;
@@ -1640,7 +1662,10 @@ export class PlayScene extends BaseScene {
     const verdict = this.verdictPose(now);
     if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
     else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
-    if (this.controller?.phase === 'result' && !this.transition && now >= this.finishUnlock && !this.summaryShown) this.showSummary();
+    if (this.controller?.phase === 'result' && !this.transition && !this.summaryShown && resultDue(now, this.finishUnlock, performance.now(), this.finishWallMs)) {
+      if (now < this.finishUnlock) this.reportStalledClock(now);
+      this.showSummary();
+    }
     if (this.debugMode) {
       const music = this.audio?.music;
       this.debug.setText(`${this.definition.id} L${this.spec.level} t${this.taskIndex + 1}/${this.spec.tasks.length} ${this.task.bpm}bpm tier${this.task.tier} clear${this.spec.clearAccuracy} rate${music?.playbackRate ?? 1} attempt ${this.attempts} · ${this.controller?.phase ?? 'idle'}\nvoices ${this.audio?.activeSources ?? 0} · handlers ${this.input.listenerCount(Phaser.Input.Events.POINTER_DOWN)} · objects ${this.children.length}\n${this.controller?.result?.accuracy.toFixed(0) ?? '—'}% · ${this.audio?.clock.mode ?? 'locked'} · lag ${this.audio?.clock.reportedLagMs ?? 0}+${this.audio?.clock.calibrationMs ?? 0} ${this.audio?.clock.tapVoiceLate ? 'grid' : 'tap'} · ${this.game.loop.actualFps.toFixed(0)} fps\n${this.lastJudgement}\nGroove ${this.groove.level} peak ${this.groove.peak} · scored ${this.groove.scoredTasks} flawless ${this.groove.flawlessTasks} · mastered ${this.mastered} preview ${this.groovePreview ?? 'off'}\nmusic ${music?.trackId ?? '—'} ${music?.activeLayers ?? 0}/${music?.activeSources ?? 0}${music?.metronome ? ' +click' : ''} · run ${music?.playbackGeneration ?? 0} · loops ${music?.completedLoops ?? 0}\nstart ${music?.startTime?.toFixed(3) ?? '—'} · length ${music?.duration.toFixed(6) ?? '—'}\ngain ${(music?.gain ?? 0).toFixed(3)} · lead ${music?.leadInSeconds.toFixed(3) ?? '—'}`);
@@ -2158,6 +2183,7 @@ export class PlayScene extends BaseScene {
     // there is no next task, and it rings out under the summary.
     this.audio!.playFinish(contact, outcome, last ? undefined : ending.next);
     this.finishUnlock = contact + this.definition.endingSec;
+    this.finishWallMs = performance.now() + (this.finishUnlock - this.now()) * 1000;
     this.transition = last ? null : { ...ending, swapped: false };
     if (last) {
       this.audio!.music.setRate(1, ending.next); // back to the source tempo on the next downbeat
@@ -2239,6 +2265,25 @@ export class PlayScene extends BaseScene {
       this.heartRefunded = finished.refunded;
       saveHealth(finished.health);
     }
+  }
+  /**
+   * The result opened on the wall clock because the heard clock stopped short of the coda's
+   * end. Nothing is lost — the level was scored and saved — but a device whose output clock
+   * stalls is otherwise invisible from outside, and it is the freeze players reported.
+   */
+  private reportStalledClock(now: number): void {
+    if (this.stallReported) return;
+    this.stallReported = true;
+    const context = this.audio?.context;
+    reportError(new Error('Result opened on the wall clock: the audio clock stalled'), {
+      context: {
+        level: this.spec.level,
+        behindMs: Math.round((this.finishUnlock - now) * 1000),
+        clock: this.audio?.clock.mode ?? 'none',
+        state: context?.state ?? 'none',
+        reportedLagMs: this.audio?.clock.reportedLagMs ?? 0,
+      },
+    });
   }
   private showSummary(): void {
     if (this.summaryShown) return;

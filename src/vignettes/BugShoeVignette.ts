@@ -14,6 +14,7 @@ import type { Vignette } from './Vignette';
 import { bugLook, type BugLook } from './bugLooks';
 import { handoverAt } from '@/game/beatTrack';
 import { clamp01, easeOut, isPlayerTurn, turnOpen } from './motion';
+import { floorSpan } from './floorSpan';
 
 
 /**
@@ -131,6 +132,13 @@ export class BugShoeVignette implements Vignette {
     this.scale = Math.min(safe.width / 720, safe.height / 1080);
     this.baseX = safe.centerX; this.baseY = safe.top + safe.height * 0.7;
     this.stage.setPosition(this.baseX, this.baseY).setScale(this.scale);
+    // Only the floor this frame can reveal: under the canvas renderer the sprite owns a
+    // canvas its full size, and a fixed 5000 x 2500 one was 50 MB (`vignettes/floorSpan.ts`).
+    const floor = floorSpan(viewport.full, this.baseX, this.baseY, this.scale);
+    if (this.matting.x !== floor.x || this.matting.width !== floor.width || this.matting.height !== floor.height) {
+      // The grain stays where it lay when the sprite started at -2500.
+      this.matting.setX(floor.x).setSize(floor.width, floor.height).setTilePosition((floor.x + 2500) / this.matting.tileScaleX, 0);
+    }
     this.backdrop.layout(viewport);
     // The ground colour goes down first, the weave over it, the grout over that.
     const tile = faces(GARDEN.tile);

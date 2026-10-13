@@ -84,9 +84,12 @@ mid-run sheet still go through `leaveForMap` and never see a review. Continue:
    the screen has usually been up for many seconds, and past it the player goes
    to the map without a dialog rather than looking at a button that did nothing;
 2. records the attempt, then calls `launchReviewFlow` and waits for Play to
-   hand control back, up to `REVIEW_WAIT.launchMs` (20 s) — a native task that
+   hand control back, up to `REVIEW_WAIT.launchMs` (3 s) — a native task that
    never completes would otherwise hold the player on the result screen for
-   good; if Play's own sheet is up it stays up over the map, which is harmless;
+   good; if Play's own sheet is up it stays up over the map, which is harmless.
+   It was 20 s, and since every control is inert while Continue waits, a device
+   whose Play never answered sat on a frozen-looking result for twenty seconds
+   (`docs/TABLETS.md`);
 3. goes to the map, through the same `leaveForMap` every other exit uses.
 
 Step 3 runs on every branch. Play Store missing, the API unavailable, a non-Play

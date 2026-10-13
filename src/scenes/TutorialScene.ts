@@ -10,7 +10,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, numeralStyle, pulseBall, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
-import { RoundController, type Phase } from '@/game/RoundController';
+import { RoundController, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach, type JudgedStep } from '@/game/TutorialRun';
 import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
 import { TapInput, type Tap } from '@/input/TapInput';
@@ -98,6 +98,8 @@ export class TutorialScene extends BaseScene {
   private rattleAt = -Infinity;
   private pressedAt = -Infinity;
   private lastFrame = 0;
+  /** When the AudioContext was first seen outside `running`, or null while it runs. */
+  private suspendedSince: number | null = null;
   private lastCopy = '';
 
   public constructor() { super(SceneKey.Tutorial); }
@@ -111,6 +113,7 @@ export class TutorialScene extends BaseScene {
     this.watching = null;
     this.marks = [];
     this.started = this.busy = this.paused = this.disposed = false;
+    this.suspendedSince = null;
     this.lastCopy = '';
     this.pressedAt = this.struckAt = this.rattleAt = -Infinity;
     this.struckIndex = -1;
@@ -331,6 +334,13 @@ export class TutorialScene extends BaseScene {
     // pass has the controller's own stall guard.
     if (this.started && !this.paused && (this.blocked() || (this.watching && frame - this.lastFrame > 500))) this.interrupt();
     this.lastFrame = frame;
+    // A context that stays suspended stops every clock the lesson runs on, and only a
+    // gesture brings it back: pause rather than stand still with nothing to tap.
+    this.suspendedSince = this.audio.context.state === 'running' ? null : this.suspendedSince ?? frame;
+    if (this.started && !this.paused && suspendedTooLong(this.suspendedSince, frame)) {
+      this.suspendedSince = null;
+      this.interrupt();
+    }
     const now = this.now();
     if (this.started && !this.paused && !this.busy) {
       if (this.watching) this.watchTick(now);

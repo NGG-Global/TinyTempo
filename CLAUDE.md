@@ -567,6 +567,12 @@ reading — milliseconds through a speaker, 200–400 ms through Bluetooth. A de
 one clock for a tick that arrived on the other charges that latency to the level: the task
 change did exactly that, and interrupted every level on a headset a beat before the next
 task. `canPlaceNextTask` is that deadline now, and it is the next task's own downbeat.
+**And nothing at a level's end may wait on the audio clock alone.** The result opens when the
+heard clock reaches the last coda's end, and also `RHYTHM.resultGraceMs` after the wall clock
+says it ended (`resultDue`), with a report when it had to; a context that stays suspended past
+`RHYTHM.suspendedPauseMs` pauses the level (`suspendedTooLong`) rather than standing still with
+nothing to tap; and Continue waits on Play's review for 3 s at most. Each was a way to freeze a
+finished level, which is what an Android tablet reported. See `docs/TABLETS.md`.
 
 **Whose turn it is is an object at the thumb, not a word at the top.** `ui/turnBlock.ts`
 draws two rows sharing one set of column centres — the demonstration's recessed shelf above,
@@ -1058,6 +1064,7 @@ src/
     registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
     rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
     staging.ts         The household shelf and card light: geometry pure, drawn once per layout
+    floorSpan.ts       How much floor an open-table act lays: the frame and a slide either side; pure
     Vignette.ts        The contract a vignette implements
     *Vignette.ts       One per act: all geometry, palette and motion
     *Motion.ts         Pure curves, no Phaser import, unit-tested under node
@@ -1232,20 +1239,25 @@ nagged — *and* a display whose shorter side is under 600 CSS pixels.
 
 That last term is the tablet rule, and it follows the platform rather than fighting it.
 **Android ignores an activity's `screenOrientation` on a display of 600dp or more for an
-app targeting API 36**, so a tablet can be held in landscape and the app has no say. The
-manifest keeps `android:screenOrientation="portrait"` regardless: below 600dp the platform
-still enforces it, which is the handset case, and it is what keeps older Android versions
-portrait-locked everywhere. Without the tablet term the game asked a tablet player to
-rotate back — something the OS would not let them do — and the two `blocked()` checks
-stopped the level outright.
+app targeting API 36 — unless the app is a game.** Games are the documented exception
+(`android:appCategory`), so the manifest declares `android:appCategory="game"` and keeps
+`android:screenOrientation="portrait"`: the Android app is portrait on every phone and tablet,
+and `scripts/check-android-config.mjs` warns if the category is ever dropped. Before that, a
+tablet held sideways ran every portrait screen at 2048x1280. A tablet can still be landscape
+in a browser, a freeform or split-screen window, or by the player's own aspect-ratio setting,
+and there the game must run wide rather than ask for something the OS will not do: without
+the tablet term the prompt asked exactly that, and the two `blocked()` checks stopped the
+level outright. See `docs/TABLETS.md`.
 
 600 CSS pixels is the same measurement Android makes in dp: both take the shorter edge.
 Game units are not, since the scaling model makes them a function of the design box and
 the aspect ratio, so `viewport` cannot answer a question about the physical device.
 
-A tablet in landscape is wide — a 4:3 tablet gives a logical box near 1707x1280 — and every
-screen is laid out from a portrait design box. It adapts because `layout()` is idempotent
-and reruns on resize, but it has not been looked at on a real tablet.
+A tablet in landscape is wide — a 4:3 tablet gives a logical box near 1707x1280 and a 16:10
+one 2048x1280 — and every screen is laid out from a portrait design box. It adapts because
+`layout()` is idempotent and reruns on resize, and every screen was opened and rotated on
+eight emulated tablets without an error, but it centres a portrait column and the map holds
+2.5x a phone's textures. It has not been looked at on a real tablet.
 
 ## Style
 

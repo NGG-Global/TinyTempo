@@ -158,6 +158,11 @@ if (!manifest.includes('com.google.android.gms.games.APP_ID')) {
   notes.push('AndroidManifest.xml has no com.google.android.gms.games.APP_ID meta-data, so the\n'
     + '    Games SDK has no project to authenticate against. See docs/PLAY_GAMES.md.');
 }
+if (!manifest.includes('android:appCategory="game"')) {
+  notes.push('AndroidManifest.xml does not declare android:appCategory="game", so Android 16 ignores\n'
+    + '    the portrait lock on every tablet and the game runs sideways at 2048 x 1280. Games are\n'
+    + '    the documented exception. See docs/TABLETS.md.');
+}
 if (!manifest.includes('android:name=".TinyTempoApplication"')) {
   notes.push('AndroidManifest.xml does not name .TinyTempoApplication, so PlayGamesSdk.initialize\n'
     + '    never runs and authentication silently never happens.');
