@@ -44,10 +44,24 @@ player never gets to while a bar is playing.
 
 ## What it is now
 
-Three passes on the real grid, all drawn with the level's own block and its own count,
-and none with a pause between the hammer's bar and the player's. Every pass runs the same
-cycle level 1's first-run pass plays, at 72 BPM: one counted bar, the hammer's bar, the
-count, the answer.
+Two passes on the real grid, both drawn with the level's own block and its own count,
+and neither with a pause between the hammer's bar and the player's — and the first is the
+player's thumb, not their eyes. Every pass runs the same cycle level 1's first-run pass
+plays, at 72 BPM: one counted bar, the hammer's bar, the count, the answer.
+
+**The first pass is tapped along, not watched.** It used to be a watched pass, then a
+tapped-along one, then one on their own: three passes, about ten seconds each, and on a
+fresh install the music's six stems decoded in front of all of it, so the first scored tap
+came a minute or more after launch. Now the lesson opens on tapping along, with the answer
+voiced on the grid under the thumb, and its first judged tap is due about 7.3 s after the
+lesson opens (`TUTORIAL.leadSec` plus one counted bar and the hammer's bar at 72 BPM,
+pinned under 8 s by the tests). A first PLAY no longer waits for the loop's stems either:
+the lesson hushes the music and plays none of it, so `MenuScene.play` starts the load and
+goes straight to the lesson, and the map's bed and level 1 wait on that same pending load
+if it has not finished. The budget is **about thirty seconds from launch to the first
+scored tap** on a fresh install; `tutorial_started.since_launch_ms` plus the time to the
+first `tutorial_step_ended` measures it on real devices. The watched pass is still there,
+behind *Watch again*, for a player who wants to see the whole cycle first.
 
 **The ball.** User testing after the count was added said the same thing again: players
 could not tell that their turn starts the beat after the hammer's last. The count says
@@ -61,20 +75,19 @@ yours. The words follow it: *Watch the ball hop along the hammer's row*, *3, 2, 
 the ball lands in your row*. And the fact first players miss is said outright, more than
 once, before the player is ever judged: **no pause**.
 
-1. **Watch.** The game plays both halves. A sign above names each moment as it happens:
-   *Listen*, *Their turn*, **Count down** on the beat the "3" strikes — "3, 2, 1 — and
-   the game taps on Go!" — *Your turn* on the downbeat, and *That's the whole game* at
-   the end. A drawn finger taps beside the face during the answer. The sign takes the
-   side's colour — timber for the hammer's turn, coral for the player's, the mix through
-   the count — so the sign and the face agree.
-2. **Tap along.** The same cycle, judged by `RoundController`, with every target voiced
-   on the grid (`gridAction`, the same thing a laggy output route turns on for every
-   act): the hammer sounds the answer and the player taps with it, so the downbeat is
-   felt under the thumb before it has to be found alone. One judged hit passes
-   (`TUTORIAL.alongHits`), because a single hit is proof the downbeat was found and two
-   would hold a player in the scaffold who is ready to leave it. The verdict is *With it
-   — now without it*, and the coral block reads **On your own**.
-3. **On your own.** The same cycle, with nothing voiced for the player: what passes here
+1. **Tap along** (`1 / 2`). The cycle, judged by `RoundController`, with every target
+   voiced on the grid (`gridAction`, the same thing a laggy output route turns on for
+   every act): the hammer sounds the answer and the player taps with it, so the downbeat
+   is felt under the thumb before it has to be found alone. Being the first pass, its
+   words say what the rows are: *Listen — the hammer first, on Go! you tap with it*,
+   *Their turn — watch the ball hop along the hammer's row*, **Count down** on the beat
+   the "3" strikes, *Your turn — tap with the hammer*. The sign takes the side's colour —
+   timber for the hammer's turn, coral for the player's, the mix through the count — so
+   the sign and the face agree. One judged hit passes (`TUTORIAL.alongHits`), because a
+   single hit is proof the downbeat was found and two would hold a player in the scaffold
+   who is ready to leave it. The verdict is *With it — now without it*, and the coral
+   block reads **On your own**.
+2. **On your own** (`2 / 2`). The same cycle, with nothing voiced for the player: what passes here
    is what passes in a level. Two judged hits of the three is a pass. A miss is named for
    what it was rather than scored:
    - **Too early** — every tap landed in the hammer's turn. *Wait for Go!*
@@ -89,6 +102,10 @@ once, before the player is ever judged: **no pause**.
    same pass again. After four judged passes that did not clear, counting the tap-along
    ones, *Let's play* is offered instead, so nobody is held in the lesson. *Skip* is there
    throughout, and *Watch again* whenever a pass is over.
+
+**Watch again** plays the old first pass: the game plays both halves, with *That's the
+whole game* at the end and a drawn finger tapping beside the face during the answer. It is
+unnumbered (`WATCH`), judges nothing, and ends on **Tap along**.
 
 **A tap in the hammer's turn is named as it lands.** On either judged pass, a tap before
 the player's window makes the rows shake, as before, and now also turns the sign to
@@ -128,12 +145,18 @@ read while a bar is playing, from the far end of the screen.
 
 ## What it does not do
 
-- It does not judge the watched pass, score anything, or spend anything. No heart, no
-  progress, no analytics event beyond the visit's start and how it ended.
+- It does not judge the watched pass, score anything, or spend anything. No heart and no
+  progress. It reports the visit's start and how it ended, and each pass's start and end
+  (`tutorial_step_started`, `tutorial_step_ended` with the verdict), so the funnel shows
+  the step a player left on even when they left by closing the app.
 - It does not teach with a pause. The one place the loop waits is the `TUTORIAL.leadSec`
   grace before each pass's count-in, so the count is whole.
-- It does not replace level 1's first-run pass or its guiding ring. Those are still the
-  in-level teach for a player who skipped this; the tutorial is the version with words.
+- It does not show level 1's first-run pass again. Finishing the lesson — *Let's play*,
+  passed or offered — marks that demonstration seen (`markDemonstrationSeen`), since the
+  lesson has just played the same cycle; before this a player who passed it watched the
+  loop a fourth time, at a third tempo, before their first scored tap. A *Skip* does not
+  mark it: a player who skipped has seen nothing, and level 1's pass and its guiding ring
+  are their teach.
 - It does not add a sound to the count. The level's count has no voice, for the reason
   `docs/TURN_CUE.md` gives — a second pulse under the demonstration's own beats — and the
   lesson's count is the level's.
@@ -150,13 +173,13 @@ the lesson is *How to play* on the title screen after that rather than a gate in
 every Play — which is what it was while only `complete` counted. A save code carries
 `complete` alone (`tutorialComplete`), as before. The lesson's own state is a
 `TutorialRun` per visit and is not stored. `tutorial_skipped` reports the step it was
-skipped from — `watch`, `along`, `try` or `done`.
+skipped from — `along`, `try`, `watch` or `done` — and a visit opens on `along`.
 
 ## Files
 
 | File | What it holds |
 | --- | --- |
-| `game/TutorialRun.ts` | `TUTORIAL`, the three-pass model, the verdicts, the re-scaffold, the nudge, `momentOf`, `coach`; no Phaser |
+| `game/TutorialRun.ts` | `TUTORIAL`, the two-pass model and the watched replay, the verdicts, the re-scaffold, the nudge, `momentOf`, `coach`; no Phaser |
 | `game/beatTrack.ts` | `pulseBall`: where the ball is at any moment of a plan; `numeralStyle`: how each numeral is dressed |
 | `scenes/TutorialScene.ts` | The stage: hammer act, the level's block with labels, pointer and count, the sign, the controller |
-| `tests/tutorial.test.ts` | Moments against the count, verdicts from judgements, the nudge, completion storage |
+| `tests/tutorial.test.ts` | Moments against the count, verdicts from judgements, the nudge, completion storage, the tap-along opening and its timing |

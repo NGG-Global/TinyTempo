@@ -79,7 +79,7 @@ describe('the finale’s rules are every level’s', () => {
     }
   });
 
-  it('costs one heart on the frontier, none on a replay, and refunds on three stars — like any level', () => {
+  it('costs one heart on the frontier, none on a replay, and refunds on two stars — like any level', () => {
     const level = 2 * PROGRESSION.areaSize;
     const ordinary = level - 1;
     for (const at of [level, ordinary]) {
@@ -91,7 +91,8 @@ describe('the finale’s rules are every level’s', () => {
       // Resume and a free restart are the same attempt: still one heart. A paid restart is a new id.
       expect(beginAttempt(begun.health, progress, at, `a${at}`, 0).health.hearts).toBe(HEALTH.max - 1);
       expect(finishAttempt(begun.health, `a${at}`, 3, 0)).toMatchObject({ refunded: true });
-      expect(finishAttempt(begun.health, `a${at}`, 2, 0).health.hearts).toBe(HEALTH.max - 1);
+      expect(finishAttempt(begun.health, `a${at}`, 2, 0)).toMatchObject({ refunded: true });
+      expect(finishAttempt(begun.health, `a${at}`, 1, 0).health.hearts).toBe(HEALTH.max - 1);
     }
     // A finished finale replays for free, exactly as a finished level does.
     expect(attemptCostsHeart(road(level, 1), level)).toBe(false);

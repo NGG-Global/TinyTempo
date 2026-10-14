@@ -40,8 +40,10 @@ What follows, and is tested for levels 1–300:
   task; length, tempo and lead-ins are the curve's exactly.
 - **The same rules.** Clear bar and star thresholds are the curve's (pinned by
   `level-thresholds.json`); `recordResult`, the star gates and `beginAttempt` treat a
-  finale like any level — one heart on the frontier, none on a replay, a refund on three
-  stars, and a clear unlocks the next area's first level and nothing else.
+  finale like any level — one heart on the frontier, none on a replay, a refund on two
+  stars or more (`HEALTH.keepAtStars`), and a clear unlocks the next area's first level and
+  nothing else. The first area's finale, level 10, is inside `HEALTH.protectedThrough` and
+  costs nothing.
 
 The opening is longer: `PROGRESSION.finale.openingBars` (two) instead of one bar, through
 the same `leadBeats` mechanism the breather uses, so the scheduler and the turn block see

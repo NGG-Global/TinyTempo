@@ -397,7 +397,7 @@ gone.
 
 **The first task cannot be failed.** A missed beat on level 1's first task marks no
 socket, sounds no judder and says no "Miss". Nothing was spent to attempt the level
-either — `HEALTH.protectedThrough` already covers the opening five levels, so
+either — `HEALTH.protectedThrough` already covers the whole first area, so
 `beginAttempt` returns without taking a heart and there was never one to skip. Note
 that the round is still *scored*: the judge and the scorer stay authoritative, so a
 missed beat on that task still costs accuracy toward the level's 40% clear bar. What

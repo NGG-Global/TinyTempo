@@ -214,11 +214,14 @@ test rather than a hope. On a level that opens with a subdivision introduction,
 | How often does a star rating improve? | `star_improved`, with `previous_stars` → `stars` |
 | How often does a star gate block a player, and by how much? | `star_gate_reached` with `gate_short` and `unlocked`; `star_gate_opened` for the ones got through, with `replays`, `improvements` and `stars_gained` when this session saw the gate close |
 | How many complete or skip the tutorial? | `tutorial_started` → `tutorial_completed` / `tutorial_skipped`, by `source` |
+| Where in the tutorial do players drop off? | `tutorial_step_started` → `tutorial_step_ended` by `step` and `attempt`; the last `tutorial_step_started` with no end, completion or skip after it is where a player closed the app |
+| How long from launch to the first scored tap? | `tutorial_started.since_launch_ms` (`source = first_play`) plus `elapsed_ms` on the first `tutorial_step_ended` for `along`, which is an upper bound; the target is about 30 s |
 | Which task inside a failed level is hardest? | `level_failed.weakest_task`, and `task_completed.accuracy` by `task_index` |
 
 ### Schema
 
-Every parameter is a number or a string from a closed set of at most three values. No tap
+Every parameter is a number or a string from a small closed set — a handful of values at
+most, every one named in this file. No tap
 timestamp, no pattern, no id, no name and nothing about the device is sent. Indices are
 **1-based** — `level`, `area`, `task_index`, `weakest_task` — so a dashboard reads the way
 the game does. `area` is `floor((level - 1) / 10) + 1`.
@@ -252,9 +255,11 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `star_improved` | A cleared **replay** earns more stars than the level held. A first clear is not an improvement | `level`, `area`, `stars`, `previous_stars`, `accuracy`, `gate_have` |
 | `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session — the first time that gate is met | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short`, `unlocked` (highest level the save may start) |
 | `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have`, `unlocked`. When this session already sent `star_gate_reached` for that gate: `replays`, `improvements`, `stars_gained` — the ledger's own events in between, not a stored session |
-| `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
+| `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once), `since_launch_ms` (the page clock: on a cold start, roughly launch to lesson; meaningful for `first_play`) |
+| `tutorial_step_started` | A pass of the lesson begins: the opening tap-along, a try on their own, or *Watch again* | `step` (`along` \| `try` \| `watch`), `attempt` (that step's passes this visit, from 1), `resumed` (1 when an interruption restarted the same attempt), `elapsed_ms` (since the visit began), `repeat` |
+| `tutorial_step_ended` | A pass runs to its end | `step`, `attempt`, `verdict` (`clear` \| `early` \| `silent` \| `partial`, or `watched` for *Watch again*), `hits`, `elapsed_ms`, `repeat` |
 | `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
-| `tutorial_skipped` | *Skip* | `step` (`watch` \| `along` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
+| `tutorial_skipped` | *Skip* | `step` (`along` \| `try` \| `watch` \| `done`), `tries`, `duration_ms`, `repeat` |
 | `subdivision_intro_shown` | A finer grid's introduction begins (`docs/SUBDIVISIONS.md`). Shown again if the player leaves before a try is judged | `grid` (`triplet` \| `sixteenth`), `level`, `mode` |
 | `subdivision_intro_completed` | The introduction hands over to the level. Once per showing | `grid`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `scrapbook_opened` | The Scrapbook opens (`docs/SCRAPBOOK.md`) | `source` (`menu` \| `map`), `owned`, `total` |

@@ -638,7 +638,11 @@ raster and no construction. **A hit is answered at its socket** (`ui/hitPose.ts`
 `drawBlock` from `struck.age`/`struck.perfect`): a Perfect gets a shockwave ring in sun and
 cream (never coral, on a plate that has warmed to coral), rays, a flash on the socket and the
 plate, a hop of the baton and `HAPTIC.hit`; a Good the flash, a faint ring and `tap`; the
-verdict word is struck like a count numeral (`verdictPose`). A flawless task's flourish ends
+verdict word is struck like a count numeral (`verdictPose`), and **an off-centre tap says which
+side it fell on beside it** — EARLY or LATE on a Good, and on a tap that reached for an
+unanswered beat and missed its window (`Judgement.near`, which changes no grade), never on a
+Perfect (`tapTiming`, `ui/verdictTag.ts`; both words made in `build`, posed with the word as one
+group, `docs/TIMING_DETAILS.md`). A flawless task's flourish ends
 in a **chorus** (`FLAWLESS.chorusAt`): every socket rings together, the plate lights, the
 baton lands again, the word kicks, confetti goes up. **The pulse ball** (`pulseBall` in
 `game/beatTrack.ts`, `BlockState.pulse`) lands on every beat of a task — the shelf's beads,
@@ -691,13 +695,18 @@ and a lesson that left it out sent the player to meet it unexplained on level 1 
 two things a level leaves out, a label beside each owner slot and a pointer that follows the
 token, and one line of words. `coach` derives every heading from `momentOf`, which reads the
 same plan the block is drawn from, so *Count down* is said on the beat the "3" strikes and
-*Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins that order. Three
-passes: watched; **tapped along**, with the answer voiced on the grid (`gridAction`) so the
-downbeat is felt before it has to be found; then on their own, with nothing voiced. Both
-judged passes run on the level's own `RoundController`, a tap in the hammer's turn gets *Not
-yet* the instant it lands, and a miss is named — *Too early*, *That was your turn* — rather
-than scored. Nothing in it waits for a tap: the loop's whole lesson is that it does not. See
-`docs/TUTORIAL.md`.
+*Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins that order. **Two
+passes, and the first is the player's thumb**: **tapped along**, with the answer voiced on the
+grid (`gridAction`) so the downbeat is felt before it has to be found; then on their own, with
+nothing voiced. The watched pass is only *Watch again*. Both run on the level's own
+`RoundController`, a tap in the hammer's turn gets *Not yet* the instant it lands, and a miss
+is named — *Too early*, *That was your turn* — rather than scored. Nothing in it waits for a
+tap: the loop's whole lesson is that it does not. **A first scored tap is budgeted at about
+thirty seconds from launch**: the lesson's first judged tap is due ~7.3 s in, a first PLAY
+starts the loop's stems loading and goes straight to the lesson (which plays no music; the map
+and level 1 wait on the same pending load), and finishing the lesson marks level 1's
+demonstration seen, so a player who passed it does not watch the loop again — a skip does
+not. Each pass reports `tutorial_step_started`/`tutorial_step_ended`. See `docs/TUTORIAL.md`.
 
 **Three stars on a designated level earns a keepsake, and ownership is never stored.**
 `game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
@@ -739,6 +748,18 @@ attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttemp
 id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
 same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
 and it restarts only if its `RestartTicket` still holds.
+
+**A frontier attempt keeps its heart on two stars, and the first area is free**
+(`HEALTH.keepAtStars`, `HEALTH.protectedThrough` in `game/health.ts`). The heart is spent when
+the attempt begins and refunded by `finishAttempt` on two stars or more; a failure or a
+one-star scrape keeps it spent. Not three, which charged nearly every clear, a heart lost for
+passing and the whole first session spent by level 10; and not failure only, which at a clear
+bar of 40–67% through level 30 would almost never charge the better half of players and stop
+pacing them at all. The middle star is the real test of a level and a threshold the player
+already sees. Levels 1–10, the first finale included, never cost one, so nothing about hearts
+has coloured a session by the time the first star gate and the review offer arrive. A two-star
+keep puts the refund plate, the next-star strip and the replay block on one result, the
+tallest stack `planResult` lays out, which `tests/resultLayout.test.ts` covers.
 
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
@@ -1052,6 +1073,7 @@ src/
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces
+    verdictTag.ts      EARLY or LATE beside the verdict word, made once and posed with it
   updates/
     playUpdate.ts      Flexible vs immediate, when to restart; no native import
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
@@ -1316,8 +1338,11 @@ and a browser or a Studio-sideloaded APK is silent — Play only answers for a p
 installed. See `docs/UPDATES.md`. In-app review is the sixth, and the same shape again:
 `PlayReviewPlugin.java` holds a `ReviewInfo` and shows it, `src/review/appReview.ts` decides
 which clear is the milestone and when the opportunity is spent, and the browser keeps a stub
-that offers nothing. **The first area finale is the only milestone**: `PlayScene.showSummary`
-reports the facts of a finished level to `offer`, and the cleared result's Continue —
+that offers nothing. **The only milestone is the first area finale finished with two stars**
+(`first-finale`: from level 10, `minStars` 2 — `HEALTH.keepAtStars`, so the review is never
+offered on a result that just took a heart; a one-star scrape waits for the next good finale,
+a replay of level 10 included): `PlayScene.showSummary`
+reports the facts of a finished level, the run's stars among them, to `offer`, and the cleared result's Continue —
 `continueFromSummary`, never `leaveForMap`, which the map puck also uses — launches the flow
 and goes to the map on every branch. Play does not say whether it showed a dialog, so a
 completed launch means "attempted" and nothing more, and the one stored bit

@@ -19,7 +19,7 @@ import { wrongOrientation } from '@/core/shell';
 import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { RoundResult } from '@/game/scoring';
-import { addRound, EMPTY_TIMING, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
+import { addRound, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
@@ -68,6 +68,7 @@ import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
 import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
+import { VerdictTag } from '@/ui/verdictTag';
 import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
 import { punch } from '@/ui/punch';
@@ -415,6 +416,8 @@ export class PlayScene extends BaseScene {
   private struckPerfect = false;
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
+  /** EARLY or LATE beside the verdict word, for an off-centre tap. */
+  private verdictTag!: VerdictTag;
   private verdictAt = -Infinity;
   /** The grade the word is showing and the beat it answered, for its pose (`verdictPose`). */
   private verdictGrade: VerdictGrade = 'Good';
@@ -609,6 +612,7 @@ export class PlayScene extends BaseScene {
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.verdictTag = new VerdictTag(this, 8, ink);
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
     this.restLabel = label(this, '', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setAlpha(0).setDepth(12);
     this.restShelf = label(this, 'Rest', { size: 18, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
@@ -710,6 +714,7 @@ export class PlayScene extends BaseScene {
     this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    this.verdictTag.layout(s, this.verdictColour());
     // Above the verdict's line, so the rows the player is answering on stay in sight.
     this.restartSheet.layout(safe.centerX, this.verdictY - 34 * s, safe.width - 40 * s, s, this.controlSize);
     // The flawless word takes the verdict's line: it is the verdict on the whole task.
@@ -1317,6 +1322,7 @@ export class PlayScene extends BaseScene {
     this.flawlessSwept = 0;
     this.goStruck = false;
     this.verdict.setAlpha(0);
+    this.verdictTag.clear();
     this.hideTurnCall();
     this.flawless.setAlpha(0);
     this.flawlessHalo.setAlpha(0);
@@ -1662,6 +1668,7 @@ export class PlayScene extends BaseScene {
     const verdict = this.verdictPose(now);
     if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
     else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
+    this.verdictTag.pose(this.verdict, this.viewport.safe.centerX, verdict);
     if (this.controller?.phase === 'result' && !this.transition && !this.summaryShown && resultDue(now, this.finishUnlock, performance.now(), this.finishWallMs)) {
       if (now < this.finishUnlock) this.reportStalledClock(now);
       this.showSummary();
@@ -1810,6 +1817,9 @@ export class PlayScene extends BaseScene {
     this.verdictIndex = result.index ?? this.verdictIndex + 1;
     this.verdict.setText(word);
     resize(this.verdict, 38 * this.uiScale, colour);
+    // Which side of the beat an off-centre tap fell, beside the word: the result's lean, a
+    // tap at a time, while the player can still do something about the next one.
+    this.verdictTag.set(tapTiming(result));
     if (result.grade === 'Perfect' && result.kind === 'hit') {
       // At level 3 the room answers a Perfect too: the pool flares for a moment.
       if (!this.intro && !this.teach && this.controller?.phase === 'respond' && (this.groovePreview ?? this.groove.level) === 3) this.grooveStage.flare(now);
@@ -1977,7 +1987,7 @@ export class PlayScene extends BaseScene {
     const pose = this.verdictPose(now);
     if (!pose || pose.alpha <= 0.01 || this.verdict.text === '') return;
     const s = this.uiScale;
-    const w = this.verdict.width * pose.scale + 28 * s;
+    const w = this.verdictTag.width(this.verdict, pose.scale) + 28 * s;
     const h = 38 * s * 1.3 * pose.scale;
     const x = this.viewport.safe.centerX - w / 2;
     const y = pose.y - h / 2;
@@ -2143,6 +2153,7 @@ export class PlayScene extends BaseScene {
       this.flawlessChorused = false;
       this.verdictAt = -Infinity;
       this.verdict.setAlpha(0);
+      this.verdictTag.clear();
       vibrate('stamp');
     }
     this.results[this.taskIndex] = result.accuracy;
@@ -2353,7 +2364,7 @@ export class PlayScene extends BaseScene {
     // Continue, never here: the celebration runs its course and the button is what asks.
     // Which clears are milestones is `review/appReview.ts`; this scene only reports the facts.
     const milestone = this.previewResult ? null : appReview().offer({
-      level: this.spec.level, cleared: outcome.cleared, finale: this.finaleCleared, saved: !this.saveFailed,
+      level: this.spec.level, cleared: outcome.cleared, stars: outcome.stars, finale: this.finaleCleared, saved: !this.saveFailed,
     });
     if (milestone) breadcrumb('review offered', { milestone: milestone.id });
     // Placed now that the rows under the plaque are known, then drawn.

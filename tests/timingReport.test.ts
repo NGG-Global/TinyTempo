@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { RHYTHM } from '../src/config/rhythm';
 import { scoreRound } from '../src/game/scoring';
-import { addRound, EMPTY_TIMING, median, TIMING, TIMING_ADVICE, timingReport, type TimingTally } from '../src/game/timingReport';
+import { addRound, EMPTY_TIMING, median, tapTiming, TIMING, TIMING_ADVICE, timingReport, type TimingTally } from '../src/game/timingReport';
 import { createJudge, expireTargets, judgeTap } from '../src/rhythm/judge';
 import { PLATE, TIMING_TRAY } from '../src/ui/resultLayout';
 
@@ -167,5 +167,32 @@ describe('the details fit the tray', () => {
     expect(TIMING_TRAY.adviceY + 2 * lineHeight).toBeLessThanOrEqual(PLATE.tray.height);
     // "EARLY" and "LATE" sit in the inset the bar leaves at each end.
     expect(TIMING_TRAY.barInset - TIMING_TRAY.pad).toBeGreaterThanOrEqual('EARLY'.length * TIMING_TRAY.labelSize * 0.62);
+  });
+});
+
+describe('early or late, a tap at a time', () => {
+  it('names the side of an off-centre hit, negative being early', () => {
+    expect(tapTiming({ kind: 'hit', grade: 'Good', deltaMs: -90 })).toBe('early');
+    expect(tapTiming({ kind: 'hit', grade: 'Good', deltaMs: 90 })).toBe('late');
+  });
+
+  it('says nothing about a Perfect, which is on time', () => {
+    expect(tapTiming({ kind: 'hit', grade: 'Perfect', deltaMs: -50 })).toBeNull();
+    expect(tapTiming({ kind: 'hit', grade: 'Perfect', deltaMs: 50 })).toBeNull();
+  });
+
+  it('names the side of a tap that reached for a beat and missed its window, and of no other miss', () => {
+    expect(tapTiming({ kind: 'extra', grade: 'Miss', deltaMs: -180, near: true })).toBe('early');
+    expect(tapTiming({ kind: 'extra', grade: 'Miss', deltaMs: 200, near: true })).toBe('late');
+    expect(tapTiming({ kind: 'extra', grade: 'Miss', deltaMs: -400 })).toBeNull();
+    expect(tapTiming({ kind: 'omission', grade: 'Miss', deltaMs: null })).toBeNull();
+    expect(tapTiming({ kind: 'hit', grade: 'Good', deltaMs: Number.NaN })).toBeNull();
+  });
+
+  it('agrees with the judge, tap by tap', () => {
+    const state = createJudge([10, 11, 12, 13]);
+    const sides = [9.9, 11.03, 12.08, 12.85].map(t => tapTiming(judgeTap(state, t)));
+    // 100 ms early is a Good; 30 ms late is Perfect; 80 ms late a Good; 150 ms early reaches for 13.
+    expect(sides).toEqual(['early', null, 'late', 'early']);
   });
 });

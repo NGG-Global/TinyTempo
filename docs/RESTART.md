@@ -19,7 +19,7 @@ heart.
 | Kind | When | The puck does |
 | --- | --- | --- |
 | `try_again` | The level's result is recorded | What the result's Try again does: a new attempt. No sheet. |
-| `immediate` | A finished level, a protected level (1–5), Premium, or no attempt yet | Restarts at once, free, on the same attempt. No sheet. |
+| `immediate` | A finished level, a protected level (1–10), Premium, or no attempt yet | Restarts at once, free, on the same attempt. No sheet. |
 | `confirm_free` | A frontier attempt before its first scored response | **Restart from the beginning? / No heart will be used.** Restart · Keep playing |
 | `confirm_paid` | A frontier attempt after its first scored response, with a heart | **Restart level? / This run will end. Restarting uses 1 heart.** Restart (♥ 1 chip) · Keep playing |
 | `out_of_hearts` | The same, with no heart | **Out of hearts / Get a heart and restart this level.** Watch ad & Restart (♥ +1 chip) · Refill 5 hearts · ∞ Unlimited hearts · Keep playing |

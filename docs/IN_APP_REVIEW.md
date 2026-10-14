@@ -30,27 +30,46 @@ The browser, and every native build until `bootAppReview` says otherwise, holds
 rather than a flag, so a development mock can never stand in for Play in a
 release.
 
-## Why level 10
+## Why the first good finale
 
-Level 10 is the first area finale. Clearing it is the first thing a player has
-*finished* — an area's ten levels and the presentation that closes them — rather
-than merely started, and it comes before any star gate, purchase or empty heart
-bar can have coloured the session. It is also early enough that most players who
-will ever form an opinion have reached it.
+The opportunity opens on **the first area finale a player finishes with two stars
+or more**. For most players that is level 10, the first finale. A player who only
+scraped it with one star meets it at the next finale they finish well, or at a
+replay of level 10 that earns the second star.
 
-It asks nothing else. Not three stars, not an accuracy above the clear bar, not
-Premium, not a purchase, not an ad, not the day's objectives, and not any guess
-about whether the player is enjoying themselves. Asking only the players who
-seem happy is the thing Play's policy forbids, and the game does not do it.
+A finale is the first thing a player has *finished* — an area's ten levels and the
+presentation that closes them — rather than merely started, and level 10 is early
+enough that most players who will ever form an opinion have reached it.
+
+Two stars is `HEALTH.keepAtStars`, deliberately. It used to be any clear of level
+10, and while hearts were spent from level 6 and refunded only on three stars, that
+clear met most players at an empty heart bar, on a result that had just taken a
+heart for passing. Now the review is offered only on a result that keeps its heart —
+whatever the bar holds, it is never the screen that just took one — and level 10 is
+inside `HEALTH.protectedThrough`, so on the common path hearts have not touched the
+session at all. `tests/appReview.test.ts` keeps `minStars` at or above the heart's
+threshold so the two cannot drift apart.
+
+It asks nothing else: not three stars, not Premium, a purchase, an ad, the day's
+objectives, or any guess at how the player feels. Choosing *when* is what Google's
+own guidance asks for — "target the best possible moment to request a review"
+([in-app review guidelines](https://developer.android.com/guide/playcore/in-app-review),
+updated 30 January 2026). What it forbids, and the game never does, is asking the
+player anything before or while the card shows ("Do you like the app?", "Would you
+rate this app 5 stars?") or offering anything for a rating
+([User Ratings, Reviews, and Installs](https://support.google.com/googleplay/android-developer/answer/9898684)).
+Neither page says anything against tying the moment to a result in the game. Read
+both again before adding a milestone; they change.
 
 ## Eligibility
 
 `reviewMilestoneFor` in `src/review/appReview.ts` opens a milestone when all of
 these hold, and it is the only place the rule is written:
 
-- the level is exactly a milestone's level — `REVIEW_MILESTONES` holds one entry,
-  `first-finale` at level 10;
-- the level was cleared (one star or more);
+- the level is at or past a milestone's `fromLevel` — `REVIEW_MILESTONES` holds one
+  entry, `first-finale`, from level 10;
+- the level was cleared, and this run earned the milestone's `minStars` (two) — the
+  run's own stars, never the level's best;
 - the clear was a finale clear — PlayScene's own `finaleCleared`, the same bit
   that puts the "Area complete" ribbon on the plaque;
 - progress saved (`saveProgress` reported the write landed), because a clear the
@@ -61,9 +80,10 @@ Running as the native app is the sixth condition, and it is not a flag: the
 browser holds the stub, which returns null from `offer` before any of the above
 is read.
 
-Level 9, a failed level 10, an unsaved one, a level 10 result that is not a
-finale clear, a replay after the attempt, and level 20 all open nothing.
-`tests/appReview.test.ts` pins each.
+Level 9, a failed level 10, a one-star level 10, an unsaved one, a result that is
+not a finale clear, and anything after the attempt all open nothing; a later finale
+finished with two stars opens it while it is untried. `tests/appReview.test.ts` pins
+each.
 
 ## When it prepares, and when it launches
 
@@ -71,7 +91,7 @@ finale clear, a replay after the attempt, and level 20 all open nothing.
 — the pennants settling, the star reveal, the fanfare, the ribbon, a keepsake's
 card — runs exactly as it did.
 
-`showSummary` calls `appReview().offer(...)` with the four facts above once the
+`showSummary` calls `appReview().offer(...)` with the five facts above once the
 result is on the plaque. On a milestone, the adapter starts `requestReviewFlow`
 in the background and returns; nothing awaits it, so the result screen keeps
 every one of its beats and stays fully interactive.
@@ -128,15 +148,16 @@ been asked is not asked again.
 **The opportunity is spent when a launch is tried, not when one is offered.** A
 preparation that fails, or is still pending when Continue is pressed, has asked
 the player nothing, so it costs nothing: the record is not written and the next
-clear of level 10 — a replay — offers again. A launch that is tried is recorded
+qualifying finale — a replay of level 10 included — offers again. A launch that is tried is recorded
 *before* the call, whether or not Play then completes it, because from that
 instant the game cannot tell whether a dialog was shown, and Play's own quota
 already keeps a retried launch from being a second prompt. On top of the record,
 the adapter launches at most once per session, so a device whose storage refuses
 the write still never sees two sheets in one sitting.
 
-Once recorded: replaying level 10 offers nothing, level 20 offers nothing (it is
-no milestone), and a fresh launch reads the record, not memory.
+Once recorded: replaying level 10 offers nothing, level 20 offers nothing, and a
+fresh launch reads the record, not memory. The record's `level` is the level the
+launch was tried on, which is 10 for most players and a later finale for some.
 
 ## What the game cannot know, and does not guess
 
@@ -146,7 +167,7 @@ That is by design on Google's side, so the prompt cannot be gamed. The game
 therefore treats a completed launch as "TinyTempo attempted the review flow" and
 nothing more: no rating, no submission, no sentiment is known, inferred or
 recorded, and no analytics or logic is built on one. A player who sees no dialog
-on level 10 has lost nothing; a player who sees one and closes it has, from the
+on a finale has lost nothing; a player who sees one and closes it has, from the
 game's side, done exactly the same thing as one who rated it.
 
 ## Adding a milestone
@@ -179,12 +200,14 @@ To verify the closed-testing build:
 1. Reset the record. Clearing the app's storage does it (Settings → Apps →
    TinyTempo → Clear storage), and so does uninstalling; there is no in-game
    reset because there is nothing for a player to gain from one.
-2. Clear levels 1–10 (a fresh install starts at level 1). Watch the level 10
-   finale complete uninterrupted: pennants, stars, fanfare, ribbon.
-3. Tap Continue. Play's review sheet should appear over the result screen, or
+2. Clear levels 1–9, then clear level 10 with **one** star and tap Continue: no
+   sheet, and the map follows.
+3. Replay level 10 for two stars or more. Watch the finale complete
+   uninterrupted: pennants, stars, fanfare, ribbon.
+4. Tap Continue. Play's review sheet should appear over the result screen, or
    not, at Play's discretion. Close it, or rate. The map follows.
-4. Replay level 10 and clear it: no sheet. Clear level 20: no sheet.
-5. Force-stop and reopen; clear level 10 again: still no sheet, because the
+5. Replay level 10 and clear it again: no sheet. Clear level 20: no sheet.
+6. Force-stop and reopen; clear level 10 again: still no sheet, because the
    record is stored.
 
 For an unattended check of the bridge itself, the Play library ships

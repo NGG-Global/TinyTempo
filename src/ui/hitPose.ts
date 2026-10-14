@@ -112,3 +112,20 @@ export function verdictPose(age: number, grade: VerdictGrade, index: number, sti
     tilt: grade === 'Miss' ? settle(age, 40, 10) * 0.05 : 0,
   };
 }
+
+/**
+ * The verdict word and its early/late tag (`tapTiming`) as one group centred on the
+ * verdict's line: each one's centre as an offset from that line's centre, and the group's
+ * width for the pill behind it. With no tag the word is centred alone, exactly as before.
+ * There is no room above or below the word — the act's shelf is over it and the block under
+ * it — so the tag sits beside it.
+ */
+export function verdictGroup(wordWidth: number, tagWidth: number, scale: number, gap: number): {
+  readonly wordX: number; readonly tagX: number; readonly width: number;
+} {
+  const word = Math.max(0, wordWidth) * scale;
+  if (!(tagWidth > 0)) return { wordX: 0, tagX: 0, width: word };
+  const tag = tagWidth * scale;
+  const width = word + gap * scale + tag;
+  return { wordX: (word - width) / 2, tagX: (width - tag) / 2, width };
+}

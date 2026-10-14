@@ -317,9 +317,10 @@ these is a blocker — but none has been run on a device.
       See `docs/UPDATES.md`.
 - [ ] **Confirm in-app review on a Play-installed build.** The same rule: a sideload
       gets nothing from `requestReviewFlow`. From a closed-testing install with a
-      fresh store, clear levels 1–10 and tap Continue on the level 10 result; Play's
-      sheet appears at its discretion and the map follows either way. A replay of
-      level 10 and a clear of level 20 must show nothing. See `docs/IN_APP_REVIEW.md`.
+      fresh store, clear levels 1–10, the level 10 finale with two stars or more, and
+      tap Continue on its result; Play's sheet appears at its discretion and the map
+      follows either way. A one-star level 10 must show nothing, and so must a replay
+      of level 10 or a clear of level 20 after the sheet. See `docs/IN_APP_REVIEW.md`.
 
 ### D2. Saved Games — Console and two devices
 

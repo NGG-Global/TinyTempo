@@ -34,6 +34,11 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Rasterised map, Scrapbook and menus', text: 'baked:', source: 'src/ui/bakedLayer.ts' },
   { feature: 'Credits: the original score', text: 'Alon Attaly', source: 'src/config/credits.ts' },
   { feature: 'Endless Mode', text: 'Run interrupted', source: 'src/scenes/EndlessScene.ts' },
+  { feature: 'A heart kept on two stars, the first area free', text: 'keepAtStars', source: 'src/game/health.ts' },
+  { feature: 'Review offered on the first two-star finale', text: 'minStars', source: 'src/review/appReview.ts' },
+  { feature: 'Tutorial opens on tapping along', text: '1 / 2 · TAP ALONG', source: 'src/scenes/TutorialScene.ts' },
+  { feature: 'Tutorial step analytics', text: 'tutorial_step_ended', source: 'src/monetization/analytics.ts' },
+  { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/scenes/PlayScene.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

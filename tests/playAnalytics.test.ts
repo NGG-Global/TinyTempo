@@ -314,7 +314,7 @@ describe('the tutorial', () => {
     visit.complete(2, true);
     visit.skip('done', 2);
     expect(sent).toEqual([
-      { event: 'tutorial_started', payload: { source: 'first_play', repeat: 0 } },
+      { event: 'tutorial_started', payload: { source: 'first_play', repeat: 0, since_launch_ms: 1_000 } },
       { event: 'tutorial_completed', payload: { tries: 2, passed: 1, duration_ms: 30_000, repeat: 0 } },
     ]);
   });
@@ -329,6 +329,46 @@ describe('the tutorial', () => {
   it('can say the player went on without passing, when the lesson offered the way on anyway', () => {
     ledger.beginTutorial('first_play', false)!.complete(3, false);
     expect(only('tutorial_completed')[0]).toMatchObject({ tries: 3, passed: 0 });
+  });
+
+  it('reports each pass’s start and end, so the funnel shows the step a player left on', () => {
+    const visit = ledger.beginTutorial('first_play', false)!;
+    visit.stepStarted('along');
+    clock += 11_000;
+    visit.stepEnded('along', 'silent', 0);
+    visit.stepStarted('along');
+    clock += 11_000;
+    visit.stepEnded('along', 'clear', 2);
+    visit.stepStarted('try');
+    // The app was backgrounded mid-pass: the same attempt restarts and is marked resumed.
+    visit.stepStarted('try', true);
+    clock += 11_000;
+    visit.stepEnded('try', 'clear', 3);
+    visit.stepStarted('watch');
+    visit.stepEnded('watch', 'watched', 0);
+    visit.complete(3, true);
+    visit.stepStarted('try');
+    expect(only('tutorial_step_started')).toEqual([
+      { step: 'along', attempt: 1, resumed: 0, elapsed_ms: 0, repeat: 0 },
+      { step: 'along', attempt: 2, resumed: 0, elapsed_ms: 11_000, repeat: 0 },
+      { step: 'try', attempt: 1, resumed: 0, elapsed_ms: 22_000, repeat: 0 },
+      { step: 'try', attempt: 1, resumed: 1, elapsed_ms: 22_000, repeat: 0 },
+      { step: 'watch', attempt: 1, resumed: 0, elapsed_ms: 33_000, repeat: 0 },
+    ]);
+    expect(only('tutorial_step_ended')).toEqual([
+      { step: 'along', attempt: 1, verdict: 'silent', hits: 0, elapsed_ms: 11_000, repeat: 0 },
+      { step: 'along', attempt: 2, verdict: 'clear', hits: 2, elapsed_ms: 22_000, repeat: 0 },
+      { step: 'try', attempt: 1, verdict: 'clear', hits: 3, elapsed_ms: 33_000, repeat: 0 },
+      { step: 'watch', attempt: 1, verdict: 'watched', hits: 0, elapsed_ms: 33_000, repeat: 0 },
+    ]);
+    // Nothing is reported once the visit has ended.
+    expect(names().at(-1)).toBe('tutorial_completed');
+  });
+
+  it('says how long after launch the lesson opened', () => {
+    clock = 18_400.6;
+    ledger.beginTutorial('first_play', false);
+    expect(only('tutorial_started')).toEqual([{ source: 'first_play', repeat: 0, since_launch_ms: 18_401 }]);
   });
 });
 
@@ -407,6 +447,8 @@ describe('every gameplay event, as the game actually fires it', () => {
     // A scripted session that reaches every gameplay event, checked against the shaping
     // rules as sent — so a parameter added to a payload cannot go quiet in the dashboard.
     const visit = ledger.beginTutorial('first_play', false)!;
+    visit.stepStarted('along');
+    visit.stepEnded('along', 'clear', 1);
     visit.complete(1, true);
     ledger.beginTutorial('menu', true)!.skip('try', 1);
     playThrough(10, road(9, 3), 10);

@@ -72,3 +72,30 @@ describe('windows for a set of targets', () => {
     }
   });
 });
+
+describe('an extra tap that reached for a beat', () => {
+  it('is marked near when it falls just outside the Good window of a beat still unanswered', () => {
+    const early = judgeTap(createJudge([10]), 10 - 0.18);
+    expect(early).toMatchObject({ kind: 'extra', grade: 'Miss', index: null, near: true });
+    expect(early.deltaMs).toBeCloseTo(-180);
+    expect(judgeTap(createJudge([10]), 10 + 0.26)).toMatchObject({ kind: 'extra', near: true });
+  });
+
+  it('is not near past twice the Good window, nor on a beat already answered', () => {
+    expect(judgeTap(createJudge([10]), 10 - 0.27).near).toBeUndefined();
+    const state = createJudge([10]);
+    judgeTap(state, 10);
+    // A second tap on an answered beat is a double, not a reach for it.
+    expect(judgeTap(state, 10.05)).toMatchObject({ kind: 'extra' });
+    expect(judgeTap(state, 10.05).near).toBeUndefined();
+    expect(judgeTap(state, 10.2).near).toBeUndefined();
+  });
+
+  it('changes no grade and no score: near is a description, not a hit', () => {
+    const state = createJudge([10]);
+    expect(judgeTap(state, 9.82).kind).toBe('extra');
+    expect(state.outcomes[0]).toBeNull();
+    expect(state.extras).toHaveLength(1);
+    expect(judgeTap(state, 10.1)).toMatchObject({ kind: 'hit', grade: 'Good', index: 0 });
+  });
+});

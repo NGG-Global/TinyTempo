@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { RHYTHM } from '../src/config/rhythm';
 import { handoverAt, turnCount } from '../src/game/beatTrack';
@@ -348,5 +349,42 @@ describe('tutorial completion', () => {
     expect(tutorialComplete({ getItem: () => { throw new Error('blocked'); } })).toBe(false);
     expect(() => completeTutorial(null)).not.toThrow();
     expect(() => completeTutorial({ setItem: () => { throw new Error('full'); } })).not.toThrow();
+  });
+});
+
+describe('the first pass is the player’s', () => {
+  it('opens on tapping along, with the answer voiced, rather than on a watched pass', () => {
+    const run = new TutorialRun();
+    expect(run.step).toBe('along');
+    const plan = beginOnce(run, 'along', 0);
+    // Tapping along is the first pass, so its words say what the top row is.
+    expect(coach(run, plan.demo + 0.1)).toMatchObject({ heading: 'Their turn', side: 'theirs' });
+    expect(coach(run, plan.demo + 0.1).copy).toContain('row');
+    const scene = readFileSync('src/scenes/TutorialScene.ts', 'utf8');
+    expect(scene).toMatch(/curtain\.reveal\(\(\) => \{ void this\.startJudged\('along'\); \}\)/);
+    // The watched pass is only ever the replay.
+    expect(scene).not.toMatch(/curtain\.reveal\(\(\) => \{ void this\.startWatch\(\)/);
+  });
+
+  it('puts the first judged tap under eight seconds into the lesson', () => {
+    // The budget for a fresh install is about thirty seconds to the first scored tap: the
+    // boot, a PLAY, the curtain, then this. The lesson's share is its lead and one counted
+    // bar of the hammer before the player's downbeat.
+    const plan = createRoundPlan(1, TUTORIAL.pattern, TUTORIAL.bpm, TUTORIAL.leadSec, TUTORIAL.leadBeats);
+    expect(plan.targets[0]!).toBeLessThan(8);
+  });
+
+  it('does not hold a first PLAY on the loop’s stems, which the lesson never plays', () => {
+    const menu = readFileSync('src/scenes/MenuScene.ts', 'utf8');
+    const lesson = menu.slice(menu.indexOf('if (needsTutorial) {'), menu.indexOf('} else {', menu.indexOf('if (needsTutorial) {')));
+    expect(lesson).toContain('audio.music.load(track).catch(');
+    expect(lesson).not.toMatch(/await\s+audio\.music\.load/);
+  });
+
+  it('marks level 1’s demonstration as seen when the lesson is finished, and not when it is skipped', () => {
+    const scene = readFileSync('src/scenes/TutorialScene.ts', 'utf8');
+    expect(scene).toMatch(/if \(complete\) \{ completeTutorial\(\); markDemonstrationSeen\(\);/);
+    const skip = scene.slice(scene.indexOf('else { skipTutorial();'));
+    expect(skip.slice(0, skip.indexOf('\n'))).not.toContain('markDemonstrationSeen');
   });
 });

@@ -6,6 +6,13 @@ export interface Judgement {
   readonly kind: 'hit' | 'extra' | 'omission';
   readonly index: number | null;
   readonly deltaMs: number | null;
+  /**
+   * An extra tap that fell just outside the Good window of a beat still unanswered — the
+   * player reaching for that beat, early or late — rather than a tap between beats or a
+   * second tap on one already answered. Only ever set on an extra, and it changes no grade:
+   * it is what lets the verdict say *early* or *late* about a tap that missed its window.
+   */
+  readonly near?: true;
 }
 export interface JudgeState {
   readonly targets: readonly number[];
@@ -15,6 +22,9 @@ export interface JudgeState {
 }
 
 const EPSILON_MS = 0.000001; // Only absorb floating-point subtraction at exact boundaries.
+
+/** How far past the Good window, as a multiple of it, an extra tap still counts as reaching for its beat. */
+const NEAR_REACH = 2;
 
 /**
  * The most of the gap between two neighbouring targets one Perfect window may take. Under
@@ -58,7 +68,10 @@ export function judgeTap(state: JudgeState, inputSec: number): Judgement {
   }
   const deltaMs = (inputSec - state.targets[index]!) * 1000;
   if (Math.abs(deltaMs) > state.windows.goodMs + EPSILON_MS || state.outcomes[index] !== null) {
-    const extra: Judgement = { kind: 'extra', grade: 'Miss', index: null, deltaMs };
+    const near = state.outcomes[index] === null && Math.abs(deltaMs) <= state.windows.goodMs * NEAR_REACH + EPSILON_MS;
+    const extra: Judgement = near
+      ? { kind: 'extra', grade: 'Miss', index: null, deltaMs, near: true }
+      : { kind: 'extra', grade: 'Miss', index: null, deltaMs };
     state.extras.push(extra);
     return extra;
   }

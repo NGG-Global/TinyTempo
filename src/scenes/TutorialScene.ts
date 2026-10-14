@@ -12,6 +12,7 @@ import { wrongOrientation } from '@/core/shell';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, numeralStyle, pulseBall, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
 import { RoundController, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach, type JudgedStep } from '@/game/TutorialRun';
+import { markDemonstrationSeen } from '@/game/progress';
 import { playAnalytics, type TutorialSource, type TutorialVisit } from '@/game/playAnalytics';
 import { TapInput, type Tap } from '@/input/TapInput';
 import type { Judgement } from '@/rhythm/judge';
@@ -34,8 +35,8 @@ const ROW_LABELS = { theirs: 'THE HAMMER', yours: 'YOU' } as const;
 /** The count's words in strike order, "3" first and "Go!" last; one Text each. */
 const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 
-/** The step line over the sign, per step. */
-const STEP_LABELS = { watch: '1 / 3 · WATCH', along: '2 / 3 · TAP ALONG', try: '3 / 3 · ON YOUR OWN', done: 'READY' } as const;
+/** The step line over the sign, per step. Watching is the optional replay, so it is not numbered. */
+const STEP_LABELS = { along: '1 / 2 · TAP ALONG', try: '2 / 2 · ON YOUR OWN', watch: 'WATCH', done: 'READY' } as const;
 
 /**
  * A lesson on the same stage, the same audio clock and the same turn block as a level.
@@ -141,7 +142,8 @@ export class TutorialScene extends BaseScene {
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: VIGNETTES[0]!.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(13));
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => { void this.startWatch(); }));
+    // The first pass is tapped along: the player's thumb is on the downbeat from the first bar.
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => { void this.startJudged('along'); }));
     // The judge runs off a steady pump as it does in a level: a dropped frame must not
     // expire a target the player answered in time.
     this.pump = setInterval(() => this.pumpTick(), RHYTHM.pumpMs);
@@ -215,6 +217,7 @@ export class TutorialScene extends BaseScene {
       this.paused = false;
       this.started = true;
       const plan = this.run.watch(Math.max(this.now(), this.audio.context.currentTime));
+      this.visit?.stepStarted('watch');
       this.watching = { cue: 0, answered: 0, phase: 'prepare' };
       this.resetMarks(plan);
       this.illustration.reset(plan);
@@ -271,6 +274,7 @@ export class TutorialScene extends BaseScene {
       const plan = this.controller.plan!;
       if (resumed) this.run.tries--;
       this.run.begin(step, plan);
+      this.visit?.stepStarted(step, resumed);
       this.resetMarks(plan);
       this.illustration.reset(plan);
       this.lastFrame = performance.now();
@@ -311,7 +315,10 @@ export class TutorialScene extends BaseScene {
   }
 
   private completeTry(): void {
+    // Read before `complete`, which turns a passed try into `done`.
+    const step = this.run.step;
     const verdict = this.run.complete();
+    if (step === 'along' || step === 'try') this.visit?.stepEnded(step, verdict, this.run.tally.hits);
     const now = this.now();
     // The hammer closes the pass the way a level closes a task: struck home on a pass,
     // bent on a miss. Contact is a moment ahead so the swing has room to wind up.
@@ -369,7 +376,10 @@ export class TutorialScene extends BaseScene {
       this.illustration.onPlayerHit(now);
       this.illustration.onAccuracy({ kind: 'hit', grade: 'Perfect', index, deltaMs: 0 }, now);
     }
-    if (now >= plan.end) this.watching = null;
+    if (now >= plan.end) {
+      this.watching = null;
+      this.visit?.stepEnded('watch', 'watched', 0);
+    }
   }
 
   private paint(now: number): void {
@@ -568,7 +578,8 @@ export class TutorialScene extends BaseScene {
   }
 
   private async resume(): Promise<void> {
-    if (!this.started || (this.run.step === 'watch' && momentOf(this.run.plan, this.now()) !== 'after')) { await this.startWatch(); return; }
+    if (!this.started) { await this.startJudged('along'); return; }
+    if (this.run.step === 'watch' && momentOf(this.run.plan, this.now()) !== 'after') { await this.startWatch(); return; }
     if ((this.run.step === 'along' || this.run.step === 'try') && this.run.verdict === null) { await this.startJudged(this.run.step, true); return; }
     // Between passes there is nothing to restart: the words and the block are still up.
     this.paused = false;
@@ -580,7 +591,9 @@ export class TutorialScene extends BaseScene {
     this.stop();
     this.illustration.pause();
     this.paused = true;
-    if (complete) { completeTutorial(); this.registry.set('tutorial-complete', true); }
+    // A finished lesson has shown the loop, so level 1 does not show it again: its
+    // demonstration pass is for a player who has seen nothing, which a skip still is.
+    if (complete) { completeTutorial(); markDemonstrationSeen(); this.registry.set('tutorial-complete', true); }
     // A skip is remembered too, so the next Play goes to the map rather than back here;
     // the registry copy covers a device whose storage refuses the write for this session.
     else { skipTutorial(); this.registry.set('tutorial-seen', true); }

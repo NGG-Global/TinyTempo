@@ -10,8 +10,20 @@ export const HEALTH = {
   max: 5,
   /** One heart returns this many milliseconds after the current refill started. */
   regenMs: 20 * 60 * 1000,
-  /** Levels up to this one never cost a heart. */
-  protectedThrough: 5,
+  /**
+   * Levels up to this one never cost a heart: the whole first area, finale included, so a
+   * first session reaches its first finale on skill alone and nothing about hearts has
+   * coloured it by then (the in-app review and star gate 1 both sit at that boundary).
+   */
+  protectedThrough: 10,
+  /**
+   * The stars a frontier attempt must earn to keep the heart it spent. Two, not three: the
+   * clear bar is lenient (40% rising to about 67% by level 30), so a heart lost only on a
+   * failure would almost never be lost and would stop pacing anyone; three charged nearly
+   * every clear, a heart lost for passing. The middle star is the real test of a level, and
+   * a threshold the player already sees.
+   */
+  keepAtStars: 2,
 } as const;
 
 /** Shown when the bar is empty: replays stay free, the frontier still costs a heart. */
@@ -263,15 +275,15 @@ export function beginAttempt(
 }
 
 /**
- * Resolves a finished attempt. Three stars refunds the heart this attempt spent;
- * 0–2 stars leaves it spent. Duplicate calls with the same id do not refund twice.
+ * Resolves a finished attempt. `HEALTH.keepAtStars` or more refunds the heart this attempt
+ * spent; fewer leaves it spent. Duplicate calls with the same id do not refund twice.
  */
 export function finishAttempt(
   health: Health, attemptId: string, stars: 0 | 1 | 2 | 3, now: number = Date.now(),
 ): FinishAttemptResult {
   const live = reconcile(health, now);
   if (live.spentAttempt !== attemptId) return { refunded: false, health: live };
-  if (stars === 3) {
+  if (stars >= HEALTH.keepAtStars) {
     const hearts = Math.min(HEALTH.max, live.hearts + 1);
     return {
       refunded: true,
@@ -294,7 +306,7 @@ export function abandonAttempt(health: Health, attemptId: string, now: number = 
 
 /**
  * Adds exactly one heart, never above `HEALTH.max`. A grant at max is a no-op.
- * An existing refill stamp is kept until the bar fills, matching a 3-star refund.
+ * An existing refill stamp is kept until the bar fills, matching a kept heart's refund.
  */
 export function grantHeart(health: Health, now: number = Date.now()): GrantHeartResult {
   const live = reconcile(health, now);
@@ -357,7 +369,7 @@ export function redeemHeart(claimId: string, now: number = Date.now()): GrantHea
 
 /**
  * Restores the bar to `HEALTH.max` and clears the regen clock. Already-full health is a no-op.
- * A spent attempt is left alone so a 3-star refund still has an id to match.
+ * A spent attempt is left alone so a kept heart's refund still has an id to match.
  */
 export function fillHearts(health: Health, now: number = Date.now()): GrantHeartResult {
   const live = reconcile(health, now);

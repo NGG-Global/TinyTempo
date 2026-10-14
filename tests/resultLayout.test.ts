@@ -58,17 +58,21 @@ function frameFor(f: typeof FRAMES[number]) {
 }
 
 /**
- * Every combination a result can show. A heart is refunded only on three stars
- * (`finishAttempt`), and the next-star strip and the replay block only appear short of
- * three, so the refund plate never shares the screen with either; a keepsake needs three
- * stars too. The first keepsake's longer note is measured at three lines at the card's width.
+ * Every combination a result can show. A heart is refunded on two stars or more
+ * (`finishAttempt`, `HEALTH.keepAtStars`), and the next-star strip and the replay block
+ * appear short of three, so a two-star keep puts the refund plate, the strip and the replay
+ * block on one screen — the tallest stack a result has. A keepsake needs three stars, so it
+ * never shares with the strip. The first keepsake's longer note is measured at three lines
+ * at the card's width.
  */
 function allNeeds(s: number): ResultNeeds[] {
   const out: ResultNeeds[] = [];
   const firstNote = keepsakeCardHeight(KEEPSAKE_CARD.noteTop * s + 3 * 28 * s, s);
   for (const finale of [false, true]) {
-    out.push({ refund: false, finale, strip: true, keepsake: 0, replay: true });
-    out.push({ refund: false, finale, strip: true, keepsake: 0, replay: false });
+    for (const refund of [false, true]) {
+      out.push({ refund, finale, strip: true, keepsake: 0, replay: true });
+      out.push({ refund, finale, strip: true, keepsake: 0, replay: false });
+    }
     for (const refund of [false, true]) {
       out.push({ refund, finale, strip: false, keepsake: firstNote, replay: false });
       out.push({ refund, finale, strip: false, keepsake: 0, replay: false });
