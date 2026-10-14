@@ -69,6 +69,28 @@ id spends exactly one heart.
 If the audio then fails, no attempt holds a heart and the player still has the one they were
 about to spend. Retry spends it.
 
+## Try again, on the result
+
+**Try again says what it costs before it is pressed.** On a level where a new attempt spends
+a heart — past `HEALTH.protectedThrough`, unfinished, no Premium — the block carries the
+restart sheet's chip, a heart and a **1** (`tryAgainCost` in `game/restart.ts`, the same rule
+`beginAttempt` charges by). Where it spends nothing, there is no chip.
+
+**And the result ignores taps for `RESULT_ARM_SEC` (0.7 s) after it appears** (`resultArmed`).
+The summary opens on the last coda's end, and a player still tapping the rhythm lands a tap or
+two on it: on a failed result that was Try again, a new attempt and a heart, taken by a thumb
+that had not read the result; on a cleared one, Continue, leaving the result unread. The block
+takes about that long to rise into place, so the first tap the block is ready for is the first
+the result takes.
+
+## Back, in a level
+
+Android's back is two presses in a level, never one (`levelBackAction` in `core/backButton.ts`):
+the first pauses a running level — by the path a backgrounded app takes, so Resume continues
+the same attempt — or closes the restart sheet as Keep playing; only a second, from a paused
+level, goes to the map, by the path the map puck takes. A level waiting to start, or showing
+its result, leaves on the first. An ad or purchase in flight keeps the press.
+
 **When the scored response begins.** `PlayScene.scoredResponseBegun` is set when the
 controller enters `respond`, or judges a tap, on a task that counts (`scoredResponseBegins`).
 The controller judges nothing earlier than the Good window before the response, so a judged

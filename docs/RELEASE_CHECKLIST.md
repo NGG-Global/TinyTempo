@@ -238,8 +238,11 @@ The code is in and tested; these are the account-side steps.
 - [x] ~~Set `VITE_ANALYTICS=on`~~ — set locally in `.env`, along with
       `VITE_ANALYTICS_CONSENT=granted`. Leave both unset anywhere you do not want in the
       funnel; `.env` is gitignored, so no other checkout inherits them.
-- [ ] Decide `VITE_ANALYTICS_CONSENT`. It sets where the Settings switch *starts*, not
-      whether the player can change it.
+- [x] ~~Decide `VITE_ANALYTICS_CONSENT`.~~ It stays `granted` for release builds, and
+      now only sets where the switch starts **outside** regions that ask for consent: in
+      the EEA, the UK and Switzerland an unchosen switch starts off and nothing is sent
+      (`analytics/startingConsent.ts`). The privacy policy describes exactly this, so a
+      release built without `granted` needs the policy changed with it.
 - [ ] **Confirm an event in DebugView before trusting the dashboard.**
       `adb shell setprop debug.firebase.analytics.app <package>`, then watch DebugView in
       the Firebase console. Firebase batches events for up to an hour otherwise, so an
@@ -248,9 +251,12 @@ The code is in and tested; these are the account-side steps.
       native SDK rather than the web one.
 - [ ] Set the Firebase data-retention period. The privacy policy points at it rather than
       naming a number, so the two cannot drift.
-- [ ] **EEA consent is not finished.** The in-app switch is a control, not a lawful
-      basis. Either configure the UMP message to cover analytics purposes, or do not
-      collect in the EEA. Decide this before the first public release, not after.
+- [x] ~~**EEA consent is not finished.**~~ Analytics is off in regulated regions until
+      the player turns it on, and Firebase collects nothing at all until the game has
+      applied the answer (`firebase_analytics_collection_enabled` and the consent-mode
+      defaults are false in the manifest; see `docs/ANALYTICS.md`). **It depends on the
+      UMP GDPR message below**: the region comes from UMP, and with no message UMP reports
+      every player as outside it.
 
 ### B4. Check the support route on a handset
 
@@ -372,6 +378,13 @@ the pinned SDK. None of this has run between two real devices.
       The game's own save data otherwise leaves the device only through Android's own
       backup, to the player's Google account, and through a save code the player
       chooses to copy. The privacy policy says so.
+      **Endless Mode** adds two things to declare: the player's **best Endless time is posted
+      to a public Play Games leaderboard** under their Play Games name while signed in, and
+      the Endless gameplay events go to Firebase with the rest (*verify against Google's
+      current Play Games Services data-safety guidance which categories those fall under*).
+      **Feedback** from Settings → Help → Feedback goes to a Google Form (`VITE_FEEDBACK_URL`)
+      or by email; it is typed by the player in the browser or mail app, outside the game
+      (*verify whether Play counts a linked form as collection by the app*).
 - [ ] **Content rating questionnaire.** Disclose ads and in-app purchases.
 - [ ] **Target audience and content.** The cartoon workshop look will read as
       child-appealing to a reviewer. If you select a child audience you enter the
@@ -397,9 +410,11 @@ the pinned SDK. None of this has run between two real devices.
       does not prove the signed bundle works.
 - [ ] **Buy each product end to end with a licence tester account.** Premium,
       then a refill, then Restore on a fresh install.
-- [ ] **Register the handset as a test device in AdMob first.** The unit is live, so
-      every ad you tap through on the bench is real inventory and counts as invalid
-      traffic.
+- [ ] **Register the handset as a test device.** Every build except `build:release`
+      now serves Google's test ads (`ADMOB.testAds`), CI's APK included, so the bench is
+      safe by default. A release build serves live ads to everyone, including you: put
+      your phones' hashed ids in `VITE_ADMOB_TEST_DEVICES` (Logcat prints a phone's id the
+      first time it requests an ad) or register them in the AdMob console.
 - [ ] Watch a real rewarded ad and confirm the heart lands.
 - [ ] Exercise the AdMob consent form in an EEA/UK locale.
 - [ ] Confirm Settings → Privacy shows **Ad privacy** in that locale, that the
@@ -413,6 +428,16 @@ the pinned SDK. None of this has run between two real devices.
       `CLAUDE.md` warns that logical size is not constant.
 - [ ] Confirm the portrait lock, the haptics switch, and that reduced motion is
       honoured system-wide.
+- [ ] **Back button on every screen** (`core/backButton.ts`): in a level the first back
+      pauses and the second goes to the map; the restart sheet closes; Endless asks before
+      ending a run; Settings, its pages and the Scrapbook go back; the lesson goes to the
+      title screen; the map goes to the title screen; the title screen sends the app to
+      the background; the save-code and update sheets cancel.
+- [ ] **Sound stops in the background.** Press Home on the title screen, the map and in a
+      level: nothing keeps playing. Come back: the music resumes where it was, or on the
+      next touch if the phone refused it (`audio/backgroundSilence.ts`).
+- [ ] **A failed result ignores taps for 0.7 s**, and **Try again shows ♥ 1** on a level
+      that costs a heart (past level 10, unfinished, no Premium) and nothing elsewhere.
 - [ ] Internal testing track → closed testing → production. *(verify — Play has
       required a period of closed testing with a minimum tester count for some
       new developer accounts.)*

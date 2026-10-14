@@ -355,7 +355,14 @@ report of the purchase that caused it. **Firebase enforces its limits by discard
 dislikes is not an error, it is an event that never arrives. Consent is a stored setting
 with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` puts it, and
 it deliberately does not travel in a save code; the adapter also refuses to hand an event
-to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
+to the SDK while consent is not granted. **Nothing is collected before the answer is read**:
+the manifest holds Firebase (`firebase_analytics_collection_enabled` and every
+`google_analytics_default_allow_*` false, checked by `check-android-config.mjs`) until
+`setFirebaseConsent` runs. **Where UMP says consent applies, an unchosen switch starts off**:
+`admob.ts` reports UMP's first status as a region (`monetization/consentRegion.ts`) before any
+form, and `analytics/startingConsent.ts` keeps a moved switch (`Settings.analyticsChosen`) in
+every region, turns an unchosen one off in a regulated one, and holds collection for a session
+whose region is unknown. Only the region is taken from UMP, never its ad answer. **Gameplay events ride the same bus**, reported
 through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
 attempt on PlayScene's heart attempt id, so Resume and a free restart continue a run
 instead of starting a second one, `level_completed`/`level_failed` fire once from
@@ -517,7 +524,10 @@ through `setSounds`, which belongs to the level that set it. The nail gives `KNO
 the first knock and no more on the rest, and `knockDepth` (`hammerMotion.ts`) lets it back up
 `KNOCK.restSec` after the last; `reset` clears it, so a level's hammer never inherits one.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. The same loop is the **shell bed** on settings and the map
+menu's PLAY tap. **It goes silent while the page is hidden** (`audio/backgroundSilence.ts`):
+the level, the lesson and Endless pause themselves, but the title theme and the road's loop
+played on behind Home and phone calls, so the engine suspends the one context on hidden and
+resumes only a context it suspended, on the next touch if the platform refuses. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
 reuse the one source, a level fades it out and starts a fresh source on its own
 downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
@@ -747,7 +757,10 @@ sheet spends and ends nothing, and the sheet re-reads the run and re-arms before
 attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
 id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
 same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
-and it restarts only if its `RestartTicket` still holds.
+and it restarts only if its `RestartTicket` still holds. **Try again says what it costs and
+does not take a stray tap**: the block carries the sheet's ♥ 1 chip when `tryAgainCost` says a
+heart goes, and a result ignores taps for `RESULT_ARM_SEC` after it appears (`resultArmed`),
+because a player still tapping the rhythm landed on it and paid for an attempt unread.
 
 **A frontier attempt keeps its heart on two stars, and the first area is free**
 (`HEALTH.keepAtStars`, `HEALTH.protectedThrough` in `game/health.ts`). The heart is spent when
@@ -937,6 +950,7 @@ src/
   analytics/
     boot.ts            Attaches the provider on native; composes with the installed sink
     eventShape.ts      Firebase's name and parameter limits, as pure functions
+    startingConsent.ts Where collection starts: the player's answer, then the region; pure
     firebase.ts        The Firebase adapter; the only file that knows the vendor
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
@@ -952,6 +966,7 @@ src/
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
+    backgroundSilence.ts  Suspends the one context while the page is hidden; resumes only its own suspend
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
     design.ts          Design resolution, layout metrics, depth ordering
@@ -974,6 +989,7 @@ src/
     BaseScene.ts       Scene base class owning the build/layout lifecycle
     errors.ts          Capture, dedupe, breadcrumbs and redaction; no vendor, no network
     haptics.ts         navigator.vibrate behind the player's setting; the one added web API
+    backButton.ts      Android's back: one listener, a DOM sheet first, then the scene's handleBack; pure dispatch
     Viewport.ts        Live layout frames (full / safe / content / designBox)
     motionPreference.ts  The one live read of prefers-reduced-motion
     safeArea.ts        Reads env(safe-area-inset-*) via a probe element
@@ -1315,15 +1331,25 @@ after, that the bundle carries the text of every shipped feature in `RELEASE_MAR
 reached Play from a checkout behind main, without the timing details or anything merged with
 them, and nothing said so. A shipped feature adds its marker; the test keeps each one in `src/`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
-is generated by `cap sync` and is not committed. Two native Capacitor plugins are used — AdMob and Firebase
+is generated by `cap sync` and is not committed. Two native Capacitor plugins carry features — AdMob and Firebase
 Analytics — each behind an adapter that is dynamically imported on a native platform only,
-so a browser build downloads none of them. Billing is the third native capability and is
+so a browser build downloads none of them. The third is `@capacitor/app`, for **Android's back
+button** and nothing else (`core/backButton.ts`, native-only and lazily imported): one listener
+hands the press to a DOM sheet first (`dismissShellOverlay`), then to the active scene's
+`handleBack`, and only a press nothing takes — the title screen's — goes to `minimizeApp`.
+Every scene a player can stand on answers it; in a level it is two presses
+(`levelBackAction`: pause, then the map), because the second can end a paid attempt. Before
+it, back left the app from any screen. **AdMob asks for consent before it starts**: `admob.ts`
+initialises the SDK only once `canRequestAds` is true, caps ad content at
+`ADMOB.maxAdContentRating` (parental guidance), and every build but `npm run build:release`
+(`__RELEASE_BUILD__`) serves Google's test ads, so no bench or CI APK serves live ones; the
+Mobile Ads SDK and UMP are pinned in `variables.gradle`. Billing is the fourth native capability and is
 **not** a package: `PlayBillingPlugin.java` in this module calls Google Play Billing
 directly, registered by hand in `MainActivity` and reached through `monetization/purchases.ts`.
 Every decision about a purchase lives in `monetization/playBilling.ts`, which imports no
 native code and is therefore tested under node — the native side only relays what Play says
 and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Play Games
-Services v2 is the fourth and is hand-written for the same reason: `PlayGamesPlugin.java`
+Services v2 is the fifth and is hand-written for the same reason: `PlayGamesPlugin.java`
 relays `GamesSignInClient` and `PlayersClient`, registered beside Billing in `MainActivity`,
 and `PlayGamesSdk.initialize` runs in `TinyTempoApplication` because v2 wants it in
 `Application.onCreate`. The artifact is pinned (`playGamesVersion` in `variables.gradle`) and
@@ -1332,10 +1358,10 @@ is **`play-services-games-v2` only** — the deprecated v1 `play-services-games`
 enforces along with the Games project id, the meta-data, the Application class and both
 `registerPlugin` calls: `cap sync` rewrites `MainActivity` from its own template if the file
 is ever lost, taking the registrations with it. See `docs/PLAY_GAMES.md`. In-app updates
-are the fifth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
+are the sixth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
 `src/updates/playUpdate.ts` decides flexible vs immediate and when to ask for a restart,
 and a browser or a Studio-sideloaded APK is silent — Play only answers for a package it
-installed. See `docs/UPDATES.md`. In-app review is the sixth, and the same shape again:
+installed. See `docs/UPDATES.md`. In-app review is the seventh, and the same shape again:
 `PlayReviewPlugin.java` holds a `ReviewInfo` and shows it, `src/review/appReview.ts` decides
 which clear is the milestone and when the opportunity is spent, and the browser keeps a stub
 that offers nothing. **The only milestone is the first area finale finished with two stars**
@@ -1347,7 +1373,7 @@ reports the facts of a finished level, the run's stars among them, to `offer`, a
 and goes to the map on every branch. Play does not say whether it showed a dialog, so a
 completed launch means "attempted" and nothing more, and the one stored bit
 (`tiny-tempo.review.v1`) is written when a launch is tried, not when one is offered. See
-`docs/IN_APP_REVIEW.md`. The audio route is the seventh: `AudioRoutePlugin.java` reads
+`docs/IN_APP_REVIEW.md`. The audio route is the eighth: `AudioRoutePlugin.java` reads
 `AudioManager.getDevices` and `AudioDeviceCallback` and relays a category, never a device name,
 registered beside the others in `MainActivity` and checked by `check-android-config.mjs`. See
 `docs/AUDIO_ROUTES.md`. Beyond those, the game

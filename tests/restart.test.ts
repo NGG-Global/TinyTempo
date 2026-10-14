@@ -528,3 +528,25 @@ describe('restart analytics', () => {
     expect(count('level_started')).toBe(2);
   });
 });
+
+describe('the result after a level', () => {
+  it('ignores taps for a moment after it appears, so a tap still landing from the level spends nothing', async () => {
+    const { RESULT_ARM_SEC, resultArmed } = await import('../src/game/restart');
+    expect(RESULT_ARM_SEC).toBeGreaterThanOrEqual(0.5);
+    expect(resultArmed(10, 10)).toBe(false);
+    expect(resultArmed(10, 10 + RESULT_ARM_SEC - 0.01)).toBe(false);
+    expect(resultArmed(10, 10 + RESULT_ARM_SEC)).toBe(true);
+    expect(resultArmed(-Infinity, 10)).toBe(false);
+    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
+    expect(scene).toContain('if (this.summaryShown && resultArmed(this.summaryWallAt, performance.now() / 1000)) {');
+  });
+
+  it('says on Try again the heart it will spend, and nothing where it spends none', async () => {
+    const { tryAgainCost } = await import('../src/game/restart');
+    expect(tryAgainCost({ progress: frontier(PAID), level: PAID, premium: false })).toBe(1);
+    expect(tryAgainCost({ progress: frontier(PAID), level: PAID, premium: true })).toBe(0);
+    expect(tryAgainCost({ progress: frontier(HEALTH.protectedThrough), level: HEALTH.protectedThrough, premium: false })).toBe(0);
+    // A finished level replays free, whatever its stars.
+    expect(tryAgainCost({ progress: frontier(PAID + 1), level: PAID, premium: false })).toBe(0);
+  });
+});

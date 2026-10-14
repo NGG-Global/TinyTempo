@@ -586,6 +586,21 @@ export class TutorialScene extends BaseScene {
     this.illustration.onPhase('idle', this.now());
   }
 
+  /**
+   * Android's back in the lesson goes back to the title screen it was opened from. It is
+   * not *Skip*: nothing is stored, so the next Play opens the lesson again, and the visit's
+   * last `tutorial_step_started` is where the funnel shows it was left.
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    ++this.request;
+    this.stop();
+    this.illustration.pause();
+    this.paused = true;
+    this.curtain.cover(() => this.scene.start(SceneKey.Menu));
+    return true;
+  }
+
   private leave(complete: boolean): void {
     ++this.request;
     this.stop();

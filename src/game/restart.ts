@@ -159,3 +159,27 @@ export function ticketStillApplies(ticket: RestartTicket, now: {
 }): boolean {
   return !now.disposed && !now.outcomeRecorded && now.attemptId === ticket.attemptId && now.startRequest === ticket.startRequest;
 }
+
+/**
+ * How long a result ignores taps after it appears, in seconds. The summary opens on the
+ * last coda's end, and a player still tapping the rhythm lands a tap or two on it: a failed
+ * result's tap-anywhere is Try again, which on the frontier spends a heart, and a cleared
+ * one's is Continue, which leaves the result unread. The block takes about this long to
+ * rise into place, so a tap the block is ready for is one the result takes.
+ */
+export const RESULT_ARM_SEC = 0.7;
+
+/** Whether a result shown at `shownAtSec` takes a tap at `nowSec` (wall-clock seconds). */
+export function resultArmed(shownAtSec: number, nowSec: number): boolean {
+  // A microsecond of tolerance: wall-clock seconds are floats, and 10.7 − 10 is under 0.7.
+  return Number.isFinite(shownAtSec) && nowSec - shownAtSec >= RESULT_ARM_SEC - 1e-6;
+}
+
+/**
+ * The hearts Try again will spend, said on the block before it is pressed: one on an
+ * unfinished frontier level past the protected area, none on a finished or protected one,
+ * and none under Premium. The same rule `beginAttempt` charges by.
+ */
+export function tryAgainCost(facts: { readonly progress: Progress; readonly level: number; readonly premium: boolean }): 0 | 1 {
+  return !facts.premium && attemptCostsHeart(facts.progress, facts.level) ? 1 : 0;
+}

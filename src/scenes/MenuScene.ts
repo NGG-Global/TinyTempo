@@ -506,6 +506,17 @@ export class MenuScene extends BaseScene {
       console.error('Unable to prepare music', error);
     }
   }
+  /**
+   * Android's back on the title screen: an open card is put away; otherwise nothing here
+   * takes it, and the app goes to the background, which is what back on a root screen does
+   * (`core/backButton.ts`).
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    if (this.objectivesCard.open) { this.objectivesCard.hide(); return true; }
+    return false;
+  }
+
   private shutdown(): void {
     if (this.disposed) return;
     this.disposed = true;

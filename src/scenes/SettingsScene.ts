@@ -5,6 +5,7 @@ import { activeCalibration, currentRoute, onRouteChange } from '@/audio/audioRou
 import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { CREDITS } from '@/config/credits';
 import { SceneKey } from '@/config/scenes';
+import { SUPPORT } from '@/config/support';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
@@ -18,6 +19,7 @@ import { achievementsOffered, openAchievements } from '@/playgames/achievementSy
 import { repairCloudBinding } from '@/playgames/cloudSync';
 import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
+import { supportMailto } from '@/game/supportReport';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
 import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
@@ -50,7 +52,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'credit' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -247,6 +249,9 @@ export class SettingsScene extends BaseScene {
       help: rowTitle('Contact us'),
       helpNote: rowNote('Report a problem, or ask for a hand'),
       helpGo: chip('Open'),
+      feedback: rowTitle('Feedback'),
+      feedbackNote: rowNote('Tell us what to fix or keep'),
+      feedbackGo: chip('Send'),
       // The person first, their work under it: a credit names someone.
       credit: rowTitle(CREDITS.score.name),
       creditNote: rowNote(CREDITS.score.role),
@@ -621,6 +626,15 @@ export class SettingsScene extends BaseScene {
     this.rows.help = helpRect;
     this.texts.helpGo!.setPosition(helpRect.centerX - 14 * s, helpRect.centerY);
     this.hits.push({ name: 'help', rect: helpRect, pinned: false });
+    // Feedback beside it: the same card, for what a player thinks rather than what broke.
+    const feedback = plate(row);
+    this.rows.feedbackCard = feedback;
+    this.texts.feedback!.setPosition(left + 28 * s, feedback.centerY - 15 * s);
+    this.texts.feedbackNote!.setPosition(left + 28 * s, feedback.centerY + 19 * s);
+    const feedbackRect = new Phaser.Geom.Rectangle(feedback.right - 26 * s - helpW, feedback.centerY - control / 2, helpW, control);
+    this.rows.feedback = feedbackRect;
+    this.texts.feedbackGo!.setPosition(feedbackRect.centerX - 14 * s, feedbackRect.centerY);
+    this.hits.push({ name: 'feedback', rect: feedbackRect, pinned: false });
 
     // CREDITS — the people whose work is in the game beyond its code, each a row whose chip
     // opens a page of their own choosing (`config/credits.ts`, mirrored on the website).
@@ -784,6 +798,12 @@ export class SettingsScene extends BaseScene {
       const sink = 8 * s * sunk('help') * 0.8;
       drawChevron(g, this.rows.help.right - 30 * s, this.rows.help.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.helpGo!.setPosition(this.rows.help.centerX - 14 * s, this.rows.help.centerY + sink);
+    }
+    if (this.rows.feedback) {
+      drawPanel(g, this.rows.feedback, s, { fill: SHELL.cream, depth: 8, press: sunk('feedback'), radius: 18 });
+      const sink = 8 * s * sunk('feedback') * 0.8;
+      drawChevron(g, this.rows.feedback.right - 30 * s, this.rows.feedback.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.feedbackGo!.setPosition(this.rows.feedback.centerX - 14 * s, this.rows.feedback.centerY + sink);
     }
     if (this.rows.credit) {
       drawPanel(g, this.rows.credit, s, { fill: SHELL.cream, depth: 8, press: sunk('credit'), radius: 18 });
@@ -1048,6 +1068,7 @@ export class SettingsScene extends BaseScene {
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
       case 'reset': this.resetTapped(); return;
+      case 'feedback': sendFeedback(); return;
       case 'credit': openPage(CREDITS.score.url); return;
       case 'privacy': openPage(LEGAL.privacy); return;
       case 'terms': openPage(LEGAL.terms); return;
@@ -1228,6 +1249,12 @@ export class SettingsScene extends BaseScene {
     }
   }
 
+  /** Android's back is this screen's own back puck (`core/backButton.ts`). */
+  public handleBack(): boolean {
+    this.leave();
+    return true;
+  }
+
   private leave(): void {
     this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(this.from)));
   }
@@ -1258,4 +1285,13 @@ export class SettingsScene extends BaseScene {
  */
 function openPage(url: string): void {
   try { window.open(url, '_blank', 'noopener,noreferrer'); } catch { /* a blocked popup costs nothing here */ }
+}
+
+/**
+ * The feedback form when the build names one, in the system browser; otherwise a mail with
+ * the build in its subject. Nothing is attached: what a player sends is what they write.
+ */
+function sendFeedback(): void {
+  if (SUPPORT.feedbackUrl !== null) { openPage(SUPPORT.feedbackUrl); return; }
+  try { window.location.href = supportMailto(SUPPORT.address, SUPPORT.feedbackSubject(__APP_VERSION__), ''); } catch { /* the address is on the Help page */ }
 }

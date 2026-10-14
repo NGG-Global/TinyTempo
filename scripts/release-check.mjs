@@ -39,6 +39,12 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Tutorial opens on tapping along', text: '1 / 2 · TAP ALONG', source: 'src/scenes/TutorialScene.ts' },
   { feature: 'Tutorial step analytics', text: 'tutorial_step_ended', source: 'src/monetization/analytics.ts' },
   { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/scenes/PlayScene.ts' },
+  { feature: 'Android back button on every screen', text: 'handleBack', source: 'src/core/backButton.ts' },
+  { feature: 'Silence while the app is in the background', text: 'releaseBackground', source: 'src/audio/AudioEngine.ts' },
+  { feature: 'Analytics off until chosen where consent is required', text: 'analyticsChosen', source: 'src/game/settings.ts' },
+  { feature: 'Ad content capped', text: 'maxAdContentRating', source: 'src/config/ads.ts' },
+  { feature: 'Try again guarded and priced', text: 'summaryWallAt', source: 'src/scenes/PlayScene.ts' },
+  { feature: 'Feedback from Settings', text: 'Tell us what to fix or keep', source: 'src/scenes/SettingsScene.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

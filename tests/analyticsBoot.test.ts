@@ -12,12 +12,14 @@ const state = vi.hoisted(() => ({
   config: { enabled: true, consentGranted: false },
   logged: [] as string[],
   failToCreate: false,
+  granted: [] as boolean[],
 }));
 
 vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => state.native } }));
 vi.mock('@/config/analytics', () => ({ ANALYTICS: state.config }));
 vi.mock('@/analytics/firebase', () => ({
-  createFirebaseSink: async () => {
+  createFirebaseSink: async (granted: boolean) => {
+    state.granted.push(granted);
     if (state.failToCreate) throw new Error('no google-services.json');
     return (event: string) => { state.logged.push(event); };
   },
@@ -26,8 +28,18 @@ vi.mock('@/analytics/firebase', () => ({
 
 const { logged } = state;
 
-import { installAnalyticsProvider } from '../src/analytics/boot';
+import { installAnalyticsProvider as install } from '../src/analytics/boot';
+import { loadSettings, saveSettings } from '../src/game/settings';
 import { installAnalytics, track } from '../src/monetization/analytics';
+import { createConsentRegionSignal, type ConsentRegion } from '../src/monetization/consentRegion';
+
+/** A region that has already answered, so the boot does not sit out its wait. */
+function answered(region: ConsentRegion) {
+  const signal = createConsentRegionSignal();
+  signal.report(region);
+  return signal;
+}
+const installAnalyticsProvider = (region: ConsentRegion = 'open') => install(answered(region));
 
 /** Stands in for the crash-breadcrumb wrapper `diagnostics/boot.ts` installs first. */
 function installBridge(seen: string[]): void {
@@ -42,7 +54,18 @@ describe('attaching the analytics provider', () => {
     state.native = true;
     state.config.enabled = true;
     state.failToCreate = false;
+    state.config.consentGranted = false;
     logged.length = 0;
+    state.granted.length = 0;
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => { store.set(key, String(value)); },
+      removeItem: (key: string) => { store.delete(key); },
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    });
     installAnalytics(() => { /* a quiet default, as in production */ });
   });
 
@@ -94,5 +117,26 @@ describe('attaching the analytics provider', () => {
     track('purchase_failed', { product: 'premium', reason: 'unavailable' });
     expect(seen).toEqual(['bridge:purchase_failed']);
     expect(logged).toEqual([]);
+  });
+
+  it('starts with collection off where consent is required, whatever the build defaulted to', async () => {
+    saveSettings({ ...loadSettings(), analytics: true, analyticsChosen: false });
+    await installAnalyticsProvider('regulated');
+    expect(state.granted).toEqual([false]);
+    // The switch says so too, rather than showing an on that is not running.
+    expect(loadSettings().analytics).toBe(false);
+  });
+
+  it('keeps the player’s own yes in any region', async () => {
+    saveSettings({ ...loadSettings(), analytics: true, analyticsChosen: true });
+    await installAnalyticsProvider('regulated');
+    expect(state.granted).toEqual([true]);
+  });
+
+  it('holds collection for a session whose region is unknown, without writing anything', async () => {
+    saveSettings({ ...loadSettings(), analytics: true, analyticsChosen: false });
+    await installAnalyticsProvider('unknown');
+    expect(state.granted).toEqual([false]);
+    expect(loadSettings().analytics).toBe(true);
   });
 });

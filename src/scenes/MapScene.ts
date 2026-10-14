@@ -2576,6 +2576,21 @@ export class MapScene extends BaseScene {
     this.routeNotice.show(!this.restShown && routeNoticeWanted() ? currentRoute() : null);
   }
 
+  /**
+   * Android's back on the road: an open card or the out-of-hearts sheet is put away first,
+   * as a tap off it would; then back is the header's back puck, to the title screen. A sheet
+   * whose ad or purchase is still out keeps the press, so nothing is left half-done.
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    if (this.objectivesCard.open) { this.objectivesCard.hide(); this.puckDirty = true; return true; }
+    if (this.endlessCard.open) { this.endlessCard.hide(); this.puckDirty = true; return true; }
+    if (this.restShown) { if (!this.restBusy) this.hideRest(); return true; }
+    this.pressPuck('back');
+    this.curtain.cover(() => this.scene.start(SceneKey.Menu));
+    return true;
+  }
+
   private shutdown(): void {
     if (this.disposed) return;
     this.disposed = true;

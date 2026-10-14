@@ -64,6 +64,15 @@ same discipline the save code's Copy button follows.
 The report is wrapped with Phaser's *advanced* word wrap, because a save code is one
 58-character word with no spaces in it and basic wrapping leaves it hanging off the card.
 
+## Feedback, beside it
+
+Settings → Help has a second row, **Feedback**, for what a player thinks rather than what
+broke. It opens the form a build names in `VITE_FEEDBACK_URL` — the closed test's Google Form,
+so every tester's note lands in one place Play's production questions can be answered from —
+in the system browser, and with no form it is a mail to the support address with "feedback"
+and the build in the subject. Nothing is attached: what is sent is what the player writes.
+Only an https address is taken (`SUPPORT.feedbackUrl`).
+
 ## The player whose game will not start
 
 They cannot reach Settings, so the support screen does not exist for them — and a boot

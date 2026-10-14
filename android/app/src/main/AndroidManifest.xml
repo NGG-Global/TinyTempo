@@ -54,6 +54,18 @@
             android:name="com.google.android.gms.ads.APPLICATION_ID"
             android:value="@string/admob_app_id" />
 
+        <!-- Google Analytics for Firebase collects nothing until the game applies the player's
+             answer (src/analytics/boot.ts → setFirebaseConsent): collection starts off, and so
+             does every consent-mode signal. The game grants analytics_storage at runtime when
+             the player's answer is yes; the advertising signals stay denied, because analytics
+             consent is never advertising consent. scripts/check-android-config.mjs checks
+             these five are here. -->
+        <meta-data android:name="firebase_analytics_collection_enabled" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_analytics_storage" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_storage" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_user_data" android:value="false" />
+        <meta-data android:name="google_analytics_default_allow_ad_personalization_signals" android:value="false" />
+
         <!-- Play Games Services v2. The value is the numeric Games project id; see
              @string/game_services_project_id for why it is none of the other ids. -->
         <meta-data

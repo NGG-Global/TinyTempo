@@ -687,6 +687,20 @@ export class EndlessScene extends BaseScene {
   }
 
   /** The player chose to leave: not ranked, nothing recorded, straight to the map. */
+  /**
+   * Android's back in Endless is the map puck: before the run's clock has started it
+   * leaves; during a run it asks first, on the same sheet, because leaving ends the run;
+   * with the sheet up it is Keep playing; after the run, it goes to the map.
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    if (this.sheetOpen) { this.hideSheet(); return true; }
+    if (this.plaqueShown || this.over || this.invalid !== null) { this.leaveForMap(); return true; }
+    if (this.runStartSec === -Infinity && !this.starting) { this.leaveForMap(); return true; }
+    this.showSheet();
+    return true;
+  }
+
   private abandon(): void {
     if (this.over) { this.leaveForMap(); return; }
     const elapsed = this.runStartSec > -Infinity ? Math.max(0, Math.floor(this.now() - this.runStartSec)) : 0;

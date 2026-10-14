@@ -4,6 +4,7 @@ import {
   createAdMobAds, createMonetization, REWARD_EVENTS, type AdMobClient, type ConsentSnapshot,
 } from '../src/monetization';
 import { claimHeart, type Health } from '../src/game/health';
+import { createConsentRegionSignal, type ConsentRegion } from '../src/monetization/consentRegion';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -300,5 +301,76 @@ describe('rewarded show through the facade still grants once', () => {
     expect(commerce.privacyOptionsAvailable()).toBe(true);
     await commerce.showPrivacyOptions();
     expect(client.privacyForms).toBe(1);
+  });
+});
+
+describe('consent before the Mobile Ads SDK', () => {
+  /** The fake client, with every call it receives written down in order. */
+  function logged(options: FakeOptions = {}) {
+    const client = fakeClient(options);
+    const calls: string[] = [];
+    const wrap = <K extends 'initialize' | 'requestConsentInfo' | 'showConsentForm' | 'prepareRewardVideoAd'>(key: K) => {
+      const original = client[key].bind(client) as (...args: never[]) => unknown;
+      (client as unknown as Record<string, unknown>)[key] = (...args: never[]) => { calls.push(key); return original(...args); };
+    };
+    wrap('initialize'); wrap('requestConsentInfo'); wrap('showConsentForm'); wrap('prepareRewardVideoAd');
+    return { client, calls };
+  }
+  const signal = () => {
+    const reported: ConsentRegion[] = [];
+    const region = createConsentRegionSignal();
+    return { reported, region: { report: (r: ConsentRegion) => { reported.push(r); region.report(r); }, wait: region.wait } };
+  };
+
+  it('asks for consent first and starts the SDK only once ads may be requested', async () => {
+    const { client, calls } = logged({ consent: BLOCKED, form: ALLOWED });
+    await createAdMobAds(client, { region: signal().region }).boot();
+    expect(calls).toEqual(['requestConsentInfo', 'showConsentForm', 'initialize', 'prepareRewardVideoAd']);
+  });
+
+  it('never starts the SDK for a player who refuses', async () => {
+    const { client, calls } = logged({ consent: BLOCKED, form: BLOCKED });
+    const ads = createAdMobAds(client, { region: signal().region });
+    await ads.boot();
+    expect(calls).not.toContain('initialize');
+    expect(ads.available()).toBe(false);
+  });
+
+  it('starts it later, once, when the privacy options grant consent', async () => {
+    const { client, calls } = logged({
+      consent: { canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' },
+      form: { canRequestAds: false, privacyOptionsRequirementStatus: 'REQUIRED' },
+      privacyForm: { canRequestAds: true, privacyOptionsRequirementStatus: 'REQUIRED' },
+    });
+    const ads = createAdMobAds(client, { region: signal().region });
+    await ads.boot();
+    expect(calls).not.toContain('initialize');
+    await ads.showPrivacyOptions();
+    await ads.showPrivacyOptions();
+    expect(calls.filter(c => c === 'initialize')).toHaveLength(1);
+    expect(ads.available()).toBe(true);
+  });
+
+  it('reports the region from the first answer, before any form, and unknown when asking fails', async () => {
+    const regulated = signal();
+    await createAdMobAds(fakeClient({ consent: { ...BLOCKED, status: 'REQUIRED' }, form: ALLOWED }), { region: regulated.region }).boot();
+    expect(regulated.reported).toEqual(['regulated']);
+    const open = signal();
+    await createAdMobAds(fakeClient({ consent: { ...ALLOWED, status: 'NOT_REQUIRED' } }), { region: open.region }).boot();
+    expect(open.reported).toEqual(['open']);
+    const failed = signal();
+    const broken = fakeClient();
+    broken.requestConsentInfo = async () => { throw new Error('offline'); };
+    const ads = createAdMobAds(broken, { region: failed.region });
+    await ads.boot();
+    expect(failed.reported).toEqual(['unknown']);
+    expect(ads.available()).toBe(false);
+  });
+
+  it('caps ad content at parental guidance, and serves test ads outside a release build', () => {
+    expect(ADMOB.maxAdContentRating).toBe('ParentalGuidance');
+    // Tests are not `build:release`, so they see what a debug APK sees.
+    expect(ADMOB.testAds).toBe(true);
+    expect(ADMOB.testDevices).toEqual([]);
   });
 });

@@ -124,11 +124,47 @@ denial and opens only *after* the SDK has accepted a grant, and a slower grant t
 resolves after a newer denial cannot reopen it. `tests/analyticsConsent.test.ts` stages
 each of those orders against a mocked plugin.
 
-**It is deliberately not wired to the AdMob consent flow.** The game already runs
-Google's UMP form for ads, and `canRequestAds` is tempting to reuse — but it answers a
+**Nothing is collected before the game has read the answer.** Firebase starts collecting
+the moment it is initialised unless the manifest holds it, and the game applies consent only
+once its JavaScript has booted — so every launch used to send an app open and a session
+before the player's answer was read. `AndroidManifest.xml` now sets
+`firebase_analytics_collection_enabled` to false (Firebase's documented way to hold
+collection until consent) and every `google_analytics_default_allow_*` consent-mode default
+to false. `setFirebaseConsent` grants `analytics_storage` and re-enables collection at
+runtime when the answer is yes; the advertising signals stay denied, because analytics
+consent is never advertising consent. `scripts/check-android-config.mjs` warns if any of
+the five goes missing.
+
+**It does not use the AdMob consent *answer*, only its region.** `canRequestAds` answers a
 question about *advertising*, not about analytics storage, and treating one as the other
-is exactly the conflation the GDPR purpose rules exist to prevent. `setFirebaseConsent`
-exists so a real consent signal can be connected when there is one.
+is exactly the conflation the GDPR purpose rules exist to prevent. What the game does take
+from UMP is *where the player is*: its first status at boot, `REQUIRED` or `OBTAINED` where
+a consent message is shown (the EEA, the UK and Switzerland, for the GDPR message) and
+`NOT_REQUIRED` elsewhere (`monetization/consentRegion.ts`, reported by `admob.ts` before any
+form is shown). `analytics/startingConsent.ts` (pure) decides from it:
+
+| The player's switch | Region | Collection this session |
+| --- | --- | --- |
+| Moved by the player (`analyticsChosen`) | any | what they chose |
+| Never moved | regulated | **off**, and the switch is written off so Settings shows it |
+| Never moved | unknown (no answer in 8 s, no network, no plugin) | off for this session; nothing written |
+| Never moved | open | the build's default, `VITE_ANALYTICS_CONSENT` |
+
+So a player in the EEA, the UK or Switzerland is asked nothing and sends nothing unless
+they turn the switch on, and a player elsewhere starts where the build says.
+
+One window remains, and it closes itself. Firebase keeps `setAnalyticsCollectionEnabled`
+across launches, over the manifest's hold, so a grant an earlier build applied runs from
+launch until this boot applies the new answer — up to `REGION_WAIT_MS`. That is the first
+launch after updating, for a player in a regulated region who never moved the switch: the
+boot then writes the switch off and denies collection natively, and every later launch is
+held. Denying first on every launch would close it, at the cost of every granted player's
+opening events; for the handful of closed-test installs this applies to, it was not worth it. **The region
+comes from the UMP message configured in AdMob**: with no GDPR message there, UMP answers
+`NOT_REQUIRED` everywhere and the regulated row never applies — configure it before a
+public release. The privacy policy states this behaviour for a build with
+`VITE_ANALYTICS_CONSENT=granted`; a build without it starts off everywhere, and the policy's
+"elsewhere it starts on" would then be wrong.
 
 ### The switch
 
@@ -144,7 +180,8 @@ drive analytics consent, and the analytics switch does not drive ads.
 
 `Settings.analytics` defaults to whatever `VITE_ANALYTICS_CONSENT` says, and a save
 written before the switch existed falls back to the same default rather than being read as
-a yes. That is the opposite of the rule `haptics` follows, and deliberately so: a missing
+a yes. `Settings.analyticsChosen` records whether the switch has ever been moved, so the
+boot can tell a player's answer from a default; a save from before it reads as not chosen. That is the opposite of the rule `haptics` follows, and deliberately so: a missing
 preference can be assumed, a missing consent cannot.
 
 **Consent does not travel in a save code.** `SaveData.settings` is a
@@ -152,10 +189,11 @@ preference can be assumed, a missing consent cannot.
 Consent belongs to a device and the jurisdiction its owner is in; restoring a code must
 not answer that question on a phone whose owner was never asked it.
 
-**This is still not a finished consent story.** Shipping analytics to EEA users needs the
-UMP message configured to cover analytics purposes, or analytics left off there — the
-in-app switch is a control, not a lawful basis. That is account-side work; see the release
-checklist.
+**What is left is account-side.** Configure the UMP GDPR message in AdMob, which is what
+tells the game a player is in a region that asks for consent. If you would rather ask EEA
+players for analytics consent in the UMP form itself than leave it off until they find the
+switch, that is a change to the message and to `startingConsent` together — the switch is a
+control, and an unchosen default in a regulated region is never treated as a yes.
 
 ## Turning it on
 

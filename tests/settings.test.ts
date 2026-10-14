@@ -36,16 +36,16 @@ function fakeStorage(initial?: string) {
 
 describe('stored settings', () => {
   it('falls back to the defaults for missing, unparseable and wrongly shaped values', () => {
-    expect(loadSettings(null)).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage())).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(null)).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(loadSettings(fakeStorage())).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(loadSettings(fakeStorage('not json'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(loadSettings(fakeStorage('[1,2]'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":"120","muted":"yes"}'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":null}'))).toEqual({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
   });
   it('clamps a stored offset rather than trusting it', () => {
     // A version-1 save's one offset is the legacy slot, clamped like every other value.
-    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibration: legacy(180), muted: true, music: 1, sfx: 1, haptics: true, analytics: false });
+    expect(loadSettings(fakeStorage('{"calibrationMs":180,"muted":true}'))).toEqual({ calibration: legacy(180), muted: true, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
     expect(loadSettings(fakeStorage(`{"calibrationMs":${1e9}}`)).calibration.legacy).toBe(CALIBRATION_LIMIT_MS);
     expect(loadSettings(fakeStorage('{"calibrationMs":-1e9}')).calibration.legacy).toBe(-CALIBRATION_LIMIT_MS);
     // And a version-2 save's per-route values the same way.
@@ -65,17 +65,17 @@ describe('stored settings', () => {
   });
   it('reports whether a write landed and clamps on the way out', () => {
     const storage = fakeStorage();
-    expect(saveSettings({ calibration: { ...NO_CALIBRATION, bluetooth: 5000 }, muted: true, music: 1, sfx: 1, haptics: true, analytics: false }, storage)).toBe(true);
+    expect(saveSettings({ calibration: { ...NO_CALIBRATION, bluetooth: 5000 }, muted: true, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false }, storage)).toBe(true);
     // Version 2, the per-route object holding only the slots that have a value, and no
     // single `calibrationMs` for a version-1 reader to trust.
-    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 2, calibration: { bluetooth: CALIBRATION_LIMIT_MS }, muted: true, music: 1, sfx: 1, haptics: true, analytics: false });
-    expect(saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false }, null)).toBe(false);
+    expect(JSON.parse(storage.store.get('tiny-tempo.settings.v1')!)).toEqual({ version: 2, calibration: { bluetooth: CALIBRATION_LIMIT_MS }, muted: true, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false });
+    expect(saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false }, null)).toBe(false);
     const blocked = { setItem: () => { throw new Error('quota'); } } as unknown as Storage;
-    expect(saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false }, blocked)).toBe(false);
+    expect(saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false }, blocked)).toBe(false);
     // A round trip through storage is the shape the game actually uses.
     const routes = { ...NO_CALIBRATION, speaker: -40, bluetooth: 142 };
-    saveSettings({ calibration: routes, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false }, storage);
-    expect(loadSettings(storage)).toEqual({ calibration: routes, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false });
+    saveSettings({ calibration: routes, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false, analyticsChosen: false }, storage);
+    expect(loadSettings(storage)).toEqual({ calibration: routes, muted: false, music: 0.5, sfx: 0, haptics: false, analytics: false, analyticsChosen: false });
     // Reset is a route back to uncalibrated, not a measurement of the inverse.
     saveSettings({ ...loadSettings(storage), calibration: { ...routes, speaker: null } }, storage);
     expect(loadSettings(storage).calibration).toEqual({ ...routes, speaker: null });
@@ -153,7 +153,7 @@ describe('the offset applies to judged input only', () => {
 });
 
 describe('music and effects levels', () => {
-  const base = { calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false };
+  const base = { calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: false, analyticsChosen: false };
   it('reads a save from before the sliders as full, mute and all', () => {
     // The mute still silences. The levels underneath it are what unmuting used to restore,
     // which was everything, so a missing field is full rather than zero.
@@ -189,6 +189,8 @@ describe('analytics consent', () => {
     // can be assumed, a missing consent cannot. The fallback is the build's own default.
     const old = fakeStorage(JSON.stringify({ version: 1, calibrationMs: 0, muted: false, haptics: true }));
     expect(loadSettings(old).analytics).toBe(false);
+    // Nor as a chosen answer: nothing then could tell a moved switch from a default.
+    expect(loadSettings(old).analyticsChosen).toBe(false);
     // And the rest of that save is still read, so this is the field falling back and not
     // the whole parse failing into the defaults.
     expect(loadSettings(old).haptics).toBe(true);
@@ -197,8 +199,9 @@ describe('analytics consent', () => {
   it('keeps an explicit answer of either kind', () => {
     for (const analytics of [true, false]) {
       const storage = fakeStorage();
-      saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics }, storage);
+      saveSettings({ calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics, analyticsChosen: true }, storage);
       expect(loadSettings(storage).analytics).toBe(analytics);
+      expect(loadSettings(storage).analyticsChosen).toBe(true);
     }
   });
 

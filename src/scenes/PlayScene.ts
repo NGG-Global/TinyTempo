@@ -29,7 +29,7 @@ import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
 import { masteryResult, type MasteryResult } from '@/game/mastery';
 import {
-  attemptForStart, liveSheet, releaseAttempt, restartKind, scoredResponseBegins, sheetFor, ticketStillApplies, watchForHeart,
+  attemptForStart, liveSheet, releaseAttempt, restartKind, resultArmed, scoredResponseBegins, sheetFor, ticketStillApplies, tryAgainCost, watchForHeart,
   type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
@@ -69,6 +69,7 @@ import { Feedback, FxKey } from '@/ui/feedback';
 import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
 import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
 import { VerdictTag } from '@/ui/verdictTag';
+import { levelBackAction } from '@/core/backButton';
 import { Sheen } from '@/ui/sheen';
 import { arrive, settle, squash } from '@/ui/spring';
 import { punch } from '@/ui/punch';
@@ -391,6 +392,10 @@ export class PlayScene extends BaseScene {
   private taskMarks!: Phaser.GameObjects.Graphics;
   private curtain!: SceneCurtain;
   private summaryAt = -Infinity;
+  /** When the summary appeared on the wall clock, for the tap guard (`resultArmed`). */
+  private summaryWallAt = -Infinity;
+  /** The heart Try again spends, on the block's chip. */
+  private retryCost!: Phaser.GameObjects.Text;
   /** Read per use, so a preference change applies mid-scene. */
   private get reducedMotion(): boolean { return reducedMotion(); }
   /**
@@ -507,6 +512,7 @@ export class PlayScene extends BaseScene {
     this.punchAt = -Infinity;
     this.summaryShown = false;
     this.summaryAt = -Infinity;
+    this.summaryWallAt = -Infinity;
     this.summaryStars = 0;
     this.levelCleared = false;
     this.saveFailed = false;
@@ -589,8 +595,9 @@ export class PlayScene extends BaseScene {
     this.actionLabel = display(this, '', { size: 40, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
     this.actionHint = label(this, '', { size: 22, colour: SHELL.cream }).setOrigin(0, 0.5);
     this.plusOne = display(this, '+1', { size: 36, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(false);
+    this.retryCost = display(this, '1', { size: 34, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(false);
     this.actionHeart = this.add.graphics();
-    this.actionRoot.add([this.action, this.actionSurface, this.actionLabel, this.actionHint, this.plusOne, this.actionHeart]);
+    this.actionRoot.add([this.action, this.actionSurface, this.actionLabel, this.actionHint, this.plusOne, this.retryCost, this.actionHeart]);
     this.refillRoot = this.add.container(0, 0).setDepth(10);
     this.refill = this.add.graphics();
     this.refillLabel = label(this, 'REFILL', { size: 28, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5);
@@ -851,6 +858,7 @@ export class PlayScene extends BaseScene {
     placeSurface(this.actionSurface, r, s, sink);
     this.actionHint.setVisible(offering);
     this.actionHeart.clear();
+    this.retryCost.setVisible(false);
     if (offering) {
       // A rewarded watch is an offer, not a verdict: the disc says a video starts, the
       // second line says how long it takes, and the chip says exactly what it buys.
@@ -883,6 +891,26 @@ export class PlayScene extends BaseScene {
       this.actionHint.setVisible(false);
       this.actionLabel.setText(this.actionCaption);
       resize(this.actionLabel, 40 * s, SHELL.cream);
+      // Try again says what it spends before it is pressed, on the chip the restart sheet
+      // and the Watch block use: a heart and a 1. Nothing on a level that costs nothing.
+      const cost = this.actionCaption === 'Try again' ? tryAgainCost({
+        progress: this.outcome?.progress ?? loadProgress(), level: this.spec.level, premium: monetization().premium(),
+      }) : 0;
+      this.retryCost.setVisible(cost > 0);
+      if (cost > 0) {
+        const chipW = 112 * s, chipH = 62 * s;
+        const chipX = r.right - 26 * s - chipW, cy = r.centerY + sink;
+        g.fillStyle(shade(PALETTE.coral, -0.5), 0.55).fillRoundedRect(chipX, cy - chipH / 2, chipW, chipH, 18 * s);
+        const heartX = chipX + 30 * s;
+        drawHeart(this.actionHeart, heartX, cy, 16 * s, SHELL.cream, 1, shade(PALETTE.coral, -0.6));
+        resize(this.retryCost, 34 * s, SHELL.cream);
+        this.retryCost.setPosition(heartX + 34 * s, cy);
+        // The word centred in the room left of the chip, so the pair reads as one block.
+        const room = chipX - 18 * s - r.x;
+        this.actionLabel.setOrigin(0.5).setPosition(r.x + room / 2 + 9 * s, cy);
+        this.placeWaitCopy();
+        return;
+      }
       // Continue carries the same disc the map's next-level block does, on the right of
       // the word: the level is over and this is the way on, not a retry.
       const forward = this.actionCaption === 'Continue';
@@ -1410,7 +1438,11 @@ export class PlayScene extends BaseScene {
     }
     if (phase === 'result') {
       // Cleared: back to the road, centred on what just opened. Failed: straight into another go.
-      if (this.summaryShown) { if (this.levelCleared) this.continueFromSummary(); else void this.startRound('new_attempt'); }
+      // Not before the result has been up for `RESULT_ARM_SEC`: a tap still landing from the
+      // level's own rhythm must not spend a heart on Try again or skip a result unread.
+      if (this.summaryShown && resultArmed(this.summaryWallAt, performance.now() / 1000)) {
+        if (this.levelCleared) this.continueFromSummary(); else void this.startRound('new_attempt');
+      }
       return;
     }
     if (!this.audio || !this.controller?.active) return;
@@ -2305,6 +2337,7 @@ export class PlayScene extends BaseScene {
       attempts: this.attempts,
     });
     this.summaryAt = this.now();
+    this.summaryWallAt = performance.now() / 1000;
     // The longer note is shown once, here; after it, every later card is the short one.
     if (this.keepsake && this.keepsakeFirst) markScrapbookSeen();
     this.keepsakeStruck = false;
@@ -3324,6 +3357,27 @@ export class PlayScene extends BaseScene {
     if (wasEnding || wasStarting || wasTeaching) { this.controller?.dispose(); this.showPause(); }
     // Freezing the idle illustration would leave it stuck until the next round begins.
     if (wasRunning || wasStarting || wasTeaching) this.vignette.pause();
+  }
+  /**
+   * Android's back in a level, as two presses rather than one, because the second can end
+   * an attempt the player paid a heart for. The restart sheet closes first, as Keep playing.
+   * A level that is running pauses, by the same path a backgrounded app takes; a level
+   * already paused, waiting to start or showing its result goes to the map, by the same
+   * path the map puck takes — the review flow stays on Continue alone. An ad or purchase in
+   * flight, or a Continue already under way, keeps the press.
+   */
+  public handleBack(): boolean {
+    const phase = this.controller?.phase ?? 'idle';
+    const action = levelBackAction({
+      busy: this.disposed || this.curtain.active || this.continuation?.busy === true || this.commerceBusy,
+      sheetOpen: this.restartSheet.open,
+      sheetBusy: this.restartSheet.busy,
+      running: this.starting || this.teach !== null || (phase !== 'idle' && phase !== 'paused' && phase !== 'result'),
+    });
+    if (action === 'closeSheet') this.closeRestartSheet('keep_playing');
+    else if (action === 'pause') this.interrupt();
+    else if (action === 'leave') this.leaveForMap();
+    return true;
   }
   private persistAbandonedAttempt(): void {
     // A finished run has already closed, so this reports only a player leaving mid-level.

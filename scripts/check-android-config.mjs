@@ -163,6 +163,24 @@ if (!manifest.includes('android:appCategory="game"')) {
     + '    the portrait lock on every tablet and the game runs sideways at 2048 x 1280. Games are\n'
     + '    the documented exception. See docs/TABLETS.md.');
 }
+/**
+ * Firebase starts collecting the moment it is initialised unless the manifest holds it, and
+ * the game only applies the player's answer once its JavaScript has booted. Without these,
+ * every launch would send an app open and a session before consent was ever read.
+ */
+const ANALYTICS_HOLD = [
+  'firebase_analytics_collection_enabled',
+  'google_analytics_default_allow_analytics_storage',
+  'google_analytics_default_allow_ad_storage',
+  'google_analytics_default_allow_ad_user_data',
+  'google_analytics_default_allow_ad_personalization_signals',
+];
+const unheld = ANALYTICS_HOLD.filter(name => !new RegExp(`android:name="${name}"\\s+android:value="false"`).test(manifest));
+if (unheld.length > 0) {
+  notes.push('AndroidManifest.xml does not hold Firebase Analytics until consent is applied:\n'
+    + unheld.map(name => `      missing  ${name} = false`).join('\n') + '\n'
+    + '    The SDK would collect from launch, before the player\'s answer is read. See docs/ANALYTICS.md.');
+}
 if (!manifest.includes('android:name=".TinyTempoApplication"')) {
   notes.push('AndroidManifest.xml does not name .TinyTempoApplication, so PlayGamesSdk.initialize\n'
     + '    never runs and authentication silently never happens.');

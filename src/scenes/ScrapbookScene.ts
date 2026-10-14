@@ -459,6 +459,12 @@ export class ScrapbookScene extends BaseScene {
     this.drawHighlight();
   }
 
+  /** Android's back is this screen's own back puck (`core/backButton.ts`). */
+  public handleBack(): boolean {
+    this.leave();
+    return true;
+  }
+
   private leave(): void {
     if (this.curtain.active) return;
     this.tweens.add({ targets: this.bandCamera, alpha: 0, duration: reducedMotion() ? 1 : 130 });
