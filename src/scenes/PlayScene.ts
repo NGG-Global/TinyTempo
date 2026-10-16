@@ -5,7 +5,7 @@ import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
-import { activeCalibration, currentRoute, syncClockCalibration } from '@/audio/audioRoute';
+import { activeCalibration, currentRoute, noteLevelLean, syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { trackForLevel } from '@/game/musicSelection';
@@ -20,7 +20,7 @@ import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, t
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import { capRound, type RoundResult } from '@/game/scoring';
 import { barsFor, finishOutcome, levelBars } from '@/game/taskVerdict';
-import { addRound, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
+import { addRound, deviceLean, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
@@ -674,7 +674,8 @@ export class PlayScene extends BaseScene {
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
     if (this.debugMode) this.installReplayPanel();
-    this.taps = new TapInput(this, tap => this.handleTap(tap));
+    // Two fingers, each tapping for itself, so a fast pair can be played with both thumbs.
+    this.taps = new TapInput(this, tap => this.handleTap(tap), { pointers: 2 });
     this.pump = setInterval(() => this.tick(), RHYTHM.pumpMs);
     document.addEventListener('visibilitychange', this.visibility);
     window.addEventListener('pagehide', this.pageHide);
@@ -2300,6 +2301,9 @@ export class PlayScene extends BaseScene {
     const before = loadProgress();
     const outcome = recordResult(before, this.spec.level, accuracy);
     this.outcome = outcome;
+    // The level's lean, counted against the route it was heard on: a run of device-like
+    // leans the same way is what the map's route card speaks up about (`routeLean`).
+    noteLevelLean(deviceLean(this.timing));
     // Every scored task flawless, on a cleared level: the result's one extra payoff. It
     // changes no star, threshold, heart or unlock; the scorer above never saw the groove.
     // Whether it is the level's first is read from the save as it stood (`game/mastery.ts`):

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { STYLE } from '../config/style';
 import { PALETTE, SHELL } from '../config/theme';
-import { ROUTE_LABELS, type AudioRoute } from '../game/routeCalibration';
+import { routeNoticeCopy, type AudioRoute } from '../game/routeCalibration';
 import { drawPanel, Rect } from './panel';
 import { body, label, resize } from './type';
 
@@ -24,7 +24,9 @@ export type RouteNoticeTap = 'tune' | 'close' | null;
 /**
  * The small, non-blocking note that the audio route has changed to one never calibrated:
  * "Bluetooth audio detected / Calibrate timing for the best accuracy.", a Tune chip that
- * opens the existing calibration screen, and a close mark. A card in screen space on a
+ * opens the existing calibration screen, and a close mark. The same card says when the last
+ * few levels on the route all leaned one way the way a device does ("Tapping about 70 ms
+ * late"), since Tune is the fix for that too. A card in screen space on a
  * shell screen, never over a level: a round in progress is never interrupted, and the
  * next run is where the advice is useful. Whether it shows is `routeNoticeWanted` in
  * `audio/audioRoute.ts`; this file only draws it and says what a tap meant.
@@ -38,7 +40,9 @@ export class RouteNotice {
   private readonly tune = new Phaser.Geom.Rectangle();
   private readonly close = new Phaser.Geom.Rectangle();
   private s = 1;
+  private room = Infinity;
   private shownRoute: AudioRoute | null = null;
+  private shownLean: number | null = null;
 
   public constructor(scene: Phaser.Scene, depth: number) {
     this.plate = scene.add.graphics().setScrollFactor(0).setDepth(depth).setVisible(false);
@@ -69,17 +73,33 @@ export class RouteNotice {
     resize(this.note, NOTICE.noteSize * s, PALETTE.muted, STYLE.current, false);
     resize(this.tuneLabel, 24 * s, SHELL.cream, STYLE.current, false);
     // The words shrink rather than run under Tune on a narrow handset.
-    const room = this.tune.x - 12 * s - (this.card.x + NOTICE.pad * s);
-    for (const text of [this.title, this.note]) text.setScale(text.width > room ? room / text.width : 1);
+    this.room = this.tune.x - 12 * s - (this.card.x + NOTICE.pad * s);
+    this.fit();
     this.draw();
   }
 
-  /** Show the card for `route`, or hide it with null. */
-  public show(route: AudioRoute | null): void {
-    if (route === this.shownRoute) return;
+  /**
+   * Show the card for `route`, or hide it with null. With a `leanMs` it names the lean the
+   * last levels on the route shared; without, that the route was never calibrated.
+   */
+  public show(route: AudioRoute | null, leanMs: number | null = null): void {
+    if (route === this.shownRoute && leanMs === this.shownLean) return;
     this.shownRoute = route;
-    if (route !== null) this.title.setText(`${ROUTE_LABELS[route]} detected`);
+    this.shownLean = leanMs;
+    if (route !== null) {
+      const copy = routeNoticeCopy(route, leanMs);
+      this.title.setText(copy.title);
+      this.note.setText(copy.note);
+      this.fit();
+    }
     this.draw();
+  }
+
+  private fit(): void {
+    for (const text of [this.title, this.note]) {
+      text.setScale(1);
+      text.setScale(text.width > this.room ? this.room / text.width : 1);
+    }
   }
 
   /** What a tap meant. Anywhere on the card but the close mark is Tune: the card is the offer. */

@@ -92,6 +92,31 @@ export const PATTERN_TIERS: readonly (readonly Pattern[])[] = Object.freeze([
 ]);
 
 /**
+ * More phrases for the tiers the plateau plays, joining their pools from
+ * `PROGRESSION.vocabulary.from` (`tierPool`). Written to each tier's own measure, which
+ * `tests/levels.test.ts` holds them to: tier 2 one bar of four hits, two of them off the
+ * beat; tier 3 two bars of eight or nine; tier 4 two bars of ten. Every phrase opens on its
+ * downbeat, no two hits are closer than half a beat, and no hit set repeats one a tier
+ * already has. Their ids continue the tier's numbering, so analytics names them alike.
+ *
+ * Append only, and only here: `PATTERN_TIERS` is what Endless rules v1 reads, and a phrase
+ * added there would change every run of it.
+ */
+export const PLATEAU_PATTERNS: readonly (readonly Pattern[])[] = Object.freeze([
+  [],
+  [],
+  ['X X - - X - - X', 'X - - X - - X X', 'X - X X - X - -', 'X X - - - X X -'].map((n, i) => parsePattern(`t2-${i + 4}`, n, 0.5)),
+  ['X - X - X X - - X - X - - X X -', 'X - - X X - X - X - X - X X - -', 'X X - X - - X - X - X X - - X -', 'X - X - - X X - X X - - X - X -'].map((n, i) => parsePattern(`t3-${i + 4}`, n, 0.5)),
+  ['X - X X - X X - X X - X - X X -', 'X X - X - X X - X - X X - X - X', 'X - X - X X - X X X - X - - X X', 'X X - X X - - X X - X - X X X -'].map((n, i) => parsePattern(`t4-${i + 4}`, n, 0.5)),
+]);
+
+/** A tier's phrases at a level: its own four, and the plateau's once the curve reaches it. */
+export function tierPool(tier: number, level: number): readonly Pattern[] {
+  const own = PATTERN_TIERS[tier]!;
+  return difficulty(level) >= PROGRESSION.vocabulary.from ? [...own, ...(PLATEAU_PATTERNS[tier] ?? [])] : own;
+}
+
+/**
  * The finer grids, on top of the tiers: two densities each, one group of the subdivision
  * per bar and then two. Every phrase is one bar and opens on its downbeat, like every
  * tier pattern, so the block, the handover and the task change see nothing new. A phrase
@@ -246,9 +271,12 @@ function subdivide(level: number, d: number, tasks: readonly LevelTask[], emphas
     if (grids.length === 0) continue;
     const grid = grids.length === 2 ? grids[Math.floor(random() * 2)]! : grids[0]!;
     const density = ramp(d, grid === 'triplet' ? S.tripletsFrom : S.sixteenthsFrom, S.fullAt) >= 0.5 ? 1 : 0;
-    // Neither neighbour repeats: the one before is final, the one after is checked when its
-    // own turn comes.
-    const pool = SUBDIVIDED_TIERS[grid][density]!.filter(pattern => pattern !== out[i - 1]!.pattern);
+    // Neither neighbour repeats — the one before is final, the one after is checked when its
+    // own turn comes — and no phrase the level already swapped in comes round again while
+    // the density has another: level 57 used to play the same triplet bar three times.
+    const allowed = SUBDIVIDED_TIERS[grid][density]!.filter(pattern => pattern !== out[i - 1]!.pattern);
+    const fresh = allowed.filter(pattern => !out.some(other => other.pattern === pattern));
+    const pool = fresh.length > 0 ? fresh : allowed;
     out[i] = { ...task, pattern: pool[Math.floor(random() * pool.length)]!, grid };
     swapped++;
   }
@@ -291,13 +319,21 @@ export function tierTasks(level: number): readonly LevelTask[] {
   const minTier = Math.max(0, maxTier - P.tierSpan);
   const breather = breatherTask(count);
   const random = seeded(level);
+  // From the plateau's vocabulary on, a level plays a phrase twice only once its tier has
+  // none left; before it, repetition is part of how the early road is learnt, and those
+  // levels draw exactly as they always did.
+  const varied = difficulty(level) >= P.vocabulary.from;
+  const used = new Set<Pattern>();
   let previous: Pattern | null = null;
   const tasks: LevelTask[] = [];
   for (let i = 0; i < count; i++) {
     const progress = count > 1 ? i / (count - 1) : 0;
     const tier = minTier + Math.round((maxTier - minTier) * progress);
-    const pool = PATTERN_TIERS[tier]!.filter(pattern => pattern !== previous);
+    const allowed = tierPool(tier, level).filter(pattern => pattern !== previous);
+    const fresh = varied ? allowed.filter(pattern => !used.has(pattern)) : allowed;
+    const pool = fresh.length > 0 ? fresh : allowed;
     const pattern = pool[Math.floor(random() * pool.length)]!;
+    used.add(pattern);
     previous = pattern;
     // One bar to open the level and find the pulse — a finale's longer opening carries its
     // title card and the music's build — four bars for the breather, and nothing between

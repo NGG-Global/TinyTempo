@@ -52,7 +52,13 @@ the level where they first appear. The teach flags live beside `seenDemonstratio
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
-nearest-target cell. See `docs/SUBDIVISIONS.md`.
+nearest-target cell. See `docs/SUBDIVISIONS.md`. **The plateau has a wider vocabulary**: from
+`PROGRESSION.vocabulary.from` (level 59) tiers 2–4 also draw on `PLATEAU_PATTERNS` (four more
+phrases each, through `tierPool`) and no level plays a phrase twice while its tier has another;
+`subdivide` never swaps in a grid phrase the level already has. Levels below 59 draw as they
+always did. `PATTERN_TIERS` and `SUBDIVIDED_TIERS` are **not to be edited** — Endless rules v1
+reads them — so a new phrase is appended to `PLATEAU_PATTERNS`, which only the levels read.
+See `docs/DIFFICULTY.md`.
 
 **Every area ends in a finale, and a finale is a presentation, not a new test.**
 `isAreaFinale` (`level % PROGRESSION.areaSize === 0`) is the only place a finale's level is
@@ -584,8 +590,12 @@ is 0, never a neighbour's value. A version-1 save's single offset becomes `legac
 `unknown` and adopted once by the first real route a device reports (`adoptLegacy`).
 Calibration and Reset touch the active route only. The map's `RouteNotice` card suggests
 calibrating an uncalibrated Bluetooth route, or any uncalibrated route once another has been
-calibrated, and a close silences it for that route for the session. It is device-local: in
-no cloud save, and not restored from a save code.
+calibrated, and a close silences it for that route for the session. The same card names a
+**steady lean**: when the last three levels finished on the route this session each leaned like
+the device (`deviceLean`, the details' "Check your Tap offset" test) the same way
+(`steadyLean`), it reads "Tapping about N ms late" with Tune — advice only, since nothing writes
+an offset from gameplay; the leans are session memory per route, cleared by a new offset. It
+is device-local: in no cloud save, and not restored from a save code.
 
 **A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
 is the context time of the sample the player is hearing, so every phase, judgement and
@@ -1214,6 +1224,11 @@ URL bar, the keyboard opens, the device rotates. Assume `layout()` runs often.
   axis-locked control.
 - **Support tap as well as drag.** Reaching across a large phone to drag is
   uncomfortable; tap-to-position is often the gesture players actually use.
+- **A rhythm screen takes two fingers** (`TapInput` with `{ pointers: 2 }`, PlayScene and
+  TutorialScene): each finger taps once on its way down, so a fast pair can be played with
+  both thumbs; with one pointer, a thumb still down as the other landed was dropped and read
+  as a Miss. Menus and calibration keep one, so a second finger cannot press a second
+  button, and Endless keeps one until its next rules version so v1 times stay comparable.
 - **Acknowledge every touch visually**, before any movement happens.
 - **Leave `input.smoothFactor` at 0.** Phaser computes
   `x = newX * smoothFactor + previousX * (1 - smoothFactor)`, so the value is

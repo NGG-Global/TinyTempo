@@ -165,6 +165,17 @@ export function timingReport(tally: TimingTally): TimingReport | null {
   return { ...base, lean, advice, tendency, offsetMs, spreadMs };
 }
 
+/**
+ * A level's lean when it looks like the device rather than the player — the same test that
+ * gives the "Check your Tap offset" advice: a large, steady lean over enough hits — in
+ * signed ms, or null. One level is the details' business; a run of them on one route is the
+ * map's (`steadyLean`, `game/routeCalibration.ts`).
+ */
+export function deviceLean(tally: TimingTally): number | null {
+  const report = timingReport(tally);
+  return report !== null && (report.advice === ADVICE.offsetEarly || report.advice === ADVICE.offsetLate) ? report.offsetMs : null;
+}
+
 /** Which side of its beat one tap fell, as the verdict says it beside the word. */
 export type TapTiming = 'early' | 'late';
 

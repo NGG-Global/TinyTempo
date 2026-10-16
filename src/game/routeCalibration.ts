@@ -134,6 +134,34 @@ export function anyCalibrated(calibration: RouteCalibration): boolean {
 }
 
 /**
+ * When a run of levels says the Tap offset is off. A single level's details already say
+ * "Always late? Check your Tap offset." behind a toggle; a lean that holds `levels` levels
+ * running on one route, the same way, is worth saying on the map, where Tune is one tap.
+ */
+export const LEAN_NOTICE = { levels: 3 } as const;
+
+/**
+ * The steady lean of the last finished levels on a route (`deviceLean` of each, oldest
+ * first), or null: every one of the last `LEAN_NOTICE.levels` leaned like the device, and
+ * all the same way. Their mean, rounded. Advice only — nothing ever writes an offset from it,
+ * because a player's habit of rushing is not the device's lag; the calibration screen
+ * measures that.
+ */
+export function steadyLean(leans: readonly (number | null)[]): number | null {
+  const recent = leans.slice(-LEAN_NOTICE.levels);
+  if (recent.length < LEAN_NOTICE.levels || recent.some(lean => lean === null || !Number.isFinite(lean))) return null;
+  const values = recent as readonly number[];
+  if (!values.every(lean => lean > 0) && !values.every(lean => lean < 0)) return null;
+  return Math.round(values.reduce((sum, lean) => sum + lean, 0) / values.length);
+}
+
+/** The route card's two lines: a route never calibrated, or a lean its last levels shared. */
+export function routeNoticeCopy(route: AudioRoute, leanMs: number | null): { readonly title: string; readonly note: string } {
+  if (leanMs === null || leanMs === 0) return { title: `${ROUTE_LABELS[route]} detected`, note: 'Calibrate timing for the best accuracy.' };
+  return { title: `Tapping about ${Math.abs(leanMs)} ms ${leanMs < 0 ? 'early' : 'late'}`, note: 'Tune the Tap offset for this audio.' };
+}
+
+/**
  * Whether to suggest calibrating the active route. Bluetooth always, uncalibrated: it is
  * where the error is a fifth of a second. Another route only once the player has shown
  * they calibrate, by having done it somewhere — a new player on their phone's speaker is

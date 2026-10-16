@@ -48,6 +48,9 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Resume continues from the task it stopped in', text: 'continuing', source: 'src/game/playAnalytics.ts' },
   { feature: 'Codas ring on when the next task is placed', text: 'cancelPlan', source: 'src/audio/AudioEngine.ts' },
   { feature: 'Introductions for the offbeat and the long phrase', text: 'Between the beats', source: 'src/game/conceptIntro.ts' },
+  { feature: 'Every act ending read against the level bar', text: 'partialBand', source: 'src/game/taskVerdict.ts' },
+  { feature: 'The plateau vocabulary', text: 'X X - X X - - X X - X - X X X -', source: 'src/game/levels.ts' },
+  { feature: 'A steady lean named on the route card', text: 'Tune the Tap offset for this audio.', source: 'src/game/routeCalibration.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

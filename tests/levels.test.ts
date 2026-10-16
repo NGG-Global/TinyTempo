@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
-  difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats,
+  AREAS, PATTERN_TIERS, PLATEAU_PATTERNS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
+  difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats, tierPool,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
 } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
@@ -138,7 +138,7 @@ describe('level progression', () => {
   });
   it('never places hits closer than half a beat, so windows stay separable at the tempo ceiling', () => {
     const fastest = 60 / (PROGRESSION.baseBpm + PROGRESSION.peakBpmRange);
-    for (const tier of PATTERN_TIERS) for (const pattern of tier) for (let i = 1; i < pattern.hits.length; i++) {
+    for (const tier of [...PATTERN_TIERS, ...PLATEAU_PATTERNS]) for (const pattern of tier) for (let i = 1; i < pattern.hits.length; i++) {
       const gap = pattern.hits[i]! - pattern.hits[i - 1]!;
       expect(gap).toBeGreaterThanOrEqual(0.5);
       expect(gap * fastest).toBeGreaterThan(RHYTHM.goodMs / 1000);
@@ -367,6 +367,55 @@ describe('the difficulty choreography', () => {
     const spec = levelSpec(level);
     expect(spec.role).toBe(role);
     expect(dims(spec)).toEqual({ tasks, peakBpm, maxTier });
+  });
+});
+
+describe('the plateau’s vocabulary', () => {
+  const from = (): number => { let level = 1; while (difficulty(level) < PROGRESSION.vocabulary.from) level++; return level; };
+
+  it('joins each plateau tier’s pool where the curve reaches it, and no earlier', () => {
+    const first = from();
+    expect(first).toBe(59);
+    for (const tier of [2, 3, 4]) {
+      expect(tierPool(tier, first - 1)).toEqual(PATTERN_TIERS[tier]);
+      expect(tierPool(tier, first)).toEqual([...PATTERN_TIERS[tier]!, ...PLATEAU_PATTERNS[tier]!]);
+    }
+    expect(PLATEAU_PATTERNS[0]).toEqual([]);
+    expect(PLATEAU_PATTERNS[1]).toEqual([]);
+  });
+
+  it('writes every new phrase to its tier’s own measure', () => {
+    const offbeats = (hits: readonly number[]) => hits.filter(hit => !Number.isInteger(hit)).length;
+    for (const [tier, patterns] of PLATEAU_PATTERNS.entries()) for (const pattern of patterns) {
+      expect(pattern.hits[0], pattern.id).toBe(0);
+      expect(pattern.id.startsWith(`t${tier}-`)).toBe(true);
+      if (tier === 2) {
+        expect([pattern.lengthBeats, pattern.hits.length, offbeats(pattern.hits)], pattern.id).toEqual([4, 4, 2]);
+      } else {
+        expect(pattern.lengthBeats, pattern.id).toBe(8);
+        const own = PATTERN_TIERS[tier]!.map(p => p.hits.length);
+        expect(pattern.hits.length, pattern.id).toBeGreaterThanOrEqual(Math.min(...own));
+        expect(pattern.hits.length, pattern.id).toBeLessThanOrEqual(Math.max(...own));
+      }
+    }
+  });
+
+  it('repeats no phrase anywhere in the vocabulary, and no id', () => {
+    const all = [...PATTERN_TIERS, ...PLATEAU_PATTERNS].flat();
+    expect(new Set(all.map(p => p.hits.join(','))).size).toBe(all.length);
+    expect(new Set(all.map(p => p.id)).size).toBe(all.length);
+  });
+
+  it('plays no phrase twice in a level from there on while its tier has another', () => {
+    for (let level = from(); level <= 300; level++) {
+      const ids = levelSpec(level).tasks.map(t => t.pattern.id);
+      expect(new Set(ids).size, `level ${level}: ${ids.join(' ')}`).toBe(ids.length);
+    }
+  });
+
+  it('leaves Endless on the vocabulary its rules version was pinned with', () => {
+    expect(PATTERN_TIERS.every(tier => tier.length === 4)).toBe(true);
+    expect(readFileSync('src/game/endless.ts', 'utf8')).not.toContain('PLATEAU_PATTERNS');
   });
 });
 

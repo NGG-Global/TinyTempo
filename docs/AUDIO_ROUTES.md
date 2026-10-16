@@ -95,6 +95,16 @@ phone's speaker is the default case, already corrected by the platform's own lag
 shown it. Closing it silences it for that route until the app starts again; nothing is stored
 (`suggestCalibration`, `routeNoticeWanted`).
 
+**The same card speaks up about a steady lean.** A level's timing details already say "Always
+late? Check your Tap offset." when its taps lean a long way one side, tightly, over enough hits
+(`deviceLean`, the same test). When the last three levels finished on a route this session all
+did that, the same way (`steadyLean`, `LEAN_NOTICE`), the card says "Tapping about 70 ms late /
+Tune the Tap offset for this audio." on any route, the speaker included, since the evidence
+is the player's own levels rather than a guess. Advice only: nothing ever writes an offset from
+gameplay, because a player who rushes is not a device that lags — Tune opens the measurement.
+The leans are session memory per route (`noteLevelLean`, `routeLean`), never stored; a new
+offset for the route clears them, and closing the card silences it as before.
+
 ## Files
 
 | File | What it holds |

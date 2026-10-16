@@ -179,3 +179,26 @@ The road moved again, deliberately, in exactly those seven rows of
 `tests/levels.test.ts` pins the debut table and checks that every other level of 1–300 is
 the composed road untouched. The independence property above now compares `composedTasks`,
 the stage before a debut is placed.
+
+## The plateau's vocabulary
+
+The curve stops adding anything new once both grids are in play, and the road goes on for
+ever; what keeps a plateau level from being one the player has learnt is its phrases. There
+were twenty tier phrases, four a tier, so a plateau area of 77 tasks played 20–22 distinct
+phrases and every one came round three or four times an area, for good — and 33 of levels
+1–120 played a phrase twice inside one level (level 57 the same triplet bar three times).
+
+From `PROGRESSION.vocabulary.from` (d 0.9, level 59, where sixteenths arrive) each tier the
+plateau plays draws on four more phrases (`PLATEAU_PATTERNS`, tiers 2–4, through
+`tierPool`), written to the tier's own measure and tested for it, with no hit set repeated
+across the whole vocabulary. From the same point a level plays no phrase twice while its
+tier has another (`tierTasks`), and the second stage never swaps in a finer-grid phrase the
+level already has (`subdivide`, at every level). Below level 59 the tier draws are exactly
+as they were: repetition is how the early road is learnt, and those levels were left alone.
+`PATTERN_TIERS` and `SUBDIVIDED_TIERS` were not edited, because Endless rules v1 reads them;
+its fixture passes unchanged.
+
+On the re-pinned road plateau areas play 30–32 distinct phrases instead of 20–22, and no
+level from 57 on repeats one. The road moved in levels 57 and 59–120 — every level the
+vocabulary or the no-repeat rule reaches — and no others; the debut table above did not move.
+The new phrases were written to the tier rules here and have not yet been heard on a device.

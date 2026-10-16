@@ -142,7 +142,8 @@ level's own events, from the same run and the same single close (`docs/ANALYTICS
   already carry their act's. An area pennant would be a second kind of keepsake, a new page
   and a new total; it is a clean follow-up (owned when the finale is cleared, derived like
   the rest), not part of this change.
-- **No boss, health bar or extra rule**, and no Groove system exists to layer on.
+- **No boss, health bar or extra rule.** Groove (`docs/GROOVE.md`) lights a finale as it
+  lights any level; nothing about it is finale-specific.
 
 ## Checked, and not
 
