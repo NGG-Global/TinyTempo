@@ -23,7 +23,7 @@ vi.mock('@/review/native', () => ({
 import { appReview, bootAppReview } from '../src/review/boot';
 import { stubAppReview } from '../src/review/appReview';
 
-const CLEAR = { level: 10, cleared: true, finale: true, saved: true } as const;
+const CLEAR = { level: 10, cleared: true, stars: 2, finale: true, saved: true } as const;
 
 describe('attaching in-app review', () => {
   beforeEach(() => {

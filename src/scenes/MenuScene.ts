@@ -471,20 +471,29 @@ export class MenuScene extends BaseScene {
       if (this.disposed || request !== this.request) return;
       this.playLabel.setText('…');
       const track = shellTrack();
-      await audio.music.load(track);
-      if (this.disposed || request !== this.request) return;
-      // The gameplay loop is the shell bed from here: start it on the tap that unlocked
-      // audio, so the map and settings share it rather than each starting a copy. The
-      // title theme is a second track and leaves on closeTheme below.
-      await setMusicBed(audio, 'shell', { track });
-      if (this.disposed || request !== this.request) return;
+      // A first Play opens the lesson until it has been passed or skipped; after either it
+      // is the title screen's own button, never a gate in front of every Play.
+      const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || this.registry.get('tutorial-seen') || tutorialSeen());
+      if (needsTutorial) {
+        // The lesson hushes the loop and plays none of it, so it does not wait for the
+        // loop's stems: decoding them cost a first player most of ten seconds on "…" before
+        // their first tap. The load runs under the lesson instead — decoding is off the main
+        // thread — and the map's bed and level 1 wait on this same pending load if it has
+        // not finished by then. A failure here is the map's to retry, not the lesson's.
+        audio.music.load(track).catch(() => { /* The map's bed and the level load it again. */ });
+      } else {
+        await audio.music.load(track);
+        if (this.disposed || request !== this.request) return;
+        // The gameplay loop is the shell bed from here: start it on the tap that unlocked
+        // audio, so the map and settings share it rather than each starting a copy. The
+        // title theme is a second track and leaves on closeTheme below.
+        await setMusicBed(audio, 'shell', { track });
+        if (this.disposed || request !== this.request) return;
+      }
       // Warmed here and awaited where it is used. The map is several taps from a level,
       // which is long enough to decode 180 KB without anyone waiting on it.
       void samples.load(audio.context);
       this.playLabel.setText('Play');
-      // A first Play opens the lesson until it has been passed or skipped; after either it
-      // is the title screen's own button, never a gate in front of every Play.
-      const needsTutorial = tutorial || !(this.registry.get('tutorial-complete') || this.registry.get('tutorial-seen') || tutorialSeen());
       this.closeTheme();
       // Which door the lesson was entered by is the difference between a player who was
       // sent there and one who went looking; the tutorial's events carry it.
@@ -497,6 +506,17 @@ export class MenuScene extends BaseScene {
       console.error('Unable to prepare music', error);
     }
   }
+  /**
+   * Android's back on the title screen: an open card is put away; otherwise nothing here
+   * takes it, and the app goes to the background, which is what back on a root screen does
+   * (`core/backButton.ts`).
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    if (this.objectivesCard.open) { this.objectivesCard.hide(); return true; }
+    return false;
+  }
+
   private shutdown(): void {
     if (this.disposed) return;
     this.disposed = true;

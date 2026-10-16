@@ -22,4 +22,10 @@ ext {
     // same commit differ. The deprecated v1 artifact (play-services-games) is not
     // used and must not be added — v2 pulls only base, basement and tasks.
     playGamesVersion = '22.1.0'
+    // The Mobile Ads SDK and UMP, which @capacitor-community/admob reads by these names and
+    // would otherwise take as '25.4.+': a dynamic version makes two builds of one commit
+    // differ in the SDK that serves ads and asks for consent. 25.4.0 is the newest in the
+    // plugin's own range; move both deliberately, after reading Google's release notes.
+    playServicesAdsVersion = '25.4.0'
+    userMessagingPlatformVersion = '4.0.0'
 }

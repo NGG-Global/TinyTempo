@@ -26,6 +26,8 @@ export const COMMERCE_EVENTS = [
 
 export const GAMEPLAY_EVENTS = [
   'tutorial_started',
+  'tutorial_step_started',
+  'tutorial_step_ended',
   'tutorial_completed',
   'tutorial_skipped',
   'level_started',
@@ -187,7 +189,37 @@ export interface AnalyticsPayloads {
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
 
-  readonly tutorial_started: { readonly source: 'first_play' | 'menu'; readonly repeat: Flag };
+  readonly tutorial_started: {
+    readonly source: 'first_play' | 'menu';
+    readonly repeat: Flag;
+    /**
+     * The page clock when the lesson opened: on a cold start, roughly the time from launch,
+     * through the title screen and PLAY, to the lesson. Meaningful for `first_play`; a menu
+     * visit in a long session reads as long as the session.
+     */
+    readonly since_launch_ms: number;
+  };
+  /** A pass of the lesson began. `attempt` counts that step's passes in this visit, from 1. */
+  readonly tutorial_step_started: {
+    readonly step: 'watch' | 'along' | 'try';
+    readonly attempt: number;
+    /** 1 when it restarts a pass an interruption stopped, which is the same attempt again. */
+    readonly resumed: Flag;
+    readonly elapsed_ms: number;
+    readonly repeat: Flag;
+  };
+  /**
+   * A pass of the lesson ran to its end. `verdict` is the lesson's own (`clear`, `early`,
+   * `silent`, `partial`), or `watched` for a pass the game played for itself.
+   */
+  readonly tutorial_step_ended: {
+    readonly step: 'watch' | 'along' | 'try';
+    readonly attempt: number;
+    readonly verdict: 'watched' | 'clear' | 'early' | 'silent' | 'partial';
+    readonly hits: number;
+    readonly elapsed_ms: number;
+    readonly repeat: Flag;
+  };
   readonly tutorial_completed: { readonly tries: number; readonly passed: Flag; readonly duration_ms: number; readonly repeat: Flag };
   readonly tutorial_skipped: { readonly step: 'watch' | 'along' | 'try' | 'done'; readonly tries: number; readonly duration_ms: number; readonly repeat: Flag };
   readonly level_started: LevelParams;

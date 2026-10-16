@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+import { HEALTH } from '../src/game/health';
 
 import {
   createAppReview, createContinuation, REVIEW_MILESTONES, reviewMilestoneFor, stubAppReview,
@@ -8,10 +10,12 @@ import {
   EMPTY_REVIEW_RECORD, hasAttempted, loadReviewRecord, recordAttempt, saveReviewRecord, type ReviewRecord,
 } from '../src/review/reviewRecord';
 
-const FIRST_FINALE: ReviewMilestone = { id: 'first-finale', level: 10 };
+vi.mock('phaser', () => ({ default: {} }));
+
+const FIRST_FINALE: ReviewMilestone = { id: 'first-finale', fromLevel: 10, minStars: 2 };
 
 function clear(overrides: Partial<LevelClearance> = {}): LevelClearance {
-  return { level: 10, cleared: true, finale: true, saved: true, ...overrides };
+  return { level: 10, cleared: true, stars: 2, finale: true, saved: true, ...overrides };
 }
 
 class MemoryStorage implements Storage {
@@ -73,7 +77,7 @@ function harness(client: AppReviewClient, storage: Storage | null = new MemorySt
 }
 
 describe('the review milestone', () => {
-  it('is the first area finale, and only that', () => {
+  it('is the first area finale finished with two stars, and only that', () => {
     expect(REVIEW_MILESTONES).toEqual([FIRST_FINALE]);
   });
 
@@ -97,9 +101,20 @@ describe('the review milestone', () => {
     expect(reviewMilestoneFor(clear({ finale: false }), EMPTY_REVIEW_RECORD)).toBeNull();
   });
 
-  it('asks nothing about stars: a one-star clear is the milestone too', () => {
-    // The clearance carries no stars or accuracy at all, which is the point.
-    expect(Object.keys(clear()).sort()).toEqual(['cleared', 'finale', 'level', 'saved']);
+  it('asks two stars of the run: a one-star scrape waits for a better finish', () => {
+    expect(reviewMilestoneFor(clear({ stars: 1 }), EMPTY_REVIEW_RECORD)).toBeNull();
+    expect(reviewMilestoneFor(clear({ stars: 2 }), EMPTY_REVIEW_RECORD)).toEqual(FIRST_FINALE);
+    expect(reviewMilestoneFor(clear({ stars: 3 }), EMPTY_REVIEW_RECORD)).toEqual(FIRST_FINALE);
+    // The clearance carries the run's stars and nothing else about how it went or what is owned.
+    expect(Object.keys(clear()).sort()).toEqual(['cleared', 'finale', 'level', 'saved', 'stars']);
+  });
+
+  it('is never offered on a result that lost a heart', () => {
+    // A frontier finale past the protected area spends a heart and keeps it on
+    // `HEALTH.keepAtStars`; asking for at least that many means the review never meets
+    // a player on the screen that just took one.
+    for (const milestone of REVIEW_MILESTONES) expect(milestone.minStars).toBeGreaterThanOrEqual(HEALTH.keepAtStars);
+    expect(REVIEW_MILESTONES[0]!.fromLevel).toBeLessThanOrEqual(HEALTH.protectedThrough);
   });
 
   it('is closed once it has been attempted on this device', () => {
@@ -107,17 +122,20 @@ describe('the review milestone', () => {
     expect(reviewMilestoneFor(clear(), attempted)).toBeNull();
   });
 
-  it('is not opened by level 20, which is no milestone', () => {
+  it('is opened by a later finale while it is untried, and by nothing once it has been', () => {
     const attempted = recordAttempt(EMPTY_REVIEW_RECORD, { milestone: 'first-finale', level: 10, at: 1, appVersion: '0.1.10' });
+    expect(reviewMilestoneFor(clear({ level: 20 }), EMPTY_REVIEW_RECORD)).toEqual(FIRST_FINALE);
     expect(reviewMilestoneFor(clear({ level: 20 }), attempted)).toBeNull();
-    expect(reviewMilestoneFor(clear({ level: 20 }), EMPTY_REVIEW_RECORD)).toBeNull();
+    // A level between finales is never a finale clear.
+    expect(reviewMilestoneFor(clear({ level: 15, finale: false }), EMPTY_REVIEW_RECORD)).toBeNull();
   });
 
   it('takes a later milestone as one more entry', () => {
-    const later: readonly ReviewMilestone[] = [FIRST_FINALE, { id: 'fifth-finale', level: 50 }];
+    const later: readonly ReviewMilestone[] = [FIRST_FINALE, { id: 'fifth-finale', fromLevel: 50, minStars: 2 }];
     const attempted = recordAttempt(EMPTY_REVIEW_RECORD, { milestone: 'first-finale', level: 10, at: 1, appVersion: '0.1.10' });
     expect(reviewMilestoneFor(clear({ level: 50 }), attempted, later)).toEqual(later[1]);
     expect(reviewMilestoneFor(clear({ level: 10 }), attempted, later)).toBeNull();
+    expect(reviewMilestoneFor(clear({ level: 20 }), attempted, later)).toBeNull();
   });
 });
 
@@ -195,20 +213,25 @@ describe('the review adapter', () => {
     expect(client.prepares).toBe(1);
   });
 
-  it('offers nothing on level 20 after the level 10 attempt, or before it', async () => {
+  it('waits past a one-star level 10 for the next good finale, and offers nothing after the attempt', async () => {
     const storage = new MemoryStorage();
-    const { review } = harness(fakeClient(), storage);
-    expect(review.offer(clear({ level: 20 }))).toBeNull();
-    review.offer(clear());
+    const client = fakeClient();
+    const { review, record } = harness(client, storage);
+    expect(review.offer(clear({ stars: 1 }))).toBeNull();
+    expect(client.prepares).toBe(0);
+    expect(review.offer(clear({ level: 20 }))).toEqual(FIRST_FINALE);
     await review.launch();
-    expect(review.offer(clear({ level: 20 }))).toBeNull();
-    expect(harness(fakeClient(), storage).review.offer(clear({ level: 20 }))).toBeNull();
+    // The record names the level the launch was tried on, not the milestone's first level.
+    expect(record().attempts.map(a => a.level)).toEqual([20]);
+    expect(review.offer(clear({ level: 30 }))).toBeNull();
+    expect(harness(fakeClient(), storage).review.offer(clear({ level: 30 }))).toBeNull();
   });
 
-  it('offers nothing on a level 9 clear, a failed level 10, an unsaved one or a non-finale', () => {
+  it('offers nothing on a level 9 clear, a failed level 10, a one-star one, an unsaved one or a non-finale', () => {
     const client = fakeClient();
     const { review } = harness(client);
     expect(review.offer(clear({ level: 9 }))).toBeNull();
+    expect(review.offer(clear({ stars: 1 }))).toBeNull();
     expect(review.offer(clear({ cleared: false }))).toBeNull();
     expect(review.offer(clear({ saved: false }))).toBeNull();
     expect(review.offer(clear({ finale: false }))).toBeNull();
@@ -363,23 +386,25 @@ describe('Continue', () => {
 });
 
 describe('the whole path, with the scene\'s inputs', () => {
-  it('level 10 clear → Continue → one flow → map; then level 10 again and level 20 → map alone', async () => {
+  it('one-star level 10 → map; two-star level 10 → one flow → map; then level 10 again and level 20 → map alone', async () => {
     const storage = new MemoryStorage();
     const client = fakeClient();
     const { review } = harness(client, storage);
     const trips: string[] = [];
     const leave = () => { trips.push('map'); };
-    const play = async (level: number, cleared = true) => {
-      review.offer({ level, cleared, finale: level % 10 === 0 && cleared, saved: cleared });
+    const play = async (level: number, cleared = true, stars = cleared ? 2 : 0) => {
+      review.offer({ level, cleared, stars, finale: level % 10 === 0 && cleared, saved: cleared });
       if (cleared) await createContinuation(() => review.launch(), leave).run();
       else trips.push('retry');
     };
     await play(9);
     await play(10, false);
+    await play(10, true, 1);
+    expect(client.prepares).toBe(0);
     await play(10);
     await play(10);
     await play(20);
-    expect(trips).toEqual(['map', 'retry', 'map', 'map', 'map']);
+    expect(trips).toEqual(['map', 'retry', 'map', 'map', 'map', 'map']);
     expect(client.prepares).toBe(1);
     expect(client.launches).toBe(1);
     const record: ReviewRecord = loadReviewRecord(storage);

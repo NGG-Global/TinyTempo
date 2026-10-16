@@ -28,6 +28,7 @@ import { advanceLayers, OPENING_LAYERS } from '@/game/musicLayers';
 import { trackForLevel } from '@/game/musicSelection';
 import { loadProgress } from '@/game/progress';
 import type { RoundResult } from '@/game/scoring';
+import { tapTiming } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { track } from '@/monetization/analytics';
 import { syncAchievements } from '@/playgames/achievementSync';
@@ -40,6 +41,7 @@ import { CHROME, drawActionDisc, drawPuck, pressAmount, puckSink } from '@/ui/ch
 import { mix, shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
+import { VerdictTag } from '@/ui/verdictTag';
 import { drawInfinity, drawMap, drawNote, drawSpeaker } from '@/ui/icons';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { punch } from '@/ui/punch';
@@ -137,6 +139,8 @@ export class EndlessScene extends BaseScene {
   private extraAt = -Infinity;
   private punchAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
+  /** EARLY or LATE beside the verdict word, for an off-centre tap. */
+  private verdictTag!: VerdictTag;
   private verdictAt = -Infinity;
   private verdictGrade: VerdictGrade = 'Good';
   private verdictIndex = 0;
@@ -219,6 +223,7 @@ export class EndlessScene extends BaseScene {
     this.roomPaper = -1;
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
+    this.verdictTag = new VerdictTag(this, 8, PALETTE.ink);
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
     this.sheet = this.add.graphics().setDepth(40).setVisible(false);
     this.sheetTitle = display(this, 'Leave this run?', { size: 40, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
@@ -302,6 +307,7 @@ export class EndlessScene extends BaseScene {
     this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    this.verdictTag.layout(s, this.verdictColour());
     this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
@@ -338,6 +344,7 @@ export class EndlessScene extends BaseScene {
     this.hidePlaque();
     this.hideSheet();
     this.verdict.setAlpha(0);
+    this.verdictTag.clear();
     this.hideTurnCall();
     this.changeHeadline('');
     this.setCaption('');
@@ -406,6 +413,7 @@ export class EndlessScene extends BaseScene {
     setErrorContext('act', definition.id);
     // The act's ink dresses the verdict and the count; re-dress them for it once, here.
     resize(this.verdict, 38 * this.uiScale, this.verdictColour());
+    this.verdictTag.layout(this.uiScale, this.verdictColour());
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
       resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * this.uiScale, mix(definition.ink, PALETTE.coral, heat));
@@ -435,6 +443,7 @@ export class EndlessScene extends BaseScene {
     this.goStruck = false;
     this.resultTaken = false;
     this.verdict.setAlpha(0);
+    this.verdictTag.clear();
     this.hideTurnCall();
     this.controller!.start(
       step.pattern, step.bpm, audio.context.currentTime, performance.now(), startAt, leadBeats,
@@ -497,6 +506,7 @@ export class EndlessScene extends BaseScene {
     this.verdictIndex = result.index ?? this.verdictIndex + 1;
     this.verdict.setText(word);
     resize(this.verdict, 38 * this.uiScale, this.verdictColour(result));
+    this.verdictTag.set(tapTiming(result));
     if (result.grade === 'Perfect' && result.kind === 'hit' && !this.reducedMotion) {
       const { centres } = this.beads();
       this.fx.burst('sparks', this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0), this.trackY, [PALETTE.coral, SHELL.cream], 8);
@@ -677,6 +687,20 @@ export class EndlessScene extends BaseScene {
   }
 
   /** The player chose to leave: not ranked, nothing recorded, straight to the map. */
+  /**
+   * Android's back in Endless is the map puck: before the run's clock has started it
+   * leaves; during a run it asks first, on the same sheet, because leaving ends the run;
+   * with the sheet up it is Keep playing; after the run, it goes to the map.
+   */
+  public handleBack(): boolean {
+    if (this.disposed || this.curtain.active) return true;
+    if (this.sheetOpen) { this.hideSheet(); return true; }
+    if (this.plaqueShown || this.over || this.invalid !== null) { this.leaveForMap(); return true; }
+    if (this.runStartSec === -Infinity && !this.starting) { this.leaveForMap(); return true; }
+    this.showSheet();
+    return true;
+  }
+
   private abandon(): void {
     if (this.over) { this.leaveForMap(); return; }
     const elapsed = this.runStartSec > -Infinity ? Math.max(0, Math.floor(this.now() - this.runStartSec)) : 0;
@@ -753,6 +777,7 @@ export class EndlessScene extends BaseScene {
     const verdict = this.verdictPose(now);
     if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
     else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
+    this.verdictTag.pose(this.verdict, this.viewport.safe.centerX, verdict);
     if (this.over && !this.plaqueShown && now >= this.finishUnlock) this.showPlaque();
   }
 
@@ -866,7 +891,7 @@ export class EndlessScene extends BaseScene {
     const pose = this.verdictPose(now);
     if (!pose || pose.alpha <= 0.01 || this.verdict.text === '') return;
     const s = this.uiScale;
-    const w = this.verdict.width * pose.scale + 28 * s, h = 38 * s * 1.3 * pose.scale;
+    const w = this.verdictTag.width(this.verdict, pose.scale) + 28 * s, h = 38 * s * 1.3 * pose.scale;
     const x = this.viewport.safe.centerX - w / 2, y = pose.y - h / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);

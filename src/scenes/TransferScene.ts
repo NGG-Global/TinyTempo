@@ -346,6 +346,12 @@ export class TransferScene extends BaseScene {
     return 'Restored. Nothing here was ahead of what you already had.';
   }
 
+  /** Android's back is this screen's own back puck (`core/backButton.ts`). */
+  public handleBack(): boolean {
+    this.leave();
+    return true;
+  }
+
   private leave(): void {
     if (this.curtain.active) return;
     this.curtain.cover(() => this.scene.start(SceneKey.Settings, { from: this.enteredFrom() }));

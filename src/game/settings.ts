@@ -41,6 +41,13 @@ export interface Settings {
    * on a phone whose owner never answered the question.
    */
   readonly analytics: boolean;
+  /**
+   * Whether `analytics` is the player's own answer — the switch in Settings has been moved
+   * — rather than where the build and the region started it. Only a chosen answer survives
+   * a region that asks for consent (`analytics/startingConsent.ts`); an unchosen one is
+   * where the game put it, and is the game's to correct. Device-local like `analytics`.
+   */
+  readonly analyticsChosen: boolean;
 }
 
 const KEY = 'tiny-tempo.settings.v1';
@@ -60,6 +67,7 @@ export const CALIBRATION_LIMIT_MS = 500;
 export const CALIBRATION_TAPS = 8;
 const DEFAULTS: Settings = Object.freeze({
   calibration: NO_CALIBRATION, muted: false, music: 1, sfx: 1, haptics: true, analytics: ANALYTICS.consentGranted,
+  analyticsChosen: false,
 });
 
 export type VolumeBus = 'music' | 'sfx';
@@ -100,9 +108,9 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
     if (!raw) return DEFAULTS;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return DEFAULTS;
-    const { calibration, calibrationMs, muted, music, sfx, haptics, analytics } = parsed as {
+    const { calibration, calibrationMs, muted, music, sfx, haptics, analytics, analyticsChosen } = parsed as {
       calibration?: unknown; calibrationMs?: unknown; muted?: unknown; music?: unknown; sfx?: unknown;
-      haptics?: unknown; analytics?: unknown;
+      haptics?: unknown; analytics?: unknown; analyticsChosen?: unknown;
     };
     return Object.freeze({
       // A version-1 save's `calibrationMs` is the legacy slot; a version-2 save's is ignored.
@@ -117,6 +125,9 @@ export function loadSettings(storage: Storage | null = safeStorage()): Settings 
       // existed answered nothing, so it falls back to what the build was configured with
       // rather than being read as a yes.
       analytics: typeof analytics === 'boolean' ? analytics : ANALYTICS.consentGranted,
+      // Absent before the flag existed. Nothing then could tell a moved switch from a
+      // default, so it reads as not chosen, and a region that asks for consent corrects it.
+      analyticsChosen: analyticsChosen === true,
     });
   } catch { return DEFAULTS; }
 }
@@ -134,6 +145,7 @@ export function saveSettings(settings: Settings, storage: Storage | null = safeS
       sfx: clampVolume(settings.sfx),
       haptics: settings.haptics !== false,
       analytics: settings.analytics === true,
+      analyticsChosen: settings.analyticsChosen === true,
     }));
     return storage !== null;
   } catch { return false; }

@@ -20,19 +20,33 @@ import { hasAttempted, recordAttempt, type ReviewRecord } from './reviewRecord';
 export interface ReviewMilestone {
   /** Stable: the stored record names it, so it is never renamed. */
   readonly id: string;
-  /** The level whose finale clear opens the opportunity. */
-  readonly level: number;
+  /** The first level that can open it. Every area finale from here on can, until it has been tried. */
+  readonly fromLevel: number;
+  /** The stars the finishing run must earn, so the moment is a success on its own terms. */
+  readonly minStars: number;
 }
 
 /**
- * Append-only. One entry for now: the first area finale, because clearing it is the
- * first thing a player has *finished* — an area's ten levels, the presentation that
- * closes it — rather than merely started, and it comes before any star gate, purchase or
- * heart can have coloured the session. A later milestone is a new entry here, and
- * nothing else changes: not the scene, not the bridge.
+ * Append-only. One entry for now: **the first area finale a player finishes with two stars
+ * or more** — level 10 for most, a later finale, or a replay of one, for a player who only
+ * scraped it. A finale is the first thing a player has *finished*, an area's levels and the
+ * presentation that closes them, rather than merely started.
+ *
+ * Two stars is `HEALTH.keepAtStars` on purpose: a result that keeps its heart, so the
+ * moment the review is offered is never one where a heart was just lost, whatever the
+ * bar holds (`tests/appReview.test.ts` keeps the two in step). Level 10 is inside
+ * `HEALTH.protectedThrough` as well, so on the common path nothing about hearts has
+ * touched the session yet. It used to be any clear of level 10, a one-star scrape
+ * included, which with hearts spent from level 6 met most players at an empty bar.
+ *
+ * The id predates the star condition and is kept, so a device that already tried is not
+ * asked again. Choosing the moment is Play's own advice ("target the best possible
+ * moment"); what the game never does is ask the player anything first or reward a rating.
+ * A later milestone is a new entry here, and nothing else changes: not the scene, not the
+ * bridge.
  */
 export const REVIEW_MILESTONES: readonly ReviewMilestone[] = Object.freeze([
-  Object.freeze({ id: 'first-finale', level: 10 }),
+  Object.freeze({ id: 'first-finale', fromLevel: 10, minStars: 2 }),
 ]);
 
 /** The facts about a finished level that the policy reads, and nothing else. */
@@ -40,6 +54,8 @@ export interface LevelClearance {
   readonly level: number;
   /** The level was cleared — one star or more. */
   readonly cleared: boolean;
+  /** This run's stars, 0–3: the run's own result, never the level's best. */
+  readonly stars: number;
   /** The level is an area finale and this run got its "Area complete" payoff. */
   readonly finale: boolean;
   /** `saveProgress` reported the write landed. A clear the next launch cannot find is not a milestone. */
@@ -47,10 +63,9 @@ export interface LevelClearance {
 }
 
 /**
- * The milestone this clear opens, or null. Exactly the milestone's level, cleared, as a
- * finale, saved, and not already tried on this device. Deliberately nothing about stars,
- * accuracy above the clear bar, Premium, ads, objectives or how the player seems to be
- * feeling: the first finale is the milestone, for everyone who reaches it.
+ * The milestone this clear opens, or null: an area finale at or past the milestone's
+ * level, cleared with its stars this run, saved, and not already tried on this device.
+ * Nothing about Premium, ads, purchases, objectives or hearts.
  */
 export function reviewMilestoneFor(
   clear: LevelClearance,
@@ -58,9 +73,8 @@ export function reviewMilestoneFor(
   milestones: readonly ReviewMilestone[] = REVIEW_MILESTONES,
 ): ReviewMilestone | null {
   if (!clear.cleared || !clear.finale || !clear.saved) return null;
-  const milestone = milestones.find(m => m.level === clear.level);
-  if (!milestone) return null;
-  return hasAttempted(record, milestone.id) ? null : milestone;
+  return milestones.find(m =>
+    clear.level >= m.fromLevel && clear.stars >= m.minStars && !hasAttempted(record, m.id)) ?? null;
 }
 
 /**
@@ -157,7 +171,7 @@ export function createAppReview(client: AppReviewClient, options: AppReviewOptio
   const milestones = options.milestones ?? REVIEW_MILESTONES;
   const prepareWaitMs = options.prepareWaitMs ?? REVIEW_WAIT.prepareMs;
   const launchWaitMs = options.launchWaitMs ?? REVIEW_WAIT.launchMs;
-  let pending: { readonly milestone: ReviewMilestone; readonly ready: Promise<boolean> } | null = null;
+  let pending: { readonly milestone: ReviewMilestone; readonly level: number; readonly ready: Promise<boolean> } | null = null;
   let launchedThisSession = false;
   let launching = false;
 
@@ -169,7 +183,7 @@ export function createAppReview(client: AppReviewClient, options: AppReviewOptio
     // serves both rather than asking Play again.
     if (pending?.milestone.id === milestone.id) return milestone;
     const ready = client.prepare().then(() => true, () => false);
-    pending = { milestone, ready };
+    pending = { milestone, level: clear.level, ready };
     return milestone;
   }
 
@@ -185,7 +199,7 @@ export function createAppReview(client: AppReviewClient, options: AppReviewOptio
       launchedThisSession = true;
       // Recorded before the call: after it the game cannot know what Play showed.
       options.save(recordAttempt(options.load(), {
-        milestone: offered.milestone.id, level: offered.milestone.level, at: now(), appVersion: options.appVersion,
+        milestone: offered.milestone.id, level: offered.level, at: now(), appVersion: options.appVersion,
       }));
       const completed = await within(client.launch().then(() => true), launchWaitMs, false);
       return completed ? 'completed' : 'failed';

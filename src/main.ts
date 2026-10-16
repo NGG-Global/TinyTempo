@@ -13,6 +13,7 @@ import { bootPlayGames } from '@/playgames/boot';
 import { bootAppReview } from '@/review/boot';
 import { bootUpdates } from '@/updates/boot';
 import { installArcDetail } from '@/ui/arcDetail';
+import { bootBackButton } from '@/core/backButton';
 
 declare global {
   interface Window {
@@ -60,6 +61,8 @@ function start(): void {
     // After the game exists so the adapter can ask which scene is up. A Play
     // sheet over a level would cost the round; chrome screens are the wait.
     void bootUpdates({ wouldInterrupt: () => wouldInterruptUpdate(game) });
+    // Android's back, answered by whichever screen is up (`core/backButton.ts`).
+    void bootBackButton(game);
 
     if (import.meta.env.DEV) {
       window.__PHASER_GAME__ = game;

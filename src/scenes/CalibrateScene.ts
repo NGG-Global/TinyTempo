@@ -468,6 +468,12 @@ export class CalibrateScene extends BaseScene {
     this.refreshCopy();
   }
 
+  /** Android's back is this screen's own back puck (`core/backButton.ts`). */
+  public handleBack(): boolean {
+    this.leave();
+    return true;
+  }
+
   private leave(): void {
     if (this.curtain.active) return;
     currentAudio(this)?.cancel();

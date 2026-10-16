@@ -124,11 +124,47 @@ denial and opens only *after* the SDK has accepted a grant, and a slower grant t
 resolves after a newer denial cannot reopen it. `tests/analyticsConsent.test.ts` stages
 each of those orders against a mocked plugin.
 
-**It is deliberately not wired to the AdMob consent flow.** The game already runs
-Google's UMP form for ads, and `canRequestAds` is tempting to reuse — but it answers a
+**Nothing is collected before the game has read the answer.** Firebase starts collecting
+the moment it is initialised unless the manifest holds it, and the game applies consent only
+once its JavaScript has booted — so every launch used to send an app open and a session
+before the player's answer was read. `AndroidManifest.xml` now sets
+`firebase_analytics_collection_enabled` to false (Firebase's documented way to hold
+collection until consent) and every `google_analytics_default_allow_*` consent-mode default
+to false. `setFirebaseConsent` grants `analytics_storage` and re-enables collection at
+runtime when the answer is yes; the advertising signals stay denied, because analytics
+consent is never advertising consent. `scripts/check-android-config.mjs` warns if any of
+the five goes missing.
+
+**It does not use the AdMob consent *answer*, only its region.** `canRequestAds` answers a
 question about *advertising*, not about analytics storage, and treating one as the other
-is exactly the conflation the GDPR purpose rules exist to prevent. `setFirebaseConsent`
-exists so a real consent signal can be connected when there is one.
+is exactly the conflation the GDPR purpose rules exist to prevent. What the game does take
+from UMP is *where the player is*: its first status at boot, `REQUIRED` or `OBTAINED` where
+a consent message is shown (the EEA, the UK and Switzerland, for the GDPR message) and
+`NOT_REQUIRED` elsewhere (`monetization/consentRegion.ts`, reported by `admob.ts` before any
+form is shown). `analytics/startingConsent.ts` (pure) decides from it:
+
+| The player's switch | Region | Collection this session |
+| --- | --- | --- |
+| Moved by the player (`analyticsChosen`) | any | what they chose |
+| Never moved | regulated | **off**, and the switch is written off so Settings shows it |
+| Never moved | unknown (no answer in 8 s, no network, no plugin) | off for this session; nothing written |
+| Never moved | open | the build's default, `VITE_ANALYTICS_CONSENT` |
+
+So a player in the EEA, the UK or Switzerland is asked nothing and sends nothing unless
+they turn the switch on, and a player elsewhere starts where the build says.
+
+One window remains, and it closes itself. Firebase keeps `setAnalyticsCollectionEnabled`
+across launches, over the manifest's hold, so a grant an earlier build applied runs from
+launch until this boot applies the new answer — up to `REGION_WAIT_MS`. That is the first
+launch after updating, for a player in a regulated region who never moved the switch: the
+boot then writes the switch off and denies collection natively, and every later launch is
+held. Denying first on every launch would close it, at the cost of every granted player's
+opening events; for the handful of closed-test installs this applies to, it was not worth it. **The region
+comes from the UMP message configured in AdMob**: with no GDPR message there, UMP answers
+`NOT_REQUIRED` everywhere and the regulated row never applies — configure it before a
+public release. The privacy policy states this behaviour for a build with
+`VITE_ANALYTICS_CONSENT=granted`; a build without it starts off everywhere, and the policy's
+"elsewhere it starts on" would then be wrong.
 
 ### The switch
 
@@ -144,7 +180,8 @@ drive analytics consent, and the analytics switch does not drive ads.
 
 `Settings.analytics` defaults to whatever `VITE_ANALYTICS_CONSENT` says, and a save
 written before the switch existed falls back to the same default rather than being read as
-a yes. That is the opposite of the rule `haptics` follows, and deliberately so: a missing
+a yes. `Settings.analyticsChosen` records whether the switch has ever been moved, so the
+boot can tell a player's answer from a default; a save from before it reads as not chosen. That is the opposite of the rule `haptics` follows, and deliberately so: a missing
 preference can be assumed, a missing consent cannot.
 
 **Consent does not travel in a save code.** `SaveData.settings` is a
@@ -152,10 +189,11 @@ preference can be assumed, a missing consent cannot.
 Consent belongs to a device and the jurisdiction its owner is in; restoring a code must
 not answer that question on a phone whose owner was never asked it.
 
-**This is still not a finished consent story.** Shipping analytics to EEA users needs the
-UMP message configured to cover analytics purposes, or analytics left off there — the
-in-app switch is a control, not a lawful basis. That is account-side work; see the release
-checklist.
+**What is left is account-side.** Configure the UMP GDPR message in AdMob, which is what
+tells the game a player is in a region that asks for consent. If you would rather ask EEA
+players for analytics consent in the UMP form itself than leave it off until they find the
+switch, that is a change to the message and to `startingConsent` together — the switch is a
+control, and an unchosen default in a regulated region is never treated as a yes.
 
 ## Turning it on
 
@@ -214,11 +252,14 @@ test rather than a hope. On a level that opens with a subdivision introduction,
 | How often does a star rating improve? | `star_improved`, with `previous_stars` → `stars` |
 | How often does a star gate block a player, and by how much? | `star_gate_reached` with `gate_short` and `unlocked`; `star_gate_opened` for the ones got through, with `replays`, `improvements` and `stars_gained` when this session saw the gate close |
 | How many complete or skip the tutorial? | `tutorial_started` → `tutorial_completed` / `tutorial_skipped`, by `source` |
+| Where in the tutorial do players drop off? | `tutorial_step_started` → `tutorial_step_ended` by `step` and `attempt`; the last `tutorial_step_started` with no end, completion or skip after it is where a player closed the app |
+| How long from launch to the first scored tap? | `tutorial_started.since_launch_ms` (`source = first_play`) plus `elapsed_ms` on the first `tutorial_step_ended` for `along`, which is an upper bound; the target is about 30 s |
 | Which task inside a failed level is hardest? | `level_failed.weakest_task`, and `task_completed.accuracy` by `task_index` |
 
 ### Schema
 
-Every parameter is a number or a string from a closed set of at most three values. No tap
+Every parameter is a number or a string from a small closed set — a handful of values at
+most, every one named in this file. No tap
 timestamp, no pattern, no id, no name and nothing about the device is sent. Indices are
 **1-based** — `level`, `area`, `task_index`, `weakest_task` — so a dashboard reads the way
 the game does. `area` is `floor((level - 1) / 10) + 1`.
@@ -252,9 +293,11 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `star_improved` | A cleared **replay** earns more stars than the level held. A first clear is not an improvement | `level`, `area`, `stars`, `previous_stars`, `accuracy`, `gate_have` |
 | `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session — the first time that gate is met | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short`, `unlocked` (highest level the save may start) |
 | `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have`, `unlocked`. When this session already sent `star_gate_reached` for that gate: `replays`, `improvements`, `stars_gained` — the ledger's own events in between, not a stored session |
-| `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once) |
+| `tutorial_started` | TutorialScene is entered | `source` (`first_play` \| `menu`), `repeat` (1 when already completed once), `since_launch_ms` (the page clock: on a cold start, roughly launch to lesson; meaningful for `first_play`) |
+| `tutorial_step_started` | A pass of the lesson begins: the opening tap-along, a try on their own, or *Watch again* | `step` (`along` \| `try` \| `watch`), `attempt` (that step's passes this visit, from 1), `resumed` (1 when an interruption restarted the same attempt), `elapsed_ms` (since the visit began), `repeat` |
+| `tutorial_step_ended` | A pass runs to its end | `step`, `attempt`, `verdict` (`clear` \| `early` \| `silent` \| `partial`, or `watched` for *Watch again*), `hits`, `elapsed_ms`, `repeat` |
 | `tutorial_completed` | *Let's play* | `tries`, `passed` (0 when the lesson offered the way on without a clear try), `duration_ms`, `repeat` |
-| `tutorial_skipped` | *Skip* | `step` (`watch` \| `along` \| `try` \| `done`), `tries`, `duration_ms`, `repeat` |
+| `tutorial_skipped` | *Skip* | `step` (`along` \| `try` \| `watch` \| `done`), `tries`, `duration_ms`, `repeat` |
 | `subdivision_intro_shown` | A finer grid's introduction begins (`docs/SUBDIVISIONS.md`). Shown again if the player leaves before a try is judged | `grid` (`triplet` \| `sixteenth`), `level`, `mode` |
 | `subdivision_intro_completed` | The introduction hands over to the level. Once per showing | `grid`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `scrapbook_opened` | The Scrapbook opens (`docs/SCRAPBOOK.md`) | `source` (`menu` \| `map`), `owned`, `total` |

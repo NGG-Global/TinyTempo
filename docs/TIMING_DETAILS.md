@@ -29,6 +29,31 @@ Slightly early — sit behind the beat.
 A level that judged nothing, such as a preview result, keeps the old "On the beat" caption
 and offers no toggle.
 
+## A tap at a time
+
+The tray tells a player their lean after the level. The same fact is also said **on each
+tap while the level is running**, beside the verdict word: **EARLY** or **LATE**
+(`tapTiming` in `game/timingReport.ts`, drawn by `ui/verdictTag.ts` in PlayScene and in
+Endless Mode).
+
+- A **Good** says which side of the beat it fell on. Negative is early, as everywhere the
+  judge's errors are read.
+- A **Perfect** says nothing. It is on time; naming a side inside the Perfect window would
+  send a player chasing a few milliseconds the game already calls right, and it would put
+  a word under every good tap of a good run.
+- A tap that **reached for a beat and missed its window** — up to twice the Good window
+  from a beat still unanswered — reads *Miss* with EARLY or LATE beside it. The judge marks
+  it (`Judgement.near`) without changing its grade or the score; it is the tap that most
+  needs telling, because the player's next one is about to make the same mistake.
+- A miss with no tap, a tap between beats and a second tap on a beat already answered
+  have no side, and say nothing.
+
+There is no room above or below the word — the act's shelf is over it and the block under
+it — so the tag sits beside it, the two centred as one group on the verdict's line
+(`verdictGroup` in `ui/hitPose.ts`) inside one pill. Both words are made in `build` and only
+shown, hidden and posed after that, so the frame of a judged tap does no raster for them.
+They ride the word's own pose, so they land and leave together, reduced motion included.
+
 ## Why in the tray, not under the plaque
 
 A row under the plaque would re-plan the whole result stack on a tap: the plaque would

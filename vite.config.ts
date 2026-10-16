@@ -84,7 +84,15 @@ function uploadCredentials(mode: string): { org: string; project: string; authTo
      * The version the settings footer prints. Inlined at build time from the one place
      * the number is already kept, so the screen cannot drift from the package.
      */
-    define: { __APP_VERSION__: JSON.stringify(version) },
+    define: {
+      __APP_VERSION__: JSON.stringify(version),
+      /**
+       * Whether this is the build Play receives. Only `npm run build:release` sets
+       * `RELEASE_BUILD=1`; every other build — the dev server, a debug APK, CI's artefact —
+       * serves Google's test ads rather than the live units (`config/ads.ts`).
+       */
+      __RELEASE_BUILD__: JSON.stringify(process.env.RELEASE_BUILD === '1'),
+    },
 
     /**
      * Relative base so the built bundle also loads from a `file://` origin.

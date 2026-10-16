@@ -25,11 +25,13 @@ import { turnCount } from './beatTrack';
  * spine of the lesson: every pass draws it, the words name it, and the one instruction
  * that matters is said in three words — *tap on Go!*
  *
- * Three passes, all on the real grid with no pause between the demonstration and the
- * answer, because that is the thing to learn. The first is watched: the game plays both
- * halves. The second is tapped along: the game sounds the answer on the grid and the
- * player taps with it, so the downbeat is felt before it has to be found. The third is
- * the player's own, judged by the level's controller with nothing sounded for them. A
+ * Two passes, both on the real grid with no pause between the demonstration and the
+ * answer, because that is the thing to learn. The first is tapped along: the game sounds
+ * the answer on the grid and the player taps with it, so the downbeat is felt before it
+ * has to be found — and the player's thumb is on the glass from the first bar, rather
+ * than after a pass spent watching. The second is the player's own, judged by the level's
+ * controller with nothing sounded for them. The watched pass, where the game plays both
+ * halves, is still there behind *Watch again* for a player who wants to see it first. A
  * verdict names the mistake rather than a score, and a tap that lands in the hammer's
  * turn is named the moment it lands, not after the bar.
  */
@@ -58,9 +60,9 @@ export const TUTORIAL = {
 } as const;
 
 /**
- * `watch`: the game plays both halves. `along`: the answer is voiced on the grid and the
- * player taps with it. `try`: the player's own bar, with nothing sounded for them.
- * `done`: the try was passed.
+ * `along`: the answer is voiced on the grid and the player taps with it — the first pass.
+ * `try`: the player's own bar, with nothing sounded for them. `watch`: the game plays both
+ * halves, on *Watch again* only. `done`: the try was passed.
  */
 export type TutorialStep = 'watch' | 'along' | 'try' | 'done';
 
@@ -105,7 +107,8 @@ export interface Tally {
 const NO_TALLY: Tally = Object.freeze({ hits: 0, misses: 0, extras: 0, early: 0 });
 
 export class TutorialRun {
-  public step: TutorialStep = 'watch';
+  /** The lesson opens on tapping along: the first pass is the player's thumb with the answer. */
+  public step: TutorialStep = 'along';
   public plan: RoundPlan | null = null;
   /** Judged passes started, along and alone together. */
   public tries = 0;
@@ -250,7 +253,9 @@ export function coach(run: Pick<TutorialRun, 'step' | 'plan' | 'verdict' | 'trie
     case 'count':
       return { heading: 'Listen', copy: along ? 'The hammer first. On Go! you tap with it.' : 'The hammer first. Then the count, then Go!', ...PLAYING, side: 'none' };
     case 'theirs':
-      return { heading: 'Their turn', copy: 'Not yet. The count, then Go! No pause.', ...PLAYING, side: 'theirs' };
+      // Tapping along is the first pass, so it says what the top row is; on their own,
+      // the player already knows, and the line is the warning.
+      return { heading: 'Their turn', copy: along ? 'Watch the ball hop along the hammer’s row.' : 'Not yet. The count, then Go! No pause.', ...PLAYING, side: 'theirs' };
     case 'runway':
       return { heading: 'Count down', copy: '3, 2, 1 — tap on Go!', ...PLAYING, side: 'handover' };
     default:

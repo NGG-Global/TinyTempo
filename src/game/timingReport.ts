@@ -1,4 +1,5 @@
 import { RHYTHM } from '../config/rhythm';
+import type { Judgement } from '../rhythm/judge';
 import type { RoundResult } from './scoring';
 
 /**
@@ -162,4 +163,24 @@ export function timingReport(tally: TimingTally): TimingReport | null {
   } else advice = ADVICE.centred;
 
   return { ...base, lean, advice, tendency, offsetMs, spreadMs };
+}
+
+/** Which side of its beat one tap fell, as the verdict says it beside the word. */
+export type TapTiming = 'early' | 'late';
+
+/**
+ * Early or late, for one tap, the moment it is judged — the result's lean, a tap at a time.
+ * A Good says which side it missed the centre on, and so does an extra tap that reached for
+ * a beat and fell outside its window (`Judgement.near`), which is the tap that most needs
+ * telling. A Perfect is on time and says nothing: naming a side inside the Perfect window
+ * would send a player chasing a few milliseconds the game already calls right. A miss with
+ * no tap, and a tap between beats or a second on one already answered, have no side.
+ * Negative is early, as everywhere the judge's errors are read.
+ */
+export function tapTiming(result: Pick<Judgement, 'kind' | 'grade' | 'deltaMs' | 'near'>): TapTiming | null {
+  const { deltaMs } = result;
+  if (deltaMs === null || !Number.isFinite(deltaMs) || deltaMs === 0) return null;
+  const offCentre = (result.kind === 'hit' && result.grade === 'Good') || (result.kind === 'extra' && result.near === true);
+  if (!offCentre) return null;
+  return deltaMs < 0 ? 'early' : 'late';
 }

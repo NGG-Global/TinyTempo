@@ -355,7 +355,14 @@ report of the purchase that caused it. **Firebase enforces its limits by discard
 dislikes is not an error, it is an event that never arrives. Consent is a stored setting
 with a switch in Settings → Privacy, it starts where `VITE_ANALYTICS_CONSENT` puts it, and
 it deliberately does not travel in a save code; the adapter also refuses to hand an event
-to the SDK while consent is not granted. **Gameplay events ride the same bus**, reported
+to the SDK while consent is not granted. **Nothing is collected before the answer is read**:
+the manifest holds Firebase (`firebase_analytics_collection_enabled` and every
+`google_analytics_default_allow_*` false, checked by `check-android-config.mjs`) until
+`setFirebaseConsent` runs. **Where UMP says consent applies, an unchosen switch starts off**:
+`admob.ts` reports UMP's first status as a region (`monetization/consentRegion.ts`) before any
+form, and `analytics/startingConsent.ts` keeps a moved switch (`Settings.analyticsChosen`) in
+every region, turns an unchosen one off in a regulated one, and holds collection for a session
+whose region is unknown. Only the region is taken from UMP, never its ad answer. **Gameplay events ride the same bus**, reported
 through `game/playAnalytics.ts` rather than by calling `track` from a scene: it keys a level
 attempt on PlayScene's heart attempt id, so Resume and a free restart continue a run
 instead of starting a second one, `level_completed`/`level_failed` fire once from
@@ -517,7 +524,10 @@ through `setSounds`, which belongs to the level that set it. The nail gives `KNO
 the first knock and no more on the rest, and `knockDepth` (`hammerMotion.ts`) lets it back up
 `KNOCK.restSec` after the last; `reset` clears it, so a level's hammer never inherits one.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. The same loop is the **shell bed** on settings and the map
+menu's PLAY tap. **It goes silent while the page is hidden** (`audio/backgroundSilence.ts`):
+the level, the lesson and Endless pause themselves, but the title theme and the road's loop
+played on behind Home and phone calls, so the engine suspends the one context on hidden and
+resumes only a context it suspended, on the next touch if the platform refuses. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
 reuse the one source, a level fades it out and starts a fresh source on its own
 downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
@@ -638,7 +648,11 @@ raster and no construction. **A hit is answered at its socket** (`ui/hitPose.ts`
 `drawBlock` from `struck.age`/`struck.perfect`): a Perfect gets a shockwave ring in sun and
 cream (never coral, on a plate that has warmed to coral), rays, a flash on the socket and the
 plate, a hop of the baton and `HAPTIC.hit`; a Good the flash, a faint ring and `tap`; the
-verdict word is struck like a count numeral (`verdictPose`). A flawless task's flourish ends
+verdict word is struck like a count numeral (`verdictPose`), and **an off-centre tap says which
+side it fell on beside it** — EARLY or LATE on a Good, and on a tap that reached for an
+unanswered beat and missed its window (`Judgement.near`, which changes no grade), never on a
+Perfect (`tapTiming`, `ui/verdictTag.ts`; both words made in `build`, posed with the word as one
+group, `docs/TIMING_DETAILS.md`). A flawless task's flourish ends
 in a **chorus** (`FLAWLESS.chorusAt`): every socket rings together, the plate lights, the
 baton lands again, the word kicks, confetti goes up. **The pulse ball** (`pulseBall` in
 `game/beatTrack.ts`, `BlockState.pulse`) lands on every beat of a task — the shelf's beads,
@@ -691,13 +705,18 @@ and a lesson that left it out sent the player to meet it unexplained on level 1 
 two things a level leaves out, a label beside each owner slot and a pointer that follows the
 token, and one line of words. `coach` derives every heading from `momentOf`, which reads the
 same plan the block is drawn from, so *Count down* is said on the beat the "3" strikes and
-*Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins that order. Three
-passes: watched; **tapped along**, with the answer voiced on the grid (`gridAction`) so the
-downbeat is felt before it has to be found; then on their own, with nothing voiced. Both
-judged passes run on the level's own `RoundController`, a tap in the hammer's turn gets *Not
-yet* the instant it lands, and a miss is named — *Too early*, *That was your turn* — rather
-than scored. Nothing in it waits for a tap: the loop's whole lesson is that it does not. See
-`docs/TUTORIAL.md`.
+*Your turn* on the downbeat, never after it; `tests/tutorial.test.ts` pins that order. **Two
+passes, and the first is the player's thumb**: **tapped along**, with the answer voiced on the
+grid (`gridAction`) so the downbeat is felt before it has to be found; then on their own, with
+nothing voiced. The watched pass is only *Watch again*. Both run on the level's own
+`RoundController`, a tap in the hammer's turn gets *Not yet* the instant it lands, and a miss
+is named — *Too early*, *That was your turn* — rather than scored. Nothing in it waits for a
+tap: the loop's whole lesson is that it does not. **A first scored tap is budgeted at about
+thirty seconds from launch**: the lesson's first judged tap is due ~7.3 s in, a first PLAY
+starts the loop's stems loading and goes straight to the lesson (which plays no music; the map
+and level 1 wait on the same pending load), and finishing the lesson marks level 1's
+demonstration seen, so a player who passed it does not watch the loop again — a skip does
+not. Each pass reports `tutorial_step_started`/`tutorial_step_ended`. See `docs/TUTORIAL.md`.
 
 **Three stars on a designated level earns a keepsake, and ownership is never stored.**
 `game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
@@ -738,7 +757,22 @@ sheet spends and ends nothing, and the sheet re-reads the run and re-arms before
 attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
 id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
 same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
-and it restarts only if its `RestartTicket` still holds.
+and it restarts only if its `RestartTicket` still holds. **Try again says what it costs and
+does not take a stray tap**: the block carries the sheet's ♥ 1 chip when `tryAgainCost` says a
+heart goes, and a result ignores taps for `RESULT_ARM_SEC` after it appears (`resultArmed`),
+because a player still tapping the rhythm landed on it and paid for an attempt unread.
+
+**A frontier attempt keeps its heart on two stars, and the first area is free**
+(`HEALTH.keepAtStars`, `HEALTH.protectedThrough` in `game/health.ts`). The heart is spent when
+the attempt begins and refunded by `finishAttempt` on two stars or more; a failure or a
+one-star scrape keeps it spent. Not three, which charged nearly every clear, a heart lost for
+passing and the whole first session spent by level 10; and not failure only, which at a clear
+bar of 40–67% through level 30 would almost never charge the better half of players and stop
+pacing them at all. The middle star is the real test of a level and a threshold the player
+already sees. Levels 1–10, the first finale included, never cost one, so nothing about hearts
+has coloured a session by the time the first star gate and the review offer arrive. A two-star
+keep puts the refund plate, the next-star strip and the replay block on one result, the
+tallest stack `planResult` lays out, which `tests/resultLayout.test.ts` covers.
 
 The first time the hearts run out, both empty-bar screens say once that a finished level
 never costs a heart and the map's sheet offers *Replay level N* (`levelToPolish`, the
@@ -916,6 +950,7 @@ src/
   analytics/
     boot.ts            Attaches the provider on native; composes with the installed sink
     eventShape.ts      Firebase's name and parameter limits, as pure functions
+    startingConsent.ts Where collection starts: the player's answer, then the region; pure
     firebase.ts        The Firebase adapter; the only file that knows the vendor
   audio/
     AudioEngine.ts     The only AudioContext; music and effects buses, and mute
@@ -931,6 +966,7 @@ src/
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
+    backgroundSilence.ts  Suspends the one context while the page is hidden; resumes only its own suspend
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
     design.ts          Design resolution, layout metrics, depth ordering
@@ -953,6 +989,7 @@ src/
     BaseScene.ts       Scene base class owning the build/layout lifecycle
     errors.ts          Capture, dedupe, breadcrumbs and redaction; no vendor, no network
     haptics.ts         navigator.vibrate behind the player's setting; the one added web API
+    backButton.ts      Android's back: one listener, a DOM sheet first, then the scene's handleBack; pure dispatch
     Viewport.ts        Live layout frames (full / safe / content / designBox)
     motionPreference.ts  The one live read of prefers-reduced-motion
     safeArea.ts        Reads env(safe-area-inset-*) via a probe element
@@ -1052,6 +1089,7 @@ src/
     sheen.ts           The light crossing a brass panel; still under reduced motion
     switch.ts          The two-state switch; its geometry imports no Phaser
     type.ts            Display, body and label text from the treatment's bundled faces
+    verdictTag.ts      EARLY or LATE beside the verdict word, made once and posed with it
   updates/
     playUpdate.ts      Flexible vs immediate, when to restart; no native import
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
@@ -1293,15 +1331,25 @@ after, that the bundle carries the text of every shipped feature in `RELEASE_MAR
 reached Play from a checkout behind main, without the timing details or anything merged with
 them, and nothing said so. A shipped feature adds its marker; the test keeps each one in `src/`. The launcher icon is an adaptive icon: a flat `#CE5133` background — the master's own ground, sampled from the artwork, which is why it is a shade off the game's `#CF5134` coral — under a full-bleed foreground, since the artwork is a scene rather than a glyph on transparency. `res/values/colors.xml` carries the palette for the native surfaces the WebView does not paint, and the launch window is a flat paper field rather than Capacitor's stock splash bitmap, so a cold start is one colour from the launcher to the menu. The portrait lock lives in `AndroidManifest.xml`;
 the DOM rotate prompt remains the browser fallback. `android/app/src/main/assets/public`
-is generated by `cap sync` and is not committed. Two native Capacitor plugins are used — AdMob and Firebase
+is generated by `cap sync` and is not committed. Two native Capacitor plugins carry features — AdMob and Firebase
 Analytics — each behind an adapter that is dynamically imported on a native platform only,
-so a browser build downloads none of them. Billing is the third native capability and is
+so a browser build downloads none of them. The third is `@capacitor/app`, for **Android's back
+button** and nothing else (`core/backButton.ts`, native-only and lazily imported): one listener
+hands the press to a DOM sheet first (`dismissShellOverlay`), then to the active scene's
+`handleBack`, and only a press nothing takes — the title screen's — goes to `minimizeApp`.
+Every scene a player can stand on answers it; in a level it is two presses
+(`levelBackAction`: pause, then the map), because the second can end a paid attempt. Before
+it, back left the app from any screen. **AdMob asks for consent before it starts**: `admob.ts`
+initialises the SDK only once `canRequestAds` is true, caps ad content at
+`ADMOB.maxAdContentRating` (parental guidance), and every build but `npm run build:release`
+(`__RELEASE_BUILD__`) serves Google's test ads, so no bench or CI APK serves live ones; the
+Mobile Ads SDK and UMP are pinned in `variables.gradle`. Billing is the fourth native capability and is
 **not** a package: `PlayBillingPlugin.java` in this module calls Google Play Billing
 directly, registered by hand in `MainActivity` and reached through `monetization/purchases.ts`.
 Every decision about a purchase lives in `monetization/playBilling.ts`, which imports no
 native code and is therefore tested under node — the native side only relays what Play says
 and performs the acknowledge and consume it is told to. See `docs/BILLING.md`. Play Games
-Services v2 is the fourth and is hand-written for the same reason: `PlayGamesPlugin.java`
+Services v2 is the fifth and is hand-written for the same reason: `PlayGamesPlugin.java`
 relays `GamesSignInClient` and `PlayersClient`, registered beside Billing in `MainActivity`,
 and `PlayGamesSdk.initialize` runs in `TinyTempoApplication` because v2 wants it in
 `Application.onCreate`. The artifact is pinned (`playGamesVersion` in `variables.gradle`) and
@@ -1310,19 +1358,22 @@ is **`play-services-games-v2` only** — the deprecated v1 `play-services-games`
 enforces along with the Games project id, the meta-data, the Application class and both
 `registerPlugin` calls: `cap sync` rewrites `MainActivity` from its own template if the file
 is ever lost, taking the registrations with it. See `docs/PLAY_GAMES.md`. In-app updates
-are the fifth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
+are the sixth, the same shape: `PlayUpdatePlugin.java` talks to `AppUpdateManager`,
 `src/updates/playUpdate.ts` decides flexible vs immediate and when to ask for a restart,
 and a browser or a Studio-sideloaded APK is silent — Play only answers for a package it
-installed. See `docs/UPDATES.md`. In-app review is the sixth, and the same shape again:
+installed. See `docs/UPDATES.md`. In-app review is the seventh, and the same shape again:
 `PlayReviewPlugin.java` holds a `ReviewInfo` and shows it, `src/review/appReview.ts` decides
 which clear is the milestone and when the opportunity is spent, and the browser keeps a stub
-that offers nothing. **The first area finale is the only milestone**: `PlayScene.showSummary`
-reports the facts of a finished level to `offer`, and the cleared result's Continue —
+that offers nothing. **The only milestone is the first area finale finished with two stars**
+(`first-finale`: from level 10, `minStars` 2 — `HEALTH.keepAtStars`, so the review is never
+offered on a result that just took a heart; a one-star scrape waits for the next good finale,
+a replay of level 10 included): `PlayScene.showSummary`
+reports the facts of a finished level, the run's stars among them, to `offer`, and the cleared result's Continue —
 `continueFromSummary`, never `leaveForMap`, which the map puck also uses — launches the flow
 and goes to the map on every branch. Play does not say whether it showed a dialog, so a
 completed launch means "attempted" and nothing more, and the one stored bit
 (`tiny-tempo.review.v1`) is written when a launch is tried, not when one is offered. See
-`docs/IN_APP_REVIEW.md`. The audio route is the seventh: `AudioRoutePlugin.java` reads
+`docs/IN_APP_REVIEW.md`. The audio route is the eighth: `AudioRoutePlugin.java` reads
 `AudioManager.getDevices` and `AudioDeviceCallback` and relays a category, never a device name,
 registered beside the others in `MainActivity` and checked by `check-android-config.mjs`. See
 `docs/AUDIO_ROUTES.md`. Beyond those, the game

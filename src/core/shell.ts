@@ -191,6 +191,23 @@ const UPDATE_OVERLAY_ID = 'update-overlay';
 const UPDATE_CONFIRM_ID = 'update-confirm';
 const UPDATE_CANCEL_ID = 'update-cancel';
 
+/**
+ * Android's back on a DOM sheet: it is the sheet's own cancel, pressed. Back is answered
+ * here before any scene, because the sheet covers the canvas and is what the player is
+ * looking at. Returns whether a sheet was up to dismiss.
+ */
+export function dismissShellOverlay(): boolean {
+  for (const [overlayId, cancelId] of [[CODE_OVERLAY_ID, CODE_CANCEL_ID], [UPDATE_OVERLAY_ID, UPDATE_CANCEL_ID]] as const) {
+    const overlay = element(overlayId);
+    if (overlay === null || overlay.hasAttribute('hidden')) continue;
+    const cancel = element(cancelId);
+    if (cancel instanceof HTMLElement) cancel.click();
+    else overlay.setAttribute('hidden', '');
+    return true;
+  }
+  return false;
+}
+
 /** One prompt at a time: a second downloaded event must not stack a second sheet. */
 let updatePrompt: Promise<boolean> | null = null;
 

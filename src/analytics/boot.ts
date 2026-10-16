@@ -4,6 +4,15 @@ import { ANALYTICS } from '@/config/analytics';
 import { breadcrumb } from '@/core/errors';
 import { loadSettings, saveSettings } from '@/game/settings';
 import { installAnalytics } from '@/monetization/analytics';
+import { consentRegion, type ConsentRegionSignal } from '@/monetization/consentRegion';
+import { startingConsent } from './startingConsent';
+
+/**
+ * How long the boot waits for UMP's first answer about the player's region (`admob.ts`
+ * reports it before any form is shown). Past it the region is unknown, and collection
+ * is held for the session rather than started on a guess.
+ */
+const REGION_WAIT_MS = 8_000;
 
 /**
  * Attaches the analytics provider to the existing event bus.
@@ -19,12 +28,16 @@ import { installAnalytics } from '@/monetization/analytics';
  * Composing is also what lets a second provider be added later without either knowing
  * about the other.
  */
-export async function installAnalyticsProvider(): Promise<void> {
+export async function installAnalyticsProvider(region: ConsentRegionSignal = consentRegion): Promise<void> {
   if (!ANALYTICS.enabled) return;
   try {
     if (!Capacitor.isNativePlatform()) return;
+    // The native SDK collects nothing until this runs (`firebase_analytics_collection_enabled`
+    // is false in the manifest), so waiting for the region costs events, never consent.
+    const start = startingConsent(loadSettings(), await region.wait(REGION_WAIT_MS));
+    if (start.storeOff) saveSettings({ ...loadSettings(), analytics: false });
     const { createFirebaseSink } = await import('./firebase');
-    const sink = await createFirebaseSink(loadSettings().analytics);
+    const sink = await createFirebaseSink(start.granted);
     const previous = installAnalytics((event, payload) => {
       previous(event, payload);
       sink(event, payload);
@@ -46,7 +59,8 @@ export async function installAnalyticsProvider(): Promise<void> {
  * because a consent call that cannot be delivered must not leave the switch lying.
  */
 export async function setAnalyticsConsent(granted: boolean): Promise<void> {
-  saveSettings({ ...loadSettings(), analytics: granted });
+  // A moved switch is the player's own answer, and stands in every region from here on.
+  saveSettings({ ...loadSettings(), analytics: granted, analyticsChosen: true });
   if (!ANALYTICS.enabled) return;
   try {
     if (!Capacitor.isNativePlatform()) return;

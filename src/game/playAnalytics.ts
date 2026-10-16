@@ -281,14 +281,43 @@ export class LevelRun {
 
 export type TutorialSource = AnalyticsPayloads['tutorial_started']['source'];
 export type TutorialStepName = AnalyticsPayloads['tutorial_skipped']['step'];
+export type TutorialPass = AnalyticsPayloads['tutorial_step_started']['step'];
+export type TutorialPassVerdict = AnalyticsPayloads['tutorial_step_ended']['verdict'];
 
-/** One visit to the tutorial. It ends once, by completing or by Skip. */
+/**
+ * One visit to the tutorial. It ends once, by completing or by Skip, and reports each pass
+ * on the way — its start and its end — so the funnel shows the step a player left on, even
+ * when they left by closing the app and neither end was sent.
+ */
 export class TutorialVisit {
   private readonly startedAt: number;
   private closed = false;
+  private readonly attempts = { watch: 0, along: 0, try: 0 };
 
   public constructor(private readonly ledger: PlayAnalytics, private readonly repeat: Flag) {
     this.startedAt = ledger.clockMs();
+  }
+
+  /** A pass began. A resumed pass is the interrupted attempt again, not a new one. */
+  public stepStarted(step: TutorialPass, resumed = false): void {
+    guard(undefined, () => {
+      if (this.closed) return;
+      if (!resumed || this.attempts[step] === 0) this.attempts[step] += 1;
+      this.ledger.emit('tutorial_step_started', {
+        step, attempt: this.attempts[step], resumed: flag(resumed), elapsed_ms: this.elapsed(), repeat: this.repeat,
+      });
+    });
+  }
+
+  /** A pass reached its end: the lesson's verdict on a judged pass, `watched` on the game's own. */
+  public stepEnded(step: TutorialPass, verdict: TutorialPassVerdict, hits: number): void {
+    guard(undefined, () => {
+      if (this.closed) return;
+      this.ledger.emit('tutorial_step_ended', {
+        step, attempt: Math.max(1, this.attempts[step]), verdict, hits: Math.max(0, Math.round(hits)),
+        elapsed_ms: this.elapsed(), repeat: this.repeat,
+      });
+    });
   }
 
   public complete(tries: number, passed: boolean): void {
@@ -494,7 +523,7 @@ export class PlayAnalytics {
   public beginTutorial(source: TutorialSource, repeat: boolean): TutorialVisit | null {
     return guard<TutorialVisit | null>(null, () => {
       const visit = new TutorialVisit(this, flag(repeat));
-      this.emit('tutorial_started', { source, repeat: flag(repeat) });
+      this.emit('tutorial_started', { source, repeat: flag(repeat), since_launch_ms: Math.max(0, Math.round(this.clockMs())) });
       return visit;
     });
   }

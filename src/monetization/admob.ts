@@ -1,4 +1,5 @@
 import { ADMOB } from '@/config/ads';
+import { consentRegion, regionFromStatus, type ConsentRegionSignal } from './consentRegion';
 import type { RewardedAds, RewardedResult } from './types';
 
 /** Plugin event names, inlined so tests never import the native package. */
@@ -18,6 +19,8 @@ export const REWARD_EVENTS = {
 export type PrivacyOptionsRequirementStatus = 'NOT_REQUIRED' | 'REQUIRED' | 'UNKNOWN';
 
 export interface ConsentSnapshot {
+  /** UMP's consent status (`REQUIRED`, `OBTAINED`, `NOT_REQUIRED`, `UNKNOWN`): where the player is, in effect. */
+  readonly status?: string;
   readonly canRequestAds: boolean;
   readonly isConsentFormAvailable?: boolean;
   readonly privacyOptionsRequirementStatus?: PrivacyOptionsRequirementStatus;
@@ -63,10 +66,13 @@ export function createAdMobAds(client: AdMobClient, options: {
   readonly showLimitMs?: number;
   /** Wait this long after a dismiss/empty resolve for a late Rewarded event. */
   readonly dismissGraceMs?: number;
+  /** Where UMP's first answer about the player's region goes; analytics reads it. */
+  readonly region?: ConsentRegionSignal;
 } = {}): AdMobAds {
   const adUnitId = options.adUnitId ?? ADMOB.rewardedUnitId;
   const showLimitMs = options.showLimitMs ?? 170_000;
   const dismissGraceMs = options.dismissGraceMs ?? 400;
+  const region = options.region ?? consentRegion;
   let bootPromise: Promise<void> | null = null;
   let initialized = false;
   let denied = false;
@@ -85,21 +91,33 @@ export function createAdMobAds(client: AdMobClient, options: {
     await bootPromise;
   }
 
+  /**
+   * Consent first, then the SDK. Google's UMP sample initialises the Mobile Ads SDK only
+   * once `canRequestAds` is true, and this used to initialise it before asking, which is
+   * an SDK started — and free to make its own requests — for a player who may yet refuse.
+   * A refusal now leaves it never started; a later grant through the privacy options
+   * starts it then (`allowAdsIfConsented`).
+   */
   async function runBoot(): Promise<void> {
     try {
-      if (!initialized) {
-        await client.initialize();
-        initialized = true;
+      let consent: ConsentSnapshot;
+      try {
+        consent = await client.requestConsentInfo();
+      } catch (error) {
+        // A request that failed is an unknown region, never an open one.
+        region.report('unknown');
+        throw error;
       }
-      const tracking = await client.trackingAuthorizationStatus();
-      if (tracking.status === 'notDetermined') {
-        await client.requestTrackingAuthorization();
-      }
-      let consent = await client.requestConsentInfo();
+      // Reported before any form is shown, so analytics is not held behind a player reading one.
+      region.report(regionFromStatus(consent.status));
       if (!consent.canRequestAds) {
         try { consent = await client.showConsentForm(); } catch { /* form missing or already answered */ }
       }
       rememberConsent(consent);
+      const tracking = await client.trackingAuthorizationStatus();
+      if (tracking.status === 'notDetermined') {
+        await client.requestTrackingAuthorization();
+      }
       await allowAdsIfConsented();
     } catch {
       denied = true;
@@ -113,6 +131,10 @@ export function createAdMobAds(client: AdMobClient, options: {
 
   async function allowAdsIfConsented(): Promise<void> {
     if (denied) return;
+    if (!initialized) {
+      await client.initialize();
+      initialized = true;
+    }
     await ensureListeners();
     await prepare();
   }

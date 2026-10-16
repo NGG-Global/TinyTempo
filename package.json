@@ -11,7 +11,7 @@
     "lint": "oxlint src tests --deny-warnings",
     "test": "vitest run",
     "build": "tsc --noEmit && vite build",
-    "build:release": "SENTRY_UPLOAD=1 npm run build && node scripts/check-no-sourcemaps.mjs",
+    "build:release": "SENTRY_UPLOAD=1 RELEASE_BUILD=1 npm run build && node scripts/check-no-sourcemaps.mjs",
     "preview": "vite preview",
     "preview:host": "vite preview --host",
     "music:encode": "node scripts/encode-music.mjs",
@@ -30,6 +30,7 @@
     "@capacitor-community/admob": "^8.1.0",
     "@capacitor-firebase/analytics": "^8.5.2",
     "@capacitor/android": "^8.5.1",
+    "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.1",
     "@sentry/browser": "^10.75.0",
     "phaser": "^4.2.1"

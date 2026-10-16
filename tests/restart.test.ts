@@ -17,6 +17,9 @@ import { guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, 
 vi.mock('phaser', () => ({ default: { Geom: { Rectangle: class {} } } }));
 
 const NOW = 1_700_000_000_000;
+/** The first level a frontier attempt pays for, past the protected first area. */
+const PAID = HEALTH.protectedThrough + 1;
+
 /** A save whose frontier is `level`: everything below it cleared on two stars. */
 function frontier(level: number): Progress {
   const best: Record<number, number> = {};
@@ -85,14 +88,14 @@ class Visit {
 
 describe('heart accounting', () => {
   it('spends one heart to start an unfinished frontier level', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     expect(visit.start('resume')).toBe(true);
     expect(visit.health.hearts).toBe(4);
     expect(visit.health.spentAttempt).toBe(visit.attemptId);
   });
 
   it('restarts free, on the same attempt, before the first scored response', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     const first = visit.attemptId;
     expect(restartKind(visit.facts())).toBe('confirm_free');
@@ -103,7 +106,7 @@ describe('heart accounting', () => {
   });
 
   it('ends the attempt and begins another once the scored response has begun', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     const first = visit.attemptId;
     visit.respond();
@@ -114,7 +117,7 @@ describe('heart accounting', () => {
   });
 
   it('charges exactly one more heart for a confirmed paid restart, and never refunds the ended attempt', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     const first = visit.attemptId!;
     visit.respond();
@@ -126,7 +129,7 @@ describe('heart accounting', () => {
   });
 
   it('consumes nothing when the sheet is opened and cancelled', () => {
-    const visit = new Visit(health(3), frontier(8), 8);
+    const visit = new Visit(health(3), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
     const before = visit.health;
@@ -143,7 +146,7 @@ describe('heart accounting', () => {
   });
 
   it('makes every confirmed restart a new attempt that needs a heart of its own', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     const ids = new Set([visit.attemptId]);
     for (let expected = 3; expected >= 0; expected--) {
@@ -164,7 +167,7 @@ describe('heart accounting', () => {
   });
 
   it('never charges Resume after an interruption, before or after the response began', () => {
-    const visit = new Visit(health(2), frontier(8), 8);
+    const visit = new Visit(health(2), frontier(PAID), PAID);
     visit.start('resume');
     const id = visit.attemptId;
     visit.respond();
@@ -175,7 +178,7 @@ describe('heart accounting', () => {
     expect(visit.begun).toBe(true);
     expect(restartKind(visit.facts())).toBe('confirm_paid');
     // Even at zero hearts, Resume continues what is already paid for.
-    const broke = new Visit(health(1), frontier(8), 8);
+    const broke = new Visit(health(1), frontier(PAID), PAID);
     broke.start('resume');
     expect(broke.health.hearts).toBe(0);
     expect(broke.start('resume')).toBe(true);
@@ -183,8 +186,8 @@ describe('heart accounting', () => {
   });
 
   it('keeps a cleared level free, with no sheet', () => {
-    const progress = frontier(12);
-    const visit = new Visit(health(0), progress, 9);
+    const progress = frontier(PAID + 2);
+    const visit = new Visit(health(0), progress, PAID);
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
@@ -205,7 +208,7 @@ describe('heart accounting', () => {
   });
 
   it('keeps Premium free, and never tells Premium a heart will be used', () => {
-    const visit = new Visit(health(0), frontier(8), 8, true);
+    const visit = new Visit(health(0), frontier(PAID), PAID, true);
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
@@ -216,13 +219,13 @@ describe('heart accounting', () => {
     expect(RESTART_COPY.free.note).toBe('No heart will be used.');
   });
 
-  it('still refunds three stars, on the attempt that earned them', () => {
-    const visit = new Visit(health(5), frontier(8), 8);
+  it('still refunds a kept heart — two stars or more — on the attempt that earned them', () => {
+    const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
     visit.restart();
     expect(visit.health.hearts).toBe(3);
-    visit.finish(3);
+    visit.finish(HEALTH.keepAtStars);
     expect(visit.health.hearts).toBe(4);
     // Try again after the result is a new attempt, as it always was.
     expect(restartKind(visit.facts())).toBe('try_again');
@@ -231,7 +234,7 @@ describe('heart accounting', () => {
   });
 
   it('leaves the heart with the player when the restart\'s audio then fails', () => {
-    const visit = new Visit(health(2), frontier(8), 8);
+    const visit = new Visit(health(2), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
     expect(visit.start('new_attempt', false)).toBe(false);
@@ -249,7 +252,7 @@ describe('the zero-heart rewarded restart', () => {
   const broken = (reason: 'unavailable' | 'cancelled' | 'failed') => (): Promise<RewardedResult> => Promise.resolve({ ok: false, reason });
 
   function emptyRun(): Visit {
-    const visit = new Visit(health(1), frontier(8), 8);
+    const visit = new Visit(health(1), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
     expect(visit.health.hearts).toBe(0);
@@ -426,7 +429,7 @@ describe('the attempt handover', () => {
   });
 
   it('asks the result screen\'s question, not the sheet\'s, once a result is recorded', () => {
-    const visit = new Visit(health(0), frontier(8), 8);
+    const visit = new Visit(health(0), frontier(PAID), PAID);
     visit.attemptId = 'done';
     visit.outcome = true;
     visit.begun = true;
@@ -523,5 +526,27 @@ describe('restart analytics', () => {
     const count = (event: AnalyticsEvent) => sent.filter(s => s.event === event).length;
     expect(count('level_abandoned')).toBe(1);
     expect(count('level_started')).toBe(2);
+  });
+});
+
+describe('the result after a level', () => {
+  it('ignores taps for a moment after it appears, so a tap still landing from the level spends nothing', async () => {
+    const { RESULT_ARM_SEC, resultArmed } = await import('../src/game/restart');
+    expect(RESULT_ARM_SEC).toBeGreaterThanOrEqual(0.5);
+    expect(resultArmed(10, 10)).toBe(false);
+    expect(resultArmed(10, 10 + RESULT_ARM_SEC - 0.01)).toBe(false);
+    expect(resultArmed(10, 10 + RESULT_ARM_SEC)).toBe(true);
+    expect(resultArmed(-Infinity, 10)).toBe(false);
+    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
+    expect(scene).toContain('if (this.summaryShown && resultArmed(this.summaryWallAt, performance.now() / 1000)) {');
+  });
+
+  it('says on Try again the heart it will spend, and nothing where it spends none', async () => {
+    const { tryAgainCost } = await import('../src/game/restart');
+    expect(tryAgainCost({ progress: frontier(PAID), level: PAID, premium: false })).toBe(1);
+    expect(tryAgainCost({ progress: frontier(PAID), level: PAID, premium: true })).toBe(0);
+    expect(tryAgainCost({ progress: frontier(HEALTH.protectedThrough), level: HEALTH.protectedThrough, premium: false })).toBe(0);
+    // A finished level replays free, whatever its stars.
+    expect(tryAgainCost({ progress: frontier(PAID + 1), level: PAID, premium: false })).toBe(0);
   });
 });

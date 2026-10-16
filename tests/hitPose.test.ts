@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HIT, hitPose, verdictPose } from '../src/ui/hitPose';
+import { HIT, hitPose, verdictGroup, verdictPose } from '../src/ui/hitPose';
 
 describe('what a hit does to the row', () => {
   it('throws a ring that spreads and fades, rays for the first instant, and a flash that cools', () => {
@@ -88,5 +89,34 @@ describe('how the verdict lands', () => {
   it('is at rest under reduced motion, and still leaves', () => {
     expect(verdictPose(0.1, 'Perfect', 0, true)).toEqual({ alpha: 1, rise: 0, scale: 1, tilt: 0 });
     expect(verdictPose(HIT.verdictHold * 0.95, 'Perfect', 0, true)!.alpha).toBeLessThan(1);
+  });
+});
+
+describe('the verdict and its early/late tag', () => {
+  it('centres the word alone when there is no tag, exactly as before', () => {
+    expect(verdictGroup(120, 0, 1.2, 12)).toEqual({ wordX: 0, tagX: 0, width: 144 });
+  });
+
+  it('centres the word and the tag as one group, a gap apart, at the word’s scale', () => {
+    const { wordX, tagX, width } = verdictGroup(100, 60, 1.5, 10);
+    expect(width).toBeCloseTo(100 * 1.5 + 10 * 1.5 + 60 * 1.5);
+    // The group's left edge and right edge sit the same distance either side of the line.
+    const left = wordX - (100 * 1.5) / 2;
+    const right = tagX + (60 * 1.5) / 2;
+    expect(left).toBeCloseTo(-width / 2);
+    expect(right).toBeCloseTo(width / 2);
+    expect(tagX - wordX).toBeCloseTo((100 + 60) * 1.5 / 2 + 10 * 1.5);
+  });
+
+  it('is made once and only shown, never re-rasterised on the frame of a tap', () => {
+    const tag = readFileSync('src/ui/verdictTag.ts', 'utf8');
+    expect(tag).not.toMatch(/setText\(/);
+    for (const scene of ['src/scenes/PlayScene.ts', 'src/scenes/EndlessScene.ts']) {
+      const source = readFileSync(scene, 'utf8');
+      expect(source).toContain('this.verdictTag.set(tapTiming(result));');
+      expect(source).toMatch(/this\.verdictTag = new VerdictTag\(/);
+      // The pill behind the word is as wide as the word and its tag together.
+      expect(source).toContain('this.verdictTag.width(this.verdict, pose.scale)');
+    }
   });
 });

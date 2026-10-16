@@ -1,4 +1,5 @@
 import { AudioClock } from './AudioClock';
+import { silenceInBackground } from './backgroundSilence';
 import { MusicSystem } from './MusicSystem';
 import { ThemeMusic } from './ThemeMusic';
 import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
@@ -91,6 +92,8 @@ export class AudioEngine implements SoundSink {
    * every waiting target while the demonstration (already scheduled) still sounds in time.
    */
   private readonly onSink = (): void => { this.clock.refresh(); };
+  /** Stops following the page's visibility; every sound is silenced while it is hidden. */
+  private readonly releaseBackground: () => void;
 
   public constructor() {
     this.musicBus.gain.value = 1;
@@ -99,6 +102,7 @@ export class AudioEngine implements SoundSink {
     this.sfxBus.connect(this.master);
     this.master.connect(this.context.destination);
     this.context.addEventListener?.('sinkchange', this.onSink);
+    this.releaseBackground = silenceInBackground(this.context, typeof document === 'undefined' ? undefined : document);
   }
 
   /** Nothing is coming out: the puck is off, or both levels are. */
@@ -261,6 +265,7 @@ export class AudioEngine implements SoundSink {
     this.music.dispose();
     this.disposed = true;
     this.context.removeEventListener?.('sinkchange', this.onSink);
+    this.releaseBackground();
     this.musicBus.disconnect();
     this.sfxBus.disconnect();
     this.master.disconnect();
