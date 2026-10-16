@@ -45,6 +45,38 @@ const SOCKET_RING = 0x8f3620;
 const RECESS = 0x5a4230;
 
 /**
+ * A hole in the bench: the socket a beat has not been answered into, and the shelf's
+ * bead before its beat has sounded. The same light as the shelf's own recess — a hard
+ * shadow inside the top of the hole, where the lip cuts the key light, and a thin catch of
+ * bounced light along the bottom — so the sockets read as *cut into* the plate rather
+ * than as flat brown discs painted on it, which is what a filled disc and a ring gave.
+ * `floor` is the hole's bottom; the rim is the caller's, since a socket's ring says more.
+ */
+function drawRecess(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, s: number, floor: number, alpha = 1): void {
+  g.fillStyle(shade(PALETTE.ink, -0.1), 0.3 * alpha).fillCircle(x, y, r);
+  const floorY = y + 2 * s;
+  g.fillStyle(floor, alpha).fillCircle(x, floorY, r * 0.92);
+  g.lineStyle(r * 0.26, 0x000000, 0.2 * alpha);
+  g.beginPath(); g.arc(x, floorY, r * 0.76, Math.PI * 1.12, Math.PI * 1.88); g.strokePath();
+  g.lineStyle(r * 0.14, SHELL.cream, 0.2 * alpha);
+  g.beginPath(); g.arc(x, floorY, r * 0.82, Math.PI * 0.22, Math.PI * 0.78); g.strokePath();
+}
+
+/**
+ * An enamel bead: the mark a beat leaves once it has sounded or been answered. A cream
+ * disc with the baton's own thickness — a shade along its lower edge and one catch of
+ * light at the top left — so a filled socket and a played bead are objects set into the
+ * row and not a lighter paint. `r` is the bead's own radius.
+ */
+function drawBead(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, s: number, alpha = 1): void {
+  g.fillStyle(PALETTE.ink, 0.32 * alpha).fillCircle(x, y + 2 * s, r);
+  g.fillStyle(SHELL.cream, alpha).fillCircle(x, y, r);
+  g.lineStyle(r * 0.3, mix(SHELL.cream, SOCKET_RING, 0.45), 0.3 * alpha);
+  g.beginPath(); g.arc(x, y, r * 0.76, Math.PI * 0.12, Math.PI * 0.88); g.strokePath();
+  g.fillStyle(0xffffff, 0.8 * alpha).fillEllipse(x - r * 0.3, y - r * 0.34, r * 0.5, r * 0.32);
+}
+
+/**
  * A row, as the four numbers a drawer needs. Deliberately not a `Phaser.Geom.Rectangle`:
  * the geometry here imports no Phaser and is worked out under node, the same split
  * `ui/switch.ts` already keeps between where a control sits and how it is painted.
@@ -522,13 +554,10 @@ function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
   const radius = TRACK.shelfBeadRadius * s;
   for (let i = 0; i < state.centres.length; i++) {
     const bx = geo.columnX + state.centres[i]! + rattle;
-    if (i < state.played) {
-      g.fillStyle(0x000000, 0.22 * alpha).fillCircle(bx, geo.shelfCentreY + 2 * s, radius);
-      g.fillStyle(SHELL.cream, alpha).fillCircle(bx, geo.shelfCentreY, radius);
-    } else {
-      g.fillStyle(0x000000, 0.3 * alpha).fillCircle(bx, geo.shelfCentreY, radius);
-      g.fillStyle(0x000000, 0.26 * alpha).fillCircle(bx, geo.shelfCentreY + 2 * s, radius * 0.9);
-    }
+    // A played beat is a bead set on the plank; one still to sound is a hole in it, with
+    // the plank's own light: the same two objects the face carries, at the shelf's scale.
+    if (i < state.played) drawBead(g, bx, geo.shelfCentreY, radius, s, alpha);
+    else drawRecess(g, bx, geo.shelfCentreY, radius, s, mix(SHELL.wood, PALETTE.ink, 0.5), alpha);
   }
 }
 
@@ -577,13 +606,13 @@ function drawFace(
     if (struck) {
       // Good sits inside a full ring, so a Perfect and a Good still read apart at a glance.
       const disc = mark === 'good' ? r * 0.62 : r;
-      g.fillStyle(PALETTE.ink, 0.35).fillCircle(x, y + 2 * s, disc);
-      g.fillStyle(SHELL.cream, 1).fillCircle(x, y, disc);
+      // A Good's smaller bead sits on the hole's floor, so the ring still reads as a socket.
+      if (mark === 'good') drawRecess(g, x, y, r, s, mix(fill, RECESS, 0.26));
+      drawBead(g, x, y, disc, s);
       g.lineStyle(4.6 * s, SOCKET_RING, 1).strokeCircle(x, y, r);
       if (i === state.struck.index && hit) drawHit(g, x, y, state.socketRadius, s, hit);
     } else {
-      g.fillStyle(shade(PALETTE.ink, -0.1), 0.3).fillCircle(x, y, r);
-      g.fillStyle(mix(fill, RECESS, 0.26), 1).fillCircle(x, y + 2 * s, r * 0.92);
+      drawRecess(g, x, y, r, s, mix(fill, RECESS, 0.26));
       const ring = mark === 'miss' ? PALETTE.muted : mix(mix(PALETTE.ink, fill, 0.5), SOCKET_RING, lit);
       g.lineStyle((3 + 1.6 * lit) * s, ring, 1).strokeCircle(x, y, r);
       // Struck out in the ink rather than in the grey of the ring, or the bar vanishes
@@ -751,8 +780,11 @@ function drawBaton(
   const w = r * 2 * (1 + sq), h = r * 2 * (1 - sq);
   g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillEllipse(x, y + 3 * s, w, h);
   g.fillStyle(PALETTE.coral, 1).fillEllipse(x, y, w, h);
+  // A rim in the coral's own shade, the outline the pulse ball and every forged tool carry:
+  // without it the token was the one unlined object on the block and read as a light.
+  g.lineStyle(2.4 * s, mix(PALETTE.coral, PALETTE.ink, 0.45), 1).strokeEllipse(x, y, w, h);
   // A catch of light on the top-left, so the disc has the thickness the pucks have.
-  g.fillStyle(SHELL.cream, 0.28).fillEllipse(x - r * 0.22, y - r * 0.3, w * 0.36, h * 0.22);
+  g.fillStyle(SHELL.cream, 0.34).fillEllipse(x - r * 0.22, y - r * 0.3, w * 0.36, h * 0.22);
   const glyph = r * 0.5 * (still ? 1 : glyphFlip(t));
   if (t < 0.5) drawHammerMark(g, x, y, glyph, SHELL.cream);
   else drawTapMark(g, x, y, glyph, SHELL.cream);

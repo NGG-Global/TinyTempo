@@ -2029,6 +2029,8 @@ export class PlayScene extends BaseScene {
     const y = pose.y - h / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
+    // The same faint line the block's sheet carries, so the pill is a cut card and not a blur.
+    this.marks.lineStyle(1.5 * s, mix(paper, this.definition.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(x, y, w, h, h / 2);
   }
 
   /**
@@ -2087,6 +2089,7 @@ export class PlayScene extends BaseScene {
     const py = this.turnCallY + pose.rise * s - ph / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
+    this.marks.lineStyle(1.5 * s, mix(paper, this.definition.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(px, py, pw, ph, ph / 2);
     // A strike rather than an entrance: each numeral drops in oversized and stamps down to
     // size on its beat, leaning alternate ways so three strikes read as three, and the
     // "Go!" stands up straight. All of it is f(age) from the clock the beat is on.

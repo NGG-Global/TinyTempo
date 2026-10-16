@@ -120,7 +120,10 @@ scheduled, judged or scored changed.
   are centred on the room beside the owner slot rather than on the row, so both rows balance;
   the baton lands and the fuse finishes at seven-tenths of the runway, so the downbeat frame
   carries the hit alone; a count numeral is knocked down by the next and the strike's ring
-  opens on the landing; and the verdict's line rose clear of the block's sheet.
+  opens on the landing; and the verdict's line rose clear of the block's sheet. A second
+  pass drew the sockets as recesses with the shelf's light, the struck marks and played
+  beads as enamel beads, gave the baton a rim and the word pills an outline ("The look of
+  the marks").
 
 - **Contact punch** (`ui/punch.ts`): the act's stage kicks down `PUNCH.reach` (3 design
   units, times the treatment's exaggeration and the scene's scale) on a contact and settles

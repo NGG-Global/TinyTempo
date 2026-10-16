@@ -407,6 +407,24 @@ drifting into the band, and the restart sheet, placed from the line, moves with 
 Perfect's shockwave was also brought in from 3.7 to 3.1 socket radii: the first socket's
 wave used to cross the owner slot and the plate's edge, where it read as the baton's ring.
 
+## The look of the marks
+
+A second pass, on the drawing rather than the timing. A pending socket was a flat brown
+disc with a ring and a struck one a flat cream disc, and beside the baton — which has a
+shadow, a catch of light and a glow — they read as paint. Two helpers in `ui/turnBlock.ts`
+now carry the block's two objects, on both rows: `drawRecess` is a hole in the bench, with
+the shelf's own light — a hard shadow inside the top of the hole where the lip cuts the key
+light, and a thin catch of bounced light along the bottom — under the socket's ring and
+under the shelf's unplayed beads; `drawBead` is an enamel bead, a cream disc with a shade
+along its lower edge and one highlight at the top left, for a struck socket and for a bead
+the example has sounded. A Good's smaller bead sits on the hole's floor inside the full
+ring, so Perfect and Good still read apart. The baton takes a rim in the coral's own shade,
+the outline the pulse ball and every forged tool already carry — it was the one unlined
+object on the block and read as a light rather than a token — and the verdict's and the
+count's pills take the same faint ink line the block's sheet has, so they read as cut
+cards rather than blurs. Each socket costs three arcs more a frame, which `arcDetail`
+keeps to the points their size needs.
+
 ## Reduced motion
 
 `reducedMotion()` is read per use, as before. Under it the baton has two states and

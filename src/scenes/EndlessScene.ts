@@ -898,6 +898,7 @@ export class EndlessScene extends BaseScene {
     const x = this.viewport.safe.centerX - w / 2, y = pose.y - h / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
+    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(x, y, w, h, h / 2);
   }
 
   private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
@@ -924,6 +925,7 @@ export class EndlessScene extends BaseScene {
     const py = this.turnCallY + pose.rise * s - ph / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
+    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(px, py, pw, ph, ph / 2);
     turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
     if (pose.ring.alpha > 0.01) {
       const reach = (30 + 70 * pose.ring.spread) * s;
