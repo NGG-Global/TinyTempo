@@ -5,9 +5,10 @@ import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
 import { PANEL_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
-import { clamp01, easeOut, TURN_OPEN_SEC } from './motion';
+import type { FinishOutcome } from '@/game/taskVerdict';
+import { actEnding, clamp01, easeOut, TURN_OPEN_SEC } from './motion';
 import {
-  BARBER_CUES, BARBER_MOTION, barberFinale, barberOutcome, cutTimes, snipOpening, tuftFall, type BarberOutcome,
+  BARBER_CUES, BARBER_MOTION, barberFinale, cutTimes, snipOpening, tuftFall, type BarberOutcome,
 } from './barberMotion';
 import { barberLook, type BarberLook } from './barberLooks';
 
@@ -62,9 +63,9 @@ export class BarberVignette extends HouseholdVignette {
     this.outcome = null;
   }
 
-  public override finish(successful: boolean, contactSec: number, accuracy?: number): void {
+  public override finish(successful: boolean, contactSec: number, outcome?: FinishOutcome): void {
     super.finish(successful, contactSec);
-    this.outcome = successful ? 'success' : barberOutcome(accuracy ?? 0);
+    this.outcome = actEnding(outcome, successful);
   }
 
   private get style() { return STYLES[((this.plan?.id ?? 1) - 1) % STYLES.length]!; }

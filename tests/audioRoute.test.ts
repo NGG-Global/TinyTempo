@@ -5,14 +5,15 @@ vi.mock('../src/config/analytics', () => ({ ANALYTICS: { enabled: false, consent
 
 import { AudioClock } from '../src/audio/AudioClock';
 import {
-  activeCalibration, activeOffset, clearActiveCalibration, currentRoute, dismissRouteNotice, onRouteChange,
-  resetRouteState, routeNoticeWanted, saveActiveCalibration, setRoute, syncClockCalibration,
+  activeCalibration, activeOffset, clearActiveCalibration, currentRoute, dismissRouteNotice, noteLevelLean, onRouteChange,
+  resetRouteState, routeLean, routeNoticeWanted, saveActiveCalibration, setRoute, syncClockCalibration,
 } from '../src/audio/audioRoute';
 import { routeFrom } from '../src/audio/routeNative';
 import {
-  adoptLegacy, calibrationFor, NO_CALIBRATION, offsetFor, readRouteCalibration, ROUTE_LABELS, suggestCalibration,
+  adoptLegacy, calibrationFor, LEAN_NOTICE, NO_CALIBRATION, offsetFor, readRouteCalibration, ROUTE_LABELS, routeNoticeCopy, steadyLean, suggestCalibration,
   toRoute, withoutRouteOffset, withRouteOffset, type RouteCalibration,
 } from '../src/game/routeCalibration';
+import { deviceLean, EMPTY_TIMING, type TimingTally } from '../src/game/timingReport';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 import { CALIBRATION_LIMIT_MS, clampCalibration, loadSettings, saveSettings } from '../src/game/settings';
 import { createJudge, judgeTap } from '../src/rhythm/judge';
@@ -265,6 +266,59 @@ describe('the "calibrate this route" note', () => {
     resetRouteState();
     setRoute('wired', storage);
     expect(routeNoticeWanted(storage)).toBe(true);
+  });
+});
+
+describe('a steady lean on one route', () => {
+  /** A level whose taps all landed `lean` ms off, tight enough to look like the device. */
+  const leaning = (lean: number, hits = 12): TimingTally => ({
+    ...EMPTY_TIMING, perfect: 0, good: hits, deltasMs: Array.from({ length: hits }, (_, i) => lean + (i % 3) - 1),
+  });
+
+  it('is read from each level by the same test that gives the Tap offset advice', () => {
+    expect(deviceLean(leaning(72))).toBe(72);
+    expect(deviceLean(leaning(-65))).toBe(-65);
+    // Too small a lean, or too few taps, is the player's, not the device's.
+    expect(deviceLean(leaning(30))).toBeNull();
+    expect(deviceLean(leaning(72, 4))).toBeNull();
+    expect(deviceLean(EMPTY_TIMING)).toBeNull();
+  });
+
+  it('speaks up only after the last levels all leaned the same way', () => {
+    expect(LEAN_NOTICE.levels).toBe(3);
+    expect(steadyLean([70, 80])).toBeNull();
+    expect(steadyLean([70, 80, 66])).toBe(72);
+    expect(steadyLean([-70, -64, -61])).toBe(-65);
+    expect(steadyLean([70, null, 66])).toBeNull();
+    expect(steadyLean([70, -80, 66])).toBeNull();
+    // Only the last few count: one level that was fine, then three that leaned.
+    expect(steadyLean([null, 70, 80, 66])).toBe(72);
+  });
+
+  it('raises the route card for the session, by route, until calibrating or closing it', () => {
+    const storage = memoryStorage();
+    setRoute('speaker', storage);
+    expect(routeNoticeWanted(storage)).toBe(false); // a new player on the speaker is never nagged
+    for (const lean of [70, 75, 68]) noteLevelLean(lean);
+    expect(routeLean()).toBe(71);
+    expect(routeNoticeWanted(storage)).toBe(true);
+    // Another route keeps its own count.
+    setRoute('wired', storage);
+    expect(routeLean()).toBeNull();
+    setRoute('speaker', storage);
+    expect(routeLean()).toBe(71);
+    // A new offset makes the old leans stale.
+    saveActiveCalibration(70, storage);
+    expect(routeLean()).toBeNull();
+    for (const lean of [-62, -66, -70]) noteLevelLean(lean);
+    dismissRouteNotice();
+    expect(routeNoticeWanted(storage)).toBe(false);
+  });
+
+  it('says which way and how far, and keeps the old words for a route never calibrated', () => {
+    expect(routeNoticeCopy('speaker', 71)).toEqual({ title: 'Tapping about 71 ms late', note: 'Tune the Tap offset for this audio.' });
+    expect(routeNoticeCopy('bluetooth', -65).title).toBe('Tapping about 65 ms early');
+    expect(routeNoticeCopy('bluetooth', null)).toEqual({ title: `${ROUTE_LABELS.bluetooth} detected`, note: 'Calibrate timing for the best accuracy.' });
   });
 });
 

@@ -1,4 +1,5 @@
 import type { Phase } from '@/game/RoundController';
+import type { FinishOutcome } from '@/game/taskVerdict';
 import type { Judgement } from '@/rhythm/judge';
 
 export const clamp01 = (value: number): number => Math.max(0, Math.min(1, value));
@@ -8,6 +9,16 @@ export const easeInOutCubic = (value: number): number => {
   const t = clamp01(value);
   return t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2;
 };
+
+/**
+ * The ending an act with three of them plays, from the verdict the scene decided
+ * (`game/taskVerdict.ts`) — never from a threshold of the act's own, which is how a level-1
+ * player clearing at 60% used to watch the failure. Without a verdict, the success flag.
+ */
+export function actEnding(outcome: FinishOutcome | undefined, successful: boolean): 'success' | 'partial' | 'fail' {
+  if (outcome === undefined) return successful ? 'success' : 'fail';
+  return outcome === 'rough' ? 'fail' : outcome;
+}
 
 /** Seconds per beat at the music's source tempo. Motion tuned at this length scales from it. */
 export const REFERENCE_BEAT = 0.5;

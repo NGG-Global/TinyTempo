@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  CLAP_MOTION, CLAP_REVEAL_SEC, CROWD_HANDS, clapFinale, clapOutcome, clapRing, crowdClap, crowdSize,
+  CLAP_MOTION, CLAP_REVEAL_SEC, CROWD_HANDS, clapFinale, clapRing, crowdClap, crowdSize,
   handGap, palmSquash, POLITE_HANDS, roomWarmth,
 } from '../src/vignettes/clapMotion';
 import { synthesizeClap } from '../src/audio/clapSounds';
 import { SAMPLE_URLS } from '../src/audio/samples';
+import { actEnding } from '../src/vignettes/motion';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
@@ -28,8 +29,7 @@ describe('clapping hands act', () => {
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(CLAP_REVEAL_SEC);
     // The middle ending is declared, so the plaque's words and the coda agree on it.
-    expect(definition.partial?.minAccuracy).toBe(CLAP_MOTION.partialAccuracy);
-    expect(definition.successAccuracy).toBe(CLAP_MOTION.successAccuracy);
+    expect(definition.partial?.copy).toHaveLength(2);
     for (const bpm of [120, 136, 150]) {
       const end = new TaskSequence(bpm, 0).ending(10, definition.endingHoldBeats);
       expect(end.slide - end.contact).toBeGreaterThan(CLAP_REVEAL_SEC);
@@ -72,12 +72,8 @@ describe('clapping hands act', () => {
   });
 
   it('sorts the round into a full house, a scattered few, and nobody', () => {
-    expect(clapOutcome(100)).toBe('success');
-    expect(clapOutcome(CLAP_MOTION.successAccuracy)).toBe('success');
-    expect(clapOutcome(CLAP_MOTION.successAccuracy - 1)).toBe('partial');
-    expect(clapOutcome(CLAP_MOTION.partialAccuracy)).toBe('partial');
-    expect(clapOutcome(CLAP_MOTION.partialAccuracy - 1)).toBe('fail');
-    expect(clapOutcome(0)).toBe('fail');
+    // Which of the three is the scene's verdict against the level's bar (`taskVerdict`).
+    expect((['success', 'partial', 'rough'] as const).map(o => actEnding(o, false))).toEqual(['success', 'partial', 'fail']);
     expect(crowdSize('success')).toBe(CROWD_HANDS.length);
     expect(crowdSize('partial')).toBe(POLITE_HANDS);
     expect(crowdSize('fail')).toBe(0);

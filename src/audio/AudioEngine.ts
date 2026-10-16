@@ -3,6 +3,7 @@ import { silenceInBackground } from './backgroundSilence';
 import { MusicSystem } from './MusicSystem';
 import { ThemeMusic } from './ThemeMusic';
 import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
+import type { FinishOutcome } from '../game/taskVerdict';
 
 const TONE = { count: 440, ready: 660, action: 880 } as const;
 const DURATION = 0.065;
@@ -21,8 +22,7 @@ const UNLOCK_TIMEOUT_MS = 3000;
  */
 export type Voice = AudioBuffer | readonly AudioBuffer[];
 
-/** Which coda a resolved round gets. The same decision the headline is chosen from. */
-export type FinishOutcome = 'success' | 'partial' | 'rough';
+export type { FinishOutcome } from '../game/taskVerdict';
 
 /**
  * The voices every act declares, which is what each act's synthesis is written against.
@@ -57,6 +57,16 @@ export interface VignetteSounds {
 }
 export type AccentKind = 'scrape' | 'judder';
 
+function stopAll(group: Map<AudioScheduledSourceNode, GainNode>): void {
+  for (const [source, envelope] of group) {
+    source.onended = null;
+    source.stop();
+    source.disconnect();
+    envelope.disconnect();
+  }
+  group.clear();
+}
+
 /** Tiny synthesized clicks keep the prototype independent of asset downloads. */
 export class AudioEngine implements SoundSink {
   public readonly context = new AudioContext({ latencyHint: 'interactive' });
@@ -73,7 +83,17 @@ export class AudioEngine implements SoundSink {
   public readonly music = new MusicSystem(this.context, this.musicBus);
   /** The title theme, on the music bus so the music level and the mute cover it like the loop. */
   public readonly theme = new ThemeMusic(this.context, this.musicBus);
-  private readonly sources = new Map<AudioScheduledSourceNode, GainNode>();
+  /**
+   * Two groups, because placing the next task must not silence the last one's coda. The
+   * plan's voices — every scheduled cue and every action a tap starts — belong to the task
+   * and go when the next one is placed (`cancelPlan`). Codas, accents and stingers are the
+   * presentation around it: a coda is already told when to be out of the way (`silentBy`),
+   * and cancelling it with the plan cut the clap's applause dead at full level a beat
+   * before the fade it was scheduled with. `cancel()` still stops both, for a pause, a
+   * restart and the way out.
+   */
+  private readonly planSources = new Map<AudioScheduledSourceNode, GainNode>();
+  private readonly presentationSources = new Map<AudioScheduledSourceNode, GainNode>();
   private sounds: VignetteSounds | null = null;
   /** The action voice's takes, and which one the next beat gets. */
   private takes: readonly AudioBuffer[] = [];
@@ -139,11 +159,11 @@ export class AudioEngine implements SoundSink {
     if (this.disposed || this.context.state === 'running' || this.context.state === 'closed') return;
     void this.context.resume();
   }
-  public get activeSources(): number { return this.sources.size; }
+  public get activeSources(): number { return this.planSources.size + this.presentationSources.size; }
   public play(time: number, kind: SoundKind): void {
     if (this.disposed) return;
     if (kind === 'action' && this.takes.length > 0) {
-      this.playBuffer(time, this.takes[this.take++ % this.takes.length]!, 0.65);
+      this.playBuffer(this.planSources, time, this.takes[this.take++ % this.takes.length]!, 0.65);
       return;
     }
     const source = this.context.createOscillator();
@@ -154,9 +174,9 @@ export class AudioEngine implements SoundSink {
     envelope.gain.linearRampToValueAtTime(kind === 'action' ? 0.22 : 0.1, start + 0.002);
     envelope.gain.exponentialRampToValueAtTime(0.001, start + DURATION);
     source.connect(envelope).connect(this.sfxBus);
-    this.sources.set(source, envelope);
-    source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
-    this.startVoice(source, envelope, start, start + DURATION);
+    this.planSources.set(source, envelope);
+    source.onended = () => { source.disconnect(); envelope.disconnect(); this.planSources.delete(source); };
+    this.startVoice(this.planSources, source, envelope, start, start + DURATION);
   }
   /**
    * A non-scoring coda, scheduled by presentation only after the round is resolved.
@@ -171,7 +191,7 @@ export class AudioEngine implements SoundSink {
     const sounds = this.sounds;
     if (!sounds) return;
     const coda = outcome === 'success' ? sounds.success : outcome === 'partial' ? sounds.partial ?? sounds.rough : sounds.rough;
-    this.playBuffer(time, coda, 0.8, silentBy);
+    this.playBuffer(this.presentationSources, time, coda, 0.8, silentBy);
   }
   /**
    * A reaction to a grade the judge has already returned. It sits under the action
@@ -179,7 +199,9 @@ export class AudioEngine implements SoundSink {
    */
   public playAccent(time: number, kind: AccentKind): void {
     const buffer = this.sounds?.[kind];
-    if (buffer) this.playBuffer(time, buffer, 0.5);
+    // A reaction to a grade already given, so presentation: the judder for a task's last
+    // beat lands as the task completes, and completing a task cancels the plan.
+    if (buffer) this.playBuffer(this.presentationSources, time, buffer, 0.5);
   }
   /**
    * A presentation sound the level's own voices do not cover — the finale's roll and
@@ -187,9 +209,12 @@ export class AudioEngine implements SoundSink {
    * like anything else; never used for anything the judge listens to.
    */
   public playStinger(time: number, buffer: AudioBuffer, gain = 0.6, rate = 1): void {
-    this.playBuffer(time, buffer, gain, undefined, rate);
+    this.playBuffer(this.presentationSources, time, buffer, gain, undefined, rate);
   }
-  private playBuffer(time: number, buffer: AudioBuffer, gain: number, silentBy?: number, rate = 1): void {
+  private playBuffer(
+    group: Map<AudioScheduledSourceNode, GainNode>,
+    time: number, buffer: AudioBuffer, gain: number, silentBy?: number, rate = 1,
+  ): void {
     if (this.disposed) return;
     const source = this.context.createBufferSource();
     const envelope = this.context.createGain();
@@ -197,18 +222,18 @@ export class AudioEngine implements SoundSink {
     if (rate !== 1) source.playbackRate.value = rate;
     envelope.gain.value = gain;
     source.connect(envelope).connect(this.sfxBus);
-    this.sources.set(source, envelope);
-    source.onended = () => { source.disconnect(); envelope.disconnect(); this.sources.delete(source); };
+    group.set(source, envelope);
+    source.onended = () => { source.disconnect(); envelope.disconnect(); group.delete(source); };
     const start = Math.max(time, this.context.currentTime);
     if (silentBy !== undefined && Number.isFinite(silentBy) && silentBy > start) {
       // Linear rather than exponential: an exponential ramp cannot reach zero, and this
       // one has to, since the source is stopped on the same instant.
       envelope.gain.setValueAtTime(gain, Math.max(start, silentBy - CODA_FADE));
       envelope.gain.linearRampToValueAtTime(0, silentBy);
-      this.startVoice(source, envelope, start, silentBy);
+      this.startVoice(group, source, envelope, start, silentBy);
       return;
     }
-    this.startVoice(source, envelope, start);
+    this.startVoice(group, source, envelope, start);
   }
   /**
    * Bluetooth A2DP can reject a start that races the hardware callback. Dropping the
@@ -216,6 +241,7 @@ export class AudioEngine implements SoundSink {
    * scored and leave the round looking like input had failed.
    */
   private startVoice(
+    group: Map<AudioScheduledSourceNode, GainNode>,
     source: AudioScheduledSourceNode,
     envelope: GainNode,
     start: number,
@@ -228,7 +254,7 @@ export class AudioEngine implements SoundSink {
       source.onended = null;
       source.disconnect();
       envelope.disconnect();
-      this.sources.delete(source);
+      group.delete(source);
     }
   }
   public setMusicVolume(value: number): void {
@@ -249,14 +275,14 @@ export class AudioEngine implements SoundSink {
     bus.gain.cancelScheduledValues(now);
     bus.gain.setValueAtTime(value, now);
   }
+  /** Every sound this engine started: a pause, a restart, leaving. */
   public cancel(): void {
-    for (const [source, envelope] of this.sources) {
-      source.onended = null;
-      source.stop();
-      source.disconnect();
-      envelope.disconnect();
-    }
-    this.sources.clear();
+    this.cancelPlan();
+    stopAll(this.presentationSources);
+  }
+  /** The task's own voices only, when the next task is placed: codas and stingers ring on. */
+  public cancelPlan(): void {
+    stopAll(this.planSources);
   }
   public dispose(): void {
     if (this.disposed) return;

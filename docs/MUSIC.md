@@ -144,9 +144,10 @@ Chromium, the drums' first crossing of −26 dBFS sits ~2 ms after the premix's,
 kick's own rise; `fallbackSec` is 0.127 for that reason.
 
 A level starts on the first stem alone, with a metronome bar under it, and earns more
-(`game/musicLayers.ts`): a scored task at or above `MUSIC.layers.strong` (70%) adds the
-next stem, one below `MUSIC.layers.weak` (40%) takes the last one away, anything between
-holds, and the change lands on the next task's downbeat with the tempo change, faded over
+(`game/musicLayers.ts`), against the level's own bars (`game/taskVerdict.ts`): a scored
+task at or above the level's second star adds the next stem (60% on level 1, 84–87% on the
+plateau), a rough one — more than 15 points under the clear bar — takes the last one away,
+anything between holds, and the change lands on the next task's downbeat with the tempo change, faded over
 `MUSIC.layers.fadeSec`. The count is level-local, reset at every start, stored nowhere and
 read by nothing that judges, scores, paces, saves or unlocks. A premix is a track that is
 always full: the same rule runs and hears nothing.

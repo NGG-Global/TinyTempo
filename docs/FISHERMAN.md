@@ -4,7 +4,7 @@ One vignette appended to the rotation at request, as act 18. Levels 1 to 17 keep
 their acts, and the fisherman's own first level is 18. The DJ scratch
 (`docs/DJ_SCRATCH.md`) has since been appended after it as act 19.
 
-| Each beat | Successful finale (70%+) | Partial finale (40–69%) | Rough finale |
+| Each beat | Successful finale (at or above the clear bar) | Partial finale (within 15 under it) | Rough finale |
 | --- | --- | --- | --- |
 | The fisherman heaves back on the rod, which bows against something heavy; the rod springs up, is yanked down again, and settles inside 0.45 beat | A big fish comes out of the water, one of three, each its own way, and he grins | A small silver fish is lifted clear and left dangling; he gives it half a smile | An old boot with a crab on it, or a tyre with a snail on top, comes up trailing weed and hangs there dripping; his mouth makes a small "oh" |
 

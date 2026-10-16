@@ -104,6 +104,54 @@ it('schedules hammer/coda sources at absolute times and cancels every voice on r
   expect(close).toHaveBeenCalledTimes(1);
 });
 
+it('lets a coda ring on when the next task is placed, and stops it only with everything else', () => {
+  const nodes: { start: ReturnType<typeof vi.fn>; stop: ReturnType<typeof vi.fn>; disconnect: ReturnType<typeof vi.fn>; onended: (() => void) | null }[] = [];
+  const ramps: [string, number, number][] = [];
+  vi.stubGlobal('AudioContext', class {
+    currentTime = 10;
+    sampleRate = 8000;
+    destination = {};
+    close = vi.fn();
+    createGain() {
+      return {
+        gain: {
+          value: 1,
+          setValueAtTime: vi.fn((v: number, t: number) => ramps.push(['set', v, t])),
+          linearRampToValueAtTime: vi.fn((v: number, t: number) => ramps.push(['ramp', v, t])),
+          cancelScheduledValues: vi.fn(),
+        },
+        connect: vi.fn((to: object) => to), disconnect: vi.fn(),
+      };
+    }
+    createBuffer(_channels: number, length: number) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() {
+      const node = { playbackRate: { value: 1 }, buffer: null, connect: vi.fn((to: object) => to), start: vi.fn(), stop: vi.fn(), disconnect: vi.fn(), onended: null };
+      nodes.push(node); return node;
+    }
+  });
+  const engine = new AudioEngine();
+  const buffers = createImpactBuffers(engine.context);
+  engine.setSounds({ action: buffers.hit, success: buffers.flush, rough: buffers.bent, scrape: buffers.skid, judder: buffers.dead });
+  engine.play(12, 'action');              // the task's own beat
+  engine.playFinish(12.5, 'success', 14); // its coda, told to be out of the way by 14
+  engine.playAccent(12.2, 'judder');      // a reaction to a grade already given
+  expect(engine.activeSources).toBe(3);
+  // Placing the next task stops the plan's voices and nothing else.
+  engine.cancelPlan();
+  expect(nodes[0]!.stop).toHaveBeenCalledTimes(1);
+  expect(nodes[1]!.stop).toHaveBeenCalledTimes(1);   // only the stop scheduled at silentBy
+  expect(nodes[1]!.stop).toHaveBeenCalledWith(14);
+  expect(nodes[2]!.stop).not.toHaveBeenCalled();
+  expect(engine.activeSources).toBe(2);
+  // The coda's fade still runs to the next downbeat.
+  expect(ramps).toContainEqual(['ramp', 0, 14]);
+  // A pause, a restart or the way out stops all of it.
+  engine.cancel();
+  expect(engine.activeSources).toBe(0);
+  expect(nodes[1]!.stop).toHaveBeenCalledTimes(2);
+  expect(nodes[2]!.stop).toHaveBeenCalledTimes(1);
+});
+
 it('gives up on an unlock whose resume() never settles instead of waiting forever', async () => {
   vi.useFakeTimers();
   try {

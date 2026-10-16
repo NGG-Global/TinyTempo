@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  BIG_FISH, bigFish, FISHING_MOTION, FISHING_REVEAL_SEC, fishingOutcome, haulFinale, HEAVE, JUNK, junkFor, rodHeave, shadowRise,
+  BIG_FISH, bigFish, FISHING_MOTION, FISHING_REVEAL_SEC, haulFinale, HEAVE, JUNK, junkFor, rodHeave, shadowRise,
 } from '../src/vignettes/fishingMotion';
 import { synthesizeFishing } from '../src/audio/fishingSounds';
+import { actEnding } from '../src/vignettes/motion';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
@@ -26,8 +27,7 @@ describe('fisherman act', () => {
     const definition = VIGNETTES[17]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(FISHING_REVEAL_SEC);
-    expect(definition.partial?.minAccuracy).toBe(FISHING_MOTION.partialAccuracy);
-    expect(definition.successAccuracy).toBe(FISHING_MOTION.successAccuracy);
+    expect(definition.partial?.copy).toHaveLength(2);
     for (const bpm of [120, 136, 150]) {
       const end = new TaskSequence(bpm, 0).ending(10, definition.endingHoldBeats);
       expect(end.slide - end.contact).toBeGreaterThan(FISHING_REVEAL_SEC);
@@ -35,13 +35,8 @@ describe('fisherman act', () => {
     }
   });
 
-  it('grades the round into a big fish, a small fish or junk from the authoritative accuracy', () => {
-    expect(fishingOutcome(100)).toBe('success');
-    expect(fishingOutcome(70)).toBe('success');
-    expect(fishingOutcome(69.9)).toBe('partial');
-    expect(fishingOutcome(40)).toBe('partial');
-    expect(fishingOutcome(39.9)).toBe('fail');
-    expect(fishingOutcome(0)).toBe('fail');
+  it('lands a big fish, a small fish or junk as the scene’s verdict says', () => {
+    expect((['success', 'partial', 'rough'] as const).map(o => actEnding(o, false))).toEqual(['success', 'partial', 'fail']);
   });
 
   it('heaves on the beat and settles back, with a yank of resistance on the way, inside half a beat', () => {

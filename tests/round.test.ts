@@ -7,7 +7,7 @@ import { RHYTHM } from '../src/config/rhythm';
 /** Defaults to a level's opening task, the only one that still carries a count-in. */
 function setup(leadBeats = RHYTHM.leadInBeats) {
   const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
-  const sound = { play: vi.fn(), cancel: vi.fn() };
+  const sound = { play: vi.fn(), cancelPlan: vi.fn() };
   const round = new RoundController(sound, events);
   let now = 0;
   const advance = (until: number) => {
@@ -99,6 +99,20 @@ describe('round lifecycle', () => {
     advance(target + 0.1);
     expect(round.tap(target, target + 0.1, (target + 0.1) * 1000)?.grade).toBe('Perfect');
   });
+  it('says how much a cut-short task could still have made, by a pause or a stall alike', () => {
+    // The pattern has three beats. One Good, then a pause: the rest could still be Perfect.
+    const { round, events, advance } = setup();
+    const plan = round.plan!;
+    advance(plan.targets[0]!);
+    expect(round.tap(plan.targets[0]! + 0.1, plan.targets[0]! + 0.1, (plan.targets[0]! + 0.1) * 1000)?.grade).toBe('Good');
+    round.interrupt('Paused');
+    expect(events.interrupted).toHaveBeenCalledWith('Paused', (70 + 100 + 100) / 3);
+    // Nothing judged yet: nothing lost, so no ceiling below a clean task.
+    const fresh = setup();
+    fresh.advance(fresh.round.plan!.demo + 0.1);
+    fresh.round.tick(fresh.round.plan!.demo + 1, (fresh.round.plan!.demo + 1) * 1000 + RHYTHM.stallMs + 1);
+    expect(fresh.events.interrupted).toHaveBeenCalledWith(expect.any(String), 100);
+  });
   it('tolerates a stall that ends inside the count-in, since nothing has been shown or judged yet', () => {
     const { round, events } = setup();
     round.tick(0.02, 20);
@@ -112,7 +126,7 @@ describe('round lifecycle', () => {
   });
   it('forgives a stall before the first demonstration beat even with nothing counted in', () => {
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
-    const round = new RoundController({ play: vi.fn(), cancel: vi.fn() }, events);
+    const round = new RoundController({ play: vi.fn(), cancelPlan: vi.fn() }, events);
     // A task swapped in mid-level has no count-in, so the old rule left no window at all
     // for the heavy frames that build it. What matters is that no beat has been hidden.
     // A leading rest, so the demonstration is already the rendered phase while the first
@@ -129,7 +143,7 @@ describe('round lifecycle', () => {
   });
   it('keeps a late last demonstration beat off the tool once the player has begun', () => {
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
-    const round = new RoundController({ play: vi.fn(), cancel: vi.fn() }, events);
+    const round = new RoundController({ play: vi.fn(), cancelPlan: vi.fn() }, events);
     // Last pair is a half beat: at 150 BPM that gap is 200 ms, inside stallMs.
     round.start(parsePattern('p', 'X - X - - - X X', 0.5), 150, 0, 0, 0);
     const plan = round.plan!;
@@ -160,7 +174,7 @@ describe('round lifecycle', () => {
   });
   it('voices grid-action targets at schedule time and does not double them on tap', () => {
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
-    const sound = { play: vi.fn(), cancel: vi.fn() };
+    const sound = { play: vi.fn(), cancelPlan: vi.fn() };
     const round = new RoundController(sound, events);
     round.start(parsePattern('p', 'X X - X'), 100, 0, 0, RHYTHM.leadSec, RHYTHM.leadInBeats, true);
     const plan = round.plan!;

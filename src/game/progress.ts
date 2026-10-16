@@ -1,4 +1,5 @@
-import { levelSpec, starsFor, type Grid } from './levels';
+import type { Concept } from './conceptIntro';
+import { levelSpec, starsFor } from './levels';
 
 export interface Progress {
   /** Highest level the player may start; everything below it has been cleared. */
@@ -140,24 +141,25 @@ export function markReplayTipSeen(storage: Storage | null = safeStorage()): bool
 }
 
 /**
- * Has the player been introduced to this finer grid? Once each, ever, on this device.
+ * Has the player been introduced to this kind of rhythm (`game/conceptIntro.ts`)? Once
+ * each, ever, on this device.
  *
- * Absent means no — which is exactly what a save written before the introductions
- * existed says, so a player already past the first triplet level meets the introduction
- * the next time a level they start uses one, rather than being told nothing.
+ * Absent means no — which is exactly what a save written before the introductions existed
+ * says. For a finer grid that means a player already past the first triplet level meets the
+ * introduction the next time a level they start uses one; the offbeat and the long phrase
+ * are kept from a player already past them by `introConcept`, from the save, not from here.
  */
-export function seenSubdivision(grid: Grid, storage: Storage | null = safeStorage()): boolean {
-  return readTeach(storage)[grid] === true;
-}
-
-export function seenSubdivisions(storage: Storage | null = safeStorage()): Readonly<Record<Grid, boolean>> {
+export function seenConcepts(storage: Storage | null = safeStorage()): Readonly<Record<Concept, boolean>> {
   const teach = readTeach(storage);
-  return { triplet: teach.triplet === true, sixteenth: teach.sixteenth === true };
+  return {
+    offbeat: teach.offbeat === true, longPhrase: teach.longPhrase === true,
+    triplet: teach.triplet === true, sixteenth: teach.sixteenth === true,
+  };
 }
 
 /** False means nothing was written, and the introduction will simply play once more. */
-export function markSubdivisionSeen(grid: Grid, storage: Storage | null = safeStorage()): boolean {
-  return writeTeach(storage, { [grid]: true });
+export function markConceptSeen(concept: Concept, storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { [concept]: true });
 }
 
 /**
@@ -175,7 +177,7 @@ export function markScrapbookSeen(storage: Storage | null = safeStorage()): bool
 }
 
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
-export const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook'] as const;
+export const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase'] as const;
 export type TeachFlag = typeof TEACH_FLAGS[number];
 type Teach = { readonly [K in TeachFlag]?: unknown };
 

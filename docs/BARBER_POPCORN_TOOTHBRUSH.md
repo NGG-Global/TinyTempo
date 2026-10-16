@@ -59,10 +59,10 @@ A round can cut three quarters of the mop (`reach`). The demonstration snips the
 beside the first lock and cuts nothing, because the answer follows it without a bar
 between. The ending is the reveal, from `barberOutcome(accuracy)`:
 
-- **70%+**: a three-snip flurry finishes the cut, the shears leave, the cape is whisked
+- **At or above the level's clear bar**: a three-snip flurry finishes the cut, the shears leave, the cape is whisked
   off to the right, the customer opens their eyes to a grin, the fresh cut gleams and the
   pole spins.
-- **40–69%**: the cape comes off on what there is. Because of the cut order, that is one
+- **Within 15 points under it**: the cape comes off on what there is. Because of the cut order, that is one
   side short and the other long, with one eye peering out from under the fringe and one
   eyebrow raised.
 - **Below 40%**: the cape stays on and a knitted beanie drops over the damage, landing
@@ -79,7 +79,7 @@ bowl fills a layer at a time (`HEAP`: from inside the bowl up to a dome over the
 reaching 80% by the end of the round. The demonstration's kernels hop out and drop
 straight back into the pan, so the example never fills the bowl the player is about to.
 
-- **70%+**: one enormous kernel swells in the pan, rattling it, and at 0.42 s bursts in a
+- **At or above the level's clear bar**: one enormous kernel swells in the pan, rattling it, and at 0.42 s bursts in a
   starburst that shakes the counter. Its giant popped piece arcs up and lands on top of
   the heap, and the rest of the bowl rains in behind it, spread over one fixed window so
   the last piece lands well inside the hold whatever was left.
@@ -101,7 +101,7 @@ glint once as they come clean and keep a highlight, and foam builds along them a
 froths at the corners. The paste on the bristles is used up as it goes. The demonstration
 scrubs where the brush starts, with a lather that pops straight away, and cleans nothing.
 
-- **70%+**: three quick scrubs finish the job, the brush is put down, the foam is rinsed
+- **At or above the level's clear bar**: three quick scrubs finish the job, the brush is put down, the foam is rinsed
   away left to right, a band of light sweeps across the smile and a gold-edged glint
   "tings" on the front teeth.
 - **Below 70%**: the foam swells over the lip and runs down the chin, a bubble grows at the

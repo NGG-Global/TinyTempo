@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, isAreaFinale, levelSpec,
-  openingBeats,
+  AREAS, PATTERN_TIERS, PLATEAU_PATTERNS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
+  difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats, tierPool,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
 } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
@@ -138,7 +138,7 @@ describe('level progression', () => {
   });
   it('never places hits closer than half a beat, so windows stay separable at the tempo ceiling', () => {
     const fastest = 60 / (PROGRESSION.baseBpm + PROGRESSION.peakBpmRange);
-    for (const tier of PATTERN_TIERS) for (const pattern of tier) for (let i = 1; i < pattern.hits.length; i++) {
+    for (const tier of [...PATTERN_TIERS, ...PLATEAU_PATTERNS]) for (const pattern of tier) for (let i = 1; i < pattern.hits.length; i++) {
       const gap = pattern.hits[i]! - pattern.hits[i - 1]!;
       expect(gap).toBeGreaterThanOrEqual(0.5);
       expect(gap * fastest).toBeGreaterThan(RHYTHM.goodMs / 1000);
@@ -173,7 +173,7 @@ describe('level progression', () => {
   });
   it.each([1, 12, 19, 45, 70, 200])('plays level %s end to end on one grid with the music tempo changing on task downbeats', level => {
     const spec = levelSpec(level);
-    const sound = { play: vi.fn(), cancel: vi.fn() };
+    const sound = { play: vi.fn(), cancelPlan: vi.fn() };
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
     const controller = new RoundController(sound, events);
     let origin = 0.2;
@@ -370,6 +370,109 @@ describe('the difficulty choreography', () => {
   });
 });
 
+describe('the plateau’s vocabulary', () => {
+  const from = (): number => { let level = 1; while (difficulty(level) < PROGRESSION.vocabulary.from) level++; return level; };
+
+  it('joins each plateau tier’s pool where the curve reaches it, and no earlier', () => {
+    const first = from();
+    expect(first).toBe(59);
+    for (const tier of [2, 3, 4]) {
+      expect(tierPool(tier, first - 1)).toEqual(PATTERN_TIERS[tier]);
+      expect(tierPool(tier, first)).toEqual([...PATTERN_TIERS[tier]!, ...PLATEAU_PATTERNS[tier]!]);
+    }
+    expect(PLATEAU_PATTERNS[0]).toEqual([]);
+    expect(PLATEAU_PATTERNS[1]).toEqual([]);
+  });
+
+  it('writes every new phrase to its tier’s own measure', () => {
+    const offbeats = (hits: readonly number[]) => hits.filter(hit => !Number.isInteger(hit)).length;
+    for (const [tier, patterns] of PLATEAU_PATTERNS.entries()) for (const pattern of patterns) {
+      expect(pattern.hits[0], pattern.id).toBe(0);
+      expect(pattern.id.startsWith(`t${tier}-`)).toBe(true);
+      if (tier === 2) {
+        expect([pattern.lengthBeats, pattern.hits.length, offbeats(pattern.hits)], pattern.id).toEqual([4, 4, 2]);
+      } else {
+        expect(pattern.lengthBeats, pattern.id).toBe(8);
+        const own = PATTERN_TIERS[tier]!.map(p => p.hits.length);
+        expect(pattern.hits.length, pattern.id).toBeGreaterThanOrEqual(Math.min(...own));
+        expect(pattern.hits.length, pattern.id).toBeLessThanOrEqual(Math.max(...own));
+      }
+    }
+  });
+
+  it('repeats no phrase anywhere in the vocabulary, and no id', () => {
+    const all = [...PATTERN_TIERS, ...PLATEAU_PATTERNS].flat();
+    expect(new Set(all.map(p => p.hits.join(','))).size).toBe(all.length);
+    expect(new Set(all.map(p => p.id)).size).toBe(all.length);
+  });
+
+  it('plays no phrase twice in a level from there on while its tier has another', () => {
+    for (let level = from(); level <= 300; level++) {
+      const ids = levelSpec(level).tasks.map(t => t.pattern.id);
+      expect(new Set(ids).size, `level ${level}: ${ids.join(' ')}`).toBe(ids.length);
+    }
+  });
+
+  it('leaves Endless on the vocabulary its rules version was pinned with', () => {
+    expect(PATTERN_TIERS.every(tier => tier.length === 4)).toBe(true);
+    expect(readFileSync('src/game/endless.ts', 'utf8')).not.toContain('PLATEAU_PATTERNS');
+  });
+});
+
+describe('debut levels', () => {
+  /** Brute force over the composed road: the first level each family appears on. */
+  const firstSeen = (): Map<string, number> => {
+    const seen = new Map<string, number>();
+    for (let level = 1; level <= 300; level++) for (const task of composedTasks(level)) {
+      const family = familyOf(task);
+      if (family !== null && !seen.has(family)) seen.set(family, level);
+    }
+    return seen;
+  };
+
+  it('finds where each rhythm first appears from the road itself, never from a list', () => {
+    expect(new Map(debutLevels())).toEqual(firstSeen());
+    // Today's road, pinned so a move is a deliberate one: the offbeat, syncopation, the
+    // two-bar phrase, the dense one, then triplets and sixteenths at one and two groups a bar.
+    expect(Object.fromEntries(debutLevels())).toEqual({
+      t1: 6, t2: 9, t3: 18, t4: 28, 'triplet-0': 43, 'triplet-1': 57, 'sixteenth-0': 59, 'sixteenth-1': 72,
+    });
+    for (const level of debutLevels().values()) expect(isAreaFinale(level), `level ${level}`).toBe(false);
+  });
+
+  it('meets a new rhythm as the second task, fresh and near the base tempo', () => {
+    for (const [family, level] of debutLevels()) {
+      const tasks = levelSpec(level).tasks;
+      const first = tasks.findIndex(task => familyOf(task) === family);
+      expect(first, `${family} on level ${level}`).toBeLessThanOrEqual(DEBUT_SLOT);
+      expect(tasks[first]!.bpm).toBeLessThanOrEqual(PROGRESSION.baseBpm + 5);
+    }
+  });
+
+  it('trades two phrases and nothing else: tempo, lead-ins, tasks, peak and top tier all stay', () => {
+    for (let level = 1; level <= 300; level++) {
+      const spec = levelSpec(level), composed = composedTasks(level);
+      const moved = spec.tasks.map((task, i) => task.pattern !== composed[i]!.pattern ? i : -1).filter(i => i >= 0);
+      if (debutsOn(level).length === 0) { expect(moved, `level ${level}`).toEqual([]); continue; }
+      expect(moved.length === 0 || (moved.length === 2 && moved[0] === DEBUT_SLOT), `level ${level}`).toBe(true);
+      expect(spec.tasks.map(t => [t.bpm, t.leadBeats])).toEqual(composed.map(t => [t.bpm, t.leadBeats]));
+      expect(new Set(spec.tasks.map(t => t.pattern))).toEqual(new Set(composed.map(t => t.pattern)));
+      expect(Math.max(...spec.tasks.map(t => t.tier))).toBe(Math.max(...composed.map(t => t.tier)));
+      for (let i = 1; i < spec.tasks.length; i++) expect(spec.tasks[i]!.pattern).not.toBe(spec.tasks[i - 1]!.pattern);
+    }
+  });
+
+  it('keeps every other level ramping in tier as well as tempo', () => {
+    for (let level = 1; level <= 300; level++) {
+      const tasks = levelSpec(level).tasks;
+      for (let i = 1; i < tasks.length; i++) {
+        expect(tasks[i]!.bpm, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.bpm);
+        if (debutsOn(level).length === 0) expect(tasks[i]!.tier, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.tier);
+      }
+    }
+  });
+});
+
 describe('the finer grids', () => {
   const S = PROGRESSION.subdivision;
   /** The first level at or past a difficulty on the curve. */
@@ -384,7 +487,8 @@ describe('the finer grids', () => {
     expect(first).toBeGreaterThan(40);
     for (let level = 1; level <= 300; level++) {
       const tiers = tierTasks(level);
-      const spec = levelSpec(level);
+      // The composed stage: a debut's placement (below) trades two tasks' phrases afterwards.
+      const spec = { finale: levelSpec(level).finale, tasks: composedTasks(level) };
       expect(spec.tasks).toHaveLength(tiers.length);
       // A finale's patterns are the area's reprise (tests/finale.test.ts); its tempo ramp
       // and lead-ins are still the tiers' own.

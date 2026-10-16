@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
-import type { AudioEngine, FinishOutcome, VignetteSounds } from '@/audio/AudioEngine';
+import type { AudioEngine, VignetteSounds } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { syncClockCalibration } from '@/audio/audioRoute';
@@ -28,6 +28,7 @@ import { advanceLayers, OPENING_LAYERS } from '@/game/musicLayers';
 import { trackForLevel } from '@/game/musicSelection';
 import { loadProgress } from '@/game/progress';
 import type { RoundResult } from '@/game/scoring';
+import { barsFor, finishOutcome } from '@/game/taskVerdict';
 import { tapTiming } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { track } from '@/monetization/analytics';
@@ -538,14 +539,17 @@ export class EndlessScene extends BaseScene {
     track('endless_vignette_finished', { elapsed_sec: elapsedSec, step: step.index, bpm: step.bpm, accuracy: Math.round(result.accuracy), lives: this.lives.lives, role: step.role });
     if (outcome.event === 'lost') { track('endless_life_lost', { elapsed_sec: elapsedSec, lives: this.lives.lives }); vibrate('stamp'); }
     if (outcome.event === 'recovered') track('endless_recovered', { elapsed_sec: elapsedSec, lives: this.lives.lives });
-    // The act's own ending: its verdict and coda are the act's, the life is the run's.
-    const strong = result.accuracy >= definition.successAccuracy;
+    // The act's ending reads the step's own bar, so a step that keeps its life ends well
+    // and one that costs a life never plays the success coda (`game/taskVerdict.ts`).
+    // Presentation only: the life above is decided by `applyAccuracy` alone.
+    const bars = barsFor(step.threshold);
     const partial = definition.partial;
-    const finish: FinishOutcome = strong ? 'success' : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
+    const finish = finishOutcome(result.accuracy, bars, partial !== undefined);
+    const strong = finish === 'success';
     const ending = new TaskSequence(step.bpm, plan.start, 1).ending(plan.end, definition.endingHoldBeats);
-    vignette.finish(strong, ending.contact, result.accuracy);
+    vignette.finish(strong, ending.contact, finish);
     if (strong) this.punchAt = ending.contact;
-    this.layers = advanceLayers(this.layers, result.accuracy, this.stems);
+    this.layers = advanceLayers(this.layers, result.accuracy, this.stems, bars);
     this.finishUnlock = ending.contact + definition.endingSec;
     if (outcome.over) {
       this.over = true;

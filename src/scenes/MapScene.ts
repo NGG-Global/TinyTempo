@@ -3,7 +3,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { MUSIC } from '@/config/music';
 import { currentAudio, ensureShellMusic, hushMusic, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
-import { currentRoute, dismissRouteNotice, onRouteChange, routeNoticeWanted } from '@/audio/audioRoute';
+import { currentRoute, dismissRouteNotice, onRouteChange, routeLean, routeNoticeWanted } from '@/audio/audioRoute';
 import { PROGRESSION } from '@/config/progression';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -2573,7 +2573,7 @@ export class MapScene extends BaseScene {
   }
   /** The route note: shown when the active route wants calibrating, never over the rest sheet. */
   private refreshRouteNotice(): void {
-    this.routeNotice.show(!this.restShown && routeNoticeWanted() ? currentRoute() : null);
+    this.routeNotice.show(!this.restShown && routeNoticeWanted() ? currentRoute() : null, routeLean());
   }
 
   /**

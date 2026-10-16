@@ -105,13 +105,30 @@ tier 4.
 
 Until this, a finer grid arrived unannounced: a task two-thirds of the way into a level
 simply asked for three taps inside a beat. Now the first level that uses each grid
-introduces it, once, in the level itself (`game/subdivisionIntro.ts`, wired in
+introduces it, once, in the level itself (`game/conceptIntro.ts`, wired in
 `PlayScene.beginIntro`).
+
+**Four introductions, not two.** The same mechanism now also introduces the two jumps the
+tiers make — the **offbeat**, the first tap between two beats (level 6), and the **long
+phrase**, two bars to hold instead of one (level 18) — which arrived unannounced exactly as
+the grids once did. They are `Concept`s beside `triplet` and `sixteenth` (`CONCEPTS`,
+`taskCarries`: an offbeat is a tier phrase with a hit off the beat, a long phrase one longer
+than a bar). Their phrases follow the same rule, the smallest change from what the player
+plays: `X - X - X X X -` on half beats — quarters with one "and", after beat three — and
+three quarters held for two bars, so only the length is new. Their captions are *Between the
+beats* and *Two bars to remember*. The one difference is who meets them: a finer grid is
+still news to a veteran, but anyone who has cleared the level where the offbeat or the long
+phrase first appears has played it many times since, so `introConcept` never introduces
+either to a save that has cleared that level — read from the save, with nothing new stored.
+Their flags (`offbeat`, `longPhrase`) are device-local: they join the teach object but not
+the cloud save's lessons, and leave with a player whose progress is shelved. On a debut
+level the new rhythm is also met as the second task (`docs/DIFFICULTY.md`), so the lesson is
+applied straight away, near the base tempo.
 
 **Where.** `firstEligibleLevel(grid)` reads the curve's own threshold (level 42 for
 triplets, 59 for sixteenths today); `firstLevelWithGrid(grid)` is the first level whose
 tasks actually use it (43 and 59), since eligibility only opens a chance. The trigger is
-`introGrid(spec, seen)`: the level uses the grid, and the player has not met its
+`introConcept(spec, seen, progress)`: the level uses the grid, and the player has not met its
 introduction. That one rule covers a new player, who meets it on level 43, and one who
 was already past it when this shipped, who meets it the next time a level they start —
 frontier or replay — uses the grid, never at launch. Where a level uses both and neither
@@ -132,7 +149,7 @@ Below 50% the player gets one more go at once — the example again with no coun
 the answer — and after it the level begins whatever happened ("Let's go"). The music
 returns to the level's tempo on the downbeat its first task starts. Everything from the
 level's opening downbeat to that one is whole bars, for every act's coda hold, so the loop
-never slips against the grid the level then runs on (`tests/subdivisionIntro.test.ts`).
+never slips against the grid the level then runs on (`tests/conceptIntro.test.ts`).
 
 **Forgiving, not different.** The introduction never counts: it adds nothing to the
 level's accuracy, stars, sequence or `task_completed` events, a missed beat is not called
@@ -142,7 +159,7 @@ it runs on the ordinary Perfect and Good, at a tempo where the phrase's tightest
 unscored. A test plays the same subdivided task on a controller that has just run an
 introduction and on a fresh one, and requires identical scores.
 
-**Once.** The flags are `triplet` and `sixteenth` in the teach object beside
+**Once.** The grids' flags are `triplet` and `sixteenth` in the teach object beside
 `seenDemonstration` and `seenReplayTip` (`game/progress.ts`), written when the first try has
 been judged — a player who backs out during the count-in sees it again. The teach object is
 now written from one list of known flags, so setting any flag keeps the others. A save from

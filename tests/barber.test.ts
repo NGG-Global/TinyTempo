@@ -4,8 +4,9 @@ import { createBarberSounds, synthesizeBarber, type BarberVoice } from '../src/a
 import { actLevel, levelSpec } from '../src/game/levels';
 import { TaskSequence } from '../src/game/TaskSequence';
 import {
-  BARBER_CUES, BARBER_MOTION, BARBER_REVEAL_SEC, barberFinale, barberOutcome, cutTimes, locksCut, snipOpening, tuftFall,
+  BARBER_CUES, BARBER_MOTION, BARBER_REVEAL_SEC, barberFinale, cutTimes, locksCut, snipOpening, tuftFall,
 } from '../src/vignettes/barberMotion';
+import { actEnding } from '../src/vignettes/motion';
 import { VIGNETTES } from '../src/vignettes/registry';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -35,8 +36,8 @@ describe('barber act', () => {
     const definition = VIGNETTES.find(v => v.id === 'barber')!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(BARBER_REVEAL_SEC);
-    expect(definition.successAccuracy).toBe(BARBER_MOTION.successAccuracy);
-    expect(definition.partial?.minAccuracy).toBe(BARBER_MOTION.partialAccuracy);
+    // The middle ending is declared, so the plaque's words and the coda agree on it.
+    expect(definition.partial?.copy).toHaveLength(2);
     for (const bpm of [120, 136, 150]) {
       const end = new TaskSequence(bpm, 0).ending(10, definition.endingHoldBeats);
       expect(end.slide - end.contact).toBeGreaterThan(BARBER_REVEAL_SEC);
@@ -47,8 +48,10 @@ describe('barber act', () => {
     }
   });
 
-  it('reads three endings from the round’s accuracy', () => {
-    expect([0, 39.99, 40, 55, 69.99, 70, 100].map(barberOutcome)).toEqual(['fail', 'fail', 'partial', 'partial', 'partial', 'success', 'success']);
+  it('plays the ending the scene decided, against the level’s bar', () => {
+    expect((['success', 'partial', 'rough'] as const).map(o => actEnding(o, false))).toEqual(['success', 'partial', 'fail']);
+    expect(actEnding(undefined, true)).toBe('success');
+    expect(actEnding(undefined, false)).toBe('fail');
   });
 
   it('cuts every lock once, in order, and never the whole mop without a clean finish', () => {

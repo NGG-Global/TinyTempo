@@ -64,7 +64,7 @@ describe('analytics consent', () => {
     const { createFirebaseSink, setFirebaseConsent } = await adapter();
     const sink = await createFirebaseSink(true);
     const denying = setFirebaseConsent(false);
-    sink('task_completed', { ...levelStarted, task_index: 1, accuracy: 90, perfect: 4, good: 0, miss: 0, extra: 0, flawless: 1 });
+    sink('task_completed', { ...levelStarted, task_index: 1, accuracy: 90, perfect: 4, good: 0, miss: 0, extra: 0, flawless: 1, pattern: 't2-1', debut: 0, route: 'speaker', offset_set: 0 });
     await denying;
     expect(sdk.logged).toEqual([]);
   });

@@ -46,7 +46,7 @@ beat, so the knife is always clear before the next possible hit from 120 to 150 
   changed.
 
 Grading stays outside the vignette: it receives `Judgement` and inspects only `kind` and
-`index`; the strong/rough boundary is `successAccuracy` on the registry entry.
+`index`; the strong/rough boundary is the level's clear bar (`finishOutcome`, `game/taskVerdict.ts`).
 
 ## Verification
 

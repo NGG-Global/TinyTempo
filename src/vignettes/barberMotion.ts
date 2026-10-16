@@ -9,8 +9,6 @@ import { clamp01, easeInOutCubic, easeOut, REFERENCE_BEAT } from './motion';
 export const BARBER_REVEAL_SEC = 1.8;
 
 export const BARBER_MOTION = {
-  successAccuracy: 70,
-  partialAccuracy: 40,
   /**
    * The mop is cut in twelve locks: eight round the back, left to right over the crown,
    * then four across the fringe. A round can cut three quarters of them; the rest belong
@@ -37,11 +35,6 @@ export const BARBER_MOTION = {
 } as const;
 
 export type BarberOutcome = 'success' | 'partial' | 'fail';
-
-export function barberOutcome(accuracy: number): BarberOutcome {
-  if (accuracy >= BARBER_MOTION.successAccuracy) return 'success';
-  return accuracy >= BARBER_MOTION.partialAccuracy ? 'partial' : 'fail';
-}
 
 /** Locks cut by `hits` judged hits out of `targets`. Never the whole mop. */
 export function locksCut(hits: number, targets: number): number {

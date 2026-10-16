@@ -34,17 +34,31 @@ are never choreographed**: stars are recomputed from best accuracy on every read
 threshold moves saved star totals and can close a gate behind a player
 (`tests/fixtures/level-thresholds.json` holds them). `tests/fixtures/levels-choreography.json`
 pins levels 1–120; a change that moves any of them is the registry trap again. See
-`docs/DIFFICULTY.md`. **Each finer grid is introduced once, in the level that first uses it**
-(`game/subdivisionIntro.ts`): one unscored task in front of the level's first, at 0.75× on the
-act, block and judge the level uses — "New rhythm / 3 inside the beat", one example, one
-answer, one retry below 50% — on ordinary windows, never wider. `introGrid` triggers on a level
-that uses an unseen grid, so a save from before the feature meets it on the next such level,
-never at launch; the `triplet`/`sixteenth` teach flags live beside `seenDemonstration`. See
-`docs/SUBDIVISIONS.md`. Subdivided phrases
+`docs/DIFFICULTY.md`. **A new rhythm is met as the second task of its debut level**
+(`debutLevels`, `placeDebut`, `DEBUT_SLOT` in `levels.ts`): the first level whose composed tasks
+reach a tier above the quarters or a finer grid at either density trades that task's phrase
+with task 2, each slot keeping its tempo and lead-in, so it is met fresh near the base tempo
+rather than last at the level's peak; debuts are found by scanning `composedTasks`, never
+written down, and tasks, peak tempo and top tier never move (levels 6, 9, 18, 28, 43, 59, 72
+today). **Each new kind of rhythm is introduced once, in the level that first asks for it**
+(`game/conceptIntro.ts`): the offbeat (level 6), the long phrase (18), triplets (43) and
+sixteenths (59) — one unscored task in front of the level's first, at 0.75× on the act, block
+and judge the level uses — "New rhythm / Between the beats", one example, one answer, one
+retry below 50% — on ordinary windows, never wider. `introConcept` triggers on a level that
+asks for an unseen concept; a save from before the feature meets a grid on the next such
+level, never at launch, but never meets the offbeat or the long phrase once it has cleared
+the level where they first appear. The teach flags live beside `seenDemonstration`;
+`offbeat`/`longPhrase` are device-local, outside the cloud save. See `docs/SUBDIVISIONS.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
-nearest-target cell. See `docs/SUBDIVISIONS.md`.
+nearest-target cell. See `docs/SUBDIVISIONS.md`. **The plateau has a wider vocabulary**: from
+`PROGRESSION.vocabulary.from` (level 59) tiers 2–4 also draw on `PLATEAU_PATTERNS` (four more
+phrases each, through `tierPool`) and no level plays a phrase twice while its tier has another;
+`subdivide` never swaps in a grid phrase the level already has. Levels below 59 draw as they
+always did. `PATTERN_TIERS` and `SUBDIVIDED_TIERS` are **not to be edited** — Endless rules v1
+reads them — so a new phrase is appended to `PLATEAU_PATTERNS`, which only the levels read.
+See `docs/DIFFICULTY.md`.
 
 **Every area ends in a finale, and a finale is a presentation, not a new test.**
 `isAreaFinale` (`level % PROGRESSION.areaSize === 0`) is the only place a finale's level is
@@ -219,9 +233,14 @@ its own geometry — eaten from one side across, drawn as scanned half-rings so 
 can open the hole — and a wasp instead of the worm. See `docs/VARIANTS.md`.
 
 Scissors & paper is the ninth act. Its three cutout shapes rotate per task;
-`paperMotion.ts` derives success (70%+), partial (40–69%) and failure from the
-round accuracy passed to `Vignette.finish`. Other acts retain their binary
-endings. Its five-beat reveal hold adds one bar to the default coda; holds must
+`paperMotion.ts` draws success, partial and failure from the
+verdict passed to `Vignette.finish`. Other acts retain their binary
+endings. **Every act's ending reads the level's own bar** (`game/taskVerdict.ts`):
+success at or above the clear bar, partial (three-ending acts) within `VERDICT.partialBand`
+under it, rough below — one verdict for the coda, the headline and the act, decided by the
+scene and passed to `finish`, so a level-1 player clearing at 60% no longer watches the
+failure and a plateau level can no longer show eight successes and fail. Endless reads its
+step's life bar the same way (`barsFor`), presentation only. Its five-beat reveal hold adds one bar to the default coda; holds must
 complete whole bars with the contact and two slide beats. See
 `docs/SCISSORS_PAPER.md`. In DEV only, `?debug&level=9` opens it directly.
 
@@ -240,8 +259,8 @@ judged hits and bursts on a rough coda. See `docs/ERRAND_ACTS.md`.
 The fisherman is act 18, on the same lifecycle: one Graphics, curves in
 `fishingMotion.ts`, voices in `audio/fishingSounds.ts`, and the same five-beat hold. The
 beat is a pull on a hooked line, not a reel, so `rodHeave` is deliberately not monotonic.
-It is the second act with three endings from the round accuracy: a big fish at 70%+, one
-of three that each leave the water their own way, a small fish at 40–69%, and a boot or
+It is the second act with three endings from the round accuracy: a big fish on a success, one
+of three that each leave the water their own way, a small fish on a near miss, and a boot or
 tyre below. See `docs/FISHERMAN.md`.
 
 The DJ scratch is act 19: a hand on a record and one on the crossfader, one short scratch
@@ -259,8 +278,12 @@ whose middle ending has a voice of its own, since all four of its takes were rec
 **A coda can outlive the hold it plays in.** Four seconds of applause against 2.8 at the
 fastest tempo would land on the beats the player has to copy next, so `playFinish` takes
 the instant the room has to be clear by — the next task's own downbeat — and fades the coda
-under it; after the last task nothing follows and it rings out under the summary. See
-`docs/CLAPPING_HANDS.md`.
+under it; after the last task nothing follows and it rings out under the summary. **Placing
+the next task stops only the plan's voices** (`SoundSink.cancelPlan`): `AudioEngine` keeps
+the cues and tap-started actions apart from codas, accents and stingers, because the next
+task is placed a beat before the downbeat the coda fades to, and a cancel of everything cut
+the applause dead at full level; `cancel()` still stops both for a pause, a restart and the
+way out. See `docs/CLAPPING_HANDS.md`.
 
 The trombone is act 20 and its beat is unlike every other's. **The action voice is scheduled
 on the grid for every demonstration cue and every target when a task is placed**, and the
@@ -480,8 +503,8 @@ same sample under the same rate automation, detects the lead-in on the first ste
 applies it to all, and `setLayers(count, at)` fades stems in or out on a bar line. A level
 starts on the first stem with a **metronome bar** under it (`audio/metronomeSounds.ts`,
 one synthesized bar looped from the same sample, beat 1 accented) and `advanceLayers`
-(`game/musicLayers.ts`) moves the count per scored task — strong adds a stem, weak takes
-one — applied on the next task's downbeat with the tempo; the shell hears every stem, trimmed,
+(`game/musicLayers.ts`) moves the count per scored task against the level's bars — its second
+star adds a stem, a rough task takes one — applied on the next task's downbeat with the tempo; the shell hears every stem, trimmed,
 and no click; track A is one stem and hears nothing of it. **The cost is ~230 MB of decoded PCM
 and a 10.4 MB download** for track B, the cost the premix existed to avoid, accepted for a
 mix that answers the player; `docs/MUSIC.md` names the cheaper shape if a handset cannot
@@ -567,8 +590,12 @@ is 0, never a neighbour's value. A version-1 save's single offset becomes `legac
 `unknown` and adopted once by the first real route a device reports (`adoptLegacy`).
 Calibration and Reset touch the active route only. The map's `RouteNotice` card suggests
 calibrating an uncalibrated Bluetooth route, or any uncalibrated route once another has been
-calibrated, and a close silences it for that route for the session. It is device-local: in
-no cloud save, and not restored from a save code.
+calibrated, and a close silences it for that route for the session. The same card names a
+**steady lean**: when the last three levels finished on the route this session each leaned like
+the device (`deviceLean`, the details' "Check your Tap offset" test) the same way
+(`steadyLean`), it reads "Tapping about N ms late" with Tune — advice only, since nothing writes
+an offset from gameplay; the leans are session memory per route, cleared by a new offset. It
+is device-local: in no cloud save, and not restored from a save code.
 
 **A level runs on two clocks, and a deadline must name the right one.** `AudioClock.now()`
 is the context time of the sample the player is hearing, so every phase, judgement and
@@ -745,7 +772,11 @@ tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJEC
 
 **One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
 `ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
-that paid. The restart puck is free before the attempt's first scored response
+that paid, **from the task it stopped in** (`resumeTask`): finished tasks are kept, and the
+cut-short task replays from a fresh count-in **held to a ceiling** (`scoreCeiling`,
+`capRound`, `pauseTask`) — the most the interrupted pass could still have made — so an
+interruption can cost a task but never improve it. Groove is kept with the pass, so mastery
+stays the same fact as a best of 100. The restart puck is free before the attempt's first scored response
 (`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
 an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
 first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
@@ -1008,7 +1039,7 @@ src/
     settings.ts        Saved audio offset, music and effects levels, and mute
     beatTrack.ts       What the two rows show, and the handover, as pure functions
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
-    subdivisionIntro.ts  A finer grid's one-time introduction: where, which, and its tries
+    conceptIntro.ts    A new rhythm's one-time introduction (offbeat, long phrase, grids): where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
@@ -1019,7 +1050,8 @@ src/
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
-    musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
+    musicLayers.ts     How many stems a level has earned: strong adds one, rough takes one; pure
+    taskVerdict.ts     A task's ending and its mix step, read against the bar it is held to; pure
     endless.ts         Endless Mode: the unlock, the pool, the step generator, the schedule, lives, the ranked time; pure
     endlessProgress.ts The device's Endless record per ruleset: best, badges, run count; one key
   input/
@@ -1192,6 +1224,11 @@ URL bar, the keyboard opens, the device rotates. Assume `layout()` runs often.
   axis-locked control.
 - **Support tap as well as drag.** Reaching across a large phone to drag is
   uncomfortable; tap-to-position is often the gesture players actually use.
+- **A rhythm screen takes two fingers** (`TapInput` with `{ pointers: 2 }`, PlayScene and
+  TutorialScene): each finger taps once on its way down, so a fast pair can be played with
+  both thumbs; with one pointer, a thumb still down as the other landed was dropped and read
+  as a Miss. Menus and calibration keep one, so a second finger cannot press a second
+  button, and Endless keeps one until its next rules version so v1 times stay comparable.
 - **Acknowledge every touch visually**, before any movement happens.
 - **Leave `input.smoothFactor` at 0.** Phaser computes
   `x = newX * smoothFactor + previousX * (1 - smoothFactor)`, so the value is
@@ -1338,7 +1375,10 @@ button** and nothing else (`core/backButton.ts`, native-only and lazily imported
 hands the press to a DOM sheet first (`dismissShellOverlay`), then to the active scene's
 `handleBack`, and only a press nothing takes — the title screen's — goes to `minimizeApp`.
 Every scene a player can stand on answers it; in a level it is two presses
-(`levelBackAction`: pause, then the map), because the second can end a paid attempt. Before
+(`levelBackAction`: pause, then the map), because the second can end a paid attempt — and
+the map puck takes the same two steps (`wayOut`). `levelRunning` counts the controller's
+`result` phase as running while no outcome is recorded, since that phase is also every coda
+between tasks, where one press used to abandon the attempt. Before
 it, back left the app from any screen. **AdMob asks for consent before it starts**: `admob.ts`
 initialises the SDK only once `canRequestAds` is true, caps ad content at
 `ADMOB.maxAdContentRating` (parental guidance), and every build but `npm run build:release`

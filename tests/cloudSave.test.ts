@@ -160,7 +160,7 @@ describe('the payload', () => {
     });
     play(storage, road(12, { 3: 91 }));
     completeTutorial(storage);
-    setTeachFlags({ seen: true, triplet: true, replayTip: true }, storage);
+    setTeachFlags({ seen: true, triplet: true, replayTip: true, offbeat: true, longPhrase: true }, storage);
     const text = encodeCloudSave(localCloudSave(storage).read());
     const parsed = JSON.parse(text);
     expect(Object.keys(parsed).sort()).toEqual(['progress', 'teach', 'tutorial', 'version']);
@@ -172,9 +172,16 @@ describe('the payload', () => {
     expect(parsed.tutorial).toBe('complete');
     expect(parsed.teach).toEqual({ seen: true, triplet: true, sixteenth: false, scrapbook: false });
     // Hearts, ledgers, Premium, calibration, volumes, consent, objectives: none of it, by name or by value.
-    expect(text).not.toMatch(/heart|regen|fill|claim|daily|premium|entitle|purchase|calibrat|offset|latency|mute|music|sfx|volume|haptic|analytics|consent|objective|stamp|replayTip/i);
+    expect(text).not.toMatch(/heart|regen|fill|claim|daily|premium|entitle|purchase|calibrat|offset|latency|mute|music|sfx|volume|haptic|analytics|consent|objective|stamp|replayTip|offbeat|longPhrase/i);
     expect(text).not.toContain('-120');
     expect(text).not.toContain('0.4');
+  });
+
+  it('leaves the device-local introductions behind when the device changes hands', () => {
+    const storage = memoryStorage();
+    setTeachFlags({ seen: true, offbeat: true, longPhrase: true }, storage);
+    localCloudSave(storage).replace(emptyCloudSave());
+    expect(readTeachFlags(storage)).toMatchObject({ offbeat: false, longPhrase: false });
   });
 
   it('round-trips, bounds what it carries, and is canonical', () => {
