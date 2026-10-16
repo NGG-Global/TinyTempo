@@ -51,6 +51,20 @@ export const PROGRESSION = {
     minSpacingMs: 110,
   },
   /**
+   * The plateau's wider vocabulary. Past `from` the curve has nothing new left to add —
+   * every tier and both grids are in play, and the levels go on forever — so what keeps a
+   * level from being one the player has already learnt is the phrases in it. From here each
+   * tier's pool also draws on `PLATEAU_PATTERNS` (`game/levels.ts`), and no level repeats a
+   * phrase while another is free. Below it the original four a tier stay alone: a small
+   * vocabulary met again and again is how the early road is learnt. Read on the plain
+   * curve, like the grids' thresholds; d 0.9 is level 59, where sixteenths arrive.
+   *
+   * Endless reads `PATTERN_TIERS` alone, so none of this reaches its rules version.
+   */
+  vocabulary: {
+    from: 0.9,
+  },
+  /**
    * A long level gets one rest at its midpoint, because nothing else in a task waits any
    * more: demonstration runs straight into response and one task straight into the next.
    * Four bars, and only from the length at which a level starts to feel relentless.

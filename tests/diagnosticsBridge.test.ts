@@ -21,6 +21,7 @@ describe('the crash-breadcrumb bridge', () => {
     track('task_completed', {
       level: 3, area: 1, mode: 'frontier', task_index: 1, task_count: 3, bpm: 120, pattern_tier: 0,
       grid: 'eighth', accuracy: 90, perfect: 3, good: 1, miss: 0, extra: 0, flawless: 0,
+      pattern: 't0-1', debut: 0, route: 'speaker', offset_set: 0,
     });
     track('level_failed', {
       level: 3, area: 1, role: 'pattern', task_count: 3, bpm: 120, pattern_tier: 0, grid: 'eighth', clear_accuracy: 43,

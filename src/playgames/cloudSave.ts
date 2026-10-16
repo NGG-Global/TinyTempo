@@ -322,7 +322,13 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
     replace(save) {
       const stored = saveProgress(save.progress, storage);
       const tutorial = setTutorialState(save.tutorial, storage);
-      const teach = setTeachFlags({ seen: save.teach.seen, triplet: save.teach.triplet, sixteenth: save.teach.sixteenth, scrapbook: save.teach.scrapbook }, storage);
+      // The offbeat and long-phrase introductions are this device's note, not the cloud's, so
+      // they leave with the player whose progress is being shelved; the next player's save is
+      // what keeps them from a veteran (`introConcept`).
+      const teach = setTeachFlags({
+        seen: save.teach.seen, triplet: save.teach.triplet, sixteenth: save.teach.sixteenth, scrapbook: save.teach.scrapbook,
+        offbeat: false, longPhrase: false,
+      }, storage);
       return stored && tutorial && teach;
     },
   };

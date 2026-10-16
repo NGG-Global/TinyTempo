@@ -5,10 +5,13 @@ import {
 import { finaleTreatment } from './finale';
 import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
 import { isCleared } from './health';
-import type { LevelSpec } from './levels';
+import type { Concept } from './conceptIntro';
+import { debutsOn, familyOf, type LevelSpec } from './levels';
 import type { MasteryResult } from './mastery';
 import type { LevelOutcome, Progress } from './progress';
+import type { AudioRoute } from './routeCalibration';
 import type { RoundResult } from './scoring';
+import { median } from './timingReport';
 import { areaIndexOf, gateFor, levelStars, totalStars } from './stars';
 
 /**
@@ -75,11 +78,19 @@ export function levelParams(spec: LevelSpec, progress: Progress, retryCount: num
   };
 }
 
+/** How the task was heard: the route it played through, and whether that route has a Tap offset. */
+export interface TaskListening {
+  readonly route: AudioRoute;
+  readonly offsetSet: boolean;
+}
+const UNHEARD: TaskListening = Object.freeze({ route: 'unknown', offsetSet: false });
+
 export function taskParams(
-  spec: LevelSpec, index: number, result: RoundResult, mode: AttemptMode,
+  spec: LevelSpec, index: number, result: RoundResult, mode: AttemptMode, listening: TaskListening = UNHEARD,
 ): AnalyticsPayloads['task_completed'] {
   const task = spec.tasks[index]!;
   const error = result.meanAbsoluteErrorMs;
+  const lean = median(result.deltasMs.filter(Number.isFinite));
   return {
     level: spec.level,
     area: areaNumber(spec.level),
@@ -94,10 +105,17 @@ export function taskParams(
     good: result.good,
     miss: result.missed,
     extra: result.extras,
-    // Every beat Perfect: the test `isFlawless` applies to the marks, so the event agrees
-    // with the strike the player saw. Extra taps do not cancel it there, so not here either.
-    flawless: flag(result.missed === 0 && result.good === 0 && result.perfect > 0),
+    // Every beat Perfect and no extra tap: the scene's own test (`isFlawless` on the marks and
+    // no extras), so the dashboard counts the celebrations the player saw, and the tasks
+    // mastery is made of. It used to ignore extras, and disagreed with the game.
+    flawless: flag(result.missed === 0 && result.good === 0 && result.perfect > 0 && result.extras === 0),
     ...(error !== null && Number.isFinite(error) ? { error_ms: Math.round(error) } : {}),
+    pattern: task.pattern.id,
+    // The task carries a rhythm the road meets for the first time on this level.
+    debut: flag(debutsOn(spec.level).includes(familyOf(task) ?? '')),
+    ...(lean !== null ? { lean_ms: Math.round(lean) } : {}),
+    route: listening.route,
+    offset_set: flag(listening.offsetSet),
   };
 }
 
@@ -127,6 +145,11 @@ export interface LevelStart {
   readonly progress: Progress;
   readonly attemptId: string;
   readonly heartSpent: boolean;
+  /**
+   * Resume picked the attempt up at the task it stopped in, keeping every task already
+   * finished: the run goes on, rather than going round again from its first task.
+   */
+  readonly continuing?: boolean;
 }
 
 /** One attempt at a level, from its first downbeat to its result or the player leaving. */
@@ -163,12 +186,12 @@ export class LevelRun {
   }
 
   /** A task was judged to its end. Once per task per pass through the level. */
-  public task(index: number, result: RoundResult): void {
+  public task(index: number, result: RoundResult, listening?: TaskListening): void {
     guard(undefined, () => {
       if (this.closed || this.tasks.has(index) || !this.spec.tasks[index]) return;
       this.tasks.add(index);
       this.results[index] = result.accuracy;
-      this.ledger.emit('task_completed', taskParams(this.spec, index, result, this.params.mode));
+      this.ledger.emit('task_completed', taskParams(this.spec, index, result, this.params.mode, listening));
     });
   }
 
@@ -341,13 +364,13 @@ export class TutorialVisit {
   }
 }
 
-/** One showing of a subdivision introduction. It finishes once; leaving part-way is not a finish. */
-export class SubdivisionIntroVisit {
+/** One showing of a concept's introduction. It finishes once; leaving part-way is not a finish. */
+export class ConceptIntroVisit {
   private closed = false;
 
   public constructor(
     private readonly ledger: PlayAnalytics,
-    private readonly grid: 'triplet' | 'sixteenth',
+    private readonly concept: Concept,
     private readonly level: number,
   ) {}
 
@@ -355,8 +378,8 @@ export class SubdivisionIntroVisit {
     guard(undefined, () => {
       if (this.closed) return;
       this.closed = true;
-      this.ledger.emit('subdivision_intro_completed', {
-        grid: this.grid, level: this.level, tries, accuracy: Math.round(accuracy), passed: flag(passed),
+      this.ledger.emit('concept_intro_completed', {
+        concept: this.concept, level: this.level, tries, accuracy: Math.round(accuracy), passed: flag(passed),
       });
     });
   }
@@ -414,13 +437,17 @@ export class PlayAnalytics {
   /**
    * An attempt's first downbeat is ready. A new id starts a run — `level_started`, plus
    * `level_retried` after a failure and `level_replayed` on a finished level — and an id
-   * already open is the same attempt going round again. A finished id is never reopened.
+   * already open is the same attempt going round again, or, `continuing`, carrying on from
+   * the task it stopped in. A finished id is never reopened.
    */
   public beginLevel(start: LevelStart): LevelRun | null {
     return guard<LevelRun | null>(null, () => {
       if (this.closed.includes(start.attemptId)) return null;
       const existing = this.open.get(start.attemptId);
-      if (existing) { existing.restart(); return existing; }
+      if (existing) {
+        if (start.continuing !== true) existing.restart();
+        return existing;
+      }
       const retries = this.failStreak.get(start.spec.level) ?? 0;
       const params = levelParams(start.spec, start.progress, retries, start.heartSpent);
       const run = new LevelRun(this, start.attemptId, start.spec, start.progress, params);
@@ -528,10 +555,10 @@ export class PlayAnalytics {
     });
   }
 
-  public beginSubdivisionIntro(grid: 'triplet' | 'sixteenth', level: number, mode: AttemptMode): SubdivisionIntroVisit | null {
-    return guard<SubdivisionIntroVisit | null>(null, () => {
-      const visit = new SubdivisionIntroVisit(this, grid, level);
-      this.emit('subdivision_intro_shown', { grid, level, mode });
+  public beginConceptIntro(concept: Concept, level: number, mode: AttemptMode): ConceptIntroVisit | null {
+    return guard<ConceptIntroVisit | null>(null, () => {
+      const visit = new ConceptIntroVisit(this, concept, level);
+      this.emit('concept_intro_shown', { concept, level, mode });
       return visit;
     });
   }

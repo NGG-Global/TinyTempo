@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { levelSpec } from '../src/game/levels';
 import {
-  loadProgress, markDemonstrationSeen, markScrapbookSeen, mergeProgress, recordResult, seenScrapbook, seenSubdivisions,
+  loadProgress, markDemonstrationSeen, markScrapbookSeen, mergeProgress, recordResult, seenConcepts, seenScrapbook,
   type Progress,
 } from '../src/game/progress';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
@@ -165,7 +165,7 @@ describe('existing saves', () => {
     markScrapbookSeen(storage);
     markDemonstrationSeen(storage);
     expect(seenScrapbook(storage)).toBe(true);
-    expect(seenSubdivisions(storage)).toEqual({ triplet: true, sixteenth: false });
+    expect(seenConcepts(storage)).toEqual({ offbeat: false, longPhrase: false, triplet: true, sixteenth: false });
   });
 });
 

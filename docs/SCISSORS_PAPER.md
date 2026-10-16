@@ -10,11 +10,11 @@ or consuming the player's sheet. Gameplay remains one tap anywhere per hit.
 
 | Round accuracy | Animation |
 | --- | --- |
-| 70–100%, star task | The fold opens into a gold five-point star, rocks gently, and catches three glints. |
-| 70–100%, heart task | Coral paper unfolds into a heart with a small settling pulse. |
-| 70–100%, angel task | Cream paper opens into a winged angel, rises slightly, and reveals feather scores, gown pleats, and a halo. |
-| 40–69% | The left half opens only partway, wobbles, and leaves a ragged attached flap. |
-| Below 40% | The torn sheet buckles into a crumpled scrap and drops onto the mat. |
+| At or above the clear bar, star task | The fold opens into a gold five-point star, rocks gently, and catches three glints. |
+| At or above the clear bar, heart task | Coral paper unfolds into a heart with a small settling pulse. |
+| At or above the clear bar, angel task | Cream paper opens into a winged angel, rises slightly, and reveals feather scores, gown pleats, and a halo. |
+| Within 15 points under it | The left half opens only partway, wobbles, and leaves a ragged attached flap. |
+| Further below | The torn sheet buckles into a crumpled scrap and drops onto the mat. |
 
 Star, heart and angel cycle deterministically by round ID, with the shape chosen
 at reset so the cutting template matches its ending. They are the first of four

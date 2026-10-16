@@ -1,5 +1,5 @@
 import {
-  adoptLegacy, calibrationFor, offsetFor, suggestCalibration, withoutRouteOffset, withRouteOffset, type AudioRoute,
+  adoptLegacy, calibrationFor, LEAN_NOTICE, offsetFor, steadyLean, suggestCalibration, withoutRouteOffset, withRouteOffset, type AudioRoute,
 } from '../game/routeCalibration';
 import { clampCalibration, loadSettings, saveSettings } from '../game/settings';
 
@@ -21,6 +21,12 @@ let route: AudioRoute = 'unknown';
 const listeners = new Set<(route: AudioRoute) => void>();
 /** Routes the player has dismissed the calibration suggestion for, this session. Never stored. */
 const dismissed = new Set<AudioRoute>();
+/**
+ * The device-like lean of each level finished on a route this session (`deviceLean`), the
+ * last few only. Never stored: a lean is evidence about this session's route, and a new
+ * session, a new headset or a new offset starts the count again.
+ */
+const leans = new Map<AudioRoute, (number | null)[]>();
 
 export function currentRoute(): AudioRoute {
   return route;
@@ -74,6 +80,8 @@ export function syncClockCalibration(clock: { calibrationMs: number }, storage?:
 /** Keeps a measurement for the active route only. False means nothing was written. */
 export function saveActiveCalibration(ms: number, storage?: Storage | null): boolean {
   const settings = loadSettings(storage);
+  // A new offset makes every lean measured under the old one stale.
+  leans.delete(route);
   return saveSettings({ ...settings, calibration: withRouteOffset(settings.calibration, route, ms, clampCalibration) }, storage);
 }
 
@@ -83,9 +91,25 @@ export function clearActiveCalibration(storage?: Storage | null): boolean {
   return saveSettings({ ...settings, calibration: withoutRouteOffset(settings.calibration, route) }, storage);
 }
 
-/** Whether to show the small "calibrate this route" note: wanted, and not dismissed for this route this session. */
+/** A finished level's lean (`deviceLean`), counted against the route it was played on. */
+export function noteLevelLean(lean: number | null): void {
+  const list = [...(leans.get(route) ?? []), lean].slice(-LEAN_NOTICE.levels);
+  leans.set(route, list);
+}
+
+/** The active route's steady lean this session, in signed ms, or null (`steadyLean`). */
+export function routeLean(): number | null {
+  return steadyLean(leans.get(route) ?? []);
+}
+
+/**
+ * Whether to show the small "calibrate this route" note: the route was never calibrated, or
+ * the last few levels on it all leaned the same way like a device — and not dismissed for
+ * this route this session.
+ */
 export function routeNoticeWanted(storage?: Storage | null): boolean {
-  return !dismissed.has(route) && suggestCalibration(loadSettings(storage).calibration, route);
+  if (dismissed.has(route)) return false;
+  return routeLean() !== null || suggestCalibration(loadSettings(storage).calibration, route);
 }
 
 /** The player closed the note: not again for this route until the app starts again. */
@@ -98,4 +122,5 @@ export function resetRouteState(): void {
   route = 'unknown';
   listeners.clear();
   dismissed.clear();
+  leans.clear();
 }

@@ -76,12 +76,19 @@ describe('what a level attempt reports', () => {
     const spec = levelSpec(59);
     const index = spec.tasks.findIndex(t => t.grid === 'sixteenth');
     expect(index).toBeGreaterThan(0);
-    const payload = taskParams(spec, index, task(71.4, { perfect: 5, good: 2, missed: 1, extras: 2, meanAbsoluteErrorMs: 48.4 }), 'frontier');
+    const played = task(71.4, { perfect: 5, good: 2, missed: 1, extras: 2, meanAbsoluteErrorMs: 48.4, deltasMs: [-30, -12, -8, 4, 20, 61, -70] });
+    const payload = taskParams(spec, index, played, 'frontier', { route: 'bluetooth', offsetSet: true });
     expect(payload).toEqual({
       level: 59, area: 6, mode: 'frontier', task_index: index + 1, task_count: spec.tasks.length,
       bpm: spec.tasks[index]!.bpm, pattern_tier: spec.tasks[index]!.tier, grid: 'sixteenth',
       accuracy: 71, perfect: 5, good: 2, miss: 1, extra: 2, flawless: 0, error_ms: 48,
+      // Which phrase, which way the taps leaned (the median), and how the task was heard.
+      pattern: spec.tasks[index]!.pattern.id, debut: 1, lean_ms: -8, route: 'bluetooth', offset_set: 1,
     });
+    // Unsaid, the route is unknown rather than guessed, and a task with no landed tap has no lean.
+    const silent = taskParams(spec, index, task(0, { perfect: 0, good: 0, missed: 7 }), 'frontier');
+    expect(silent).toMatchObject({ route: 'unknown', offset_set: 0 });
+    expect(silent).not.toHaveProperty('lean_ms');
     // Aggregates only: no array, no timestamp, nothing that grows with the pattern.
     for (const value of Object.values(payload)) expect(['number', 'string']).toContain(typeof value);
   });
@@ -92,9 +99,9 @@ describe('what a level attempt reports', () => {
     expect(payload.flawless).toBe(0);
   });
 
-  it('marks a task flawless exactly when every beat was Perfect', () => {
+  it('marks a task flawless exactly when every beat was Perfect and nothing extra was tapped, as the scene does', () => {
     expect(taskParams(levelSpec(1), 0, task(100, { perfect: 4, good: 0 }), 'frontier').flawless).toBe(1);
-    expect(taskParams(levelSpec(1), 0, task(100, { perfect: 4, good: 0, extras: 1 }), 'frontier').flawless).toBe(1);
+    expect(taskParams(levelSpec(1), 0, task(75, { perfect: 4, good: 0, extras: 1 }), 'frontier').flawless).toBe(0);
     expect(taskParams(levelSpec(1), 0, task(90, { perfect: 3, good: 1 }), 'frontier').flawless).toBe(0);
   });
 
@@ -143,6 +150,22 @@ describe('exactly one result per finished attempt', () => {
     expect(only('level_completed')[0]!.restarts).toBe(1);
     // The resumed pass played its tasks again, and each play is one report.
     expect(only('task_completed')).toHaveLength(1 + begin.spec.tasks.length);
+  });
+
+  it('carries a continued attempt on from the task it stopped in, without going round again', () => {
+    const begin = start(4, road(3, 3));
+    const first = ledger.beginLevel(begin)!;
+    first.task(0, task(80));
+    first.task(1, task(70));
+    // Paused in task 3, resumed there: the finished tasks are kept, not played again.
+    const carried = ledger.beginLevel({ ...begin, continuing: true })!;
+    expect(carried).toBe(first);
+    first.task(1, task(99)); // never reported twice
+    begin.spec.tasks.slice(2).forEach((_, i) => carried.task(i + 2, task(90)));
+    carried.finish(recordResult(begin.progress, 4, 85), 85);
+    expect(only('level_started')).toHaveLength(1);
+    expect(only('level_completed')[0]!.restarts).toBe(0);
+    expect(only('task_completed')).toHaveLength(begin.spec.tasks.length);
   });
 
   it('reports a task once per pass however often the scene hands it over', () => {
@@ -372,20 +395,26 @@ describe('the tutorial', () => {
   });
 });
 
-describe('a finer grid’s introduction', () => {
+describe('a new rhythm’s introduction', () => {
   it('reports that it was shown, and how it went, once', () => {
-    const visit = ledger.beginSubdivisionIntro('sixteenth', 59, 'frontier')!;
+    const visit = ledger.beginConceptIntro('sixteenth', 59, 'frontier')!;
     visit.complete(2, 38.4, false);
     visit.complete(1, 90, true);
     expect(sent).toEqual([
-      { event: 'subdivision_intro_shown', payload: { grid: 'sixteenth', level: 59, mode: 'frontier' } },
-      { event: 'subdivision_intro_completed', payload: { grid: 'sixteenth', level: 59, tries: 2, accuracy: 38, passed: 0 } },
+      { event: 'concept_intro_shown', payload: { concept: 'sixteenth', level: 59, mode: 'frontier' } },
+      { event: 'concept_intro_completed', payload: { concept: 'sixteenth', level: 59, tries: 2, accuracy: 38, passed: 0 } },
     ]);
   });
 
+  it('names the offbeat and the long phrase the same way as a grid', () => {
+    ledger.beginConceptIntro('offbeat', 6, 'frontier')!.complete(1, 72, true);
+    ledger.beginConceptIntro('longPhrase', 18, 'frontier');
+    expect(only('concept_intro_shown').map(p => p.concept)).toEqual(['offbeat', 'longPhrase']);
+  });
+
   it('shows without completing when the player leaves part-way', () => {
-    ledger.beginSubdivisionIntro('triplet', 70, 'replay');
-    expect(names()).toEqual(['subdivision_intro_shown']);
+    ledger.beginConceptIntro('triplet', 70, 'replay');
+    expect(names()).toEqual(['concept_intro_shown']);
   });
 });
 
@@ -458,7 +487,7 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.gateOnMap(road(10, 1));
     playThrough(5, road(10, 1), levelSpec(5).starAccuracy[2]!);
     ledger.beginPractice(2)!.complete(60);
-    ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
+    ledger.beginConceptIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     ledger.scrapbookOpened('menu', 3, 32);
     ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
     // A flawless level: groove 2 and 3 reached, then mastered.

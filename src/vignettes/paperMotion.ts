@@ -2,8 +2,6 @@ import { clamp01, easeOut, REFERENCE_BEAT, TURN_OPEN_SEC } from './motion';
 export { acceptDemoBeat, advanceOnHit, clamp01, easeOut } from './motion';
 
 export const PAPER_MOTION = {
-  successAccuracy: 70,
-  partialAccuracy: 40,
   reopenBeats: 0.42,
   unfoldSec: 0.64,
   revealSec: 1.25,
@@ -30,10 +28,6 @@ export function paperShape(roundId: number, lap = 0): PaperShape {
   return set[((Math.max(1, Math.floor(roundId)) - 1) % set.length)]!;
 }
 
-export function paperOutcome(accuracy: number): PaperOutcome {
-  if (accuracy >= PAPER_MOTION.successAccuracy) return 'success';
-  return accuracy >= PAPER_MOTION.partialAccuracy ? 'partial' : 'fail';
-}
 
 /** The blades meet on the cue and reopen before even a half-beat pair at 150 BPM. */
 export function scissorOpening(age: number, beat = REFERENCE_BEAT): number {

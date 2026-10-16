@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPE_SETS, PAPER_SHAPES, paperCutPoint, paperHandoff, paperOutcome, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
-import { TURN_OPEN_SEC } from '../src/vignettes/motion';
+import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPE_SETS, PAPER_SHAPES, paperCutPoint, paperHandoff, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
+import { actEnding, TURN_OPEN_SEC } from '../src/vignettes/motion';
 import { synthesizePaper } from '../src/audio/paperSounds';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { VIGNETTES } from '../src/vignettes/registry';
@@ -49,11 +49,10 @@ describe('paper cutting presentation', () => {
     expect(levelSpec(actLevel('paper', 1)).lap).toBe(1);
   });
 
-  it('uses authoritative accuracy for success, half success and failure', () => {
-    expect([0, 39.99, 40, 50, 69.99, 70, 100].map(paperOutcome)).toEqual(['fail', 'fail', 'partial', 'partial', 'partial', 'success', 'success']);
+  it('cuts the success, half success or failure the scene decided', () => {
+    expect((['success', 'partial', 'rough'] as const).map(o => actEnding(o, false))).toEqual(['success', 'partial', 'fail']);
     const def = VIGNETTES.find(v => v.id === 'paper')!;
-    expect(def.successAccuracy).toBe(PAPER_MOTION.successAccuracy);
-    expect(def.partial?.minAccuracy).toBe(PAPER_MOTION.partialAccuracy);
+    expect(def.partial?.copy).toHaveLength(2);
     // Its introduction stays at level 9, and its second visit at 34.
     expect(levelSpec(9).vignette).toBe('paper');
     expect(actLevel('paper', 1)).toBe(34);

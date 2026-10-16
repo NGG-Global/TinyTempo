@@ -32,3 +32,28 @@ it('uses one unified handler, preserves event timestamp and filters held/seconda
   adapter.dispose(); adapter.dispose();
   expect(handlers.size).toBe(0);
 });
+
+it('takes a second finger on a rhythm screen, each finger tapping once on its way down', () => {
+  const native = new EventTarget();
+  vi.stubGlobal('window', native);
+  const handlers = new Map<string, (pointer: object) => void>();
+  const input = {
+    on: (name: string, fn: (pointer: object) => void, context: object) => handlers.set(name, fn.bind(context)),
+    off: (name: string) => handlers.delete(name),
+  };
+  const receive = vi.fn();
+  const adapter = new TapInput({ input } as unknown as Phaser.Scene, receive, { pointers: 2 });
+  const thumb = (id: number, timeStamp: number) => ({ id, x: id * 10, y: 20, wasTouch: true, button: 0, event: { timeStamp } });
+  handlers.get('down')!(thumb(1, 100));
+  // The other thumb lands while the first is still down: a tap of its own.
+  handlers.get('down')!(thumb(2, 210));
+  expect(receive.mock.calls.map(([tap]) => tap.timestamp)).toEqual([100, 210]);
+  // A third finger, or a finger already down, does nothing until one lifts.
+  handlers.get('down')!(thumb(3, 300));
+  handlers.get('down')!(thumb(1, 320));
+  expect(receive).toHaveBeenCalledTimes(2);
+  handlers.get('up')!(thumb(1, 330));
+  handlers.get('down')!(thumb(1, 340));
+  expect(receive).toHaveBeenCalledTimes(3);
+  adapter.dispose();
+});

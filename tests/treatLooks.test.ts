@@ -71,7 +71,7 @@ describe('picnic looks', () => {
     for (const lap of [1, 2, 3]) {
       const look = definitionForLap(apple, lap);
       expect(look.id).toBe('apple');
-      expect(look.successAccuracy).toBe(apple.successAccuracy);
+      expect(look.partial).toBe(apple.partial);
       expect(look.endingHoldBeats).toBe(apple.endingHoldBeats);
       expect(look.endingSec).toBe(apple.endingSec);
       expect(look.sounds).toBe(apple.sounds);

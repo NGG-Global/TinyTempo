@@ -5,11 +5,12 @@ import { fillContour } from '@/ui/illustration';
 import { HouseholdVignette } from './HouseholdVignette';
 import { shape, slab, sparkle } from './householdArt';
 import {
-  clapFinale, clapOutcome, clapRing, crowdClap, CROWD_HANDS, handGap, palmSquash, roomWarmth,
+  clapFinale, clapRing, crowdClap, CROWD_HANDS, handGap, palmSquash, roomWarmth,
   type ClapFinale, type ClapOutcome, type CrowdHand,
 } from './clapMotion';
 import { clapLook, type ClapLook } from './clapLooks';
-import { clamp01 } from './motion';
+import type { FinishOutcome } from '@/game/taskVerdict';
+import { actEnding, clamp01 } from './motion';
 
 /** The room's palette. The ink is a deep warm brown, so dressed type takes no outline. */
 export const ROOM = { ink: 0x3b2a2e, wall: 0xdcc3a6, floor: 0xb4906d, warm: 0xf7d489 } as const;
@@ -74,9 +75,9 @@ export class ClappingHandsVignette extends HouseholdVignette {
     this.hands = { skin: faces(look.skin), nail: look.nail, sleeve: faces(look.sleeve), cuff: look.cuff };
   }
 
-  public override finish(successful: boolean, contactSec: number, accuracy = successful ? 100 : 0): void {
+  public override finish(successful: boolean, contactSec: number, outcome?: FinishOutcome): void {
     super.finish(successful, contactSec);
-    this.outcome = clapOutcome(accuracy);
+    this.outcome = actEnding(outcome, successful);
   }
 
   protected draw(now: number, ending: number): void {

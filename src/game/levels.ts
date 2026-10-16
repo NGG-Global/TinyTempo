@@ -92,6 +92,31 @@ export const PATTERN_TIERS: readonly (readonly Pattern[])[] = Object.freeze([
 ]);
 
 /**
+ * More phrases for the tiers the plateau plays, joining their pools from
+ * `PROGRESSION.vocabulary.from` (`tierPool`). Written to each tier's own measure, which
+ * `tests/levels.test.ts` holds them to: tier 2 one bar of four hits, two of them off the
+ * beat; tier 3 two bars of eight or nine; tier 4 two bars of ten. Every phrase opens on its
+ * downbeat, no two hits are closer than half a beat, and no hit set repeats one a tier
+ * already has. Their ids continue the tier's numbering, so analytics names them alike.
+ *
+ * Append only, and only here: `PATTERN_TIERS` is what Endless rules v1 reads, and a phrase
+ * added there would change every run of it.
+ */
+export const PLATEAU_PATTERNS: readonly (readonly Pattern[])[] = Object.freeze([
+  [],
+  [],
+  ['X X - - X - - X', 'X - - X - - X X', 'X - X X - X - -', 'X X - - - X X -'].map((n, i) => parsePattern(`t2-${i + 4}`, n, 0.5)),
+  ['X - X - X X - - X - X - - X X -', 'X - - X X - X - X - X - X X - -', 'X X - X - - X - X - X X - - X -', 'X - X - - X X - X X - - X - X -'].map((n, i) => parsePattern(`t3-${i + 4}`, n, 0.5)),
+  ['X - X X - X X - X X - X - X X -', 'X X - X - X X - X - X X - X - X', 'X - X - X X - X X X - X - - X X', 'X X - X X - - X X - X - X X X -'].map((n, i) => parsePattern(`t4-${i + 4}`, n, 0.5)),
+]);
+
+/** A tier's phrases at a level: its own four, and the plateau's once the curve reaches it. */
+export function tierPool(tier: number, level: number): readonly Pattern[] {
+  const own = PATTERN_TIERS[tier]!;
+  return difficulty(level) >= PROGRESSION.vocabulary.from ? [...own, ...(PLATEAU_PATTERNS[tier] ?? [])] : own;
+}
+
+/**
  * The finer grids, on top of the tiers: two densities each, one group of the subdivision
  * per bar and then two. Every phrase is one bar and opens on its downbeat, like every
  * tier pattern, so the block, the handover and the task change see nothing new. A phrase
@@ -246,9 +271,12 @@ function subdivide(level: number, d: number, tasks: readonly LevelTask[], emphas
     if (grids.length === 0) continue;
     const grid = grids.length === 2 ? grids[Math.floor(random() * 2)]! : grids[0]!;
     const density = ramp(d, grid === 'triplet' ? S.tripletsFrom : S.sixteenthsFrom, S.fullAt) >= 0.5 ? 1 : 0;
-    // Neither neighbour repeats: the one before is final, the one after is checked when its
-    // own turn comes.
-    const pool = SUBDIVIDED_TIERS[grid][density]!.filter(pattern => pattern !== out[i - 1]!.pattern);
+    // Neither neighbour repeats — the one before is final, the one after is checked when its
+    // own turn comes — and no phrase the level already swapped in comes round again while
+    // the density has another: level 57 used to play the same triplet bar three times.
+    const allowed = SUBDIVIDED_TIERS[grid][density]!.filter(pattern => pattern !== out[i - 1]!.pattern);
+    const fresh = allowed.filter(pattern => !out.some(other => other.pattern === pattern));
+    const pool = fresh.length > 0 ? fresh : allowed;
     out[i] = { ...task, pattern: pool[Math.floor(random() * pool.length)]!, grid };
     swapped++;
   }
@@ -291,13 +319,21 @@ export function tierTasks(level: number): readonly LevelTask[] {
   const minTier = Math.max(0, maxTier - P.tierSpan);
   const breather = breatherTask(count);
   const random = seeded(level);
+  // From the plateau's vocabulary on, a level plays a phrase twice only once its tier has
+  // none left; before it, repetition is part of how the early road is learnt, and those
+  // levels draw exactly as they always did.
+  const varied = difficulty(level) >= P.vocabulary.from;
+  const used = new Set<Pattern>();
   let previous: Pattern | null = null;
   const tasks: LevelTask[] = [];
   for (let i = 0; i < count; i++) {
     const progress = count > 1 ? i / (count - 1) : 0;
     const tier = minTier + Math.round((maxTier - minTier) * progress);
-    const pool = PATTERN_TIERS[tier]!.filter(pattern => pattern !== previous);
+    const allowed = tierPool(tier, level).filter(pattern => pattern !== previous);
+    const fresh = varied ? allowed.filter(pattern => !used.has(pattern)) : allowed;
+    const pool = fresh.length > 0 ? fresh : allowed;
     const pattern = pool[Math.floor(random() * pool.length)]!;
+    used.add(pattern);
     previous = pattern;
     // One bar to open the level and find the pulse — a finale's longer opening carries its
     // title card and the music's build — four bars for the breather, and nothing between
@@ -315,8 +351,92 @@ export function openingBeats(level: number): number {
 }
 
 /** A level's tasks from both stages of the curve, before any finale reprise. */
-function curveTasks(level: number): readonly LevelTask[] {
+export function curveTasks(level: number): readonly LevelTask[] {
   return subdivide(level, difficulty(level), tierTasks(level), choreographedShape(level).subdivision);
+}
+
+/** A level's tasks as composed — the curve, or a finale's reprise — before its debut is placed. */
+export function composedTasks(level: number): readonly LevelTask[] {
+  return isAreaFinale(level) ? repriseTasks(level, curveTasks(level)) : curveTasks(level);
+}
+
+/**
+ * What is new about a task's rhythm, for finding the level where it first appears: its tier
+ * above the quarter notes (`t1` … `t4`), or its finer grid and that grid's density
+ * (`triplet-0` … `sixteenth-1`). Null for the quarter notes, which every level opens on.
+ */
+export function familyOf(task: LevelTask): string | null {
+  if (task.grid === null) return task.tier > 0 ? `t${task.tier}` : null;
+  const density = SUBDIVIDED_TIERS[task.grid].findIndex(pool => pool.includes(task.pattern));
+  return `${task.grid}-${density}`;
+}
+
+/** Every family the road can introduce: each tier above the first, each grid at each density. */
+const FAMILIES: readonly string[] = Object.freeze([
+  ...PATTERN_TIERS.slice(1).map((_, i) => `t${i + 1}`),
+  ...(Object.keys(SUBDIVIDED_TIERS) as Grid[]).flatMap(grid => SUBDIVIDED_TIERS[grid].map((_, density) => `${grid}-${density}`)),
+]);
+
+/** Far past where the curve has introduced everything; a bound on the scan, never reached. */
+const DEBUT_SCAN_LIMIT = 1_000;
+let debutCache: ReadonlyMap<string, number> | null = null;
+
+/**
+ * The level each family first appears on, from the composed road: derived, never written
+ * down, so a change to the curve moves a debut with it. It reads `composedTasks`, never
+ * `levelSpec`, so placing a debut cannot move where it is found. A finale is never a debut —
+ * its reprise draws only from what its area already played.
+ */
+export function debutLevels(): ReadonlyMap<string, number> {
+  if (debutCache) return debutCache;
+  const found = new Map<string, number>();
+  for (let level = 1; level <= DEBUT_SCAN_LIMIT && found.size < FAMILIES.length; level++) {
+    for (const task of composedTasks(level)) {
+      const family = familyOf(task);
+      if (family !== null && !found.has(family)) found.set(family, level);
+    }
+  }
+  debutCache = found;
+  return found;
+}
+
+/** The families a level introduces: the rhythms the player has not met before it. */
+export function debutsOn(level: number): readonly string[] {
+  return [...debutLevels()].filter(([, first]) => first === level).map(([family]) => family);
+}
+
+/**
+ * Where a new rhythm is first met inside its level: the second task, right after the one
+ * that sets the pulse.
+ *
+ * The curve ramps tier and tempo from the same progress, so left alone a debut lands in the
+ * second half of its level, near its fastest tempo and after the most fatigue — the first
+ * two-bar phrase at 131 BPM, the first sixteenth fifth of eight. A new rhythm should be met
+ * fresh and slow and then again at speed, so the first task carrying it trades phrases with
+ * the second: each slot keeps its tempo and lead-in, a tier phrase takes its tier with it
+ * and a finer-grid phrase takes the slot's (as `subdivide` leaves it). Tasks, peak tempo and
+ * top tier are untouched, so nothing the choreography promises moves.
+ */
+export const DEBUT_SLOT = 1;
+
+function placeDebut(level: number, tasks: readonly LevelTask[]): readonly LevelTask[] {
+  const debuts = debutsOn(level);
+  if (debuts.length === 0) return tasks;
+  const at = tasks.findIndex(task => { const family = familyOf(task); return family !== null && debuts.includes(family); });
+  if (at <= DEBUT_SLOT) return tasks;
+  const into = (slot: LevelTask, from: LevelTask): LevelTask => ({
+    ...slot, pattern: from.pattern, grid: from.grid, tier: from.grid === null ? from.tier : slot.tier,
+  });
+  const out = [...tasks];
+  out[DEBUT_SLOT] = into(tasks[DEBUT_SLOT]!, tasks[at]!);
+  out[at] = into(tasks[at]!, tasks[DEBUT_SLOT]!);
+  // Never two identical phrases side by side, and never a finer grid on a slot too fast for
+  // the thumb: the phrase pushed out of the second slot lands on a faster one.
+  for (let i = 1; i < out.length; i++) if (out[i]!.pattern === out[i - 1]!.pattern) return tasks;
+  for (const task of [out[DEBUT_SLOT]!, out[at]!]) {
+    if (task.grid !== null && tightestSpacingMs(task.pattern, task.bpm) < PROGRESSION.subdivision.minSpacingMs) return tasks;
+  }
+  return out;
 }
 
 /**
@@ -407,12 +527,11 @@ export function levelSpec(level: number): LevelSpec {
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
   const finale = isAreaFinale(level);
-  const curve = subdivide(level, d, tierTasks(level), shape.subdivision);
   const act = placementAt(ROTATION, level);
   const spec = Object.freeze({
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
-    tasks: Object.freeze(finale ? repriseTasks(level, curve) : curve),
+    tasks: Object.freeze(placeDebut(level, composedTasks(level))),
     peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });

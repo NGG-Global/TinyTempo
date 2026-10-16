@@ -140,7 +140,8 @@ export class TutorialScene extends BaseScene {
     this.theirsLabel = label(this, ROW_LABELS.theirs, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
     this.yoursLabel = label(this, ROW_LABELS.yours, { size: 21, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5).setDepth(13);
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: VIGNETTES[0]!.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(13));
-    this.taps = new TapInput(this, tap => this.handleTap(tap));
+    // Two fingers, each tapping for itself, so a fast pair can be played with both thumbs.
+    this.taps = new TapInput(this, tap => this.handleTap(tap), { pointers: 2 });
     this.curtain = new SceneCurtain(this);
     // The first pass is tapped along: the player's thumb is on the downbeat from the first bar.
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => { void this.startJudged('along'); }));

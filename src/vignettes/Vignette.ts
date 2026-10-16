@@ -5,6 +5,7 @@ import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import type { Judgement } from '@/rhythm/judge';
 import type { VignetteSounds } from '@/audio/AudioEngine';
 import type { GrooveLevel } from '@/game/groove';
+import type { FinishOutcome } from '@/game/taskVerdict';
 
 export interface Vignette {
   layout(viewport: Viewport): void;
@@ -14,7 +15,8 @@ export interface Vignette {
   onPlayerHit(now: number): void;
   /** Includes successful hits, omissions, and extra taps. */
   onAccuracy(result: Judgement, now: number): void;
-  finish(successful: boolean, contactSec: number, accuracy?: number): void;
+  /** `outcome`: the scene's verdict (`game/taskVerdict.ts`), which an act with three endings plays. */
+  finish(successful: boolean, contactSec: number, outcome?: FinishOutcome): void;
   pause(): void;
   update(now: number): void;
   /**
@@ -52,12 +54,14 @@ export interface VignetteDefinition {
   readonly ink: number;
   readonly success: readonly [string, string];
   readonly rough: readonly [string, string];
-  /** Optional middle ending, based on the authoritative round accuracy. */
-  readonly partial?: { readonly minAccuracy: number; readonly copy: readonly [string, string] };
+  /**
+   * The middle ending's words, for an act that has one. When it plays is the scene's
+   * decision, read against the level's own bar (`game/taskVerdict.ts`), never the act's.
+   */
+  readonly partial?: { readonly copy: readonly [string, string] };
   /** Beats to show the ending before the table slides; defaults to one. */
   readonly endingHoldBeats?: number;
   readonly endingSec: number;
-  readonly successAccuracy: number;
   /**
    * The action voice is scheduled on every response target as well as the demonstration,
    * whatever the output route. Only the trombone: every other act keeps the player's turn
