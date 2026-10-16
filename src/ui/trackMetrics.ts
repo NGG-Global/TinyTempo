@@ -36,8 +36,12 @@ export const TRACK = {
   batonRadius: 26,
   /** How far the face rises into the thumb once the turn has passed. */
   faceLift: 15,
-  /** How far the baton bows out, over the columns it is handing across. */
-  batonBow: 60,
+  /**
+   * How far the baton bows out, over the columns it is handing across. Far enough to
+   * read as a throw, and no further: at 60 the disc sat over the first socket at the top
+   * of its bow, covering that socket's own pop as its fuse reached it.
+   */
+  batonBow: 52,
 
   /** The breather's bar tiles on the face: height, corner, gap, and the right-hand inset. */
   tileHeight: 44,
@@ -55,8 +59,18 @@ export const TRACK = {
   restWidth: 560,
 } as const;
 
-/** Space between the shelf's top edge and the verdict word's centre line, in design units. */
-const VERDICT_ABOVE_SHELF = 34;
+/**
+ * Space between the shelf's top edge and the verdict word's centre line, in design units.
+ *
+ * The block stands on a sheet that reaches `BACKING_PAD` above the shelf and feathers
+ * further, and the verdict's pill is a little over 49 units tall at rest. At 34 the pill's
+ * bottom edge sat on the sheet's top edge and "Flawless!", taller still, touched the shelf,
+ * so a word that is meant to hover over the block read as resting on it. The line is now
+ * high enough that the pill clears the sheet at rest and the flawless word clears the
+ * shelf; the stage reads the same line through `roomBelowCard`, so the act's shelf gives
+ * way by the same amount rather than drifting into the band.
+ */
+const VERDICT_ABOVE_SHELF = 48;
 /**
  * How far the verdict's pill reaches either side of its line at its largest, in design
  * units: half its height at the pop's peak, and a little air.

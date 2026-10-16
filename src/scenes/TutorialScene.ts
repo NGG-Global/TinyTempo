@@ -9,7 +9,7 @@ import { PALETTE, SHELL } from '@/config/theme';
 import { BaseScene } from '@/core/BaseScene';
 import { reducedMotion } from '@/core/motionPreference';
 import { wrongOrientation } from '@/core/shell';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, numeralStyle, pulseBall, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, markFor, numeralStyle, pulseBall, trackGeometry, turnCount, turnCountExit, turnCountPose, type Mark } from '@/game/beatTrack';
 import { RoundController, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { coach, completeTutorial, isPlayersWindow, momentOf, skipTutorial, TUTORIAL, TutorialRun, tutorialComplete, type Coach, type JudgedStep } from '@/game/TutorialRun';
 import { markDemonstrationSeen } from '@/game/progress';
@@ -456,7 +456,7 @@ export class TutorialScene extends BaseScene {
       rattle, still,
       ghost: live ? this.ghostFor(plan!, marks, turn.yours, now) : null,
       ink: VIGNETTES[0]!.ink,
-      landed: live && plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
+      landed: live ? now - batonLanding(plan) : -Infinity,
       // The ball is the lesson's one cue for *when*: it is on their row, then on yours.
       pulse: live ? pulseBall(plan, now, still) : null,
     });
@@ -513,6 +513,13 @@ export class TutorialScene extends BaseScene {
     if (call.count !== this.turnCalled) {
       this.hideTurnCall();
       this.turnCalled = call.count;
+    }
+    // The replaced numeral is knocked down under the one striking, as in a level.
+    const previous = this.turnCalls[RHYTHM.turnCountBeats - call.count - 1];
+    if (previous) {
+      const exit = turnCountExit(call.age, 60 / plan.bpm, call.count + 1, still);
+      if (exit) previous.setAlpha(exit.alpha).setScale(exit.scale).setRotation(exit.tilt).setY(this.turnCallY + exit.rise * s);
+      else if (previous.alpha !== 0) previous.setAlpha(0);
     }
     turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
     if (pose.ring.alpha > 0.01) {

@@ -116,6 +116,11 @@ scheduled, judged or scored changed.
   like a count numeral. A flawless task's flourish ends in a chorus: every socket rings
   together, the plate lights, the baton lands again, confetti goes up. Both are `f(age)`
   from the audio clock. See `docs/TURN_CUE.md`.
+- **The block's review** (`docs/TURN_CUE.md`, "Where the columns stand" onward): the columns
+  are centred on the room beside the owner slot rather than on the row, so both rows balance;
+  the baton lands and the fuse finishes at seven-tenths of the runway, so the downbeat frame
+  carries the hit alone; a count numeral is knocked down by the next and the strike's ring
+  opens on the landing; and the verdict's line rose clear of the block's sheet.
 
 - **Contact punch** (`ui/punch.ts`): the act's stage kicks down `PUNCH.reach` (3 design
   units, times the treatment's exaggeration and the scene's scale) on a contact and settles

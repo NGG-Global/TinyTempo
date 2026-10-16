@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE, SHELL } from '@/config/theme';
-import { fuse, type Handover, type Mark, type PulseBall } from '@/game/beatTrack';
+import { BATON_LANDS_AT, fuse, type Handover, type Mark, type PulseBall } from '@/game/beatTrack';
 import { clamp01, easeInOutCubic, easeOut } from '@/vignettes/motion';
 import { mix, shade } from './colour';
 import { chorusRing, FLAWLESS, plateGlow, socketGlint, sweepBand } from './flourish';
@@ -64,6 +64,30 @@ export interface BlockGeometry {
   readonly shelfCentreY: number;
   readonly faceSlot: { readonly x: number; readonly y: number };
   readonly shelfSlot: { readonly x: number; readonly y: number };
+  /**
+   * The x the column offsets are measured from, on both rows. It is not the rows' centre:
+   * see `columnShift`.
+   */
+  readonly columnX: number;
+}
+
+/**
+ * How far right of the rows' centre the columns sit.
+ *
+ * The owner slot takes a row's left end and nothing takes its right, and the columns used
+ * to be centred on the row regardless — so a three-beat pattern had 34 units between the
+ * slot and its first socket and 125 of empty plate after the last, and every row read as
+ * a control pushed into its own left corner. Centring the columns on the room *between*
+ * the slot and the far edge instead puts the same clear plate either side of them: the
+ * gap from the slot's edge to the first socket equals the gap from the last socket to the
+ * row's edge, on the face and, since the shelf is inset the same at both ends, on the
+ * shelf. Half of what the slot occupies past the row's own edge inset, which is the
+ * quantity the right end does not pay. The rows' width and the columns' pitch are
+ * unchanged, so nothing gets narrower or tighter; the columns simply stand in the middle
+ * of their room.
+ */
+export function columnShift(s: number): number {
+  return (TRACK.ownerInset + TRACK.ownerSlotRadius) / 2 * s;
 }
 
 const rect = (x: number, y: number, width: number, height: number): BlockRect =>
@@ -74,8 +98,9 @@ const rect = (x: number, y: number, width: number, height: number): BlockRect =>
  *
  * Measured on the *shelf*, not the face: the shelf is inset by `shelfInset` per side, so
  * its slot sits that much closer to the columns than the face's does, and it is the one
- * that collides first. The columns are centred on the row, so the allowance is paid at
- * both ends even though only the left end carries a slot.
+ * that collides first. The allowance is paid at both ends even though only the left end
+ * carries a slot; `columnShift` is what spends the right end's share as the clear plate
+ * after the last column, rather than leaving it stacked at one end.
  */
 const SLOT_ROOM = TRACK.shelfInset + TRACK.ownerInset + TRACK.ownerSlotRadius + TRACK.slotClearance;
 
@@ -117,6 +142,7 @@ export function blockGeometry(centreX: number, trackY: number, width: number, s:
     shelfCentreY,
     faceSlot: { x: face.x + TRACK.ownerInset * s, y: trackY },
     shelfSlot: { x: shelf.x + TRACK.ownerInset * s, y: shelfCentreY },
+    columnX: face.centerX + columnShift(s),
   };
 }
 
@@ -241,10 +267,13 @@ export function faceLift(turn: Handover, still: boolean): number {
   return still ? 0 : Math.max(turn.yours, easeInOutCubic(turn.runway) * 0.5) * TRACK.faceLift;
 }
 
-/** How far the turn has crossed, 0 on the shelf and 1 in the player's hand. */
+/**
+ * How far the turn has crossed, 0 on the shelf and 1 in the player's hand. It is there by
+ * `BATON_LANDS_AT` of the runway, so the landing is over before the downbeat it precedes.
+ */
 export function batonCrossing(turn: Handover, still: boolean): number {
   // Two states and no travel: the token is on their side, and then it is on yours.
-  return still ? (turn.runway > 0 ? 1 : 0) : easeInOutCubic(turn.runway);
+  return still ? (turn.runway > 0 ? 1 : 0) : easeInOutCubic(clamp01(turn.runway / BATON_LANDS_AT));
 }
 
 /**
@@ -313,17 +342,18 @@ export function socketPop(lit: number): number {
  * fuse — the pattern is visibly handed *down* from their row to yours, which is the whole
  * metaphor — and thins once the turn has arrived, so it never competes with the answer.
  */
-export function dropLine(turn: Handover, index: number, still: boolean): number {
-  return socketFuse(turn, index, still) * (1 - 0.7 * turn.yours) * 0.42;
+export function dropLine(turn: Handover, index: number, still: boolean, count = 5): number {
+  return socketFuse(turn, index, still, count) * (1 - 0.7 * turn.yours) * 0.42;
 }
 
 /**
  * How lit one socket's ring is. A fuse burning left to right during the runway, so the
  * row reads as a sequence being handed over rather than a bank of lamps coming on
- * together; under reduced motion all of them, in two steps.
+ * together, and done with the whole row by the time the baton lands whatever `count` is;
+ * under reduced motion all of them, in two steps.
  */
-export function socketFuse(turn: Handover, index: number, still: boolean): number {
-  return still ? (turn.yours > 0 ? 1 : turn.runway > 0 ? 0.5 : 0) : fuse(turn, index);
+export function socketFuse(turn: Handover, index: number, still: boolean, count = 5): number {
+  return still ? (turn.yours > 0 ? 1 : turn.runway > 0 ? 0.5 : 0) : fuse(turn, index, count);
 }
 
 /** The whole block, in one pass over one Graphics. */
@@ -364,7 +394,7 @@ function drawPulse(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
   // legible and a ball at rest never reads as a smaller mark of its own.
   const seat = state.socketRadius * 0.55 + r * 0.6;
   const point = (on: { row: 'shelf' | 'face'; index: number }): { x: number; y: number } => ({
-    x: geo.face.centerX + (state.centres[on.index] ?? 0) + rattle,
+    x: geo.columnX + (state.centres[on.index] ?? 0) + rattle,
     y: (on.row === 'shelf' ? geo.shelfCentreY : geo.faceCentreY - lift) - seat,
   });
   const to = point(ball.to);
@@ -491,7 +521,7 @@ function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
 
   const radius = TRACK.shelfBeadRadius * s;
   for (let i = 0; i < state.centres.length; i++) {
-    const bx = geo.face.centerX + state.centres[i]! + rattle;
+    const bx = geo.columnX + state.centres[i]! + rattle;
     if (i < state.played) {
       g.fillStyle(0x000000, 0.22 * alpha).fillCircle(bx, geo.shelfCentreY + 2 * s, radius);
       g.fillStyle(SHELL.cream, alpha).fillCircle(bx, geo.shelfCentreY, radius);
@@ -527,17 +557,18 @@ function drawFace(
   // bead on the shelf to the socket under it, arriving with the fuse. Drawn before the
   // sockets so a socket's own ring sits over the line's end.
   const shelfBead = TRACK.shelfBeadRadius * s;
-  for (let i = 0; i < state.centres.length; i++) {
-    const alpha = dropLine(state.turn, i, state.still);
+  const count = state.centres.length;
+  for (let i = 0; i < count; i++) {
+    const alpha = dropLine(state.turn, i, state.still, count);
     if (alpha <= 0.01) continue;
-    const x = geo.face.centerX + state.centres[i]! + rattle;
+    const x = geo.columnX + state.centres[i]! + rattle;
     g.lineStyle(2.4 * s, SOCKET_RING, alpha)
       .lineBetween(x, geo.shelfCentreY + shelfBead + 3 * s, x, y - state.socketRadius - 2 * s);
   }
-  for (let i = 0; i < state.centres.length; i++) {
-    const x = geo.face.centerX + state.centres[i]! + rattle;
+  for (let i = 0; i < count; i++) {
+    const x = geo.columnX + state.centres[i]! + rattle;
     const mark = state.marks[i] ?? 'pending';
-    const lit = socketFuse(state.turn, i, state.still);
+    const lit = socketFuse(state.turn, i, state.still, count);
     const struck = mark === 'perfect' || mark === 'good';
     // The struck swell for an answered socket; for a pending one, the pop as its fuse
     // reaches it, so the row visibly counts itself off left to right.
@@ -565,7 +596,7 @@ function drawFace(
 
   const ghost = state.ghost;
   if (ghost && ghost.alpha > 0.01) {
-    const gx = geo.face.centerX + (state.centres[ghost.index] ?? 0) + rattle;
+    const gx = geo.columnX + (state.centres[ghost.index] ?? 0) + rattle;
     const radius = (26 + 30 * ghost.radius) * s;
     // Graphics cannot blur, so the glow is a wider, fainter pass under the ring itself.
     g.lineStyle(12 * s, SHELL.cream, ghost.alpha * 0.28).strokeCircle(gx, y, radius);
@@ -597,7 +628,9 @@ function drawHit(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: n
   if (hit.ring.alpha > 0.01) {
     // Sun and cream, never coral: the plate under the ring has warmed to coral by now, and
     // coral on coral is the invisibility the socket ring's own colour exists to avoid.
-    const reach = radius * (1.1 + 2.6 * hit.ring.spread);
+    // It reaches a socket's pitch and no further: the first socket's wave used to cross
+    // the owner slot and the plate's edge, which read as the baton's ring, not the hit's.
+    const reach = radius * (1.1 + 2.0 * hit.ring.spread);
     g.lineStyle((5.5 - 4 * hit.ring.spread) * s, SHELL.sun, hit.ring.alpha).strokeCircle(x, y, reach);
     g.lineStyle(2.2 * s, SHELL.cream, hit.ring.alpha * 0.8).strokeCircle(x, y, reach * 0.84);
   }
@@ -632,7 +665,7 @@ function drawFlawless(
   const chorus = state.still ? { spread: 1, alpha: 0 } : chorusRing(age);
   const glowAll = state.still ? plateGlow(age) : 0;
   for (let i = 0; i < state.centres.length; i++) {
-    const x = geo.face.centerX + state.centres[i]! + state.rattle;
+    const x = geo.columnX + state.centres[i]! + state.rattle;
     const r = state.socketRadius;
     const glint = state.still ? Math.min(1, age / 0.4) : socketGlint(age, i, state.centres.length);
     if (glint >= 0 && glint < 1) {

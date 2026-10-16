@@ -23,7 +23,7 @@ import { addRound, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, typ
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, numeralStyle, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, numeralStyle, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountExit, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
@@ -60,7 +60,7 @@ import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit }
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
-import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
+import { blockGeometry, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
 import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
@@ -419,6 +419,8 @@ export class PlayScene extends BaseScene {
   private struckAt = -Infinity;
   /** Whether the last struck socket was answered Perfect: the hit's ring and rays are its alone. */
   private struckPerfect = false;
+  /** The x the block's column offsets are measured from (`columnShift`), for a burst at a socket. */
+  private columnX = 0;
   private extraAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
   /** EARLY or LATE beside the verdict word, for an off-centre tap. */
@@ -716,6 +718,8 @@ export class PlayScene extends BaseScene {
     // on the first socket on a dense pattern, which is the one case where the answer is
     // not simply a wider row.
     this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
+    // The block's rows are centred on the frame; its columns stand right of that centre.
+    this.columnX = safe.centerX + columnShift(s);
     // Above the shelf, not above the face: the demonstration row now occupies the band
     // the verdict word used to sit in, and a word over the beads is a word over the cue.
     this.verdictY = verdictLine(this.trackY, s);
@@ -1857,7 +1861,7 @@ export class PlayScene extends BaseScene {
       if (!this.intro && !this.teach && this.controller?.phase === 'respond' && (this.groovePreview ?? this.groove.level) === 3) this.grooveStage.flare(now);
       if (!this.reducedMotion) {
         const { centres } = this.beads();
-        const x = this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0);
+        const x = this.columnX + (centres[result.index ?? 0] ?? 0);
         // Richer with the groove: a few more sparks, and the sun among them from level 2.
         const level = this.groove.level;
         this.fx.burst('sparks', x, this.trackY, level >= 2 ? [PALETTE.coral, SHELL.cream, SHELL.sun] : [PALETTE.coral, SHELL.cream], 8 + (level >= 2 ? 3 : 0) + (level >= 3 ? 3 : 0));
@@ -1968,7 +1972,7 @@ export class PlayScene extends BaseScene {
       ghost: this.ghostFor(plan, marks, turn, now),
       ink: this.definition.ink,
       paper,
-      landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
+      landed: now - batonLanding(plan),
       flawless: now - this.flawlessAt,
       // The ball shows the pulse crossing from their row into yours where the game still
       // teaches: the first-run pass, the guided level and a new grid's introduction.
@@ -1985,7 +1989,7 @@ export class PlayScene extends BaseScene {
     const bar = plan ? { origin: plan.demo, bpm: plan.bpm, from: plan.start } : null;
     this.grooveStage.show(this.teach || this.intro ? 0 : (this.groovePreview ?? this.groove.level), now);
     this.grooveStage.drawRim(g, geo.face, TRACK.plateRadius * s, s, this.grooveStage.update(now, bar, still));
-    this.drawFlawless(geo.face.centerX, centres, geo.faceCentreY, now);
+    this.drawFlawless(geo.columnX, centres, geo.faceCentreY, now);
 
     // The count-in: the last four ticks before the example, so the opening bar is not
     // dead air. A breather shows nothing until its final four beats.
@@ -2063,6 +2067,14 @@ export class PlayScene extends BaseScene {
     if (call.count !== this.turnCalled) {
       this.hideTurnCall();
       this.turnCalled = call.count;
+    }
+    // The numeral this strike replaced is knocked down off the line under it, so the slot
+    // is never empty on the beat and "Go!" visibly displaces the "1" rather than succeeding it.
+    const previous = this.turnCalls[RHYTHM.turnCountBeats - call.count - 1];
+    if (previous) {
+      const exit = turnCountExit(call.age, beat, call.count + 1, still);
+      if (exit) previous.setAlpha(exit.alpha).setScale(exit.scale).setRotation(exit.tilt).setY(this.turnCallY + exit.rise * s);
+      else if (previous.alpha !== 0) previous.setAlpha(0);
     }
     // A patch of the act's paper under the numeral, at the numeral's own weight and
     // stamped down with it. Dark ink has no outline to carry (`typeStroke`) and its pale
