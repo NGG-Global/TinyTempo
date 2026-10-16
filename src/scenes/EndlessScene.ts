@@ -885,9 +885,9 @@ export class EndlessScene extends BaseScene {
     this.roomDim.setAlpha(turn.yours * 0.5);
   }
 
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number } | null {
+  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number; readonly tag: number } | null {
     const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
-    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt };
+    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt, tag: pose.tag };
   }
 
   private drawVerdictPill(now: number, paper: number): void {

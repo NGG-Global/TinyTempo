@@ -51,10 +51,14 @@ export function flawlessPose(age: number, still = false): FlawlessPose | null {
   const p = clamp01(age / FLAWLESS.stamp);
   // The word kicks once more as the chorus lands: the row and the word answer together.
   const kick = clamp01((age - FLAWLESS.chorusAt) / (FLAWLESS.chorus * 0.6));
+  // And leaves upward, growing a touch as it thins — a celebration floats off; it does not
+  // dissolve where it stands. Eased in over the fade, so the word is at rest through the hold.
+  const gone = (1 - leaving) ** 2;
   return {
-    scale: (1 + 0.9 * (1 - overshoot(p, 0.2))) * (1 + 0.14 * Math.sin(Math.PI * kick)),
-    rise: -30 * (1 - overshoot(p, 0.1)),
-    alpha: clamp01(age / (FLAWLESS.stamp * 0.3)) * leaving,
+    scale: (1 + 0.9 * (1 - overshoot(p, 0.2))) * (1 + 0.14 * Math.sin(Math.PI * kick)) * (1 + 0.08 * gone),
+    rise: -30 * (1 - overshoot(p, 0.1)) - 16 * gone,
+    // Opaque within a frame: a strike that fades in is not a strike.
+    alpha: clamp01(age * 60) * leaving,
     tilt: settle(age, 24, 6) * 0.08,
     glow: Math.sin(Math.PI * clamp01(age / FLAWLESS.hold)) * leaving,
   };

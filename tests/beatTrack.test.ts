@@ -394,6 +394,16 @@ describe('how a numeral of the count is posed', () => {
     expect(batonLanding(null)).toBe(Infinity);
   });
 
+  it('is opaque from its first frame, and rebounds a little off its landing', () => {
+    expect(turnCountPose(at(3, 0.017), beat, false).alpha).toBeGreaterThan(0.5);
+    // After the stamp the lean is still there, with a small wobble on it that dies away.
+    const lean = Math.abs(turnCountPose(at(2, beat * 0.9), beat, false).tilt);
+    const wobble = Math.abs(turnCountPose(at(2, beat * 0.2), beat, false).tilt - turnCountPose(at(2, beat * 0.26), beat, false).tilt);
+    expect(wobble).toBeGreaterThan(0.002);
+    expect(lean).toBeGreaterThan(0.04);
+    expect(lean).toBeLessThan(0.07);
+  });
+
   it('is the Go leaving over the back of its hold, and never before the numerals have had their say', () => {
     const go = (into: number) => turnCountPose(turnCount(plan, first + into)!, beat, false);
     expect(go(beat * 0.3).alpha).toBeGreaterThan(go(beat * GO_HOLD_BEATS * 0.9).alpha);

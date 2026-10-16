@@ -123,7 +123,9 @@ scheduled, judged or scored changed.
   opens on the landing; and the verdict's line rose clear of the block's sheet. A second
   pass drew the sockets as recesses with the shelf's light, the struck marks and played
   beads as enamel beads, gave the baton a rim and the word pills an outline ("The look of
-  the marks").
+  the marks"). A third refined the words: the verdict and *Flawless!* lift off as they
+  leave, every struck word is opaque from its first frame, the early/late tag follows the
+  word in, and the numerals rebound off their landing ("How the words leave").
 
 - **Contact punch** (`ui/punch.ts`): the act's stage kicks down `PUNCH.reach` (3 design
   units, times the treatment's exaggeration and the scene's scale) on a contact and settles

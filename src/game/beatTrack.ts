@@ -349,11 +349,14 @@ export function turnCountPose(call: TurnCount, beat: number, still: boolean, bea
   const from = go ? 1.9 : 1.45;
   const scale = 1 + (from - 1) * (1 - overshoot(p, 0.18));
   const rise = -DROP * (1 - overshoot(p, 0.1));
-  const alpha = presence * clamp01(call.age / (stamp * 0.3)) * leaving;
+  // Opaque from its first frame: a strike that fades in over three frames is not a strike.
+  const alpha = presence * clamp01(call.age / (stamp * 0.1)) * leaving;
+  const landed = call.age - stamp * STAMP_LANDS;
+  // The numerals keep their lean and take a small rebound off the landing — the "Go!"
+  // already shimmies off its own strike — so none of the four stops dead on its line.
   const tilt = go
     ? settle(call.age, 26, 7) * 0.09
-    : (call.count % 2 === 0 ? 1 : -1) * 0.085 * (1 - 0.35 * p);
-  const landed = call.age - stamp * STAMP_LANDS;
+    : (call.count % 2 === 0 ? 1 : -1) * 0.085 * (1 - 0.35 * p) + settle(landed, 26, 9) * 0.035;
   const ringP = clamp01(landed / (beat * RING_BEATS));
   return {
     scale, rise, alpha, tilt, heat,

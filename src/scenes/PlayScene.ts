@@ -1873,9 +1873,9 @@ export class PlayScene extends BaseScene {
    * a Good arrives with its pop, a Miss arrives flat with a shake (`ui/hitPose.ts`). Null
    * once it has gone.
    */
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number } | null {
+  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number; readonly tag: number } | null {
     const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
-    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt };
+    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt, tag: pose.tag };
   }
   private verdictColour(result?: Judgement): number {
     if (!result) return this.definition.ink;

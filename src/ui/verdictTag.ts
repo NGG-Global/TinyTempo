@@ -13,6 +13,8 @@ interface VerdictPose {
   readonly y: number;
   readonly scale: number;
   readonly tilt: number;
+  /** The tag's own presence, 0 → 1, a few frames behind the word's; whole when omitted. */
+  readonly tag?: number;
 }
 
 /**
@@ -65,7 +67,10 @@ export class VerdictTag {
     }
     const { wordX, tagX } = this.group(word, pose.scale);
     word.setX(centreX + wordX);
-    if (tag) tag.setAlpha(pose.alpha).setPosition(centreX + tagX, pose.y).setScale(pose.scale).setRotation(pose.tilt);
+    // The tag pops in behind the word — fainter and a little under size until it has
+    // arrived — so "Good … early" reads as a verdict and its qualifier, in that order.
+    const present = pose.tag ?? 1;
+    if (tag) tag.setAlpha(pose.alpha * present).setPosition(centreX + tagX, pose.y).setScale(pose.scale * (0.8 + 0.2 * present)).setRotation(pose.tilt);
   }
 
   private group(word: Phaser.GameObjects.Text, scale: number): ReturnType<typeof verdictGroup> {

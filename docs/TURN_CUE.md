@@ -425,6 +425,29 @@ count's pills take the same faint ink line the block's sheet has, so they read a
 cards rather than blurs. Each socket costs three arcs more a frame, which `arcDetail`
 keeps to the points their size needs.
 
+## How the words leave
+
+A third pass, on the three texts alone: the count's numerals, the verdict word with its
+early/late tag, and *Flawless!*. Each arrived as a strike and left as a fade in place, which
+is an entrance with a direction and an exit without one. Four refinements:
+
+- **Lift-off.** The verdict (`verdictPose`, `ui/hitPose.ts`) and *Flawless!*
+  (`flawlessPose`) now leave upward as they thin — the verdict a little smaller, the
+  celebration a touch larger — eased in over the fade so the word is at rest for the whole
+  of its hold. The count's numerals already leave by being knocked down.
+- **Opaque from the first frame.** The verdict, the numerals and *Flawless!* ramped their
+  alpha over three or four frames on arrival, which softened exactly the thing a strike is
+  for. Each is now opaque within a frame; the drop from above is the whole entrance.
+- **The tag follows the word.** `VerdictPose.tag` brings EARLY or LATE in from 70 ms after
+  the word, over 100 ms, fainter and a little under size until it has arrived
+  (`VerdictTag.pose`), so "Good … early" reads as a verdict and then its qualifier rather
+  than two words striking together. Whole under reduced motion.
+- **The numerals rebound.** "3", "2" and "1" keep their alternate lean and take a small
+  settle off the landing, as the "Go!" already did off its own strike, so none of the four
+  stops dead on its line.
+
+`tests/hitPose.test.ts`, `tests/beatTrack.test.ts` and `tests/flourish.test.ts` pin each.
+
 ## Reduced motion
 
 `reducedMotion()` is read per use, as before. Under it the baton has two states and

@@ -87,8 +87,33 @@ describe('how the verdict lands', () => {
   });
 
   it('is at rest under reduced motion, and still leaves', () => {
-    expect(verdictPose(0.1, 'Perfect', 0, true)).toEqual({ alpha: 1, rise: 0, scale: 1, tilt: 0 });
+    expect(verdictPose(0.1, 'Perfect', 0, true)).toEqual({ alpha: 1, rise: 0, scale: 1, tilt: 0, tag: 1 });
     expect(verdictPose(HIT.verdictHold * 0.95, 'Perfect', 0, true)!.alpha).toBeLessThan(1);
+  });
+
+  it('is opaque from its first frame: a strike is not faded in', () => {
+    expect(verdictPose(0.017, 'Perfect', 0, false)!.alpha).toBeCloseTo(1, 2);
+  });
+
+  it('lifts off as it leaves, a little up and a little smaller, and is at rest through its hold', () => {
+    // A Perfect sits on its line through the hold; a Good and a Miss hold where they arrived.
+    expect(verdictPose(0.34, 'Perfect', 0, false)!.rise).toBeCloseTo(0, 1);
+    for (const grade of ['Perfect', 'Good', 'Miss'] as const) {
+      const held = verdictPose(0.34, grade, 0, false)!;
+      const going = verdictPose(HIT.verdictHold * 0.95, grade, 0, false)!;
+      expect(going.rise).toBeLessThan(held.rise - 3);
+      expect(going.scale).toBeLessThan(held.scale);
+    }
+  });
+
+  it('brings the tag in a few frames behind the word, and whole under reduced motion', () => {
+    expect(verdictPose(0, 'Good', 0, false)!.tag).toBe(0);
+    expect(verdictPose(0.05, 'Good', 0, false)!.tag).toBe(0);
+    const mid = verdictPose(0.12, 'Good', 0, false)!.tag;
+    expect(mid).toBeGreaterThan(0);
+    expect(mid).toBeLessThan(1);
+    expect(verdictPose(0.25, 'Good', 0, false)!.tag).toBe(1);
+    expect(verdictPose(0, 'Good', 0, true)!.tag).toBe(1);
   });
 });
 
