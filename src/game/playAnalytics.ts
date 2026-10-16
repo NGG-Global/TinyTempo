@@ -5,7 +5,8 @@ import {
 import { finaleTreatment } from './finale';
 import { doneCount, stampWeek, type ObjectivesUpdate } from './objectives';
 import { isCleared } from './health';
-import type { LevelSpec } from './levels';
+import type { Concept } from './conceptIntro';
+import { debutsOn, familyOf, type LevelSpec } from './levels';
 import type { MasteryResult } from './mastery';
 import type { LevelOutcome, Progress } from './progress';
 import type { AudioRoute } from './routeCalibration';
@@ -110,6 +111,8 @@ export function taskParams(
     flawless: flag(result.missed === 0 && result.good === 0 && result.perfect > 0 && result.extras === 0),
     ...(error !== null && Number.isFinite(error) ? { error_ms: Math.round(error) } : {}),
     pattern: task.pattern.id,
+    // The task carries a rhythm the road meets for the first time on this level.
+    debut: flag(debutsOn(spec.level).includes(familyOf(task) ?? '')),
     ...(lean !== null ? { lean_ms: Math.round(lean) } : {}),
     route: listening.route,
     offset_set: flag(listening.offsetSet),
@@ -361,13 +364,13 @@ export class TutorialVisit {
   }
 }
 
-/** One showing of a subdivision introduction. It finishes once; leaving part-way is not a finish. */
-export class SubdivisionIntroVisit {
+/** One showing of a concept's introduction. It finishes once; leaving part-way is not a finish. */
+export class ConceptIntroVisit {
   private closed = false;
 
   public constructor(
     private readonly ledger: PlayAnalytics,
-    private readonly grid: 'triplet' | 'sixteenth',
+    private readonly concept: Concept,
     private readonly level: number,
   ) {}
 
@@ -375,8 +378,8 @@ export class SubdivisionIntroVisit {
     guard(undefined, () => {
       if (this.closed) return;
       this.closed = true;
-      this.ledger.emit('subdivision_intro_completed', {
-        grid: this.grid, level: this.level, tries, accuracy: Math.round(accuracy), passed: flag(passed),
+      this.ledger.emit('concept_intro_completed', {
+        concept: this.concept, level: this.level, tries, accuracy: Math.round(accuracy), passed: flag(passed),
       });
     });
   }
@@ -552,10 +555,10 @@ export class PlayAnalytics {
     });
   }
 
-  public beginSubdivisionIntro(grid: 'triplet' | 'sixteenth', level: number, mode: AttemptMode): SubdivisionIntroVisit | null {
-    return guard<SubdivisionIntroVisit | null>(null, () => {
-      const visit = new SubdivisionIntroVisit(this, grid, level);
-      this.emit('subdivision_intro_shown', { grid, level, mode });
+  public beginConceptIntro(concept: Concept, level: number, mode: AttemptMode): ConceptIntroVisit | null {
+    return guard<ConceptIntroVisit | null>(null, () => {
+      const visit = new ConceptIntroVisit(this, concept, level);
+      this.emit('concept_intro_shown', { concept, level, mode });
       return visit;
     });
   }

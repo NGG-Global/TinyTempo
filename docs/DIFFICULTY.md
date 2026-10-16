@@ -138,3 +138,44 @@ before finer grids existed; that is now false by design, so it is replaced by:
   the "its own seeded stream" property the old fixture proved indirectly, now stated.
   Finales are the one exception: their patterns are the reprise, and the test holds them to
   the curve's tempo ramp and lead-ins instead (`tests/finale.test.ts` checks the rest).
+
+## A new rhythm is met second, not last
+
+The curve ramps tier and tempo from the same progress through a level, so a rhythm the road
+had never asked for used to arrive in the second half of its level, near its fastest tempo
+and after the most fatigue: the first two-bar phrase was task 4 of 5 at 131 BPM (level 18),
+the first sixteenth task 5 of 8 at 136 on a *challenge* level (59). A new rhythm should be met
+fresh and slow and then again at speed.
+
+So the level where a rhythm first appears — its **debut**, `debutLevels()` in
+`game/levels.ts` — trades two phrases: the first task carrying the new rhythm swaps with the
+second task (`DEBUT_SLOT`). Every slot keeps its own tempo and lead-in; a tier phrase takes its
+tier with it and a finer-grid phrase takes the slot's, as `subdivide` leaves it. A family is a
+tier above the quarter notes (`t1`–`t4`) or a finer grid at one of its two densities
+(`familyOf`). Debuts are found by scanning the composed road (`composedTasks`: the curve, or a
+finale's reprise) and never written down, so a change to the curve moves a debut with it; a
+finale is never a debut, since its reprise draws only on what its area already played.
+
+Nothing the choreography promises moves: tasks, peak tempo and top tier are the same, so the
+spike, role and area-average tests hold as they were. The swap is skipped where it would put two
+identical phrases side by side, or a finer grid on a slot too fast for the thumb.
+
+Playing a debut level at the base tempo throughout was considered and rejected: it makes level
+59 → 60 a 28 BPM jump, which the "no sudden spikes" test rightly forbids.
+
+| Family | Debut | Before | After |
+| --- | --- | --- | --- |
+| Offbeat (tier 1) | 6 | task 3 at 120 | task 2 at 120 |
+| Syncopation (tier 2) | 9 | task 4 at 125 | task 2 at 122 |
+| Two-bar phrase (tier 3) | 18 | task 4 at 131 | task 2 at 124 |
+| Dense two-bar phrase (tier 4) | 28 | task 5 at 136 | task 2 at 124 |
+| Triplets, one group a bar | 43 | task 3 at 127 | task 2 at 124 |
+| Triplets, two groups | 57 | task 2 at 124 | unchanged |
+| Sixteenths, one group a bar | 59 | task 5 at 136 | task 2 at 124 |
+| Sixteenths, two groups | 72 | task 4 at 130 | task 2 at 123 |
+
+The road moved again, deliberately, in exactly those seven rows of
+`tests/fixtures/levels-choreography.json` — 6, 9, 18, 28, 43, 59 and 72 — and no others.
+`tests/levels.test.ts` pins the debut table and checks that every other level of 1–300 is
+the composed road untouched. The independence property above now compares `composedTasks`,
+the stage before a debut is placed.

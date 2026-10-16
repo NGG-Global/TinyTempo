@@ -9,6 +9,7 @@
  * each decided once. See `docs/ANALYTICS.md` for the schema.
  */
 
+import type { Concept } from '../game/conceptIntro';
 import type { LevelRole } from '../game/levels';
 import type { AudioRoute } from '../game/routeCalibration';
 
@@ -41,8 +42,8 @@ export const GAMEPLAY_EVENTS = [
   'star_improved',
   'star_gate_reached',
   'star_gate_opened',
-  'subdivision_intro_shown',
-  'subdivision_intro_completed',
+  'concept_intro_shown',
+  'concept_intro_completed',
   'scrapbook_opened',
   'collectible_unlocked',
   'area_finale_started',
@@ -254,6 +255,8 @@ export interface AnalyticsPayloads {
     readonly error_ms?: number;
     /** The pattern's id (`t3-1`, `tr0-2` …): which phrases cost players most. */
     readonly pattern: string;
+    /** 1 when the task carries a rhythm the road first meets on this level (`debutLevels`). */
+    readonly debut: Flag;
     /** The median signed error of the landed taps, rounded ms, negative early. Absent when nothing landed. */
     readonly lean_ms?: number;
     /** The audio route the task was played through, so a latency failure is not read as a hard pattern. */
@@ -296,10 +299,10 @@ export interface AnalyticsPayloads {
     readonly improvements?: number;
     readonly stars_gained?: number;
   };
-  /** The first meeting with a finer grid began, on this level (`game/subdivisionIntro.ts`). */
-  readonly subdivision_intro_shown: { readonly grid: 'triplet' | 'sixteenth'; readonly level: number; readonly mode: AttemptMode };
-  readonly subdivision_intro_completed: {
-    readonly grid: 'triplet' | 'sixteenth';
+  /** The first meeting with a new kind of rhythm began, on this level (`game/conceptIntro.ts`). */
+  readonly concept_intro_shown: { readonly concept: Concept; readonly level: number; readonly mode: AttemptMode };
+  readonly concept_intro_completed: {
+    readonly concept: Concept;
     readonly level: number;
     /** 1, or 2 when the first answer was weak enough to get one more go. */
     readonly tries: number;

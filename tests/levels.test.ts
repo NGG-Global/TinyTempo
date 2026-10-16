@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, difficulty, dimensionsOf, gridFits, isAreaFinale, levelSpec,
-  openingBeats,
+  AREAS, PATTERN_TIERS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
+  difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
 } from '../src/game/levels';
 import { PROGRESSION } from '../src/config/progression';
@@ -370,6 +370,60 @@ describe('the difficulty choreography', () => {
   });
 });
 
+describe('debut levels', () => {
+  /** Brute force over the composed road: the first level each family appears on. */
+  const firstSeen = (): Map<string, number> => {
+    const seen = new Map<string, number>();
+    for (let level = 1; level <= 300; level++) for (const task of composedTasks(level)) {
+      const family = familyOf(task);
+      if (family !== null && !seen.has(family)) seen.set(family, level);
+    }
+    return seen;
+  };
+
+  it('finds where each rhythm first appears from the road itself, never from a list', () => {
+    expect(new Map(debutLevels())).toEqual(firstSeen());
+    // Today's road, pinned so a move is a deliberate one: the offbeat, syncopation, the
+    // two-bar phrase, the dense one, then triplets and sixteenths at one and two groups a bar.
+    expect(Object.fromEntries(debutLevels())).toEqual({
+      t1: 6, t2: 9, t3: 18, t4: 28, 'triplet-0': 43, 'triplet-1': 57, 'sixteenth-0': 59, 'sixteenth-1': 72,
+    });
+    for (const level of debutLevels().values()) expect(isAreaFinale(level), `level ${level}`).toBe(false);
+  });
+
+  it('meets a new rhythm as the second task, fresh and near the base tempo', () => {
+    for (const [family, level] of debutLevels()) {
+      const tasks = levelSpec(level).tasks;
+      const first = tasks.findIndex(task => familyOf(task) === family);
+      expect(first, `${family} on level ${level}`).toBeLessThanOrEqual(DEBUT_SLOT);
+      expect(tasks[first]!.bpm).toBeLessThanOrEqual(PROGRESSION.baseBpm + 5);
+    }
+  });
+
+  it('trades two phrases and nothing else: tempo, lead-ins, tasks, peak and top tier all stay', () => {
+    for (let level = 1; level <= 300; level++) {
+      const spec = levelSpec(level), composed = composedTasks(level);
+      const moved = spec.tasks.map((task, i) => task.pattern !== composed[i]!.pattern ? i : -1).filter(i => i >= 0);
+      if (debutsOn(level).length === 0) { expect(moved, `level ${level}`).toEqual([]); continue; }
+      expect(moved.length === 0 || (moved.length === 2 && moved[0] === DEBUT_SLOT), `level ${level}`).toBe(true);
+      expect(spec.tasks.map(t => [t.bpm, t.leadBeats])).toEqual(composed.map(t => [t.bpm, t.leadBeats]));
+      expect(new Set(spec.tasks.map(t => t.pattern))).toEqual(new Set(composed.map(t => t.pattern)));
+      expect(Math.max(...spec.tasks.map(t => t.tier))).toBe(Math.max(...composed.map(t => t.tier)));
+      for (let i = 1; i < spec.tasks.length; i++) expect(spec.tasks[i]!.pattern).not.toBe(spec.tasks[i - 1]!.pattern);
+    }
+  });
+
+  it('keeps every other level ramping in tier as well as tempo', () => {
+    for (let level = 1; level <= 300; level++) {
+      const tasks = levelSpec(level).tasks;
+      for (let i = 1; i < tasks.length; i++) {
+        expect(tasks[i]!.bpm, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.bpm);
+        if (debutsOn(level).length === 0) expect(tasks[i]!.tier, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.tier);
+      }
+    }
+  });
+});
+
 describe('the finer grids', () => {
   const S = PROGRESSION.subdivision;
   /** The first level at or past a difficulty on the curve. */
@@ -384,7 +438,8 @@ describe('the finer grids', () => {
     expect(first).toBeGreaterThan(40);
     for (let level = 1; level <= 300; level++) {
       const tiers = tierTasks(level);
-      const spec = levelSpec(level);
+      // The composed stage: a debut's placement (below) trades two tasks' phrases afterwards.
+      const spec = { finale: levelSpec(level).finale, tasks: composedTasks(level) };
       expect(spec.tasks).toHaveLength(tiers.length);
       // A finale's patterns are the area's reprise (tests/finale.test.ts); its tempo ramp
       // and lead-ins are still the tiers' own.

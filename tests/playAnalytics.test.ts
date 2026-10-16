@@ -83,7 +83,7 @@ describe('what a level attempt reports', () => {
       bpm: spec.tasks[index]!.bpm, pattern_tier: spec.tasks[index]!.tier, grid: 'sixteenth',
       accuracy: 71, perfect: 5, good: 2, miss: 1, extra: 2, flawless: 0, error_ms: 48,
       // Which phrase, which way the taps leaned (the median), and how the task was heard.
-      pattern: spec.tasks[index]!.pattern.id, lean_ms: -8, route: 'bluetooth', offset_set: 1,
+      pattern: spec.tasks[index]!.pattern.id, debut: 1, lean_ms: -8, route: 'bluetooth', offset_set: 1,
     });
     // Unsaid, the route is unknown rather than guessed, and a task with no landed tap has no lean.
     const silent = taskParams(spec, index, task(0, { perfect: 0, good: 0, missed: 7 }), 'frontier');
@@ -395,20 +395,26 @@ describe('the tutorial', () => {
   });
 });
 
-describe('a finer grid’s introduction', () => {
+describe('a new rhythm’s introduction', () => {
   it('reports that it was shown, and how it went, once', () => {
-    const visit = ledger.beginSubdivisionIntro('sixteenth', 59, 'frontier')!;
+    const visit = ledger.beginConceptIntro('sixteenth', 59, 'frontier')!;
     visit.complete(2, 38.4, false);
     visit.complete(1, 90, true);
     expect(sent).toEqual([
-      { event: 'subdivision_intro_shown', payload: { grid: 'sixteenth', level: 59, mode: 'frontier' } },
-      { event: 'subdivision_intro_completed', payload: { grid: 'sixteenth', level: 59, tries: 2, accuracy: 38, passed: 0 } },
+      { event: 'concept_intro_shown', payload: { concept: 'sixteenth', level: 59, mode: 'frontier' } },
+      { event: 'concept_intro_completed', payload: { concept: 'sixteenth', level: 59, tries: 2, accuracy: 38, passed: 0 } },
     ]);
   });
 
+  it('names the offbeat and the long phrase the same way as a grid', () => {
+    ledger.beginConceptIntro('offbeat', 6, 'frontier')!.complete(1, 72, true);
+    ledger.beginConceptIntro('longPhrase', 18, 'frontier');
+    expect(only('concept_intro_shown').map(p => p.concept)).toEqual(['offbeat', 'longPhrase']);
+  });
+
   it('shows without completing when the player leaves part-way', () => {
-    ledger.beginSubdivisionIntro('triplet', 70, 'replay');
-    expect(names()).toEqual(['subdivision_intro_shown']);
+    ledger.beginConceptIntro('triplet', 70, 'replay');
+    expect(names()).toEqual(['concept_intro_shown']);
   });
 });
 
@@ -481,7 +487,7 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.gateOnMap(road(10, 1));
     playThrough(5, road(10, 1), levelSpec(5).starAccuracy[2]!);
     ledger.beginPractice(2)!.complete(60);
-    ledger.beginSubdivisionIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
+    ledger.beginConceptIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     ledger.scrapbookOpened('menu', 3, 32);
     ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
     // A flawless level: groove 2 and 3 reached, then mastered.

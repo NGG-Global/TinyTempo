@@ -24,7 +24,7 @@ import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
 import { beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, numeralStyle, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
-import { breatherTask, levelSpec, meanAccuracy, starsFor, type Grid, type LevelSpec } from '@/game/levels';
+import { breatherTask, levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
 import { masteryResult, type MasteryResult } from '@/game/mastery';
@@ -50,14 +50,14 @@ import {
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
 import {
-  guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, markSubdivisionSeen, recordResult, saveProgress,
-  markScrapbookSeen, seenDemonstration, seenReplayTip, seenScrapbook, seenSubdivisions, type LevelOutcome, type Progress,
+  guidedLevel, loadProgress, markConceptSeen, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress,
+  markScrapbookSeen, seenConcepts, seenDemonstration, seenReplayTip, seenScrapbook, type LevelOutcome, type Progress,
 } from '@/game/progress';
 import { collectionCount, keepsakeEarned, ownedKeepsakes, type Keepsake } from '@/game/scrapbook';
 import { drawKeepsake } from '@/ui/keepsakes';
-import { introCopy, introGrid, SUBDIVISION_INTRO, SubdivisionIntroRun } from '@/game/subdivisionIntro';
+import { CONCEPT_INTRO, ConceptIntroRun, introConcept, introCopy, type Concept } from '@/game/conceptIntro';
 import { totalStars, type EarnedStars } from '@/game/stars';
-import { attemptMode, playAnalytics, type LevelRun, type SubdivisionIntroVisit } from '@/game/playAnalytics';
+import { attemptMode, playAnalytics, type ConceptIntroVisit, type LevelRun } from '@/game/playAnalytics';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
@@ -268,12 +268,12 @@ export class PlayScene extends BaseScene {
     swapped: boolean;
   } | null = null;
   /**
-   * A finer grid's first meeting, while it runs (`game/subdivisionIntro.ts`). It is a
+   * A new rhythm's first meeting, while it runs (`game/conceptIntro.ts`). It is a
    * task in every way the controller, the act and the block can see — its own plan, its
    * own coda, the same transition — and in no way the level's: its result goes to `run`,
    * never to `results`, the sequence's accuracy or the level's analytics.
    */
-  private intro: { readonly run: SubdivisionIntroRun; readonly visit: SubdivisionIntroVisit | null; readonly bpm: number } | null = null;
+  private intro: { readonly run: ConceptIntroRun; readonly visit: ConceptIntroVisit | null; readonly bpm: number } | null = null;
   /** The keepsake this run earned, if it earned one; revealed under the plaque. */
   private keepsake: Keepsake | null = null;
   /** The player's first keepsake on this device, whose card says what keepsakes are. */
@@ -1184,9 +1184,9 @@ export class PlayScene extends BaseScene {
         return;
       }
       this.sequence = new TaskSequence(this.task.bpm, origin, 1);
-      const grid = introGrid(this.spec, seenSubdivisions());
+      const concept = introConcept(this.spec, seenConcepts(), before);
       if (this.guided && !seenDemonstration()) this.beginTeach(origin);
-      else if (grid !== null) this.beginIntro(grid, origin, before);
+      else if (concept !== null) this.beginIntro(concept, origin, before);
       else this.beginTask(origin);
     } catch (error) {
       if (this.disposed || request !== this.startRequest) return;
@@ -1271,17 +1271,17 @@ export class PlayScene extends BaseScene {
     if (now >= teach.taskAt) this.teach = null;
   }
   /**
-   * A finer grid's introduction, in front of the level's first task. The music slows to
+   * A new rhythm's introduction, in front of the level's first task. The music slows to
    * the teaching tempo on the level's own opening downbeat and goes back to the level's on
    * the downbeat its first task starts, and everything between is whole bars — a count-in,
    * the demonstration and the answer, and the coda's hold — so the loop never slips
    * against the grid the level then runs on.
    */
-  private beginIntro(grid: Grid, origin: number, progress: Progress): void {
-    const bpm = this.task.bpm * SUBDIVISION_INTRO.tempo;
+  private beginIntro(concept: Concept, origin: number, progress: Progress): void {
+    const bpm = this.task.bpm * CONCEPT_INTRO.tempo;
     this.intro = {
-      run: new SubdivisionIntroRun(grid),
-      visit: playAnalytics.beginSubdivisionIntro(grid, this.spec.level, attemptMode(progress, this.spec.level)),
+      run: new ConceptIntroRun(concept),
+      visit: playAnalytics.beginConceptIntro(concept, this.spec.level, attemptMode(progress, this.spec.level)),
       bpm,
     };
     this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
@@ -1295,7 +1295,7 @@ export class PlayScene extends BaseScene {
     this.sequence = new TaskSequence(intro.bpm, startAt, 1);
     this.beginPlan(intro.run.pattern, intro.bpm, startAt, intro.run.retrying ? 0 : RHYTHM.leadInBeats);
     // After the plan starts: starting it runs `showPhase('prepare')`, which clears the headline.
-    const copy = introCopy(intro.run.grid, intro.run.retrying);
+    const copy = introCopy(intro.run.concept, intro.run.retrying);
     this.changeHeadline(copy.title);
     this.setIntroCaption(copy.caption);
   }
@@ -1323,12 +1323,12 @@ export class PlayScene extends BaseScene {
     this.transition = { ...ending, swapped: false };
     if (next === 'done') {
       // Seen once a try has been judged: the player has heard the example and answered it.
-      markSubdivisionSeen(intro.run.grid);
+      markConceptSeen(intro.run.concept);
       intro.visit?.complete(intro.run.tries, intro.run.best, intro.run.passed);
       this.changeHeadline(intro.run.passed ? 'Got it' : 'Let’s go');
       this.setIntroCaption('');
     } else {
-      const copy = introCopy(intro.run.grid, true);
+      const copy = introCopy(intro.run.concept, true);
       this.changeHeadline(copy.title);
       this.setIntroCaption(copy.caption);
     }
