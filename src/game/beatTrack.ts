@@ -186,6 +186,29 @@ export function handover(plan: RoundPlan | null, now: number): Handover {
 }
 
 /**
+ * How far along the runway the baton lands in the player's slot, and the sockets have
+ * all lit.
+ *
+ * The token used to touch down exactly on the first target: `batonCrossing` reached 1 at
+ * runway 1, so the landing's ring and squash fired on the downbeat — the same instant the
+ * first hit's shockwave leaves its socket, the "Go!" strikes and the verdict lands. Four
+ * things arriving on one frame is a wash, and the one that matters there is the hit. The
+ * baton now lands at seven-tenths of the runway, six-tenths of a beat before the downbeat
+ * at `runwayBeats` of 2, so its ring has faded by the time the thumb comes down and the
+ * downbeat belongs to the answer. The fuse finishes with it: the pattern is in the
+ * player's hand before they are asked for it, which is the property the block protects.
+ */
+export const BATON_LANDS_AT = 0.7;
+
+/** The audio-clock time the baton lands, for the landing's ring and squash. */
+export function batonLanding(plan: RoundPlan | null): number {
+  if (!plan) return Infinity;
+  const first = plan.targets[0] ?? plan.response;
+  const from = handoverAt(plan);
+  return from + (first - from) * BATON_LANDS_AT;
+}
+
+/**
  * The count into the player's turn: "3", "2", "1" landing on the beats before their
  * first target, and "Go!" on the target itself.
  *
@@ -290,10 +313,21 @@ export interface TurnCountPose {
 
 /** How long a numeral takes to stamp down to size, as a fraction of a beat. */
 const STAMP_BEATS = 0.34;
-/** How long the strike's ring is visible, as a fraction of a beat. */
+/**
+ * Where in the stamp the numeral first touches its line: the overshoot carries it through
+ * rest size about here. The ring leaves from this instant, not from the beat — a ring that
+ * opened while the numeral was still falling sat on the line under a word that had not
+ * landed, and read as two events where there is one.
+ */
+const STAMP_LANDS = 0.37;
+/** How long the strike's ring is visible, as a fraction of a beat, from the landing. */
 const RING_BEATS = 0.6;
 /** How far above its line the numeral starts, in design units. */
 const DROP = 26;
+/** How long the numeral being replaced takes to leave, as a fraction of a beat. */
+const EXIT_BEATS = 0.3;
+/** How far below its line the leaving numeral is knocked, in design units. */
+const EXIT_DROP = 22;
 
 export function turnCountPose(call: TurnCount, beat: number, still: boolean, beats: number = RHYTHM.turnCountBeats): TurnCountPose {
   const go = call.count === 0;
@@ -315,14 +349,55 @@ export function turnCountPose(call: TurnCount, beat: number, still: boolean, bea
   const from = go ? 1.9 : 1.45;
   const scale = 1 + (from - 1) * (1 - overshoot(p, 0.18));
   const rise = -DROP * (1 - overshoot(p, 0.1));
-  const alpha = presence * clamp01(call.age / (stamp * 0.3)) * leaving;
+  // Opaque from its first frame: a strike that fades in over three frames is not a strike.
+  const alpha = presence * clamp01(call.age / (stamp * 0.1)) * leaving;
+  const landed = call.age - stamp * STAMP_LANDS;
+  // The numerals keep their lean and take a small rebound off the landing — the "Go!"
+  // already shimmies off its own strike — so none of the four stops dead on its line.
   const tilt = go
     ? settle(call.age, 26, 7) * 0.09
-    : (call.count % 2 === 0 ? 1 : -1) * 0.085 * (1 - 0.35 * p);
-  const ringP = clamp01(call.age / (beat * RING_BEATS));
+    : (call.count % 2 === 0 ? 1 : -1) * 0.085 * (1 - 0.35 * p) + settle(landed, 26, 9) * 0.035;
+  const ringP = clamp01(landed / (beat * RING_BEATS));
   return {
     scale, rise, alpha, tilt, heat,
-    ring: { spread: ringP, alpha: ringP > 0 && ringP < 1 ? (1 - ringP) ** 1.6 * (0.5 + 0.5 * call.weight) : 0 },
+    ring: { spread: ringP, alpha: landed >= 0 && ringP < 1 ? (1 - ringP) ** 1.6 * (0.5 + 0.5 * call.weight) : 0 },
+  };
+}
+
+/** The numeral the strike replaced, on its way out. */
+export interface TurnCountExit {
+  readonly scale: number;
+  /** Design units, positive below its line: it is knocked down and away, never faded in place. */
+  readonly rise: number;
+  readonly alpha: number;
+  readonly tilt: number;
+}
+
+/**
+ * How the numeral being replaced leaves, `age` seconds after the next one struck.
+ *
+ * The slot used to empty on the beat: the old numeral vanished on the frame the new one
+ * was due, and the new one took three frames to become visible, so every strike opened
+ * with an empty slot and a ring around nothing. A count-in that is struck should also be
+ * *knocked*: the outgoing numeral is punched down off its line, shrinking and leaning
+ * further the way it already leant, under the one dropping in. The slot is never empty
+ * and the two never share the line — the incoming is above it while the outgoing is below.
+ * `count` is the outgoing numeral's own, for its lean and weight. Null once it has gone,
+ * and under reduced motion, where a replacement is a replacement.
+ */
+export function turnCountExit(age: number, beat: number, count: number, still: boolean, beats: number = RHYTHM.turnCountBeats): TurnCountExit | null {
+  const span = beat * EXIT_BEATS;
+  if (still || !Number.isFinite(age) || age < 0 || age >= span || !(span > 0)) return null;
+  const p = age / span;
+  // Struck, so it leaves fastest at the start — it is well off the line by the time the
+  // incoming numeral touches it, a third of the way into the stamp.
+  const out = 1 - (1 - p) ** 2;
+  const presence = 0.55 + 0.45 * numeralStyle(count, beats).weight;
+  return {
+    scale: 1 - 0.3 * out,
+    rise: EXIT_DROP * out,
+    alpha: presence * (1 - p) ** 1.3,
+    tilt: (count % 2 === 0 ? 1 : -1) * 0.085 * (0.65 + 0.9 * p),
   };
 }
 
@@ -331,13 +406,23 @@ export function isFlawless(marks: readonly Mark[]): boolean {
   return marks.length > 0 && marks.every(mark => mark === 'perfect');
 }
 
+/** The most of the runway between one socket's fuse and the next, on a short pattern. */
+const FUSE_STAGGER = 0.17;
+
 /**
- * How far the socket at `index` has been lit by the runway: a fuse burning left to
- * right, so the row reads as a sequence being handed over rather than a bank of lamps
- * switching on together. Full the moment the turn actually arrives, whatever the runway
- * did — a reduced-motion or interrupted handover must still end with every socket lit.
+ * How far the socket at `index` of `count` has been lit by the runway: a fuse burning
+ * left to right, so the row reads as a sequence being handed over rather than a bank of
+ * lamps switching on together. Full the moment the turn actually arrives, whatever the
+ * runway did — a reduced-motion or interrupted handover must still end with every socket
+ * lit.
+ *
+ * The stagger gives way on a long pattern. At a fixed stagger the ninth socket's fuse
+ * opened at runway 1.36 — after the downbeat — and that socket was lit by `yours` on the
+ * beat it announced, which is the one thing the runway exists to prevent. Every socket
+ * now finishes by `BATON_LANDS_AT`, so the last lights as the token lands, on any count.
  */
-export function fuse(turn: Handover, index: number, stagger = 0.17, ramp = 0.3): number {
+export function fuse(turn: Handover, index: number, count = 5, ramp = 0.3): number {
+  const stagger = Math.min(FUSE_STAGGER, (BATON_LANDS_AT - ramp) / Math.max(1, count - 1));
   return Math.max(turn.yours, clamp01((turn.runway - index * stagger) / ramp));
 }
 

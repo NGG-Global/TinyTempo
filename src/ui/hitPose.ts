@@ -79,7 +79,21 @@ export interface VerdictPose {
   readonly scale: number;
   /** Radians. */
   readonly tilt: number;
+  /**
+   * How present the early/late tag beside the word is, 0 → 1: it pops in a few frames
+   * after the word has landed, so it reads as a qualifier of the verdict rather than a
+   * second word striking with it.
+   */
+  readonly tag: number;
 }
+
+/** When the tag starts to arrive after the word, and how long it takes, in seconds. */
+const TAG_AFTER = 0.07;
+const TAG_IN = 0.1;
+/** How far the word lifts, in design units, and how much it shrinks, as it leaves. */
+const LIFT_OFF = { rise: 9, shrink: 0.07 } as const;
+/** One frame at 60 Hz: the most a struck word may take to become opaque. */
+const FIRST_FRAME = 1 / 60;
 
 /**
  * How the verdict word lands, `age` seconds after the tap it answers. A Perfect is struck
@@ -87,29 +101,40 @@ export interface VerdictPose {
  * ways by the beat it answered, the way the count's numerals land — so a run of them
  * reads as a row of strikes rather than one label refreshing. A Good arrives from below
  * with the small pop it always had, and a Miss arrives flat with a shake. Every grade
- * holds the same `HIT.verdictHold` and leaves over the back of it; under reduced motion
- * the word is simply there at size, and still leaves. Null once it has gone.
+ * holds the same `HIT.verdictHold` and leaves over the back of it — **lifting off** as it
+ * fades, a little up and a little smaller, since a word that arrived with a direction
+ * should leave with one rather than dissolve where it stands. A struck word is opaque
+ * from its first frame: fading a strike in over three frames softened exactly the thing
+ * it was for. Under reduced motion the word is simply there at size, and still leaves.
+ * Null once it has gone.
  */
 export function verdictPose(age: number, grade: VerdictGrade, index: number, still: boolean): VerdictPose | null {
   if (!Number.isFinite(age) || age < 0 || age >= HIT.verdictHold) return null;
   const leaving = 1 - clamp01((age - 0.35) / (HIT.verdictHold - 0.35));
-  if (still) return { alpha: leaving, rise: 0, scale: 1, tilt: 0 };
+  const tag = clamp01((age - TAG_AFTER) / TAG_IN);
+  if (still) return { alpha: leaving, rise: 0, scale: 1, tilt: 0, tag: 1 };
+  // The lift-off eases in over the fade, so the word is at rest for the whole of its hold.
+  const gone = (1 - leaving) ** 2;
+  const lift = -LIFT_OFF.rise * gone;
+  const shrink = 1 - LIFT_OFF.shrink * gone;
   if (grade === 'Perfect') {
     const p = clamp01(age / HIT.verdictStamp);
     const lean = (index % 2 === 0 ? -1 : 1) * 0.06 * (1 - 0.4 * p);
     return {
-      alpha: clamp01(age / (HIT.verdictStamp * 0.3)) * leaving,
-      rise: -16 * (1 - overshoot(p, 0.1)),
-      scale: 1 + 0.55 * (1 - overshoot(p, 0.22)),
+      alpha: clamp01(age / FIRST_FRAME) * leaving,
+      rise: -16 * (1 - overshoot(p, 0.1)) + lift,
+      scale: (1 + 0.55 * (1 - overshoot(p, 0.22))) * shrink,
       tilt: lean + settle(age, 24, 7) * 0.03,
+      tag,
     };
   }
   const { rise, alpha } = arrive(age, 0.45);
   return {
     alpha: alpha * leaving,
-    rise: -(1 - rise) * 18,
-    scale: grade === 'Good' ? 0.85 + 0.15 * overshoot(Math.min(1, age / 0.45), 0.4) : 1,
+    rise: -(1 - rise) * 18 + lift,
+    scale: (grade === 'Good' ? 0.85 + 0.15 * overshoot(Math.min(1, age / 0.45), 0.4) : 1) * shrink,
     tilt: grade === 'Miss' ? settle(age, 40, 10) * 0.05 : 0,
+    tag,
   };
 }
 

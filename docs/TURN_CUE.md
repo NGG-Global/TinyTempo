@@ -343,6 +343,111 @@ broken one.
 The verdict word and the count-in pips moved above the shelf, which now occupies
 the band they used to sit in.
 
+## Where the columns stand
+
+The owner slot takes a row's left end and nothing takes its right, and the columns were
+centred on the row regardless. On a three-beat pattern that put 34 units between the slot
+and the first socket and 125 of empty plate after the last: every row read as a control
+pushed into its own left corner, on the face and on the shelf alike, and it was the first
+thing a review of the block saw. `columnShift` (`ui/turnBlock.ts`) moves the columns right
+by half of what the slot occupies past the row's own edge inset — the share the right end
+never paid — so the clear plate from the slot's edge to the first socket equals the clear
+plate from the last socket to the row's edge, and the same holds on the shelf, since it is
+inset the same at both ends. `BlockGeometry.columnX` is the x every column offset is
+measured from; the rows' width, the pitch and `columnRoom` are untouched, so nothing got
+narrower, and the scenes place a socket's sparks from the same `columnX`. The count-in
+pips and the numerals stay on the frame's centre: they are the rows' captions, not the
+columns'. `tests/turnBlock.test.ts` pins the balance on both rows at every scale.
+
+## The landing is before the downbeat
+
+`batonCrossing` used to reach 1 at runway 1, which is the first target: the token touched
+down *on* the downbeat, and its landing ring and squash fired on the frame the first hit's
+shockwave left its socket, the "Go!" struck and the verdict landed. Four things on one
+frame is a wash, and the one that matters there is the hit. `BATON_LANDS_AT`
+(`game/beatTrack.ts`, 0.7) is where on the runway the token now lands — six-tenths of a
+beat before the downbeat at `runwayBeats` of 2 — and `batonLanding(plan)` is the clock
+time the scenes key `BlockState.landed` to, so the ripple has faded by the time the thumb
+comes down and the downbeat belongs to the answer. The fuse finishes with it: `fuse` takes
+the socket count and shortens its stagger so the last socket lights as the token lands on
+any pattern, where before a nine-socket row's last fuse opened at runway 1.36 and that
+socket was lit by `yours` on the beat it announced — the one thing the runway exists to
+prevent. The bow came in from 60 to 52 units, because at 60 the disc sat on the first
+socket at the top of its arc and covered that socket's own pop. The order a player sees is
+now: "2" strikes and the token leaves; "1" strikes and the token lands with the row lit;
+"Go!" and the hit. `tests/turnBlock.test.ts` pins the landing before 1, every socket lit by
+it at counts from one to twelve, and the bow clear of the first socket.
+
+## The knock
+
+The count's slot used to empty on the beat: the outgoing numeral vanished on the frame the
+next was due and the incoming took three frames to become visible, so every strike opened
+with an empty slot — and a ring around nothing, since the ring opened at age 0 while the
+numeral was still 26 units up. A count-in that is struck should also be *knocked*.
+`turnCountExit` poses the replaced numeral being punched down off its line under the one
+dropping in, shrinking, fading and leaning further the way it already leant, fastest at
+the start so it is well below the line by the time the incoming touches it; the three
+scenes keep the previous numeral's Text visible with that pose instead of hiding it. The
+ring now opens at `STAMP_LANDS` of the stamp — where the overshoot first carries the
+numeral through its line — so the ring is the report of the landing, not of the beat.
+"Go!" therefore visibly displaces the "1" rather than succeeding it, and the slot is never
+empty from the first numeral to the end of the hold. Under reduced motion a replacement
+is a replacement, as before.
+
+## The verdict's band
+
+The block stands on a sheet that reaches `BACKING_PAD` above the shelf and feathers
+further, and the verdict's pill is a little over 49 units tall at rest. At the old line
+the pill's bottom edge sat on the sheet's top edge and "Flawless!", taller still, touched
+the shelf, so a word meant to hover over the block read as resting on it.
+`VERDICT_ABOVE_SHELF` (`ui/trackMetrics.ts`) rose from 34 to 48: the pill clears the sheet
+at rest and the flawless word clears the shelf. The household stage reads the same line
+through `roomBelowCard`, so an act's shelf gives way by the same amount rather than
+drifting into the band, and the restart sheet, placed from the line, moves with it. A
+Perfect's shockwave was also brought in from 3.7 to 3.1 socket radii: the first socket's
+wave used to cross the owner slot and the plate's edge, where it read as the baton's ring.
+
+## The look of the marks
+
+A second pass, on the drawing rather than the timing. A pending socket was a flat brown
+disc with a ring and a struck one a flat cream disc, and beside the baton — which has a
+shadow, a catch of light and a glow — they read as paint. Two helpers in `ui/turnBlock.ts`
+now carry the block's two objects, on both rows: `drawRecess` is a hole in the bench, with
+the shelf's own light — a hard shadow inside the top of the hole where the lip cuts the key
+light, and a thin catch of bounced light along the bottom — under the socket's ring and
+under the shelf's unplayed beads; `drawBead` is an enamel bead, a cream disc with a shade
+along its lower edge and one highlight at the top left, for a struck socket and for a bead
+the example has sounded. A Good's smaller bead sits on the hole's floor inside the full
+ring, so Perfect and Good still read apart. The baton takes a rim in the coral's own shade,
+the outline the pulse ball and every forged tool already carry — it was the one unlined
+object on the block and read as a light rather than a token — and the verdict's and the
+count's pills take the same faint ink line the block's sheet has, so they read as cut
+cards rather than blurs. Each socket costs three arcs more a frame, which `arcDetail`
+keeps to the points their size needs.
+
+## How the words leave
+
+A third pass, on the three texts alone: the count's numerals, the verdict word with its
+early/late tag, and *Flawless!*. Each arrived as a strike and left as a fade in place, which
+is an entrance with a direction and an exit without one. Four refinements:
+
+- **Lift-off.** The verdict (`verdictPose`, `ui/hitPose.ts`) and *Flawless!*
+  (`flawlessPose`) now leave upward as they thin — the verdict a little smaller, the
+  celebration a touch larger — eased in over the fade so the word is at rest for the whole
+  of its hold. The count's numerals already leave by being knocked down.
+- **Opaque from the first frame.** The verdict, the numerals and *Flawless!* ramped their
+  alpha over three or four frames on arrival, which softened exactly the thing a strike is
+  for. Each is now opaque within a frame; the drop from above is the whole entrance.
+- **The tag follows the word.** `VerdictPose.tag` brings EARLY or LATE in from 70 ms after
+  the word, over 100 ms, fainter and a little under size until it has arrived
+  (`VerdictTag.pose`), so "Good … early" reads as a verdict and then its qualifier rather
+  than two words striking together. Whole under reduced motion.
+- **The numerals rebound.** "3", "2" and "1" keep their alternate lean and take a small
+  settle off the landing, as the "Go!" already did off its own strike, so none of the four
+  stops dead on its line.
+
+`tests/hitPose.test.ts`, `tests/beatTrack.test.ts` and `tests/flourish.test.ts` pin each.
+
 ## Reduced motion
 
 `reducedMotion()` is read per use, as before. Under it the baton has two states and

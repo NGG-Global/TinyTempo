@@ -18,7 +18,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
-import { beatsPlayed, countIn, handover, markFor, numeralStyle, trackGeometry, turnCount, turnCountPose, type Mark } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, handover, markFor, numeralStyle, trackGeometry, turnCount, turnCountExit, turnCountPose, type Mark } from '@/game/beatTrack';
 import {
   applyAccuracy, createEndlessSequence, elapsedMs, ENDLESS_RULES, formatSurvival, LIVES_START, MILESTONES,
   type EndlessLives, type EndlessRunSummary, type EndlessSequence, type EndlessStep,
@@ -48,7 +48,7 @@ import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { punch } from '@/ui/punch';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive, settle, squash } from '@/ui/spring';
-import { blockGeometry, blockWidth, columnRoom, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
+import { blockGeometry, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { easeOut } from '@/vignettes/motion';
 import { VIGNETTES } from '@/vignettes/registry';
@@ -137,6 +137,8 @@ export class EndlessScene extends BaseScene {
   private struckIndex = -1;
   private struckAt = -Infinity;
   private struckPerfect = false;
+  /** The x the block's column offsets are measured from (`columnShift`), for a burst at a socket. */
+  private columnX = 0;
   private extraAt = -Infinity;
   private punchAt = -Infinity;
   private verdict!: Phaser.GameObjects.Text;
@@ -305,6 +307,7 @@ export class EndlessScene extends BaseScene {
     this.drawLives();
     this.trackY = safe.bottom - LAYOUT.trackOffsetFromBottom * s;
     this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
+    this.columnX = safe.centerX + columnShift(s);
     this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
@@ -510,7 +513,7 @@ export class EndlessScene extends BaseScene {
     this.verdictTag.set(tapTiming(result));
     if (result.grade === 'Perfect' && result.kind === 'hit' && !this.reducedMotion) {
       const { centres } = this.beads();
-      this.fx.burst('sparks', this.viewport.safe.centerX + (centres[result.index ?? 0] ?? 0), this.trackY, [PALETTE.coral, SHELL.cream], 8);
+      this.fx.burst('sparks', this.columnX + (centres[result.index ?? 0] ?? 0), this.trackY, [PALETTE.coral, SHELL.cream], 8);
     }
   }
 
@@ -870,7 +873,7 @@ export class EndlessScene extends BaseScene {
       centres, socketRadius: radius, played: beatsPlayed(plan, now), marks, turn,
       struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: this.struckPerfect },
       rattle, still, ghost: null, ink: this.ink, paper,
-      landed: plan ? now - (plan.targets[0] ?? plan.response) : -Infinity,
+      landed: now - batonLanding(plan),
     });
     const pips = countIn(plan, now);
     if (pips !== null) {
@@ -886,9 +889,9 @@ export class EndlessScene extends BaseScene {
     this.roomDim.setAlpha(turn.yours * 0.5);
   }
 
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number } | null {
+  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number; readonly tag: number } | null {
     const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
-    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt };
+    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt, tag: pose.tag };
   }
 
   private drawVerdictPill(now: number, paper: number): void {
@@ -899,6 +902,7 @@ export class EndlessScene extends BaseScene {
     const x = this.viewport.safe.centerX - w / 2, y = pose.y - h / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
+    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(x, y, w, h, h / 2);
   }
 
   private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
@@ -911,6 +915,13 @@ export class EndlessScene extends BaseScene {
     const pose = turnCountPose(call, beat, still);
     const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
     if (call.count !== this.turnCalled) { this.hideTurnCall(); this.turnCalled = call.count; }
+    // The replaced numeral is knocked down under the one striking, so the slot is never empty.
+    const previous = this.turnCalls[RHYTHM.turnCountBeats - call.count - 1];
+    if (previous) {
+      const exit = turnCountExit(call.age, beat, call.count + 1, still);
+      if (exit) previous.setAlpha(exit.alpha).setScale(exit.scale).setRotation(exit.tilt).setY(this.turnCallY + exit.rise * s);
+      else if (previous.alpha !== 0) previous.setAlpha(0);
+    }
     const size = (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s;
     const pw = Math.max(turnCall.width * pose.scale + 18 * s, size * 1.3);
     const ph = size * 1.2 * pose.scale;
@@ -918,6 +929,7 @@ export class EndlessScene extends BaseScene {
     const py = this.turnCallY + pose.rise * s - ph / 2;
     this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
     this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
+    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(px, py, pw, ph, ph / 2);
     turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
     if (pose.ring.alpha > 0.01) {
       const reach = (30 + 70 * pose.ring.spread) * s;

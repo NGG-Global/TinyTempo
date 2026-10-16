@@ -620,7 +620,15 @@ leaves a sunken slot on the shelf and lands in the slot on the face. It all runs
 player's first target, **inside the demonstration's own bar**: nothing is added to the loop
 and no cue moves. **By the downbeat nothing new appears** — the face has warmed, the sockets
 have rung up left to right and the baton has landed. That is the property to protect; a cue
-that arrives on the beat it announces arrives too late to wind up for. The stage light moves
+that arrives on the beat it announces arrives too late to wind up for. **The baton lands at
+`BATON_LANDS_AT` of the runway** (0.7, `game/beatTrack.ts`; `batonLanding` is the clock time
+the scenes key `landed` to) and `fuse` takes the socket count so every socket is lit by then
+on any pattern — the landing's ring was firing on the downbeat beside the first hit's. **The
+columns stand at `BlockGeometry.columnX`**, right of the rows' centre by `columnShift`, so
+the clear plate after the last socket equals the plate between the owner slot and the first;
+a socket is never placed from the frame's centre. **A count numeral is knocked down by the
+next** (`turnCountExit`), so the slot is never empty on a beat, and a strike's ring opens
+only once the numeral has touched its line. The stage light moves
 with it (`turnOpen` in `vignettes/motion.ts`, keyed to the plan in each act's `reset`) and is
 the only thing that does: the demonstration is still running, so nothing that consumes the
 act's subject may start there. `showPhase` sets no turn words. What does carry words is `turnCount` in `game/beatTrack.ts`:

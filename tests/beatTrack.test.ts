@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, isLastRestBar, markFor, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountPose } from '../src/game/beatTrack';
+import { BATON_LANDS_AT, batonLanding, beatsPlayed, countIn, fuse, ghostRing, GO_HOLD_BEATS, handover, handoverAt, isFlawless, isLastRestBar, markFor, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountExit, turnCountPose } from '../src/game/beatTrack';
 import { PROGRESSION } from '../src/config/progression';
 import { breatherTask, levelSpec, openingBeats } from '../src/game/levels';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
@@ -208,6 +208,11 @@ describe('the handover', () => {
     expect(fuse({ runway: 1, yours: 0 }, 3)).toBe(1);
     // An interrupted or stepped handover still ends with every socket lit.
     for (let i = 0; i < 8; i++) expect(fuse({ runway: 0, yours: 1 }, i)).toBe(1);
+    // On a long pattern the stagger gives way, so the last socket is still lit by the
+    // runway rather than by the downbeat.
+    expect(fuse({ runway: BATON_LANDS_AT, yours: 0 }, 8, 9)).toBe(1);
+    expect(fuse({ runway: BATON_LANDS_AT - 0.1, yours: 0 }, 8, 9)).toBeLessThan(1);
+    expect(fuse({ runway: 0.2, yours: 0 }, 0, 9)).toBeGreaterThan(fuse({ runway: 0.2, yours: 0 }, 4, 9));
   });
 });
 
@@ -343,12 +348,60 @@ describe('how a numeral of the count is posed', () => {
     expect(turnCountPose(turnCount(plan, first)!, beat, false).heat).toBe(1);
   });
 
-  it('leaves a ring on each strike that spreads and is gone before the next beat', () => {
-    const early = turnCountPose(at(2, beat * 0.1), beat, false).ring;
-    const late = turnCountPose(at(2, beat * 0.4), beat, false).ring;
+  it('leaves a ring on each strike as it lands, that spreads and is gone before the next beat', () => {
+    // Nothing while the numeral is still falling: the ring is the report of the landing.
+    expect(turnCountPose(at(2, 0), beat, false).ring.alpha).toBe(0);
+    expect(turnCountPose(at(2, beat * 0.05), beat, false).ring.alpha).toBe(0);
+    const early = turnCountPose(at(2, beat * 0.25), beat, false).ring;
+    const late = turnCountPose(at(2, beat * 0.5), beat, false).ring;
+    expect(early.alpha).toBeGreaterThan(0);
     expect(early.alpha).toBeGreaterThan(late.alpha);
     expect(late.spread).toBeGreaterThan(early.spread);
     expect(turnCountPose(at(2, beat * 0.95), beat, false).ring.alpha).toBe(0);
+    // And the ring opens once the numeral has come down to its line.
+    const landed = turnCountPose(at(2, beat * 0.25), beat, false);
+    expect(Math.abs(landed.rise)).toBeLessThan(4);
+  });
+
+  it('knocks the replaced numeral down off the line while the next one drops in from above', () => {
+    const exitAt = (age: number) => turnCountExit(age, beat, 2, false)!;
+    const struck = exitAt(0);
+    expect(struck.alpha).toBeGreaterThan(0.5);
+    expect(struck.scale).toBeCloseTo(1);
+    expect(struck.rise).toBeCloseTo(0);
+    const going = exitAt(beat * 0.15);
+    // Down, smaller, fainter, leaning further the way it leant.
+    expect(going.rise).toBeGreaterThan(0);
+    expect(going.scale).toBeLessThan(1);
+    expect(going.alpha).toBeLessThan(struck.alpha);
+    expect(Math.abs(going.tilt)).toBeGreaterThan(Math.abs(struck.tilt));
+    expect(Math.sign(going.tilt)).toBe(Math.sign(turnCountPose(at(2, beat * 0.5), beat, false).tilt));
+    // The incoming is still above the line while the outgoing is already well below it.
+    const incoming = turnCountPose(at(1, beat * 0.1), beat, false);
+    expect(incoming.rise).toBeLessThan(0);
+    expect(exitAt(beat * 0.1).rise).toBeGreaterThan(8);
+    // Gone inside the beat, and never there under reduced motion.
+    expect(turnCountExit(beat * 0.3, beat, 2, false)).toBeNull();
+    expect(turnCountExit(-0.01, beat, 2, false)).toBeNull();
+    expect(turnCountExit(0.1, beat, 2, true)).toBeNull();
+  });
+
+  it('lands the baton on the runway before the first target, never on it', () => {
+    const landing = batonLanding(plan);
+    expect(landing).toBeGreaterThan(handoverAt(plan));
+    expect(landing).toBeLessThan(first);
+    expect(landing).toBeCloseTo(handoverAt(plan) + (first - handoverAt(plan)) * BATON_LANDS_AT);
+    expect(batonLanding(null)).toBe(Infinity);
+  });
+
+  it('is opaque from its first frame, and rebounds a little off its landing', () => {
+    expect(turnCountPose(at(3, 0.017), beat, false).alpha).toBeGreaterThan(0.5);
+    // After the stamp the lean is still there, with a small wobble on it that dies away.
+    const lean = Math.abs(turnCountPose(at(2, beat * 0.9), beat, false).tilt);
+    const wobble = Math.abs(turnCountPose(at(2, beat * 0.2), beat, false).tilt - turnCountPose(at(2, beat * 0.26), beat, false).tilt);
+    expect(wobble).toBeGreaterThan(0.002);
+    expect(lean).toBeGreaterThan(0.04);
+    expect(lean).toBeLessThan(0.07);
   });
 
   it('is the Go leaving over the back of its hold, and never before the numerals have had their say', () => {

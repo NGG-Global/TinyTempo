@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE, SHELL } from '@/config/theme';
-import { fuse, type Handover, type Mark, type PulseBall } from '@/game/beatTrack';
+import { BATON_LANDS_AT, fuse, type Handover, type Mark, type PulseBall } from '@/game/beatTrack';
 import { clamp01, easeInOutCubic, easeOut } from '@/vignettes/motion';
 import { mix, shade } from './colour';
 import { chorusRing, FLAWLESS, plateGlow, socketGlint, sweepBand } from './flourish';
@@ -45,6 +45,38 @@ const SOCKET_RING = 0x8f3620;
 const RECESS = 0x5a4230;
 
 /**
+ * A hole in the bench: the socket a beat has not been answered into, and the shelf's
+ * bead before its beat has sounded. The same light as the shelf's own recess — a hard
+ * shadow inside the top of the hole, where the lip cuts the key light, and a thin catch of
+ * bounced light along the bottom — so the sockets read as *cut into* the plate rather
+ * than as flat brown discs painted on it, which is what a filled disc and a ring gave.
+ * `floor` is the hole's bottom; the rim is the caller's, since a socket's ring says more.
+ */
+function drawRecess(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, s: number, floor: number, alpha = 1): void {
+  g.fillStyle(shade(PALETTE.ink, -0.1), 0.3 * alpha).fillCircle(x, y, r);
+  const floorY = y + 2 * s;
+  g.fillStyle(floor, alpha).fillCircle(x, floorY, r * 0.92);
+  g.lineStyle(r * 0.26, 0x000000, 0.2 * alpha);
+  g.beginPath(); g.arc(x, floorY, r * 0.76, Math.PI * 1.12, Math.PI * 1.88); g.strokePath();
+  g.lineStyle(r * 0.14, SHELL.cream, 0.2 * alpha);
+  g.beginPath(); g.arc(x, floorY, r * 0.82, Math.PI * 0.22, Math.PI * 0.78); g.strokePath();
+}
+
+/**
+ * An enamel bead: the mark a beat leaves once it has sounded or been answered. A cream
+ * disc with the baton's own thickness — a shade along its lower edge and one catch of
+ * light at the top left — so a filled socket and a played bead are objects set into the
+ * row and not a lighter paint. `r` is the bead's own radius.
+ */
+function drawBead(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, s: number, alpha = 1): void {
+  g.fillStyle(PALETTE.ink, 0.32 * alpha).fillCircle(x, y + 2 * s, r);
+  g.fillStyle(SHELL.cream, alpha).fillCircle(x, y, r);
+  g.lineStyle(r * 0.3, mix(SHELL.cream, SOCKET_RING, 0.45), 0.3 * alpha);
+  g.beginPath(); g.arc(x, y, r * 0.76, Math.PI * 0.12, Math.PI * 0.88); g.strokePath();
+  g.fillStyle(0xffffff, 0.8 * alpha).fillEllipse(x - r * 0.3, y - r * 0.34, r * 0.5, r * 0.32);
+}
+
+/**
  * A row, as the four numbers a drawer needs. Deliberately not a `Phaser.Geom.Rectangle`:
  * the geometry here imports no Phaser and is worked out under node, the same split
  * `ui/switch.ts` already keeps between where a control sits and how it is painted.
@@ -64,6 +96,30 @@ export interface BlockGeometry {
   readonly shelfCentreY: number;
   readonly faceSlot: { readonly x: number; readonly y: number };
   readonly shelfSlot: { readonly x: number; readonly y: number };
+  /**
+   * The x the column offsets are measured from, on both rows. It is not the rows' centre:
+   * see `columnShift`.
+   */
+  readonly columnX: number;
+}
+
+/**
+ * How far right of the rows' centre the columns sit.
+ *
+ * The owner slot takes a row's left end and nothing takes its right, and the columns used
+ * to be centred on the row regardless — so a three-beat pattern had 34 units between the
+ * slot and its first socket and 125 of empty plate after the last, and every row read as
+ * a control pushed into its own left corner. Centring the columns on the room *between*
+ * the slot and the far edge instead puts the same clear plate either side of them: the
+ * gap from the slot's edge to the first socket equals the gap from the last socket to the
+ * row's edge, on the face and, since the shelf is inset the same at both ends, on the
+ * shelf. Half of what the slot occupies past the row's own edge inset, which is the
+ * quantity the right end does not pay. The rows' width and the columns' pitch are
+ * unchanged, so nothing gets narrower or tighter; the columns simply stand in the middle
+ * of their room.
+ */
+export function columnShift(s: number): number {
+  return (TRACK.ownerInset + TRACK.ownerSlotRadius) / 2 * s;
 }
 
 const rect = (x: number, y: number, width: number, height: number): BlockRect =>
@@ -74,8 +130,9 @@ const rect = (x: number, y: number, width: number, height: number): BlockRect =>
  *
  * Measured on the *shelf*, not the face: the shelf is inset by `shelfInset` per side, so
  * its slot sits that much closer to the columns than the face's does, and it is the one
- * that collides first. The columns are centred on the row, so the allowance is paid at
- * both ends even though only the left end carries a slot.
+ * that collides first. The allowance is paid at both ends even though only the left end
+ * carries a slot; `columnShift` is what spends the right end's share as the clear plate
+ * after the last column, rather than leaving it stacked at one end.
  */
 const SLOT_ROOM = TRACK.shelfInset + TRACK.ownerInset + TRACK.ownerSlotRadius + TRACK.slotClearance;
 
@@ -117,6 +174,7 @@ export function blockGeometry(centreX: number, trackY: number, width: number, s:
     shelfCentreY,
     faceSlot: { x: face.x + TRACK.ownerInset * s, y: trackY },
     shelfSlot: { x: shelf.x + TRACK.ownerInset * s, y: shelfCentreY },
+    columnX: face.centerX + columnShift(s),
   };
 }
 
@@ -241,10 +299,13 @@ export function faceLift(turn: Handover, still: boolean): number {
   return still ? 0 : Math.max(turn.yours, easeInOutCubic(turn.runway) * 0.5) * TRACK.faceLift;
 }
 
-/** How far the turn has crossed, 0 on the shelf and 1 in the player's hand. */
+/**
+ * How far the turn has crossed, 0 on the shelf and 1 in the player's hand. It is there by
+ * `BATON_LANDS_AT` of the runway, so the landing is over before the downbeat it precedes.
+ */
 export function batonCrossing(turn: Handover, still: boolean): number {
   // Two states and no travel: the token is on their side, and then it is on yours.
-  return still ? (turn.runway > 0 ? 1 : 0) : easeInOutCubic(turn.runway);
+  return still ? (turn.runway > 0 ? 1 : 0) : easeInOutCubic(clamp01(turn.runway / BATON_LANDS_AT));
 }
 
 /**
@@ -313,17 +374,18 @@ export function socketPop(lit: number): number {
  * fuse — the pattern is visibly handed *down* from their row to yours, which is the whole
  * metaphor — and thins once the turn has arrived, so it never competes with the answer.
  */
-export function dropLine(turn: Handover, index: number, still: boolean): number {
-  return socketFuse(turn, index, still) * (1 - 0.7 * turn.yours) * 0.42;
+export function dropLine(turn: Handover, index: number, still: boolean, count = 5): number {
+  return socketFuse(turn, index, still, count) * (1 - 0.7 * turn.yours) * 0.42;
 }
 
 /**
  * How lit one socket's ring is. A fuse burning left to right during the runway, so the
  * row reads as a sequence being handed over rather than a bank of lamps coming on
- * together; under reduced motion all of them, in two steps.
+ * together, and done with the whole row by the time the baton lands whatever `count` is;
+ * under reduced motion all of them, in two steps.
  */
-export function socketFuse(turn: Handover, index: number, still: boolean): number {
-  return still ? (turn.yours > 0 ? 1 : turn.runway > 0 ? 0.5 : 0) : fuse(turn, index);
+export function socketFuse(turn: Handover, index: number, still: boolean, count = 5): number {
+  return still ? (turn.yours > 0 ? 1 : turn.runway > 0 ? 0.5 : 0) : fuse(turn, index, count);
 }
 
 /** The whole block, in one pass over one Graphics. */
@@ -364,7 +426,7 @@ function drawPulse(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
   // legible and a ball at rest never reads as a smaller mark of its own.
   const seat = state.socketRadius * 0.55 + r * 0.6;
   const point = (on: { row: 'shelf' | 'face'; index: number }): { x: number; y: number } => ({
-    x: geo.face.centerX + (state.centres[on.index] ?? 0) + rattle,
+    x: geo.columnX + (state.centres[on.index] ?? 0) + rattle,
     y: (on.row === 'shelf' ? geo.shelfCentreY : geo.faceCentreY - lift) - seat,
   });
   const to = point(ball.to);
@@ -491,14 +553,11 @@ function drawShelf(g: Phaser.GameObjects.Graphics, geo: BlockGeometry, s: number
 
   const radius = TRACK.shelfBeadRadius * s;
   for (let i = 0; i < state.centres.length; i++) {
-    const bx = geo.face.centerX + state.centres[i]! + rattle;
-    if (i < state.played) {
-      g.fillStyle(0x000000, 0.22 * alpha).fillCircle(bx, geo.shelfCentreY + 2 * s, radius);
-      g.fillStyle(SHELL.cream, alpha).fillCircle(bx, geo.shelfCentreY, radius);
-    } else {
-      g.fillStyle(0x000000, 0.3 * alpha).fillCircle(bx, geo.shelfCentreY, radius);
-      g.fillStyle(0x000000, 0.26 * alpha).fillCircle(bx, geo.shelfCentreY + 2 * s, radius * 0.9);
-    }
+    const bx = geo.columnX + state.centres[i]! + rattle;
+    // A played beat is a bead set on the plank; one still to sound is a hole in it, with
+    // the plank's own light: the same two objects the face carries, at the shelf's scale.
+    if (i < state.played) drawBead(g, bx, geo.shelfCentreY, radius, s, alpha);
+    else drawRecess(g, bx, geo.shelfCentreY, radius, s, mix(SHELL.wood, PALETTE.ink, 0.5), alpha);
   }
 }
 
@@ -527,17 +586,18 @@ function drawFace(
   // bead on the shelf to the socket under it, arriving with the fuse. Drawn before the
   // sockets so a socket's own ring sits over the line's end.
   const shelfBead = TRACK.shelfBeadRadius * s;
-  for (let i = 0; i < state.centres.length; i++) {
-    const alpha = dropLine(state.turn, i, state.still);
+  const count = state.centres.length;
+  for (let i = 0; i < count; i++) {
+    const alpha = dropLine(state.turn, i, state.still, count);
     if (alpha <= 0.01) continue;
-    const x = geo.face.centerX + state.centres[i]! + rattle;
+    const x = geo.columnX + state.centres[i]! + rattle;
     g.lineStyle(2.4 * s, SOCKET_RING, alpha)
       .lineBetween(x, geo.shelfCentreY + shelfBead + 3 * s, x, y - state.socketRadius - 2 * s);
   }
-  for (let i = 0; i < state.centres.length; i++) {
-    const x = geo.face.centerX + state.centres[i]! + rattle;
+  for (let i = 0; i < count; i++) {
+    const x = geo.columnX + state.centres[i]! + rattle;
     const mark = state.marks[i] ?? 'pending';
-    const lit = socketFuse(state.turn, i, state.still);
+    const lit = socketFuse(state.turn, i, state.still, count);
     const struck = mark === 'perfect' || mark === 'good';
     // The struck swell for an answered socket; for a pending one, the pop as its fuse
     // reaches it, so the row visibly counts itself off left to right.
@@ -546,13 +606,13 @@ function drawFace(
     if (struck) {
       // Good sits inside a full ring, so a Perfect and a Good still read apart at a glance.
       const disc = mark === 'good' ? r * 0.62 : r;
-      g.fillStyle(PALETTE.ink, 0.35).fillCircle(x, y + 2 * s, disc);
-      g.fillStyle(SHELL.cream, 1).fillCircle(x, y, disc);
+      // A Good's smaller bead sits on the hole's floor, so the ring still reads as a socket.
+      if (mark === 'good') drawRecess(g, x, y, r, s, mix(fill, RECESS, 0.26));
+      drawBead(g, x, y, disc, s);
       g.lineStyle(4.6 * s, SOCKET_RING, 1).strokeCircle(x, y, r);
       if (i === state.struck.index && hit) drawHit(g, x, y, state.socketRadius, s, hit);
     } else {
-      g.fillStyle(shade(PALETTE.ink, -0.1), 0.3).fillCircle(x, y, r);
-      g.fillStyle(mix(fill, RECESS, 0.26), 1).fillCircle(x, y + 2 * s, r * 0.92);
+      drawRecess(g, x, y, r, s, mix(fill, RECESS, 0.26));
       const ring = mark === 'miss' ? PALETTE.muted : mix(mix(PALETTE.ink, fill, 0.5), SOCKET_RING, lit);
       g.lineStyle((3 + 1.6 * lit) * s, ring, 1).strokeCircle(x, y, r);
       // Struck out in the ink rather than in the grey of the ring, or the bar vanishes
@@ -565,7 +625,7 @@ function drawFace(
 
   const ghost = state.ghost;
   if (ghost && ghost.alpha > 0.01) {
-    const gx = geo.face.centerX + (state.centres[ghost.index] ?? 0) + rattle;
+    const gx = geo.columnX + (state.centres[ghost.index] ?? 0) + rattle;
     const radius = (26 + 30 * ghost.radius) * s;
     // Graphics cannot blur, so the glow is a wider, fainter pass under the ring itself.
     g.lineStyle(12 * s, SHELL.cream, ghost.alpha * 0.28).strokeCircle(gx, y, radius);
@@ -597,7 +657,9 @@ function drawHit(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: n
   if (hit.ring.alpha > 0.01) {
     // Sun and cream, never coral: the plate under the ring has warmed to coral by now, and
     // coral on coral is the invisibility the socket ring's own colour exists to avoid.
-    const reach = radius * (1.1 + 2.6 * hit.ring.spread);
+    // It reaches a socket's pitch and no further: the first socket's wave used to cross
+    // the owner slot and the plate's edge, which read as the baton's ring, not the hit's.
+    const reach = radius * (1.1 + 2.0 * hit.ring.spread);
     g.lineStyle((5.5 - 4 * hit.ring.spread) * s, SHELL.sun, hit.ring.alpha).strokeCircle(x, y, reach);
     g.lineStyle(2.2 * s, SHELL.cream, hit.ring.alpha * 0.8).strokeCircle(x, y, reach * 0.84);
   }
@@ -632,7 +694,7 @@ function drawFlawless(
   const chorus = state.still ? { spread: 1, alpha: 0 } : chorusRing(age);
   const glowAll = state.still ? plateGlow(age) : 0;
   for (let i = 0; i < state.centres.length; i++) {
-    const x = geo.face.centerX + state.centres[i]! + state.rattle;
+    const x = geo.columnX + state.centres[i]! + state.rattle;
     const r = state.socketRadius;
     const glint = state.still ? Math.min(1, age / 0.4) : socketGlint(age, i, state.centres.length);
     if (glint >= 0 && glint < 1) {
@@ -718,8 +780,11 @@ function drawBaton(
   const w = r * 2 * (1 + sq), h = r * 2 * (1 - sq);
   g.fillStyle(mix(PALETTE.coral, PALETTE.ink, 0.45), 1).fillEllipse(x, y + 3 * s, w, h);
   g.fillStyle(PALETTE.coral, 1).fillEllipse(x, y, w, h);
+  // A rim in the coral's own shade, the outline the pulse ball and every forged tool carry:
+  // without it the token was the one unlined object on the block and read as a light.
+  g.lineStyle(2.4 * s, mix(PALETTE.coral, PALETTE.ink, 0.45), 1).strokeEllipse(x, y, w, h);
   // A catch of light on the top-left, so the disc has the thickness the pucks have.
-  g.fillStyle(SHELL.cream, 0.28).fillEllipse(x - r * 0.22, y - r * 0.3, w * 0.36, h * 0.22);
+  g.fillStyle(SHELL.cream, 0.34).fillEllipse(x - r * 0.22, y - r * 0.3, w * 0.36, h * 0.22);
   const glyph = r * 0.5 * (still ? 1 : glyphFlip(t));
   if (t < 0.5) drawHammerMark(g, x, y, glyph, SHELL.cream);
   else drawTapMark(g, x, y, glyph, SHELL.cream);

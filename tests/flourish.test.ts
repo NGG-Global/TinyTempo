@@ -22,6 +22,16 @@ describe('the word for a flawless task', () => {
     expect(flawlessPose(Infinity)).toBeNull();
   });
 
+  it('floats off upward as it leaves, and is opaque from its first frame', () => {
+    expect(flawlessPose(0.017)!.alpha).toBeCloseTo(1, 1);
+    const held = flawlessPose(FLAWLESS.hold * 0.7)!;
+    expect(held.rise).toBeCloseTo(0, 1);
+    const going = flawlessPose(FLAWLESS.hold * 0.97)!;
+    expect(going.rise).toBeLessThan(held.rise - 8);
+    expect(going.scale).toBeGreaterThan(held.scale);
+    expect(going.alpha).toBeLessThan(0.2);
+  });
+
   it('is the word alone under reduced motion, and still leaves', () => {
     const still = flawlessPose(0.1, true)!;
     expect(still).toMatchObject({ scale: 1, rise: 0, tilt: 0, glow: 0 });

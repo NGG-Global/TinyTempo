@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
-  batonAt, batonCrossing, batonTrail, blockBacking, blockGeometry, blockWidth, columnRoom, dropLine, faceHeat, faceLift, glyphFlip,
-  landingRipple, landingSquash, restTiles, socketFuse, socketPop, tileGrowth, TRACK,
+  batonAt, batonCrossing, batonTrail, blockBacking, blockGeometry, blockWidth, columnRoom, columnShift, dropLine, faceHeat, faceLift,
+  glyphFlip, landingRipple, landingSquash, restTiles, socketFuse, socketPop, tileGrowth, TRACK,
 } from '../src/ui/turnBlock';
-import type { Handover } from '../src/game/beatTrack';
+import { BATON_LANDS_AT, type Handover } from '../src/game/beatTrack';
 
 // The drawing reaches Phaser; the geometry and the curves are plain numbers. The stub is
 // only deep enough for the drawing modules to evaluate — nothing on it is ever called.
@@ -104,7 +104,7 @@ describe('what the handover does to the block', () => {
 
   it('carries the baton across the runway and lifts the row into the thumb', () => {
     expect(batonCrossing(turn(0), false)).toBe(0);
-    expect(batonCrossing(turn(0.5), false)).toBeCloseTo(0.5);
+    expect(batonCrossing(turn(BATON_LANDS_AT / 2), false)).toBeCloseTo(0.5);
     expect(batonCrossing(turn(1), false)).toBe(1);
     expect(faceLift(turn(0), false)).toBe(0);
     expect(faceLift(turn(1), false)).toBeCloseTo(TRACK.faceLift * 0.5);
@@ -130,6 +130,48 @@ describe('what the handover does to the block', () => {
     expect(lit[1]!).toBeGreaterThanOrEqual(lit[2]!);
     expect(lit.every(v => v >= 0 && v <= 1)).toBe(true);
   });
+
+  it('lands the baton, and has every socket lit, before the downbeat', () => {
+    // The landing's ring and squash must not share the downbeat with the first hit's.
+    expect(BATON_LANDS_AT).toBeLessThan(1);
+    expect(batonCrossing(turn(BATON_LANDS_AT), false)).toBe(1);
+    expect(batonCrossing(turn(BATON_LANDS_AT - 0.05), false)).toBeLessThan(1);
+    for (const count of [1, 3, 5, 9, 12]) {
+      for (let i = 0; i < count; i++) expect(socketFuse(turn(BATON_LANDS_AT), i, false, count)).toBe(1);
+      // And still a fuse, not a bank of lamps: the last socket is not lit when the first is.
+      if (count > 1) expect(socketFuse(turn(0.3), count - 1, false, count)).toBeLessThan(socketFuse(turn(0.3), 0, false, count));
+    }
+  });
+});
+
+describe('where the columns stand in the rows', () => {
+  it('leaves the same clear plate after the last column as between the slot and the first', () => {
+    for (const s of [0.6, 1, 1.4]) {
+      for (const beadSpan of [60, 154, 300, 420]) {
+        const width = blockWidth(beadSpan, s);
+        const g = blockGeometry(360, 1000, width, s);
+        const r = TRACK.beadRadius * s;
+        const first = g.columnX - beadSpan / 2 + r, last = g.columnX + beadSpan / 2 - r;
+        // On the face: from the slot's edge to the first socket, and from the last to the edge.
+        const faceLeft = first - r - (g.faceSlot.x + TRACK.ownerSlotRadius * s);
+        const faceRight = g.face.x + g.face.width - (last + r);
+        expect(faceLeft).toBeCloseTo(faceRight, 6);
+        // On the shelf too, with its beads: the shelf is inset the same at both ends.
+        const bead = TRACK.shelfBeadRadius * s;
+        const shelfLeft = first - bead - (g.shelfSlot.x + TRACK.ownerSlotRadius * s);
+        const shelfRight = g.shelf.x + g.shelf.width - (last + bead);
+        expect(shelfLeft).toBeCloseTo(shelfRight, 6);
+        // And the shelf's slot still clears the first bead by the stated clearance.
+        expect(shelfLeft).toBeGreaterThanOrEqual(TRACK.slotClearance * s - 1e-9);
+      }
+    }
+  });
+
+  it('is a length in design units, scaled with everything else', () => {
+    expect(columnShift(1)).toBeGreaterThan(0);
+    expect(columnShift(0.5)).toBeCloseTo(columnShift(1) / 2);
+    expect(blockGeometry(360, 1000, 600, 1).columnX).toBeCloseTo(360 + columnShift(1));
+  });
 });
 
 describe('the baton’s travel', () => {
@@ -145,6 +187,15 @@ describe('the baton’s travel', () => {
     const mid = batonAt(geo, 1, 0.5, 0, false);
     expect(mid.x).toBeGreaterThan((geo.shelfSlot.x + geo.faceSlot.x) / 2 + TRACK.batonBow * 0.9);
     expect(mid.arc).toBeCloseTo(1);
+  });
+
+  it('clears the first socket at the top of its bow, so the socket\'s own pop is not covered', () => {
+    for (const beadSpan of [60, 154, 420]) {
+      const g = blockGeometry(360, 1000, blockWidth(beadSpan, 1), 1);
+      const top = batonAt(g, 1, 0.5, 0, false);
+      const firstSocketLeft = g.columnX - beadSpan / 2;
+      expect(top.x + TRACK.batonRadius * 1.16).toBeLessThan(firstSocketLeft);
+    }
   });
 
   it('travels straight and unbowed under reduced motion', () => {
