@@ -259,8 +259,12 @@ whose middle ending has a voice of its own, since all four of its takes were rec
 **A coda can outlive the hold it plays in.** Four seconds of applause against 2.8 at the
 fastest tempo would land on the beats the player has to copy next, so `playFinish` takes
 the instant the room has to be clear by — the next task's own downbeat — and fades the coda
-under it; after the last task nothing follows and it rings out under the summary. See
-`docs/CLAPPING_HANDS.md`.
+under it; after the last task nothing follows and it rings out under the summary. **Placing
+the next task stops only the plan's voices** (`SoundSink.cancelPlan`): `AudioEngine` keeps
+the cues and tap-started actions apart from codas, accents and stingers, because the next
+task is placed a beat before the downbeat the coda fades to, and a cancel of everything cut
+the applause dead at full level; `cancel()` still stops both for a pause, a restart and the
+way out. See `docs/CLAPPING_HANDS.md`.
 
 The trombone is act 20 and its beat is unlike every other's. **The action voice is scheduled
 on the grid for every demonstration cue and every target when a task is placed**, and the
@@ -745,7 +749,11 @@ tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJEC
 
 **One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
 `ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
-that paid. The restart puck is free before the attempt's first scored response
+that paid, **from the task it stopped in** (`resumeTask`): finished tasks are kept, and the
+cut-short task replays from a fresh count-in **held to a ceiling** (`scoreCeiling`,
+`capRound`, `pauseTask`) — the most the interrupted pass could still have made — so an
+interruption can cost a task but never improve it. Groove is kept with the pass, so mastery
+stays the same fact as a best of 100. The restart puck is free before the attempt's first scored response
 (`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
 an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
 first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
@@ -1338,7 +1346,10 @@ button** and nothing else (`core/backButton.ts`, native-only and lazily imported
 hands the press to a DOM sheet first (`dismissShellOverlay`), then to the active scene's
 `handleBack`, and only a press nothing takes — the title screen's — goes to `minimizeApp`.
 Every scene a player can stand on answers it; in a level it is two presses
-(`levelBackAction`: pause, then the map), because the second can end a paid attempt. Before
+(`levelBackAction`: pause, then the map), because the second can end a paid attempt — and
+the map puck takes the same two steps (`wayOut`). `levelRunning` counts the controller's
+`result` phase as running while no outcome is recorded, since that phase is also every coda
+between tasks, where one press used to abandon the attempt. Before
 it, back left the app from any screen. **AdMob asks for consent before it starts**: `admob.ts`
 initialises the SDK only once `canRequestAds` is true, caps ad content at
 `ADMOB.maxAdContentRating` (parental guidance), and every build but `npm run build:release`

@@ -53,7 +53,7 @@ describe('patterns and absolute scheduling', () => {
   });
   it('replaces scheduled sources without timers or accumulating old cues', () => {
     const active: number[] = [];
-    const scheduler = new RhythmScheduler({ play: t => active.push(t), cancel: () => { active.length = 0; } });
+    const scheduler = new RhythmScheduler({ play: t => active.push(t), cancelPlan: () => { active.length = 0; } });
     for (let i = 0; i < 100; i++) {
       const plan = createRoundPlan(i, parsePattern('p', 'X X -'), 100, i * 10);
       scheduler.schedule(plan);

@@ -255,6 +255,8 @@ test rather than a hope. On a level that opens with a subdivision introduction,
 | Where in the tutorial do players drop off? | `tutorial_step_started` → `tutorial_step_ended` by `step` and `attempt`; the last `tutorial_step_started` with no end, completion or skip after it is where a player closed the app |
 | How long from launch to the first scored tap? | `tutorial_started.since_launch_ms` (`source = first_play`) plus `elapsed_ms` on the first `tutorial_step_ended` for `along`, which is an upper bound; the target is about 30 s |
 | Which task inside a failed level is hardest? | `level_failed.weakest_task`, and `task_completed.accuracy` by `task_index` |
+| Which phrases cost players most? | `task_completed.accuracy` by `pattern`, against the mean of its `pattern_tier` |
+| Is a failure the player or the device? | `task_completed.lean_ms` and `accuracy` by `route` and `offset_set`; a steady lean on an uncalibrated `bluetooth` route is latency, not rhythm |
 
 ### Schema
 
@@ -289,7 +291,7 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `level_completed` | The level is scored and earned at least one star. Once per attempt | Level parameters, `accuracy`, `stars`, `duration_ms`, `restarts`, `weakest_task`, `weakest_accuracy` |
 | `level_failed` | The level is scored and earned no star. Once per attempt | Level parameters, `accuracy`, `duration_ms`, `restarts`, `weakest_task`, `weakest_accuracy` |
 | `level_abandoned` | The player leaves an unfinished attempt (the map puck, or the scene going away mid-level) | Level parameters, `task_index` (the task left during), `duration_ms`, `restarts` |
-| `task_completed` | A task is judged to its end. Once per task per pass | `level`, `area`, `mode`, `task_index`, `task_count`, `bpm`, `pattern_tier`, `grid`, `accuracy`, `perfect`, `good`, `miss`, `extra`, `flawless`, `error_ms` |
+| `task_completed` | A task is judged to its end. Once per task per pass | `level`, `area`, `mode`, `task_index`, `task_count`, `bpm`, `pattern_tier`, `grid`, `accuracy`, `perfect`, `good`, `miss`, `extra`, `flawless`, `error_ms`, `pattern`, `lean_ms`, `route`, `offset_set` |
 | `star_improved` | A cleared **replay** earns more stars than the level held. A first clear is not an improvement | `level`, `area`, `stars`, `previous_stars`, `accuracy`, `gate_have` |
 | `star_gate_reached` | The map opens with the frontier held by a star gate. Once per gate per app session — the first time that gate is met | `area` (the one the gate opens), `level` (its first), `gate_required`, `gate_have`, `gate_short`, `unlocked` (highest level the save may start) |
 | `star_gate_opened` | A result lifts the gate that was holding the frontier | `area`, `level`, `gate_required`, `gate_have`, `unlocked`. When this session already sent `star_gate_reached` for that gate: `replays`, `improvements`, `stars_gained` — the ledger's own events in between, not a stored session |
@@ -320,9 +322,15 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 
 On a task: `accuracy` is the task's own, rounded 0–100; `perfect`, `good`, `miss` and
-`extra` are counts; `flawless` is 1 when every beat was Perfect, the same test the
-*Flawless!* strike applies; `error_ms` is the mean absolute timing error of the landed
+`extra` are counts; `flawless` is 1 when every beat was Perfect and no extra was tapped, the
+same test the *Flawless!* strike and mastery apply (it used to ignore extras, and counted
+tasks the game did not celebrate); `error_ms` is the mean absolute timing error of the landed
 taps, rounded, and **absent** when nothing landed rather than sent as a misleading zero.
+`pattern` is the phrase's id; `lean_ms` the **median** signed error of the landed taps
+(negative early, absent when nothing landed), the same lean the timing details show;
+`route` the audio route the task was heard through and `offset_set` whether that route has a
+Tap offset of its own — the two that separate a device's latency from a hard phrase. A task
+cut short by a pause and replayed reports its credited accuracy (`docs/RESTART.md`).
 On a level result, `duration_ms` is wall-clock from the start of the pass that finished
 (a restart resets it), `accuracy` is the same mean the save used, and `weakest_task` is
 the lowest-accuracy task of that pass, earliest on a tie.
@@ -330,8 +338,11 @@ the lowest-accuracy task of that pass, earliest on a tie.
 ### One report per thing that happened
 
 - **An attempt is PlayScene's heart attempt id.** Resume after a pause and a free restart
-  are the same attempt by the heart rules, so they continue the run — `restarts` counts
-  them — instead of firing a second `level_started`. A paid restart, after the scored
+  are the same attempt by the heart rules, so they continue the run instead of firing a
+  second `level_started`. A free restart, and a Resume before any task finished, go round
+  again from task 1 and `restarts` counts them; a Resume after a finished task carries on
+  from the task it stopped in (`continuing`), keeps the tasks already reported and is not a
+  restart. A paid restart, after the scored
   response began, is a new attempt: the old run is `level_abandoned` and the new one is
   `level_started` (`docs/RESTART.md`). A finished or abandoned id is never reopened.
 - **`level_completed` / `level_failed` fire from `recordOutcome`,** the one step every

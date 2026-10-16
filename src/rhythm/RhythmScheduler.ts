@@ -16,7 +16,8 @@ export interface RoundPlan {
 }
 export interface SoundSink {
   play(time: number, kind: SoundKind): void;
-  cancel(): void;
+  /** Stops what `play` started — the plan's voices — and nothing else: a coda rings on. */
+  cancelPlan(): void;
 }
 
 /**
@@ -65,5 +66,5 @@ export class RhythmScheduler {
     for (const cue of plan.cues) this.sound.play(cue.time, cue.kind);
     if (gridAction) for (const time of plan.targets) this.sound.play(time, 'action');
   }
-  public cancel(): void { this.sound.cancel(); }
+  public cancel(): void { this.sound.cancelPlan(); }
 }

@@ -97,6 +97,47 @@ export function attemptForStart(mode: StartMode, attemptId: string | null, outco
 }
 
 /**
+ * A task an interruption cut short, and the most it may still be credited (`scoreCeiling`).
+ * Paused twice inside the same task, the lower ceiling holds: a second pause can no more
+ * improve the task than the first.
+ */
+export interface PausedTask {
+  readonly task: number;
+  readonly ceiling: number;
+}
+
+export function pauseTask(previous: PausedTask | null, task: number, ceiling: number): PausedTask {
+  const held = Number.isFinite(ceiling) ? Math.max(0, Math.min(100, ceiling)) : 100;
+  return previous !== null && previous.task === task ? { task, ceiling: Math.min(previous.ceiling, held) } : { task, ceiling: held };
+}
+
+/** The ceiling a task completes under: its pause's, or none (100). */
+export function ceilingFor(paused: PausedTask | null, task: number): number {
+  return paused !== null && paused.task === task ? paused.ceiling : 100;
+}
+
+/**
+ * Where Resume continues an attempt: the first task with no result, when at least one is
+ * finished and one is still to play. Null otherwise — nothing finished starts the level
+ * as it always did (its teach pass or introduction included), and everything finished is
+ * a result, never a run. The completed tasks are kept and never played or reported again.
+ */
+export function resumeTask(results: readonly (number | undefined)[], taskCount: number): number | null {
+  let next = 0;
+  while (next < taskCount && results[next] !== undefined) next++;
+  return next > 0 && next < taskCount ? next : null;
+}
+
+/**
+ * The lead-in a continued task is placed with: its own (a breather keeps its four bars), and
+ * never less than the level's opening bar, so the pulse is found again before the
+ * demonstration — most tasks have no lead-in of their own.
+ */
+export function resumeLeadBeats(taskLeadBeats: number, openingBeats: number): number {
+  return Math.max(taskLeadBeats, openingBeats);
+}
+
+/**
  * The ledger side of a start's handover: an ended attempt keeps the heart it spent and
  * holds nothing any more, so the next `beginAttempt` with a new id spends exactly one.
  * Idempotent, like `abandonAttempt`.

@@ -208,8 +208,8 @@ describe('an act with more than one take', () => {
     });
     const engine = new AudioEngine();
     const take = (length: number): AudioBuffer => engine.context.createBuffer(1, length, 44100);
-    const spy = vi.spyOn(engine as unknown as { playBuffer: (t: number, b: AudioBuffer) => void }, 'playBuffer')
-      .mockImplementation((_t, b) => { played.push(b.length); });
+    const spy = vi.spyOn(engine as unknown as { playBuffer: (g: unknown, t: number, b: AudioBuffer) => void }, 'playBuffer')
+      .mockImplementation((_g, _t, b) => { played.push(b.length); });
     const one = take(11), two = take(22);
     engine.setSounds({ action: [one, two], success: one, rough: one, scrape: one, judder: one });
     for (let i = 0; i < 5; i++) engine.play(0, 'action');

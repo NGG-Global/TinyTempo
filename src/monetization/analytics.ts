@@ -10,6 +10,7 @@
  */
 
 import type { LevelRole } from '../game/levels';
+import type { AudioRoute } from '../game/routeCalibration';
 
 export const COMMERCE_EVENTS = [
   'health_empty',
@@ -251,6 +252,14 @@ export interface AnalyticsPayloads {
     readonly flawless: Flag;
     /** Mean absolute timing error of the landed taps, rounded ms. Absent when nothing landed. */
     readonly error_ms?: number;
+    /** The pattern's id (`t3-1`, `tr0-2` …): which phrases cost players most. */
+    readonly pattern: string;
+    /** The median signed error of the landed taps, rounded ms, negative early. Absent when nothing landed. */
+    readonly lean_ms?: number;
+    /** The audio route the task was played through, so a latency failure is not read as a hard pattern. */
+    readonly route: AudioRoute;
+    /** Whether that route has a Tap offset of its own. */
+    readonly offset_set: Flag;
   };
   readonly star_improved: {
     readonly level: number;

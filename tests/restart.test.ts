@@ -7,9 +7,12 @@ import { levelSpec } from '../src/game/levels';
 import { PlayAnalytics } from '../src/game/playAnalytics';
 import type { Progress } from '../src/game/progress';
 import {
-  attemptForStart, liveSheet, releaseAttempt, restartKind, scoredResponseBegins, sheetFor, ticketStillApplies, watchForHeart,
-  type RestartFacts, type StartMode,
+  attemptForStart, ceilingFor, liveSheet, pauseTask, releaseAttempt, restartKind, resumeLeadBeats, resumeTask, scoredResponseBegins, sheetFor,
+  ticketStillApplies, watchForHeart, type RestartFacts, type StartMode,
 } from '../src/game/restart';
+import { RHYTHM } from '../src/config/rhythm';
+import type { JudgeState } from '../src/rhythm/judge';
+import { capRound, scoreCeiling, scoreRound } from '../src/game/scoring';
 import type { AnalyticsEvent } from '../src/monetization/analytics';
 import type { RewardedResult } from '../src/monetization/types';
 import { guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout } from '../src/ui/restartSheet';
@@ -548,5 +551,70 @@ describe('the result after a level', () => {
     expect(tryAgainCost({ progress: frontier(HEALTH.protectedThrough), level: HEALTH.protectedThrough, premium: false })).toBe(0);
     // A finished level replays free, whatever its stars.
     expect(tryAgainCost({ progress: frontier(PAID + 1), level: PAID, premium: false })).toBe(0);
+  });
+});
+
+describe('an interruption can cost a task, never improve it', () => {
+  const judged = (grades: ('Perfect' | 'Good' | 'omission' | null)[], extras = 0): JudgeState => ({
+    targets: grades.map((_, i) => i),
+    windows: RHYTHM,
+    outcomes: grades.map((grade, i) => grade === null ? null
+      : grade === 'omission' ? { kind: 'omission', grade: 'Miss', index: i, deltaMs: null }
+        : { kind: 'hit', grade, index: i, deltaMs: 0 }),
+    extras: Array.from({ length: extras }, () => ({ kind: 'extra', grade: 'Miss', index: null, deltaMs: 0 })),
+  });
+
+  it('holds a cut-short task to what it could still have made', () => {
+    expect(scoreCeiling(judged([null, null, null, null]))).toBe(100);
+    expect(scoreCeiling(judged(['Good', null, null, null]))).toBe(92.5);
+    expect(scoreCeiling(judged(['Perfect', 'omission', null, null]))).toBe(75);
+    expect(scoreCeiling(judged(['Perfect', null, null, null], 1))).toBe(93.75);
+    // Never below what the pass would have scored had it ended there and then.
+    const state = judged(['Good', 'omission', null, null], 2);
+    expect(scoreCeiling(state)).toBeGreaterThanOrEqual(scoreRound(state).accuracy);
+  });
+
+  it('lowers a replay that beat its ceiling, and leaves one that did not as played', () => {
+    const played = scoreRound(judged(['Perfect', 'Perfect', 'Perfect', 'Perfect']));
+    expect(capRound(played, 92.5).accuracy).toBe(92.5);
+    expect(capRound(played, 92.5).perfect).toBe(4);
+    expect(capRound(played, 100)).toBe(played);
+    const weak = scoreRound(judged(['Good', 'omission', 'omission', 'omission']));
+    expect(capRound(weak, 92.5)).toBe(weak);
+  });
+
+  it('keeps the lower ceiling across two pauses in one task, and forgets it for another', () => {
+    let paused = pauseTask(null, 2, 80);
+    paused = pauseTask(paused, 2, 95);
+    expect(paused).toEqual({ task: 2, ceiling: 80 });
+    expect(ceilingFor(paused, 2)).toBe(80);
+    expect(ceilingFor(paused, 3)).toBe(100);
+    expect(pauseTask(paused, 3, 90)).toEqual({ task: 3, ceiling: 90 });
+    expect(pauseTask(null, 0, Number.NaN).ceiling).toBe(100);
+  });
+
+  it('resumes at the first task with no result, and only once one is finished', () => {
+    expect(resumeTask([], 5)).toBeNull();                 // nothing finished: start as always
+    expect(resumeTask([80], 5)).toBe(1);
+    expect(resumeTask([80, 90, 70], 5)).toBe(3);
+    expect(resumeTask([80, 90, 70, 60, 50], 5)).toBeNull(); // finished: a result, not a run
+    // A breather keeps its four bars; any other task gets the opening bar back.
+    expect(resumeLeadBeats(0, RHYTHM.leadInBeats)).toBe(RHYTHM.leadInBeats);
+    expect(resumeLeadBeats(16, RHYTHM.leadInBeats)).toBe(16);
+  });
+
+  it('is wired in the scene: Resume continues, the ceiling caps, and back and the puck pause first', () => {
+    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
+    const start = scene.slice(scene.indexOf('  private async startRound('), scene.indexOf('  private beginTeach('));
+    expect(start).toContain('resumeTask(this.results, this.spec.tasks.length)');
+    expect(start).toContain('continuing: continueAt !== null');
+    expect(start).toContain('resumeLeadBeats(this.task.leadBeats, RHYTHM.leadInBeats)');
+    const result = scene.slice(scene.indexOf('  private showResult('), scene.indexOf('  private setGroove('));
+    expect(result).toContain('capRound(result, ceiling)');
+    expect(result).toContain('this.results[this.taskIndex] = credited.accuracy;');
+    expect(scene).toContain("if (near(this.mapAt)) { this.pressPuck('map'); this.wayOut('puck'); return; }");
+    expect(scene.match(/levelBackAction\(/g)).toHaveLength(1);
+    const running = scene.slice(scene.indexOf('  private levelRunning('), scene.indexOf('  private wayOut('));
+    expect(running).toContain("if (phase === 'result') return this.outcome === null && this.transition !== null;");
   });
 });

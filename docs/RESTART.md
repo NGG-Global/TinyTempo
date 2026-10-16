@@ -165,16 +165,37 @@ A paid restart ends the analytics run (`level_abandoned`) and the new attempt st
 
 | File | What it holds |
 | --- | --- |
-| `game/restart.ts` | `restartKind`, `liveSheet`, `attemptForStart`, `releaseAttempt`, `scoredResponseBegins`, `watchForHeart`, `ticketStillApplies`; pure |
+| `game/restart.ts` | `restartKind`, `liveSheet`, `attemptForStart`, `releaseAttempt`, `scoredResponseBegins`, `watchForHeart`, `ticketStillApplies`, and Resume's `resumeTask`, `resumeLeadBeats`, `pauseTask`, `ceilingFor`; pure |
 | `ui/restartSheet.ts` | The sheet, its copy, its pure layout, hit test and tap guard |
 | `scenes/PlayScene.ts` | `requestRestart`, the sheet's lifecycle, `watchToRestart`, `buyToRestart`, `startRound(mode)` |
 | `tests/restart.test.ts` | Heart accounting, the rewarded restart, when a run has begun, the handover, the sheet, analytics |
 
-## Known gap, unchanged on purpose
+## Resume continues; an interruption cannot improve a task
 
-Resume after an interruption plays the level again from task 1 on the same attempt. That is
-existing behaviour, and this change deliberately leaves it alone. It means backgrounding the
-app mid-run and resuming is still a way back to the start at no cost.
+Resume after an interruption used to play the level again from task 1 on the same attempt,
+which made backgrounding the app a free way back to the start. It now continues the attempt
+where it stopped (`resumeTask`): every finished task is kept, the analytics run carries on
+(`continuing`, no `restarts`), and the task that was cut short replays from a fresh count-in
+(`resumeLeadBeats`: its own lead-in, never less than the opening bar). A pause between two
+tasks — the controller sits in `result` through the coda — continues at the next task.
+
+Continuing on its own would have made a pause a free second go at the *current* task, so the
+interrupted task is held to a ceiling: `scoreCeiling` is the most the cut-short pass could
+still have made (every unjudged beat Perfect, every judged one as it was, every extra
+charged), and `capRound` credits the replay no more than that. A second pause in the same
+task keeps the lower ceiling (`pauseTask`). The marks and timing details stay as played; a
+capped task is never flawless. A pass that finished nothing starts as it always did, teach
+pass and introduction included, but its ceiling for task 1 still holds.
+
+Groove is kept across the continuation, so a level mastered after a resume is mastered by the
+same rule as any other — every task flawless in the one attempt, the same fact as a best of
+100 — and the music comes back on the stems the pass had earned.
+
+**Back and the map puck are one decision** (`levelBackAction`, read through `wayOut`): a
+running level pauses first. The map puck used to leave in one tap from the middle of a task,
+and `handleBack` counted the controller's `result` phase as stopped — which is also every coda
+between tasks — so a single press there abandoned a paid attempt. `levelRunning` counts
+`result` with no outcome yet as running.
 
 ## Not verified on a device
 

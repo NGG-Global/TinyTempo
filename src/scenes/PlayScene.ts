@@ -5,7 +5,7 @@ import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
-import { syncClockCalibration } from '@/audio/audioRoute';
+import { activeCalibration, currentRoute, syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
 import { trackForLevel } from '@/game/musicSelection';
@@ -18,7 +18,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
 import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
-import type { RoundResult } from '@/game/scoring';
+import { capRound, type RoundResult } from '@/game/scoring';
 import { addRound, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
@@ -29,8 +29,9 @@ import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
 import { masteryResult, type MasteryResult } from '@/game/mastery';
 import {
-  attemptForStart, liveSheet, releaseAttempt, restartKind, resultArmed, scoredResponseBegins, sheetFor, ticketStillApplies, tryAgainCost, watchForHeart,
-  type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
+  attemptForStart, ceilingFor, liveSheet, pauseTask, releaseAttempt, restartKind, resultArmed, resumeLeadBeats, resumeTask, scoredResponseBegins,
+  sheetFor, ticketStillApplies, tryAgainCost, watchForHeart,
+  type PausedTask, type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { GrooveStage } from '@/ui/grooveStage';
@@ -196,6 +197,12 @@ export class PlayScene extends BaseScene {
    * restart puck from a free reset into the end of the attempt (`game/restart.ts`).
    */
   private scoredResponseBegun = false;
+  /**
+   * The task a pause cut short and the most it may still be credited: Resume replays that
+   * task from its count-in, and an interruption may cost a task but never improve it
+   * (`scoreCeiling`, `game/restart.ts`). Kept by Resume, cleared by any other start.
+   */
+  private pausedTask: PausedTask | null = null;
   /** The restart puck's sheet, over the running level (`ui/restartSheet.ts`). */
   private restartSheet!: RestartSheet;
   /** Last wall second the open sheet re-read hearts and Premium. */
@@ -499,6 +506,7 @@ export class PlayScene extends BaseScene {
     // player had already walked away from is exactly the duplicate analytics must not see.
     this.attemptId = null;
     this.scoredResponseBegun = false;
+    this.pausedTask = null;
     this.outcome = null;
     this.continuation = null;
     this.levelRun = null;
@@ -1011,6 +1019,13 @@ export class PlayScene extends BaseScene {
       this.levelRun = null;
     }
     if (resumeId === null) this.scoredResponseBegun = false;
+    // Resume picks the attempt up at the task it stopped in, keeping the tasks it finished;
+    // a pause no longer sends the player back to task 1 for free (`docs/RESTART.md`). Only
+    // a kept attempt continues, and only Resume: any other start is a new pass, and a pass
+    // that finished nothing starts as it always did, teach pass and introduction included.
+    const continueAt = mode === 'resume' && !rehearsal && resumeId !== null && this.outcome === null
+      ? resumeTask(this.results, this.spec.tasks.length) : null;
+    if (mode !== 'resume' || resumeId === null || rehearsal) this.pausedTask = null;
     const request = ++this.startRequest;
     breadcrumb('level started', { level: this.spec.level, act: this.spec.vignette, attempt: this.attempts + 1 });
     this.replay = null;
@@ -1028,8 +1043,10 @@ export class PlayScene extends BaseScene {
     this.finale?.reset();
     this.finaleCleared = false;
     // Groove is the pass's, never the level's: a restart starts it cold, and the room with it.
+    // A continued pass keeps its count, so mastery still means every task flawless in one
+    // pass — the same fact as a best of 100 — and the room comes back up with the frame.
     if (this.groovePreview !== null && this.groove.level === 0) this.vignette.onGroove?.(0, this.now());
-    this.setGroove(GROOVE_START);
+    if (continueAt === null) this.setGroove(GROOVE_START);
     this.grooveStage.reset();
     this.groovePreview = null;
     this.previewResult = false;
@@ -1039,14 +1056,19 @@ export class PlayScene extends BaseScene {
     this.mastery = 'none';
     this.masteryAt = -Infinity;
     this.masteryStruck = false;
-    // A restart is a new pass: only the pass that finishes is counted.
-    this.tally = { perfect: 0, flawless: 0 };
-    this.timing = EMPTY_TIMING;
+    // A restart is a new pass: only the pass that finishes is counted. A continued one keeps
+    // what its finished tasks scored and starts at the first task with no result.
+    if (continueAt === null) {
+      this.tally = { perfect: 0, flawless: 0 };
+      this.timing = EMPTY_TIMING;
+      this.taskIndex = 0;
+      this.results = [];
+    } else {
+      this.taskIndex = continueAt;
+    }
     this.timingReport = null;
     this.timingOpen = false;
     this.lastJudgement = '';
-    this.taskIndex = 0;
-    this.results = [];
     this.summaryShown = false;
     this.replayOffered = false;
     this.summaryStars = 0;
@@ -1098,7 +1120,7 @@ export class PlayScene extends BaseScene {
           },
           judgement: result => this.showJudgement(result),
           complete: result => this.showResult(result),
-          interrupted: () => this.showPause(),
+          interrupted: (_reason, ceiling) => this.pausedByController(ceiling),
         });
       }
       await this.audio!.unlock();
@@ -1116,9 +1138,10 @@ export class PlayScene extends BaseScene {
       this.starting = false;
       this.audio!.setSounds(this.definition.sounds(this.audio!.context));
       // Fresh sources: every level starts at the base tempo, on the track's first stem alone,
-      // with the metronome bar counting under it from the same sample.
-      this.layers = OPENING_LAYERS;
-      const origin = this.audio!.music.start(undefined, { layers: OPENING_LAYERS, metronome: true });
+      // with the metronome bar counting under it from the same sample. A continued pass
+      // comes back on the stems it had earned.
+      if (continueAt === null) this.layers = OPENING_LAYERS;
+      const origin = this.audio!.music.start(undefined, { layers: this.layers, metronome: true });
       this.levelOrigin = origin;
       void setMusicBed(this.audio!, 'level');
       if (this.disposed || request !== this.startRequest || this.blocked()) {
@@ -1147,9 +1170,19 @@ export class PlayScene extends BaseScene {
       saveHealth(begun.health);
       this.attemptId = attemptId;
       // A resumed id continues its run rather than starting another: see playAnalytics.
-      this.levelRun = playAnalytics.beginLevel({ spec: this.spec, progress: before, attemptId, heartSpent: begun.spent });
+      this.levelRun = playAnalytics.beginLevel({
+        spec: this.spec, progress: before, attemptId, heartSpent: begun.spent, continuing: continueAt !== null,
+      });
       this.heartRefunded = false;
       this.guided = guidedLevel(loadProgress()) === this.spec.level;
+      if (continueAt !== null) {
+        // The task it stopped in, at that task's tempo from the first downbeat, after a bar to
+        // find the pulse again. No teach pass and no introduction: both came before task 1.
+        this.audio!.music.setRate(this.task.bpm / MUSIC.sourceBpm, origin);
+        this.sequence = new TaskSequence(this.task.bpm, origin, 1);
+        this.beginTask(origin, resumeLeadBeats(this.task.leadBeats, RHYTHM.leadInBeats));
+        return;
+      }
       this.sequence = new TaskSequence(this.task.bpm, origin, 1);
       const grid = introGrid(this.spec, seenSubdivisions());
       if (this.guided && !seenDemonstration()) this.beginTeach(origin);
@@ -1303,8 +1336,8 @@ export class PlayScene extends BaseScene {
     this.setAction('');
   }
 
-  private beginTask(startAt: number): void {
-    this.beginPlan(this.task.pattern, this.task.bpm, startAt, this.task.leadBeats);
+  private beginTask(startAt: number, leadBeats = this.task.leadBeats): void {
+    this.beginPlan(this.task.pattern, this.task.bpm, startAt, leadBeats);
     if (this.finale && this.taskIndex === 0) this.openFinale(startAt);
   }
 
@@ -1385,7 +1418,7 @@ export class PlayScene extends BaseScene {
       return;
     }
     if (near(this.restartAt)) { this.pressPuck('restart'); this.requestRestart(); return; }
-    if (near(this.mapAt)) { this.pressPuck('map'); this.closeRestartSheet('left'); this.leaveForMap(); return; }
+    if (near(this.mapAt)) { this.pressPuck('map'); this.wayOut('puck'); return; }
     // The line under the score opens the timing details in the tray, and closes them again.
     // Before the summary's own tap-anywhere, which would otherwise take it as Continue.
     if (this.summaryShown && this.timingReport && Phaser.Geom.Rectangle.Contains(this.timingRect, tap.x, tap.y)) {
@@ -1495,7 +1528,8 @@ export class PlayScene extends BaseScene {
         this.audio.music.setLayers(this.layers, transition.next);
         this.sequence = new TaskSequence(this.task.bpm, transition.next, 1);
         this.beginTask(transition.next);
-        // start() cancels the previous plan's voices. Schedule the handoff AFTER it.
+        // A stinger is presentation, so placing the task above leaves it be; it is
+        // scheduled here only because this is the downbeat it belongs to.
         if (this.grooveHandoff && this.grooveVoices) this.audio.playStinger(transition.next, this.grooveVoices.shaker, 0.36);
         this.grooveHandoff = false;
       }
@@ -2170,14 +2204,21 @@ export class PlayScene extends BaseScene {
     }
     // A duplicate completion must not count a task twice or replay its accents.
     if (this.results[this.taskIndex] !== undefined) return;
-    const strong = result.accuracy >= this.definition.successAccuracy;
-    this.sequence!.complete(result.accuracy);
+    // A task a pause cut short is credited no more than it could still have made when the
+    // pause came: the replay can lose ground, never win it back. The taps themselves — the
+    // marks, the timing details — are the replay's, as played.
+    const ceiling = ceilingFor(this.pausedTask, this.taskIndex);
+    const credited = capRound(result, ceiling);
+    if (this.pausedTask?.task === this.taskIndex) this.pausedTask = null;
+    const strong = credited.accuracy >= this.definition.successAccuracy;
+    this.sequence!.complete(credited.accuracy);
     // Every beat Perfect: the one moment a task earns its own celebration. It reads the
     // marks the judge already left, so it can never disagree with the row under it, and
     // it takes the verdict's line — the last tap's "Perfect" is what it is summing up.
     this.tally.perfect += result.perfect;
     this.timing = addRound(this.timing, result);
-    const flawless = isFlawless(this.outcomes) && result.extras === 0;
+    // Held under a ceiling, a task already lost a beat before its pause: not flawless.
+    const flawless = isFlawless(this.outcomes) && result.extras === 0 && credited === result;
     if (flawless) {
       this.tally.flawless++;
       this.flawlessAt = this.now();
@@ -2188,12 +2229,12 @@ export class PlayScene extends BaseScene {
       this.verdictTag.clear();
       vibrate('stamp');
     }
-    this.results[this.taskIndex] = result.accuracy;
-    this.levelRun?.task(this.taskIndex, result);
+    this.results[this.taskIndex] = credited.accuracy;
+    this.levelRun?.task(this.taskIndex, credited, { route: currentRoute(), offsetSet: activeCalibration() !== null });
     // The arrangement answers the task: a strong one earns the next stem, a weak one loses
     // the last, and the change lands on the next task's downbeat with the tempo (below).
     const track = this.audio?.music.track;
-    this.layers = advanceLayers(this.layers, result.accuracy, track?.levelStems ?? track?.stems.length ?? 1);
+    this.layers = advanceLayers(this.layers, credited.accuracy, track?.levelStems ?? track?.stems.length ?? 1);
     // The one place groove moves: a scored task's verdict. The introduction and the
     // first-run pass never reach here, so neither can move it. Level 1 is the flourish
     // above and nothing more; from 2 the room answers (`grooveStage`), and a milestone
@@ -2218,8 +2259,8 @@ export class PlayScene extends BaseScene {
     // sounds the other.
     const partial = this.definition.partial;
     const outcome: FinishOutcome = strong ? 'success'
-      : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
-    this.vignette.finish(strong, contact, result.accuracy);
+      : partial && credited.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
+    this.vignette.finish(strong, contact, credited.accuracy);
     // A clean round's coda lands its finishing blow with the same weight, on its contact.
     if (strong) this.punchAt = contact;
     // A coda has the room to itself until the next task's downbeat; after the last task
@@ -2238,7 +2279,7 @@ export class PlayScene extends BaseScene {
     const copy = outcome === 'success' ? this.definition.success
       : outcome === 'partial' && partial ? partial.copy : this.definition.rough;
     this.changeHeadline(copy[0]);
-    this.accuracy.setText(this.debugMode ? `${Math.round(result.accuracy)}%` : '');
+    this.accuracy.setText(this.debugMode ? `${Math.round(credited.accuracy)}%` : '');
     this.setAction('');
   }
   /** The groove state, and the act told of a change: only a change, so nothing is called per task. */
@@ -3314,6 +3355,22 @@ export class PlayScene extends BaseScene {
     }
   }
 
+  /**
+   * The controller paused the task it was running: a stall it caught itself, or
+   * `interrupt()` below on its way through. A scored task is held to what it could still
+   * have made, and the run goes quiet either way — a stall used to leave the music and the
+   * metronome playing under "Paused".
+   */
+  private pausedByController(ceiling: number): void {
+    if (this.disposed) return;
+    if (this.intro === null && this.teach === null && !this.grooveStudy && this.results[this.taskIndex] === undefined) {
+      this.pausedTask = pauseTask(this.pausedTask, this.taskIndex, ceiling);
+    }
+    this.grooveHandoff = false;
+    this.audio?.cancel();
+    this.audio?.music.stop();
+    this.showPause();
+  }
   private showPause(): void {
     if (this.disposed) return;
     // The controller can pause itself on a stall without passing through `interrupt`:
@@ -3367,17 +3424,38 @@ export class PlayScene extends BaseScene {
    * flight, or a Continue already under way, keeps the press.
    */
   public handleBack(): boolean {
+    this.wayOut('back');
+    return true;
+  }
+  /**
+   * Whether leaving now would walk out of a run: a start under way, the first-run pass, a
+   * task, or the coda between two tasks. The controller sits in `result` through every
+   * coda, so `result` with no outcome recorded yet is still the level running — counting it
+   * as stopped let one press of back, or one tap of the map puck, abandon a paid attempt
+   * between tasks.
+   */
+  private levelRunning(): boolean {
     const phase = this.controller?.phase ?? 'idle';
+    if (this.starting || this.teach !== null) return true;
+    if (phase === 'result') return this.outcome === null && this.transition !== null;
+    return phase !== 'idle' && phase !== 'paused';
+  }
+  /**
+   * Back and the map puck are one decision (`levelBackAction`): a running level pauses
+   * first, and only a level already paused, not yet started or showing its result goes to
+   * the map. The puck used to leave in one tap from the middle of a task. Back alone closes
+   * an open restart sheet first; the puck is a way out, so it takes the sheet with it.
+   */
+  private wayOut(source: 'back' | 'puck'): void {
     const action = levelBackAction({
       busy: this.disposed || this.curtain.active || this.continuation?.busy === true || this.commerceBusy,
-      sheetOpen: this.restartSheet.open,
+      sheetOpen: source === 'back' && this.restartSheet.open,
       sheetBusy: this.restartSheet.busy,
-      running: this.starting || this.teach !== null || (phase !== 'idle' && phase !== 'paused' && phase !== 'result'),
+      running: this.levelRunning(),
     });
     if (action === 'closeSheet') this.closeRestartSheet('keep_playing');
     else if (action === 'pause') this.interrupt();
-    else if (action === 'leave') this.leaveForMap();
-    return true;
+    else if (action === 'leave') { this.closeRestartSheet('left'); this.leaveForMap(); }
   }
   private persistAbandonedAttempt(): void {
     // A finished run has already closed, so this reports only a player leaving mid-level.

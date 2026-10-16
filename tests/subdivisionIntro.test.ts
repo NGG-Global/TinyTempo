@@ -267,7 +267,7 @@ describe('what the introduction leaves alone', () => {
     const spec = levelSpec(firstLevelWithGrid('triplet')!);
     const task = spec.tasks.find(t => t.grid === 'triplet')!;
     const events = (): RoundEvents => ({ phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() });
-    const sound = { play: vi.fn(), cancel: vi.fn() };
+    const sound = { play: vi.fn(), cancelPlan: vi.fn() };
     const play = (controller: RoundController, pattern: typeof task.pattern, bpm: number, origin: number, offsetMs: number) => {
       controller.start(pattern, bpm, origin - 0.2, (origin - 0.2) * 1000, origin, 0);
       const plan = controller.plan!;

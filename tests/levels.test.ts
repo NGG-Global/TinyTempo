@@ -173,7 +173,7 @@ describe('level progression', () => {
   });
   it.each([1, 12, 19, 45, 70, 200])('plays level %s end to end on one grid with the music tempo changing on task downbeats', level => {
     const spec = levelSpec(level);
-    const sound = { play: vi.fn(), cancel: vi.fn() };
+    const sound = { play: vi.fn(), cancelPlan: vi.fn() };
     const events: RoundEvents = { phase: vi.fn(), cue: vi.fn(), tap: vi.fn(), judgement: vi.fn(), complete: vi.fn(), interrupted: vi.fn() };
     const controller = new RoundController(sound, events);
     let origin = 0.2;

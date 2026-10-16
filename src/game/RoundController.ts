@@ -2,7 +2,7 @@ import { RHYTHM } from '../config/rhythm';
 import { createJudge, expireTargets, judgeTap, windowsFor, type JudgeState, type Judgement } from '../rhythm/judge';
 import { createRoundPlan, RhythmScheduler, type RoundPlan, type ScheduledCue, type SoundSink } from '../rhythm/RhythmScheduler';
 import type { Pattern } from '../rhythm/patterns';
-import { scoreRound, type RoundResult } from './scoring';
+import { scoreCeiling, scoreRound, type RoundResult } from './scoring';
 
 export type Phase = 'idle' | 'prepare' | 'demonstrate' | 'respond' | 'result' | 'paused';
 export interface RoundEvents {
@@ -11,7 +11,8 @@ export interface RoundEvents {
   tap(): void;
   judgement(result: Judgement): void;
   complete(result: RoundResult): void;
-  interrupted(reason: string): void;
+  /** `ceiling`: the most the cut-short task could still have scored (`scoreCeiling`). */
+  interrupted(reason: string, ceiling: number): void;
 }
 
 /** Pure coordinator: callers supply clock readings. No Phaser, DOM or animation dependency. */
@@ -103,11 +104,12 @@ export class RoundController {
   }
   public interrupt(reason: string): void {
     if (!this.active) return;
+    const ceiling = this.judge ? scoreCeiling(this.judge) : 100;
     this.scheduler.cancel();
     this.judge = null;
     this.result = null;
     this.setPhase('paused');
-    this.events.interrupted(reason);
+    this.events.interrupted(reason, ceiling);
   }
   public dispose(): void {
     this.scheduler.cancel();
