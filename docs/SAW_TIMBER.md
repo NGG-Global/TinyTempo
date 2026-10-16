@@ -113,7 +113,7 @@ the offcut hanging by a splintered hinge, swinging, and the copy holds back.
   (`ROTATION`, `src/vignettes/rotation.ts`), so an append also names where it joins.
 
 Grading stays entirely outside the vignette. It receives `Judgement` and inspects only
-`kind` and `index`; the strong/rough boundary is `successAccuracy` on the registry entry,
+`kind` and `index`; the strong/rough boundary is the level's clear bar (`finishOutcome`, `game/taskVerdict.ts`),
 compared by the host.
 
 At the base 120 BPM a four-beat phrase gives four beats each of demonstration and

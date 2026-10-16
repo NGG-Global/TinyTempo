@@ -12,7 +12,8 @@ clapping hands follow these four.
 | 12 | Light switch | Rocker toggles a floor lamp | The cutaway interior and a five-light fitting emerge | Lamp turns off; room stays hidden |
 | 13 | Doorbell | Porcelain button depresses with a two-tone chime | Door swings inward onto a warm hallway and a ginger cat | Door remains completely shut |
 
-The authoritative round score selects success at 70%. The vignette does not
+The authoritative round score selects success at the level's clear bar
+(`game/taskVerdict.ts`). The vignette does not
 judge timing. `finish` schedules the reveal at the host's audio-clock contact;
 it does not reveal early when the result arrives. Five hold beats plus contact
 and two slide beats form two complete musical bars. The 1.65-second reveal fits

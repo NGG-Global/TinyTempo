@@ -10,8 +10,6 @@ import { clamp01, easeInOutCubic, easeOut, REFERENCE_BEAT } from './motion';
 export const FISHING_REVEAL_SEC = 1.65;
 
 export const FISHING_MOTION = {
-  successAccuracy: 70,
-  partialAccuracy: 40,
   /** The rod springs back from the heave inside this fraction of a beat, so a quick pair reads as two pulls. */
   heaveBeats: 0.45,
   /** When the catch breaks the surface, from the finale's contact beat. */
@@ -20,11 +18,6 @@ export const FISHING_MOTION = {
 } as const;
 
 export type FishingOutcome = 'success' | 'partial' | 'fail';
-
-export function fishingOutcome(accuracy: number): FishingOutcome {
-  if (accuracy >= FISHING_MOTION.successAccuracy) return 'success';
-  return accuracy >= FISHING_MOTION.partialAccuracy ? 'partial' : 'fail';
-}
 
 /**
  * The three big fish, and how each one comes out of the water. The bass leaps straight

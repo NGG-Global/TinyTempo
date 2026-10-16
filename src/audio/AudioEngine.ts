@@ -3,6 +3,7 @@ import { silenceInBackground } from './backgroundSilence';
 import { MusicSystem } from './MusicSystem';
 import { ThemeMusic } from './ThemeMusic';
 import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
+import type { FinishOutcome } from '../game/taskVerdict';
 
 const TONE = { count: 440, ready: 660, action: 880 } as const;
 const DURATION = 0.065;
@@ -21,8 +22,7 @@ const UNLOCK_TIMEOUT_MS = 3000;
  */
 export type Voice = AudioBuffer | readonly AudioBuffer[];
 
-/** Which coda a resolved round gets. The same decision the headline is chosen from. */
-export type FinishOutcome = 'success' | 'partial' | 'rough';
+export type { FinishOutcome } from '../game/taskVerdict';
 
 /**
  * The voices every act declares, which is what each act's synthesis is written against.

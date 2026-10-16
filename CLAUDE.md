@@ -227,9 +227,14 @@ its own geometry — eaten from one side across, drawn as scanned half-rings so 
 can open the hole — and a wasp instead of the worm. See `docs/VARIANTS.md`.
 
 Scissors & paper is the ninth act. Its three cutout shapes rotate per task;
-`paperMotion.ts` derives success (70%+), partial (40–69%) and failure from the
-round accuracy passed to `Vignette.finish`. Other acts retain their binary
-endings. Its five-beat reveal hold adds one bar to the default coda; holds must
+`paperMotion.ts` draws success, partial and failure from the
+verdict passed to `Vignette.finish`. Other acts retain their binary
+endings. **Every act's ending reads the level's own bar** (`game/taskVerdict.ts`):
+success at or above the clear bar, partial (three-ending acts) within `VERDICT.partialBand`
+under it, rough below — one verdict for the coda, the headline and the act, decided by the
+scene and passed to `finish`, so a level-1 player clearing at 60% no longer watches the
+failure and a plateau level can no longer show eight successes and fail. Endless reads its
+step's life bar the same way (`barsFor`), presentation only. Its five-beat reveal hold adds one bar to the default coda; holds must
 complete whole bars with the contact and two slide beats. See
 `docs/SCISSORS_PAPER.md`. In DEV only, `?debug&level=9` opens it directly.
 
@@ -248,8 +253,8 @@ judged hits and bursts on a rough coda. See `docs/ERRAND_ACTS.md`.
 The fisherman is act 18, on the same lifecycle: one Graphics, curves in
 `fishingMotion.ts`, voices in `audio/fishingSounds.ts`, and the same five-beat hold. The
 beat is a pull on a hooked line, not a reel, so `rodHeave` is deliberately not monotonic.
-It is the second act with three endings from the round accuracy: a big fish at 70%+, one
-of three that each leave the water their own way, a small fish at 40–69%, and a boot or
+It is the second act with three endings from the round accuracy: a big fish on a success, one
+of three that each leave the water their own way, a small fish on a near miss, and a boot or
 tyre below. See `docs/FISHERMAN.md`.
 
 The DJ scratch is act 19: a hand on a record and one on the crossfader, one short scratch
@@ -492,8 +497,8 @@ same sample under the same rate automation, detects the lead-in on the first ste
 applies it to all, and `setLayers(count, at)` fades stems in or out on a bar line. A level
 starts on the first stem with a **metronome bar** under it (`audio/metronomeSounds.ts`,
 one synthesized bar looped from the same sample, beat 1 accented) and `advanceLayers`
-(`game/musicLayers.ts`) moves the count per scored task — strong adds a stem, weak takes
-one — applied on the next task's downbeat with the tempo; the shell hears every stem, trimmed,
+(`game/musicLayers.ts`) moves the count per scored task against the level's bars — its second
+star adds a stem, a rough task takes one — applied on the next task's downbeat with the tempo; the shell hears every stem, trimmed,
 and no click; track A is one stem and hears nothing of it. **The cost is ~230 MB of decoded PCM
 and a 10.4 MB download** for track B, the cost the premix existed to avoid, accepted for a
 mix that answers the player; `docs/MUSIC.md` names the cheaper shape if a handset cannot
@@ -1035,7 +1040,8 @@ src/
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
-    musicLayers.ts     How many stems a level has earned: strong adds one, weak takes one; pure
+    musicLayers.ts     How many stems a level has earned: strong adds one, rough takes one; pure
+    taskVerdict.ts     A task's ending and its mix step, read against the bar it is held to; pure
     endless.ts         Endless Mode: the unlock, the pool, the step generator, the schedule, lives, the ranked time; pure
     endlessProgress.ts The device's Endless record per ruleset: best, badges, run count; one key
   input/

@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { breadcrumb, reportError, setErrorContext } from '@/core/errors';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
-import type { AudioEngine, FinishOutcome } from '@/audio/AudioEngine';
+import type { AudioEngine } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
 import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, syncClockCalibration } from '@/audio/audioRoute';
@@ -19,6 +19,7 @@ import { wrongOrientation } from '@/core/shell';
 import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, type Phase } from '@/game/RoundController';
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import { capRound, type RoundResult } from '@/game/scoring';
+import { barsFor, finishOutcome, levelBars } from '@/game/taskVerdict';
 import { addRound, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
@@ -1314,10 +1315,10 @@ export class PlayScene extends BaseScene {
     const intro = this.intro!;
     const next = intro.run.complete(result.accuracy);
     const ending = this.sequence!.ending(this.controller!.plan!.end, this.definition.endingHoldBeats);
-    const strong = result.accuracy >= this.definition.successAccuracy;
-    const partial = this.definition.partial;
-    const outcome: FinishOutcome = strong ? 'success' : partial && result.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
-    this.vignette.finish(strong, ending.contact, result.accuracy);
+    // Its pass mark is its bar, so "Got it" and the success ending are one verdict.
+    const outcome = finishOutcome(result.accuracy, barsFor(CONCEPT_INTRO.passAccuracy), this.definition.partial !== undefined);
+    const strong = outcome === 'success';
+    this.vignette.finish(strong, ending.contact, outcome);
     this.audio!.playFinish(ending.contact, outcome, ending.next);
     this.finishUnlock = ending.contact + this.definition.endingSec;
     this.transition = { ...ending, swapped: false };
@@ -2210,7 +2211,11 @@ export class PlayScene extends BaseScene {
     const ceiling = ceilingFor(this.pausedTask, this.taskIndex);
     const credited = capRound(result, ceiling);
     if (this.pausedTask?.task === this.taskIndex) this.pausedTask = null;
-    const strong = credited.accuracy >= this.definition.successAccuracy;
+    // The ending, the headline and the mix all read the level's own bar (`taskVerdict`).
+    const bars = levelBars(this.spec);
+    const partial = this.definition.partial;
+    const outcome = finishOutcome(credited.accuracy, bars, partial !== undefined);
+    const strong = outcome === 'success';
     this.sequence!.complete(credited.accuracy);
     // Every beat Perfect: the one moment a task earns its own celebration. It reads the
     // marks the judge already left, so it can never disagree with the row under it, and
@@ -2234,7 +2239,7 @@ export class PlayScene extends BaseScene {
     // The arrangement answers the task: a strong one earns the next stem, a weak one loses
     // the last, and the change lands on the next task's downbeat with the tempo (below).
     const track = this.audio?.music.track;
-    this.layers = advanceLayers(this.layers, credited.accuracy, track?.levelStems ?? track?.stems.length ?? 1);
+    this.layers = advanceLayers(this.layers, credited.accuracy, track?.levelStems ?? track?.stems.length ?? 1, bars);
     // The one place groove moves: a scored task's verdict. The introduction and the
     // first-run pass never reach here, so neither can move it. Level 1 is the flourish
     // above and nothing more; from 2 the room answers (`grooveStage`), and a milestone
@@ -2254,13 +2259,10 @@ export class PlayScene extends BaseScene {
       const voices = this.grooveVoices ??= createGrooveVoices(this.audio.context);
       if (this.groove.level >= 3) this.audio.playStinger(contact, voices.chime, 0.3, this.task.bpm / MUSIC.sourceBpm);
     }
-    // One decision, read twice: the words on the plaque and the coda that plays under
-    // them are the same verdict, so an act with a middle ending never says one and
-    // sounds the other.
-    const partial = this.definition.partial;
-    const outcome: FinishOutcome = strong ? 'success'
-      : partial && credited.accuracy >= partial.minAccuracy ? 'partial' : 'rough';
-    this.vignette.finish(strong, contact, credited.accuracy);
+    // One decision, read three times: the words on the plaque, the coda that plays under
+    // them and the act's own ending are the same verdict, so an act with a middle ending
+    // never says one and sounds or shows the other.
+    this.vignette.finish(strong, contact, outcome);
     // A clean round's coda lands its finishing blow with the same weight, on its contact.
     if (strong) this.punchAt = contact;
     // A coda has the room to itself until the next task's downbeat; after the last task

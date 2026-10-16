@@ -8,11 +8,13 @@ import type { Judgement } from '@/rhythm/judge';
 import { Backdrop } from '@/ui/backdrop';
 import { mix, shade } from '@/ui/colour';
 import { faces } from '@/ui/light';
+import type { FinishOutcome } from '@/game/taskVerdict';
+import { actEnding } from './motion';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 import {
-  acceptDemoBeat, clamp01, easeOut, PAPER_CONTOURS, paperCutPoint, paperHandoff, paperOutcome, paperReveal,
+  acceptDemoBeat, clamp01, easeOut, PAPER_CONTOURS, paperCutPoint, paperHandoff, paperReveal,
   paperShape, scissorOpening, type PaperOutcome, type PaperPoint, type PaperShape,
 } from './paperMotion';
 
@@ -226,8 +228,8 @@ export class ScissorsPaperVignette implements Vignette {
     }
   }
 
-  public finish(successful: boolean, contactSec: number, accuracy = successful ? 100 : 0): void {
-    this.outcome = paperOutcome(accuracy);
+  public finish(successful: boolean, contactSec: number, outcome?: FinishOutcome): void {
+    this.outcome = actEnding(outcome, successful);
     this.finishAt = contactSec;
   }
 

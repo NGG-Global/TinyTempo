@@ -44,11 +44,12 @@ export const MUSIC = {
   metronome: { gain: 0.7, accentHz: 1500, beatHz: 1000, accentLevel: 0.4, beatLevel: 0.25, clickSec: 0.03 },
   /**
    * How a level brings a layered track in. It starts on the first stem alone and a scored
-   * task's accuracy moves the count: at or above `strong` one more stem joins on the next
-   * task's downbeat, below `weak` the last one leaves, in between it holds. The change
-   * lands on the bar line with the tempo change, faded over `fadeSec`.
+   * task's accuracy moves the count against the level's own bars (`game/taskVerdict.ts`):
+   * at its second star one more stem joins on the next task's downbeat, on a rough task the
+   * last one leaves, in between it holds. The change lands on the bar line with the tempo
+   * change, faded over `fadeSec`.
    */
-  layers: { strong: 70, weak: 40, fadeSec: 0.5 },
+  layers: { fadeSec: 0.5 },
 } as const;
 
 /** One playable file of a track: a premix, or one stem of a layered track. */
@@ -156,8 +157,8 @@ export const GAMEPLAY_TRACKS = {
     //  - the synth lead, −9 dB and softened at 1.8 kHz, **last**: it is a melody — 39% of
     //    its notes off the beat and eighth grid, in the same 250 Hz–2 kHz band as the act
     //    voices — so it is a second phrase beside the one being copied, which is what made
-    //    the track tiring the moment it entered. It is earned only after four strong
-    //    tasks in a row, by a player already in the pocket, and enters well behind them.
+    //    the track tiring the moment it entered. It is earned only after a net four
+    //    strong tasks, by a player already in the pocket, and enters well behind them.
     // `levelStems` stops a level there. The risers fire every other bar from bar 27, and a
     // riser announces a downbeat event that never comes, so they play only on the map and
     // in Settings, and quieter even there.

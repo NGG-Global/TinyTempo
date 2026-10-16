@@ -10,8 +10,6 @@ import { clamp01, easeInOutCubic, easeOut, REFERENCE_BEAT } from './motion';
 export const CLAP_REVEAL_SEC = 1.65;
 
 export const CLAP_MOTION = {
-  successAccuracy: 70,
-  partialAccuracy: 40,
   /** The palms are driven apart by the clap and reach the top of the rebound here. */
   reboundBeats: 0.16,
   /** And are back at the waiting distance here — inside half a beat, so a quick pair reads as two claps. */
@@ -32,11 +30,6 @@ export const CLAP_MOTION = {
 } as const;
 
 export type ClapOutcome = 'success' | 'partial' | 'fail';
-
-export function clapOutcome(accuracy: number): ClapOutcome {
-  if (accuracy >= CLAP_MOTION.successAccuracy) return 'success';
-  return accuracy >= CLAP_MOTION.partialAccuracy ? 'partial' : 'fail';
-}
 
 /**
  * One hand in the crowd: where it ends up, how big it is that far back, and the rate and

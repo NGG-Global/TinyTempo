@@ -6,9 +6,10 @@ import { HouseholdVignette } from './HouseholdVignette';
 import { FRAME_CARD } from './staging';
 import { shape, slab, sparkle } from './householdArt';
 import {
-  bigFish, fishingOutcome, haulFinale, junkFor, rodHeave, shadowRise, type BigFish, type FishingOutcome, type HaulFinale,
+  bigFish, haulFinale, junkFor, rodHeave, shadowRise, type BigFish, type FishingOutcome, type HaulFinale,
 } from './fishingMotion';
-import { clamp01, easeOut } from './motion';
+import type { FinishOutcome } from '@/game/taskVerdict';
+import { actEnding, clamp01, easeOut } from './motion';
 
 /** The lakeside palette. The ink is dark enough that dressed type takes no outline, like the household ink. */
 export const LAKESIDE = { ink: 0x2f3b45, sky: 0xcfe3ee, water: 0x4d8db1, deep: 0x2f6588 } as const;
@@ -61,9 +62,9 @@ export class FishermanVignette extends HouseholdVignette {
     };
   }
 
-  public override finish(successful: boolean, contactSec: number, accuracy = successful ? 100 : 0): void {
+  public override finish(successful: boolean, contactSec: number, outcome?: FinishOutcome): void {
     super.finish(successful, contactSec);
-    this.outcome = fishingOutcome(accuracy);
+    this.outcome = actEnding(outcome, successful);
   }
 
   protected draw(now: number, ending: number): void {
