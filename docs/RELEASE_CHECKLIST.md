@@ -435,7 +435,12 @@ the pinned SDK. None of this has run between two real devices.
       the background; the save-code and update sheets cancel.
 - [ ] **Sound stops in the background.** Press Home on the title screen, the map and in a
       level: nothing keeps playing. Come back: the music resumes where it was, or on the
-      next touch if the phone refused it (`audio/backgroundSilence.ts`).
+      next touch if the phone refused it (`audio/backgroundSilence.ts`). **Test this on the
+      APK, not in Chrome**: the WebView is not told the activity paused, so only the
+      native lifecycle (`audio/appLifecycle.ts`) silences it there.
+- [ ] **Sound stops under a rewarded ad.** Watch an ad from the map's out-of-hearts sheet
+      and from a level's restart sheet: the music is silent while the ad plays and comes
+      back when it closes; the level's Watch ad & Restart still restarts the level.
 - [ ] **A failed result ignores taps for 0.7 s**, and **Try again shows ♥ 1** on a level
       that costs a heart (past level 10, unfinished, no Premium) and nothing elsewhere.
 - [ ] Internal testing track → closed testing → production. *(verify — Play has

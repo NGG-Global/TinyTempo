@@ -576,7 +576,14 @@ export class EndlessScene extends BaseScene {
 
   private tick(): void {
     if (this.disposed || !this.audio || this.blocked()) return;
-    if (this.audio.context.state !== 'running') { this.audio.recover(); return; }
+    if (this.audio.context.state !== 'running') {
+      // The engine silenced the context because the app left the screen — the activity's
+      // own pause, which the page is not told about — and a run that was out of sight is
+      // invalidated, as one behind a hidden page is.
+      if (this.audio.background.hidden) { this.invalidate('background'); return; }
+      this.audio.recover();
+      return;
+    }
     this.audio.clock.refresh();
     const transition = this.transition;
     if (transition && this.now() >= transition.swap && !transition.swapped) {

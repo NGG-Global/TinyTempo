@@ -547,10 +547,22 @@ through `setSounds`, which belongs to the level that set it. The nail gives `KNO
 the first knock and no more on the rest, and `knockDepth` (`hammerMotion.ts`) lets it back up
 `KNOCK.restSec` after the last; `reset` clears it, so a level's hammer never inherits one.
 The `AudioEngine` is game-wide via `audio/sharedAudio.ts` and is unlocked by the
-menu's PLAY tap. **It goes silent while the page is hidden** (`audio/backgroundSilence.ts`):
+menu's PLAY tap. **It goes silent while the game is off screen** (`audio/backgroundSilence.ts`):
 the level, the lesson and Endless pause themselves, but the title theme and the road's loop
-played on behind Home and phone calls, so the engine suspends the one context on hidden and
-resumes only a context it suspended, on the next touch if the platform refuses. The same loop is the **shell bed** on settings and the map
+played on behind Home and phone calls, so the engine suspends the one context and resumes
+only a context it suspended, on the next touch if the platform refuses. **Two signals say the
+game is off screen, and the page's is not enough on Android**: Capacitor never pauses the
+WebView with its activity, so `document.hidden` stayed false behind the launcher and behind
+every rewarded ad — its own activity over this one — and the music played on under both.
+`audio/appLifecycle.ts` (native-only) feeds `@capacitor/app`'s `pause`, `resume` and
+`appStateChange` into the same silence through `engine.background.setAppActive`, from
+`sharedAudio`. **And while it is off screen the context stays suspended**: the level answered
+every `statechange` with `recover()`, which resumed the context on the very event the suspend
+had fired, so `recover` now yields while `background.hidden` and the silence re-suspends a
+context anything else brings back. A level under an ad or a purchase sheet stands still on
+the frozen clock and goes on from the same sample, with its restart ticket intact; with no
+commerce out it pauses through `suspendedTooLong`, as a hidden page pauses it; Endless
+invalidates the run. The same loop is the **shell bed** on settings and the map
 (`audio/musicBed.ts`): PLAY starts it as the title theme leaves, those screens
 reuse the one source, a level fades it out and starts a fresh source on its own
 downbeat, and Tap offset cuts it so the metronome is the only pulse. Starting
@@ -1005,7 +1017,8 @@ src/
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
-    backgroundSilence.ts  Suspends the one context while the page is hidden; resumes only its own suspend
+    backgroundSilence.ts  Suspends the one context while the game is off screen, by the page or the activity; resumes only its own suspend
+    appLifecycle.ts    Native-only: the activity's pause and resume, which the WebView never passes to the page
     samples.ts         The recorded one-shots: fetch, decode, align to the beat
   config/
     design.ts          Design resolution, layout metrics, depth ordering

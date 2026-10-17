@@ -1,5 +1,5 @@
 import { AudioClock } from './AudioClock';
-import { silenceInBackground } from './backgroundSilence';
+import { silenceInBackground, type BackgroundSilence } from './backgroundSilence';
 import { MusicSystem } from './MusicSystem';
 import { ThemeMusic } from './ThemeMusic';
 import type { SoundKind, SoundSink } from '../rhythm/RhythmScheduler';
@@ -112,8 +112,12 @@ export class AudioEngine implements SoundSink {
    * every waiting target while the demonstration (already scheduled) still sounds in time.
    */
   private readonly onSink = (): void => { this.clock.refresh(); };
-  /** Stops following the page's visibility; every sound is silenced while it is hidden. */
-  private readonly releaseBackground: () => void;
+  /**
+   * Every sound is silenced while the game is off screen. The page's visibility feeds it
+   * here; the activity's pause and resume reach it through `setAppActive`, from the
+   * composition point (`sharedAudio`), since the engine knows nothing native.
+   */
+  public readonly background: BackgroundSilence;
 
   public constructor() {
     this.musicBus.gain.value = 1;
@@ -122,7 +126,7 @@ export class AudioEngine implements SoundSink {
     this.sfxBus.connect(this.master);
     this.master.connect(this.context.destination);
     this.context.addEventListener?.('sinkchange', this.onSink);
-    this.releaseBackground = silenceInBackground(this.context, typeof document === 'undefined' ? undefined : document);
+    this.background = silenceInBackground(this.context, typeof document === 'undefined' ? undefined : document);
   }
 
   /** Nothing is coming out: the puck is off, or both levels are. */
@@ -157,6 +161,9 @@ export class AudioEngine implements SoundSink {
    */
   public recover(): void {
     if (this.disposed || this.context.state === 'running' || this.context.state === 'closed') return;
+    // Off screen, the suspend is the silence's own and is kept: a level's `statechange`
+    // answer used to resume the context on the very event that suspend had fired.
+    if (this.background.hidden) return;
     void this.context.resume();
   }
   public get activeSources(): number { return this.planSources.size + this.presentationSources.size; }
@@ -291,7 +298,7 @@ export class AudioEngine implements SoundSink {
     this.music.dispose();
     this.disposed = true;
     this.context.removeEventListener?.('sinkchange', this.onSink);
-    this.releaseBackground();
+    this.background.release();
     this.musicBus.disconnect();
     this.sfxBus.disconnect();
     this.master.disconnect();
