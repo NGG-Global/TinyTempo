@@ -75,7 +75,10 @@ scheduled, judged or scored changed.
 - **One ambient layer per area** (`ui/mapAmbience.ts`): pollen on Grass, a slow glow
   breathing on Pavement's lamps, dust on Sand, snowfall on Snow, fireflies at Dusk, petals in
   the Garden, mist over the Swamp, leaves tumbling (the one shape that turns) through the
-  Village, and embers rising off the Castle, whose torches glow as the lamps do. It is a
+  Village, embers rising off the Castle, whose torches glow as the lamps do, stars twinkling
+  over Space, sprinkles spinning down on Candy, faint wisps rising off the Haunted heath,
+  glitter flashing over Hollywood and bubbles rising through Art Deco. The radar beacon, the
+  jack-o'-lantern and the deco lamp glow as the lamps do. It is a
   fixed pool of 32 motes and 8 lamp glows, made once. Each mote's place is a pure function of
   its seed, the time and the view, wrapped round only off screen. Every mote is anchored to
   the world, so it keeps its place on the ground as the road scrolls. It sits at depth 0.75,

@@ -42,7 +42,7 @@ function recorder() {
   return { g: proxy as never, calls, bounds: () => ({ left: minX, right: maxX, top: minY, bottom: maxY }) };
 }
 
-const NEW = ['Garden', 'Swamp', 'Village', 'Castle'];
+const NEW = ['Garden', 'Swamp', 'Village', 'Castle', 'Space', 'Candy', 'Haunted', 'Hollywood', 'Art Deco'];
 
 describe('the scenery beside the road', () => {
   it('gives every area its own two props, and none of the new ones falls back to Grass', () => {
@@ -75,7 +75,7 @@ describe('the scenery beside the road', () => {
     }
   });
 
-  it('lights the street lamp and the castle torch, and nothing else', () => {
+  it('lights the street lamp, the castle torch, the radar beacon, the jack-o\'-lantern and the deco lamp, and nothing else', () => {
     const lit: string[] = [];
     for (const area of AREAS) {
       for (const variant of [0, 1]) {
@@ -88,7 +88,7 @@ describe('the scenery beside the road', () => {
         expect(light.y).toBeGreaterThan(500 - 132);
       }
     }
-    expect(lit).toEqual(['Pavement 0', 'Castle 1']);
+    expect(lit).toEqual(['Pavement 0', 'Castle 1', 'Space 0', 'Haunted 1', 'Art Deco 1']);
   });
 });
 

@@ -9,7 +9,10 @@ const view = { left: 0, top: 4000, width: 720, height: 1559 };
 describe('the map\'s ambience', () => {
   it('has one kind per area, in the order the props use', () => {
     expect(AMBIENCE_BY_AREA).toHaveLength(AREAS.length);
-    expect(AMBIENCE_BY_AREA).toEqual(['pollen', 'lamps', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers']);
+    expect(AMBIENCE_BY_AREA).toEqual([
+      'pollen', 'lamps', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers',
+      'stars', 'sprinkles', 'wisps', 'glitter', 'bubbles',
+    ]);
   });
 
   it('keeps every mote within the view and its margin, however long the map is open', () => {
@@ -52,10 +55,37 @@ describe('the map\'s ambience', () => {
     // Petals are not pollen in another colour: they are pinker and larger.
     const petal = poses('petals', 3)[0]!, pollen = motePose('pollen', 0, 3, view, 1)!;
     expect(petal.scale).toBeGreaterThan(pollen.scale);
-    // Nothing but leaves turns or swaps texture.
-    for (const kind of ['pollen', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'embers'] as const) {
+    // Nothing but leaves and sprinkles turns or swaps texture.
+    for (const kind of ['pollen', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'embers', 'stars', 'wisps', 'glitter', 'bubbles'] as const) {
       expect(motePose(kind, 1, 3, view, 1)).toMatchObject({ flake: false, angle: 0 });
     }
+  });
+
+  it('dresses the five areas after the castle each its own way', () => {
+    const poses = (kind: 'stars' | 'sprinkles' | 'wisps' | 'glitter' | 'bubbles', t: number) =>
+      Array.from({ length: AMBIENCE.motes }, (_, i) => motePose(kind, i, t, view, 1)!);
+    const moved = (kind: 'stars' | 'sprinkles' | 'wisps' | 'glitter' | 'bubbles', i: number) => {
+      const a = motePose(kind, i, 20, view, 1)!, b = motePose(kind, i, 21, view, 1)!;
+      return { dx: b.x - a.x, dy: b.y - a.y };
+    };
+    // Stars stay where they are and twinkle; they are the stillest kind.
+    for (let i = 0; i < AMBIENCE.motes; i++) expect(Math.hypot(moved('stars', i).dx, moved('stars', i).dy)).toBeLessThan(1);
+    expect(poses('stars', 1).every(pose => pose.glow)).toBe(true);
+    // Sprinkles fall and spin, in more than one colour.
+    expect(poses('sprinkles', 3).every(pose => pose.flake)).toBe(true);
+    expect(new Set(poses('sprinkles', 3).map(pose => pose.tint)).size).toBeGreaterThan(2);
+    // Wisps and bubbles rise; wisps are large, faint and glow, bubbles small and flat.
+    for (const kind of ['wisps', 'bubbles'] as const) {
+      const rising = Array.from({ length: AMBIENCE.motes }, (_, i) => motePose(kind, i, 2, view, 1)!)
+        .filter((pose, i) => motePose(kind, i, 2 + 1 / 60, view, 1)!.y < pose.y);
+      expect(rising.length, kind).toBeGreaterThan(AMBIENCE.motes * 0.9);
+    }
+    expect(poses('wisps', 5).every(pose => pose.glow && pose.scale >= 0.4 && pose.alpha <= 0.2)).toBe(true);
+    expect(poses('bubbles', 5).every(pose => !pose.glow)).toBe(true);
+    // Glitter is dark most of the time: a flash, not a glow.
+    const lit = Array.from({ length: 120 }, (_, k) => motePose('glitter', 4, k / 30, view, 1)!.alpha).filter(alpha => alpha > 0.5);
+    expect(lit.length).toBeLessThan(40);
+    expect(lit.length).toBeGreaterThan(0);
   });
 
   it('stays at most forty on screen, and the lamps carry glows rather than motes', () => {
@@ -64,7 +94,7 @@ describe('the map\'s ambience', () => {
   });
 
   it('moves smoothly: a frame later, a mote has drifted a little, not jumped', () => {
-    for (const kind of ['pollen', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers'] as const) {
+    for (const kind of AMBIENCE_BY_AREA.filter(kind => kind !== 'lamps')) {
       for (let i = 0; i < AMBIENCE.motes; i++) {
         const a = motePose(kind, i, 10, view, 1)!, b = motePose(kind, i, 10 + 1 / 60, view, 1)!;
         // A wrap happens only off screen, so on screen the step is tiny.

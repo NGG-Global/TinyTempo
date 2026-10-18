@@ -89,15 +89,19 @@ colours are `puckColours`** (`ui/roadLayout.ts`): frontier coral, then a cleared
 settled mid-tone of the area's road, then locked and preview, and every number clears
 `OUTLINE_CONTRAST` on its puck — a preview's is drawn whole in its faintest legible colour,
 never faded by alpha. **One ambient layer per area** (`ui/mapAmbience.ts`) — pollen, lamp
-glow, dust, snow, fireflies, petals, mist, leaves, embers — is a fixed pool of 40 world-anchored images posed as pure
+glow, dust, snow, fireflies, petals, mist, leaves, embers, stars, sprinkles, wisps, glitter, bubbles — is a fixed pool of 40 world-anchored images posed as pure
 `f(seed, t, view)`, under every prop and stop, off under reduced motion and on blur. **The
 frontier hops on beat 1 of the music**: `ui/musicPulse.ts` turns `MusicSystem.playheadAt`
 (the loop's position across its rate history, read at the heard clock) into a bar pose, and
 falls back to the frame clock at 120 BPM, never freezing. See `docs/VISUAL_POLISH.md`.
 
-**Nine areas, appended, never inserted** (`AREAS` in `game/levels.ts`): Grass, Pavement, Sand,
+**Fourteen areas, appended, never inserted** (`AREAS` in `game/levels.ts`): Grass, Pavement, Sand,
 Snow and Dusk on levels 1–50 as they always were, then Garden, Swamp, Village and Castle on
-51–90, and Grass II from 91. An area is only a look and a name — gates count areas by index,
+51–90, then Space, Candy, Haunted, Hollywood and Art Deco on 91–140, and Grass II from 141. The
+last five alternate dark and light, so the road never runs three dark areas in a row, and the two
+dark ones (Space, Haunted) take a light ink as Dusk does, which `tests/ui.test.ts` counts. The
+sci-fi area is named Space and the candyland one Candy: names are printed as places ("Space is
+open", "The best of Candy"), and "Candy Land" is a board game's trademark. An area is only a look and a name — gates count areas by index,
 analytics by number, and no save stores a name — so appending re-dresses the road past level
 50 and changes nothing a player owns; inserting would re-dress roads already walked. A new
 area needs four things, each failing a test without it: a palette held to every per-area
