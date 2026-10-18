@@ -8,6 +8,7 @@ import { BRUSH_LOOKS } from '../vignettes/brushLooks';
 import { CANVAS_LOOKS } from '../vignettes/canvasLooks';
 import { BUBBLE_LOOKS } from '../vignettes/bubbleLooks';
 import { BUG_LOOKS } from '../vignettes/bugLooks';
+import { CAMERA_LOOKS } from '../vignettes/cameraLooks';
 import { CLAP_LOOKS } from '../vignettes/clapLooks';
 import { CUCUMBER_LOOKS } from '../vignettes/cucumberLooks';
 import { CURL_LOOKS } from '../vignettes/curlLooks';
@@ -825,6 +826,41 @@ const DRAWERS: Readonly<Record<string, Drawer>> = {
       p.fill(0xfff6c4).disc(21, -30, 7.5, false);
       p.line([[-18, -26], [-15, 28]], 2.4, 0xffffff);
       glint(p, -30, -34, 7);
+    });
+  },
+  // Level 171's: the cat's portrait, pinned by its corner the way it came off the line.
+  'camera-cat-print': p => {
+    const look = CAMERA_LOOKS[0]!;
+    p.fill(0xfbfaf4).box(-32, -40, 64, 80, 4);
+    p.detail(() => {
+      p.fill(look.wall).box(-26, -34, 52, 52, 2, false);
+      p.fill(look.floor).box(-26, 4, 52, 14, 0, false);
+      p.fill(look.second).oval(0, 12, 20, 5, false);
+      p.fill(look.accent).oval(0, 2, 13, 11);
+      p.fill(look.accent).poly([[-12, -14], [-9, -26], [-3, -16]]).poly([[3, -16], [9, -26], [12, -14]]);
+      p.fill(look.accent).disc(0, -10, 11);
+      p.line([[-6, -11], [-3, -13], [0, -11]], 1.6).line([[0, -11], [3, -13], [6, -11]], 1.6);
+      p.fill(0xe7838c).disc(0, -6, 1.6, false);
+      p.fill(0xa6784e).box(-4, -46, 8, 12, 2);
+      glint(p, 24, -24, 7);
+    });
+  },
+  // Level 207's: the birthday cake, candles lit, the picture that came out right.
+  'camera-party-print': p => {
+    const look = CAMERA_LOOKS[1]!;
+    p.fill(0xfbfaf4).box(-32, -40, 64, 80, 4);
+    p.detail(() => {
+      p.fill(look.wall).box(-26, -34, 52, 52, 2, false);
+      for (const [x, colour] of [[-18, 0xf2c14e], [-6, 0x3fb6a8], [6, 0xe2603f], [18, 0xf2c14e]] as const) p.fill(colour).poly([[x - 5, -33], [x + 5, -33], [x, -26]], false);
+      p.fill(look.floor).box(-24, 8, 48, 6, 1, false);
+      p.fill(look.accent).box(-16, -6, 32, 14, 2);
+      p.fill(look.accent).box(-10, -16, 20, 10, 2);
+      p.fill(look.second).box(-16, -6, 32, 4, 1, false).box(-10, -16, 20, 3, 1, false);
+      for (const x of [-6, 0, 6]) {
+        p.fill(0x6fb2e8).box(x - 1, -23, 2, 7, 1, false);
+        p.fill(0xf2913a).oval(x, -25, 1.6, 2.6, false);
+      }
+      glint(p, 24, -26, 7);
     });
   },
 };

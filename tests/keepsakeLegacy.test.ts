@@ -32,8 +32,9 @@ const TESTER: Progress = { unlocked: 31, best: { 9: on(9, 3), 18: on(18, 3), 28:
 
 describe('keepsakes kept from before the debut schedule', () => {
   it('freezes every keepsake’s old level, exactly as the fixture pinned it before the change', () => {
-    expect(Object.keys(LEGACY_KEEPSAKE_LEVELS)).toHaveLength(KEEPSAKES.length);
-    for (const id of Object.keys(LEGACY_KEEPSAKE_LEVELS)) expect(KEEPSAKES.some(k => k.id === id), id).toBe(true);
+    // The seventy keepsakes that existed under the old schedule, and none appended since.
+    expect(Object.keys(LEGACY_KEEPSAKE_LEVELS).sort()).toEqual(KEEPSAKES.slice(0, 70).map(k => k.id).sort());
+    expect(LEGACY_KEEPSAKE_LEVELS).not.toHaveProperty('camera-cat-print');
     // A sample of the old schedule: one act a level to 25, the second lap to 50, then the eras.
     expect(LEGACY_KEEPSAKE_LEVELS).toMatchObject({
       'hammer-lucky-nail': 1, 'egg-painted': 10, 'bug-ladybird': 28, 'apple-pear': 50, 'barber-pole': 51,

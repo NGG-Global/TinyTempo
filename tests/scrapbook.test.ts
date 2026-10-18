@@ -53,12 +53,12 @@ describe('the collection', () => {
   });
 
   it('has a deterministic total and no duplicates of any kind', () => {
-    expect(KEEPSAKES).toHaveLength(70);
+    expect(KEEPSAKES).toHaveLength(72);
     expect(new Set(KEEPSAKES.map(k => k.id)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.level)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => `${k.vignette}:${k.lap}`)).size).toBe(KEEPSAKES.length);
     expect(new Set(KEEPSAKES.map(k => k.name)).size).toBe(KEEPSAKES.length);
-    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 70 });
+    expect(collectionCount(EMPTY)).toEqual({ owned: 0, total: 72 });
   });
 
   it('gives every act at least one keepsake, and the acts with looks a second', () => {

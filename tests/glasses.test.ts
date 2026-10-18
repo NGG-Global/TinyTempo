@@ -51,19 +51,20 @@ function recorder() {
 const plan = createRoundPlan(1, parsePattern('test', 'X X X X'), 120, 10);
 
 describe('the glasses', () => {
-  it('first play level 161, the opener of area 17 and the last debut, and raise a different glass each lap', () => {
+  it('first play level 161, the opener of area 17, and raise a different glass each lap', () => {
     expect(VIGNETTES[34]?.id).toBe('glasses');
-    expect(VIGNETTES).toHaveLength(35);
+    expect(VIGNETTES).toHaveLength(36);
     for (let level = 1; level < 161; level++) expect(levelSpec(level).vignette).not.toBe('glasses');
     for (let lap = 0; lap < 4; lap++) {
-      expect(actLevel('glasses', lap)).toBe(161 + 35 * lap);
-      expect(levelSpec(161 + 35 * lap)).toMatchObject({ vignette: 'glasses', lap });
+      const level = [161, 197, 233, 269][lap]!;
+      expect(actLevel('glasses', lap)).toBe(level);
+      expect(levelSpec(level)).toMatchObject({ vignette: 'glasses', lap });
     }
     expect(GLASSES_LOOKS.map(look => look.glass)).toEqual(['flute', 'tumbler', 'goblet']);
     expect(glassesLook(3)).toBe(GLASSES_LOOKS[0]);
     const definition = VIGNETTES.find(v => v.id === 'glasses')!;
     for (const lap of [1, 2]) expect(definitionForLap(definition, lap)).toBe(definition);
-    expect(KEEPSAKES.filter(k => k.vignette === 'glasses').map(k => [k.name, k.level])).toEqual([['Party flute', 161], ['Lemonade tumbler', 196]]);
+    expect(KEEPSAKES.filter(k => k.vignette === 'glasses').map(k => [k.name, k.level])).toEqual([['Party flute', 161], ['Lemonade tumbler', 197]]);
   });
 
   it('holds its ending long enough for the toast or the spill, and lands the next task on the bar', () => {

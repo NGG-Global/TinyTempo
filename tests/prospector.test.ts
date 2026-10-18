@@ -39,7 +39,7 @@ describe('the prospector', () => {
     expect(VIGNETTES[31]?.id).toBe('prospector');
     for (let level = 1; level < 131; level++) expect(levelSpec(level).vignette).not.toBe('prospector');
     for (let lap = 0; lap < 4; lap++) {
-      const level = [131, 166, 201, 236][lap]!;
+      const level = [131, 166, 202, 238][lap]!;
       expect(actLevel('prospector', lap)).toBe(level);
       expect(levelSpec(level)).toMatchObject({ vignette: 'prospector', lap });
     }

@@ -72,6 +72,10 @@ import { ProspectorVignette } from './ProspectorVignette';
 import { PROSPECTOR_LOOKS } from './prospectorLooks';
 import { PROSPECTOR_REVEAL_SEC } from './prospectorMotion';
 import { createProspectorSounds } from '@/audio/prospectorSounds';
+import { CameraVignette } from './CameraVignette';
+import { CAMERA_LOOKS } from './cameraLooks';
+import { CAMERA_REVEAL_SEC } from './cameraMotion';
+import { createCameraSounds } from '@/audio/cameraSounds';
 import { IceCreamVignette } from './IceCreamVignette';
 import { ICE_CREAM_LOOKS } from './iceCreamLooks';
 import { ICE_CREAM_REVEAL_SEC } from './iceCreamMotion';
@@ -321,6 +325,15 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     endingSec: GLASS_REVEAL_SEC, endingHoldBeats: 5,
     create: (scene, lap) => new GlassesVignette(scene, lap), sounds: createGlassesSounds,
   },
+  // Act 36, appended at request: an instant camera, the first act past the original cast. It
+  // debuts on level 171 (`DEBUT_LEVELS`), the opener of area 18.
+  {
+    id: 'camera', title: 'Snapshot', intro: 'Click on\nthe beat.', ink: HOME_INK,
+    success: ['Picture\nperfect!', 'One for the album.'], rough: ['Blurry\nshot.', 'Somebody blinked.'],
+    endingSec: CAMERA_REVEAL_SEC, endingHoldBeats: 5,
+    create: (scene, lap) => new CameraVignette(scene, lap), sounds: createCameraSounds,
+    looks: CAMERA_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
@@ -334,7 +347,8 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
  * player has met by then (`eligibleActs`), and its rules version 1 pinned that pool as the
  * first twenty-eight acts in registry order (`tests/fixtures/endless-rules-v1.json`). So
  * exactly those twenty-eight are in by level 100 — three in area 2, two in each of areas 3
- * to 10 — and the last seven follow one an area, to level 161.
+ * to 10 — and the seven after them follow one an area, to level 161. Acts appended since
+ * keep that pace, one an area: the instant camera opens area 18, on level 171.
  *
  * **Appending an act means appending its debut level here**, after the last one: it moves
  * every level from that debut onward, keepsakes included, so it goes past the furthest
@@ -350,4 +364,6 @@ export const DEBUT_LEVELS: readonly number[] = Object.freeze([
   21, 22, 31, 32, 41, 42, 51, 52, 61, 62, 71, 72, 81, 82, 91, 92,
   // Areas 11–17: one each, paintbrush to the glasses.
   101, 111, 121, 131, 141, 151, 161,
+  // Area 18: the instant camera, appended past every level any player had reached.
+  171,
 ]);

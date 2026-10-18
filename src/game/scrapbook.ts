@@ -129,6 +129,8 @@ const KEEPSAKE_LIST: readonly Entry[] = [
   { id: 'glasses-party-flute', vignette: 'glasses', lap: 0, name: 'Party flute' },
   { id: 'frog-firefly-jar', vignette: 'frog', lap: 1, name: 'Firefly jar' },
   { id: 'glasses-lemonade', vignette: 'glasses', lap: 1, name: 'Lemonade tumbler' },
+  { id: 'camera-cat-print', vignette: 'camera', lap: 0, name: 'Cat snapshot' },
+  { id: 'camera-party-print', vignette: 'camera', lap: 1, name: 'Birthday snapshot' },
 ];
 
 /** The level where an act plays for the `lap`-th time: the rotation, read backwards. */

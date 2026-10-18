@@ -11,7 +11,7 @@ act that has gone longest without a turn among those that have debuted. So:
 
 - a new act arrives exactly where the table says, and nowhere earlier;
 - no act plays two levels running;
-- once every act has debuted, each one plays exactly once in any run of 35 levels.
+- once every act has debuted, each one plays exactly once in any run of 36 levels.
 
 A level's `lap` is still the number of earlier levels its act played, which is what an act
 indexes its looks with, and `actLevel(vignette, lap)` still reads the schedule backwards.
@@ -31,6 +31,7 @@ indexes its looks with, and `actLevel(vignette, lap)` still reads the schedule b
 | 9 | 81–90 | apple, barber | 81, 82 |
 | 10 | 91–100 | popcorn, toothbrush | 91, 92 |
 | 11–17 | 101–170 | paintbrush, nose, dish, prospector, ice cream, frog, glasses | 101, 111, 121, 131, 141, 151, 161 |
+| 18 | 171–180 | instant camera | 171 |
 
 **Every area introduces at least one act until the cast is complete.** A new act arrives on
 an area's opener or its first pattern level, the two easiest steps of the area's
@@ -46,9 +47,12 @@ with none on a finale, is nine in the first, three in the second and two in each
 So the pool, its order and the first forty steps of every run are what they were, and the
 Endless leaderboard needed no new rules version. The last seven acts follow one an area.
 
-After level 161 the cast is complete and no area introduces an act. Variety from there
-is the acts' looks, which change by lap (`docs/VARIANTS.md`). Holding to one new act an
-area past 170 means making one act per ten levels.
+The instant camera (`docs/CAMERA.md`) was appended on level 171, the opener of area 18, and
+moved three keepsakes by a level each (to 177, 187 and 197), re-pinned rather than
+grandfathered since nobody had passed level 50. After level 171 the cast is complete and no
+area introduces an act. Variety from there is the acts' looks, which change by lap
+(`docs/VARIANTS.md`). Holding to one new act an area past 180 means making one act per ten
+levels.
 
 ## What it replaced
 

@@ -41,15 +41,16 @@ describe('the frog', () => {
     expect(VIGNETTES[33]?.id).toBe('frog');
     for (let level = 1; level < 151; level++) expect(levelSpec(level).vignette).not.toBe('frog');
     for (let lap = 0; lap < 4; lap++) {
-      expect(actLevel('frog', lap)).toBe(151 + 35 * lap);
-      expect(levelSpec(151 + 35 * lap)).toMatchObject({ vignette: 'frog', lap });
+      const level = [151, 187, 223, 259][lap]!;
+      expect(actLevel('frog', lap)).toBe(level);
+      expect(levelSpec(level)).toMatchObject({ vignette: 'frog', lap });
     }
     expect(FROG_LOOKS.map(look => look.pond)).toEqual(['noon', 'moon', 'lotus']);
     expect(frogLook(3)).toBe(FROG_LOOKS[0]);
     // A frog is a frog in any pond: the words never change.
     const definition = VIGNETTES.find(v => v.id === 'frog')!;
     for (const lap of [1, 2]) expect(definitionForLap(definition, lap)).toBe(definition);
-    expect(KEEPSAKES.filter(k => k.vignette === 'frog').map(k => [k.name, k.level])).toEqual([['Pond frog', 151], ['Firefly jar', 186]]);
+    expect(KEEPSAKES.filter(k => k.vignette === 'frog').map(k => [k.name, k.level])).toEqual([['Pond frog', 151], ['Firefly jar', 187]]);
   });
 
   it('holds its ending long enough for the chorus or the splash, and lands the next task on the bar', () => {

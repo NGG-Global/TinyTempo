@@ -45,7 +45,7 @@ describe('ice cream', () => {
     expect(VIGNETTES[32]?.id).toBe('icecream');
     for (let level = 1; level < 141; level++) expect(levelSpec(level).vignette).not.toBe('icecream');
     for (let lap = 0; lap < 4; lap++) {
-      const level = 141 + 35 * lap;
+      const level = [141, 177, 213, 249][lap]!;
       expect(actLevel('icecream', lap)).toBe(level);
       expect(levelSpec(level)).toMatchObject({ vignette: 'icecream', lap });
     }
@@ -59,7 +59,7 @@ describe('ice cream', () => {
     expect(new Set(words.map(d => d.rough[1])).size).toBe(3);
     // Each look is a different licker as well as a different treat.
     expect(new Set(ICE_CREAM_LOOKS.map(look => look.hairStyle)).size).toBe(3);
-    expect(KEEPSAKES.filter(k => k.vignette === 'icecream').map(k => [k.name, k.level])).toEqual([['Waffle cone', 141], ['Cherry ice pop', 176]]);
+    expect(KEEPSAKES.filter(k => k.vignette === 'icecream').map(k => [k.name, k.level])).toEqual([['Waffle cone', 141], ['Cherry ice pop', 177]]);
   });
 
   it('holds its ending long enough to finish or drop the treat, and lands the next task on the bar', () => {

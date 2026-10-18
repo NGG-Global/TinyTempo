@@ -19,7 +19,7 @@ vi.mock('../src/ui/backdrop', () => ({ Backdrop: class { open() {} layout() {} d
 describe('nose blowing and washing up', () => {
   it('open areas 12 and 13, one each, and rotate every variation', () => {
     expect(VIGNETTES.slice(29, 31).map(v => v.id)).toEqual(['nose', 'dish']);
-    for (const [id, levels, looks] of [['nose', [111, 144, 179, 214], 4], ['dish', [121, 155, 190], 3]] as const) {
+    for (const [id, levels, looks] of [['nose', [111, 144, 180, 216], 4], ['dish', [121, 155, 191], 3]] as const) {
       for (let lap = 0; lap < looks; lap++) {
         const level = levels[lap]!;
         expect(actLevel(id, lap)).toBe(level);

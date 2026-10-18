@@ -154,12 +154,12 @@ filed into the windows current when it arrives. **Any change to `ENDLESS` is a n
 version and a new leaderboard.** Five achievements were appended with their Console ids (items 8–12); the config is a
 union of three rule shapes and `hasEarned` takes the save and the Endless record.
 
-Thirty-five vignettes, **each with a debut level, and a new one in every area until the cast
+Thirty-six vignettes, **each with a debut level, and a new one in every area until the cast
 is complete** (`DEBUT_LEVELS` in `vignettes/registry.ts`, read by `placementAt` in
 `vignettes/rotation.ts`): an act first plays on its debut level, and every other level plays
 the act that has gone longest without a turn. Levels 1–9 open one act a level as they always
 did, area 2 brings three, areas 3–10 two each, on the area's opener and first pattern level,
-never a finale, and areas 11–17 one each, to the glasses on level 161. **Exactly the
+never a finale, and areas 11–18 one each, to the camera on level 171. **Exactly the
 twenty-eight acts of Endless's v1 pool are in by level 100, in its order**, which is what kept
 its rules and leaderboard valid. It replaced eras that could only add an act two full laps past
 the last keepsake, which had put the last seven acts between 107 and 358 and left thirty-one of
@@ -197,6 +197,12 @@ mistake leaves a hairline crack, and the coda either raises them to a "Cheers!" 
 `Text` made at construction and only posed — or shatters the cracked one onto the cloth.
 Three ponds and three toasts by lap; the drinks are soft ones. Both synthesized. See
 `docs/FROG_AND_GLASSES.md`.
+The instant camera is act 36, from level 171, titled *Snapshot* and never named as a brand.
+A shutter press, flash and click a beat; **only judged hits peg prints to the clothesline**,
+and the coda ejects one print that rises and develops — sharp, glossy and smiling on
+success, washed out, ghosted and sagging on a rough one, the two codas identical until the
+motor's whir ends (`CAMERA_PARTING_SEC`). A cat, a birthday cake and a sandcastle by lap
+(`cameraLooks.ts`), each with its own words. Synthesized. See `docs/CAMERA.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
