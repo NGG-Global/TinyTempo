@@ -127,7 +127,11 @@ it has landed. See `docs/STAR_GATES.md`.
 **Endless Mode is a ruleset, not a level** (`config/endless.ts`, `game/endless.ts`,
 `scenes/EndlessScene.ts`, `docs/ENDLESS_MODE.md`). It opens when level 100 is *cleared*
 (`endlessUnlocked`, read from the road's save, stored nowhere) and costs nothing: no heart,
-no attempt, no ad. A run is a sequence of steps — one act, one rhythm task, the act's coda,
+no attempt, no ad. **It has two doors and one card**: the map's infinity puck and, once open,
+an Endless block beside How to play on the title screen, both showing `EndlessCard`; a run
+started from the title screen goes back there (`from`, the plaque's **Home**). The result
+plaque is stacked from its rows' measured heights (`ui/endlessPlaque.ts`) and hides the run's
+HUD while it is up. A run is a sequence of steps — one act, one rhythm task, the act's coda,
 and **nothing else**: the next act's demonstration starts on the downbeat the coda's slide
 lands on, with no lead-in, as one task follows another in a level — generated as a pure function of
 `(seed, rulesVersion, index)` in bounded memory, from the pool of acts the rotation places
@@ -1134,7 +1138,8 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
-    endlessCard.ts     Endless Mode's door on the map: locked copy, the best, the badges, Start, Leaderboard
+    endlessCard.ts     Endless Mode's door, on the map and the title screen: locked copy, the best, the badges, Start, Leaderboard
+    endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

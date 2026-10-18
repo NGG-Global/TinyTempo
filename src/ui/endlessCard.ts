@@ -9,12 +9,11 @@ import { drawActionDisc } from './chrome';
 import { drawInfinity, drawPadlock } from './icons';
 import { BRASS, drawPanel, Rect } from './panel';
 import { arrive } from './spring';
-import { body, display, label, resize, wrapWidth } from './type';
+import { balanceWrap, body, display, label, resize } from './type';
 
 /** Design-unit metrics, scaled by the scene's `s`. */
 const CARD = Object.freeze({
   width: 600,
-  height: 740,
   lockedHeight: 520,
   bestTop: 180,
   badgeTop: 330,
@@ -22,12 +21,30 @@ const CARD = Object.freeze({
   badgeGap: 150,
   startTop: 440,
   blockHeight: 104,
-  boardTop: 572,
   chipHeight: 76,
   closeWidth: 220,
   closeHeight: 78,
+  /** Between the last control above Close and Close itself. */
+  closeGap: 28,
+  closePad: 32,
   enterSec: 0.35,
 });
+
+/**
+ * The card's vertical stack in design units, from its top: where Start, the leaderboard
+ * chip and Close sit, and how tall the card is. Close follows whatever is above it.
+ *
+ * It used to sit a fixed distance from the bottom of a fixed 740-unit card, which put it
+ * 18 units over the leaderboard chip whenever Play Games offered one — on every signed-in
+ * phone — and left an empty band where the chip would be when it did not.
+ */
+export function cardStack(unlocked: boolean, leaderboard: boolean): { readonly board: number | null; readonly close: number; readonly height: number } {
+  if (!unlocked) return { board: null, close: CARD.lockedHeight - CARD.closePad - CARD.closeHeight, height: CARD.lockedHeight };
+  const startBottom = CARD.startTop + CARD.blockHeight;
+  const board = leaderboard ? startBottom + CARD.closeGap : null;
+  const close = (board === null ? startBottom : board + CARD.chipHeight) + CARD.closeGap;
+  return { board, close, height: close + CARD.closeHeight + CARD.closePad };
+}
 
 /** The parts of a viewport frame the card reads. */
 interface CardFrame { readonly x: number; readonly y: number; readonly width: number; readonly height: number; readonly centerX: number; readonly centerY: number }
@@ -108,9 +125,10 @@ export class EndlessCard {
     const record = facts.record;
     this.title.setText(facts.unlocked ? (facts.justUnlocked ? 'Unlocked!' : 'How long can you last?') : `Clear level ${ENDLESS.unlockLevel}`);
     this.note.setText(facts.unlocked
-      ? `One rhythm per act, straight into the next. ${ENDLESS.lives.start} Groove Lives; a round under the bar costs one.`
+      ? `One rhythm per act, straight into the next. ${ENDLESS.lives.start}\u00a0Groove Lives; a round under the bar costs one.`
       : `Finish level ${ENDLESS.unlockLevel} on the road to open it. ${Math.min(facts.cleared, ENDLESS.unlockLevel)} of ${ENDLESS.unlockLevel} cleared.`);
-    this.best.setText(record.validRuns > 0 ? formatSurvival(record.bestMs, true) : '—');
+    // No run yet: no number at all, rather than a dash set at 72 units, which read as a bar.
+    this.best.setText(record.validRuns > 0 ? formatSurvival(record.bestMs, true) : '');
     this.bestNote.setText(record.validRuns > 0 ? `${record.bestVignettes} acts · ${record.bestBpm} BPM · ${record.validRuns} ${record.validRuns === 1 ? 'run' : 'runs'}` : 'No run yet');
     MILESTONES.forEach((m, i) => this.badgeLabels[i]!.setText(`${m.sec / 60} min`));
     this.relayout();
@@ -156,7 +174,7 @@ export class EndlessCard {
     resize(this.eyebrow, 20 * s, PALETTE.muted, STYLE.current, false);
     resize(this.title, 44 * s, PALETTE.ink);
     resize(this.note, 23 * s, PALETTE.muted, STYLE.current, false);
-    wrapWidth(this.note, Math.min(CARD.width * s, this.frame.width - 40 * s) - 72 * s);
+    balanceWrap(this.note, Math.min(CARD.width * s, this.frame.width - 40 * s) - 72 * s);
     resize(this.bestLabel, 20 * s, PALETTE.muted, STYLE.current, false);
     resize(this.best, 72 * s, PALETTE.ink);
     resize(this.bestNote, 22 * s, PALETTE.muted, STYLE.current, false);
@@ -173,7 +191,8 @@ export class EndlessCard {
     const f = this.frame, s = f.s;
     const unlocked = facts.unlocked;
     const w = Math.min(CARD.width * s, f.width - 40 * s);
-    const h = (unlocked ? CARD.height : CARD.lockedHeight) * s;
+    const stack = cardStack(unlocked, facts.leaderboard);
+    const h = stack.height * s;
     const x = f.centerX - w / 2, y = f.centerY - h / 2 + rise;
     this.plateRect.setTo(x, y - rise, w, h);
     this.scrim.clear().setVisible(true).setAlpha(alpha).fillStyle(0x1a201c, 0.5).fillRect(f.fullX, f.fullY, f.fullW, f.fullH);
@@ -183,16 +202,22 @@ export class EndlessCard {
     const hide = (text: Phaser.GameObjects.Text) => text.setVisible(false);
     place(this.eyebrow, f.centerX, y + 48 * s);
     place(this.title, f.centerX, y + 100 * s);
-    // The mode's glyph beside the eyebrow: the infinity, and a padlock over it while locked.
-    drawInfinity(g, x + 48 * s, y + 48 * s, 16 * s, unlocked ? PALETTE.coral : PALETTE.muted);
-    if (!unlocked) drawPadlock(g, x + 48 * s, y + 36 * s, 18 * s, PALETTE.ink, SHELL.cream);
+    // The mode's glyph beside the eyebrow it names: the infinity, and a padlock over it while locked.
+    const glyphX = f.centerX - this.eyebrow.displayWidth / 2 - 30 * s;
+    drawInfinity(g, glyphX, y + 48 * s, 16 * s, unlocked ? PALETTE.coral : PALETTE.muted);
+    if (!unlocked) drawPadlock(g, glyphX, y + 36 * s, 18 * s, PALETTE.ink, SHELL.cream);
     place(this.note, f.centerX, y + 138 * s);
 
     if (unlocked) {
       const bestY = y + CARD.bestTop * s + 36 * s;
       place(this.bestLabel, f.centerX, bestY);
-      place(this.best, f.centerX, bestY + 52 * s);
-      place(this.bestNote, f.centerX, bestY + 108 * s);
+      if (this.best.text === '') {
+        hide(this.best);
+        place(this.bestNote, f.centerX, bestY + 52 * s);
+      } else {
+        place(this.best, f.centerX, bestY + 52 * s);
+        place(this.bestNote, f.centerX, bestY + 108 * s);
+      }
       // The three badges: a brass disc for one earned, a hollow seat for one not yet.
       const badgeY = y + CARD.badgeTop * s + 40 * s;
       MILESTONES.forEach((m, i) => {
@@ -216,9 +241,9 @@ export class EndlessCard {
       const span = this.startLabel.width + 76 * s;
       this.startLabel.setOrigin(0.5).setPosition(this.startRect.centerX - span / 2 + this.startLabel.width / 2, this.startRect.centerY).setAlpha(alpha).setVisible(true);
       drawActionDisc(g, this.startRect.centerX + span / 2 - 28 * s, this.startRect.centerY, 28 * s, s);
-      if (facts.leaderboard) {
+      if (stack.board !== null) {
         const chipW = Math.min(360 * s, w - 56 * s);
-        this.boardRect.setTo(f.centerX - chipW / 2, y + CARD.boardTop * s, chipW, CARD.chipHeight * s);
+        this.boardRect.setTo(f.centerX - chipW / 2, y + stack.board * s, chipW, CARD.chipHeight * s);
         drawPanel(g, this.boardRect, s, { fill: SHELL.puck, depth: 8 });
         place(this.boardLabel, this.boardRect.centerX, this.boardRect.centerY);
       } else {
@@ -231,7 +256,7 @@ export class EndlessCard {
       for (const text of [this.bestLabel, this.best, this.bestNote, this.startLabel, this.boardLabel, ...this.badgeLabels]) hide(text);
     }
     const cw = CARD.closeWidth * s, ch = CARD.closeHeight * s;
-    this.closeRect.setTo(f.centerX - cw / 2, y + h - ch - 32 * s, cw, ch);
+    this.closeRect.setTo(f.centerX - cw / 2, y + stack.close * s, cw, ch);
     drawPanel(g, this.closeRect, s, { fill: SHELL.wood, depth: 8 });
     place(this.closeLabel, this.closeRect.centerX, this.closeRect.centerY);
   }

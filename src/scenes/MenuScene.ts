@@ -3,6 +3,7 @@ import { setMusicBed } from '@/audio/musicBed';
 import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, stopTheme, toggleMute } from '@/audio/sharedAudio';
 import { createImpactBuffers } from '@/audio/hammerSounds';
 import { samples } from '@/audio/samples';
+import { ENDLESS } from '@/config/endless';
 import { MUSIC, THEME } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
 import { STYLE } from '@/config/style';
@@ -12,6 +13,10 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { tutorialSeen } from '@/game/TutorialRun';
+import { endlessUnlocked } from '@/game/endless';
+import { endlessRecord, loadEndlessProgress, markEndlessUnlockSeen, saveEndlessProgress } from '@/game/endlessProgress';
+import { track } from '@/monetization/analytics';
+import { endlessLeaderboardOffered, openEndlessLeaderboard } from '@/playgames/endless';
 import { loadProgress, seenScrapbook } from '@/game/progress';
 import { ownedKeepsakes } from '@/game/scrapbook';
 import { MaterialKey } from '@/textures/materials';
@@ -19,7 +24,8 @@ import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { shade } from '@/ui/colour';
 import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { drawGear } from '@/ui/gear';
-import { drawBook, drawChecklist, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBook, drawChecklist, drawInfinity, drawPlay, drawSpeaker } from '@/ui/icons';
+import { EndlessCard } from '@/ui/endlessCard';
 import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
 import { STAR_PRIZE } from '@/ui/star';
@@ -33,6 +39,11 @@ import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 
 const MENU = {
   sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
+  /**
+   * The row over Play. One block, How to play, until Endless Mode opens; then two side by
+   * side, the row widened only as far as keeps it clear of the objectives puck on its left.
+   */
+  row: { single: 400, split: 480, gap: 20, label: 32, splitLabel: 30 },
   /** One bead a beat, a bar across the sign: the theme's own 4/4. */
   dots: 4,
 } as const;
@@ -65,6 +76,21 @@ export class MenuScene extends BaseScene {
   private tutorialSurface!: Phaser.GameObjects.TileSprite;
   private tutorialLabel!: Phaser.GameObjects.Text;
   private tutorialRect = new Phaser.Geom.Rectangle();
+  /**
+   * Endless Mode's block, beside How to play once level 100 is cleared: the title screen
+   * is where a player who has finished the road comes back to, and the map's puck alone
+   * left the mode one screen and a scroll away from it.
+   */
+  private endlessButton!: Phaser.GameObjects.Graphics;
+  private endlessSurface!: Phaser.GameObjects.TileSprite;
+  private endlessLabel!: Phaser.GameObjects.Text;
+  private endlessRect = new Phaser.Geom.Rectangle();
+  private endlessCard!: EndlessCard;
+  /** Read on entry: the mode is shipped and the save has cleared its level. */
+  private endlessOpen = false;
+  /** A coral dot until the card has been opened once, on this screen or the map's. */
+  private endlessDot = false;
+  private endlessBoardBusy = false;
   private pucks!: Phaser.GameObjects.Graphics;
   private taps!: TapInput;
   private curtain!: SceneCurtain;
@@ -95,7 +121,7 @@ export class MenuScene extends BaseScene {
   private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'mute' | 'setup' | 'book' | 'objectives' | null = null;
+  private puckPressed: 'mute' | 'setup' | 'book' | 'objectives' | 'endless' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   private muted = false;
@@ -121,6 +147,9 @@ export class MenuScene extends BaseScene {
     this.bookDot = !seenScrapbook() && ownedKeepsakes(loadProgress()).length > 0;
     // Read on every entry, so a set that turned over at midnight is today's on the way back.
     this.objectives = loadObjectives(Date.now(), objectiveContext(loadProgress()));
+    this.endlessOpen = ENDLESS.available && endlessUnlocked(loadProgress());
+    this.endlessDot = this.endlessOpen && !loadEndlessProgress().seenUnlock;
+    this.endlessBoardBusy = false;
     // The hammer's idle sway doubles as the title illustration; it never receives a plan.
     this.illustration = new HammerNailVignette(this, true);
     this.struckBar = Number.NaN;
@@ -140,10 +169,14 @@ export class MenuScene extends BaseScene {
     this.tutorialButton = this.add.graphics();
     this.tutorialSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7);
     this.tutorialLabel = display(this, 'How to play', { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
+    this.endlessButton = this.add.graphics().setVisible(this.endlessOpen);
+    this.endlessSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7).setVisible(this.endlessOpen);
+    this.endlessLabel = display(this, 'Endless', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(this.endlessOpen);
     this.pucks = this.add.graphics();
-    this.layers = [this.button, this.tutorialButton, this.pucks].map(graphics => new BakedLayer(this, graphics));
+    this.layers = [this.button, this.tutorialButton, this.pucks, this.endlessButton].map(graphics => new BakedLayer(this, graphics));
     this.primed = false;
     this.objectivesCard = new ObjectivesCard(this);
+    this.endlessCard = new EndlessCard(this, 30);
 
     this.taps = new TapInput(this, tap => this.handleTap(tap));
     this.enteredAt = performance.now() / 1000;
@@ -195,15 +228,29 @@ export class MenuScene extends BaseScene {
     this.buttonRect.setTo(safe.centerX - CHROME.block.width * s / 2, safe.bottom - CHROME.block.fromBottom * s - height, CHROME.block.width * s, height);
     this.drawButton(0, s);
     resize(this.playLabel, 40 * s, SHELL.cream);
-    this.tutorialRect.setTo(safe.centerX - 200 * s, this.buttonRect.y - this.controlSize - 24 * s, 400 * s, this.controlSize);
+    const rowY = this.buttonRect.y - this.controlSize - 24 * s;
+    const row = MENU.row;
+    if (this.endlessOpen) {
+      const half = (row.split - row.gap) / 2 * s;
+      this.tutorialRect.setTo(safe.centerX - row.split / 2 * s, rowY, half, this.controlSize);
+      this.endlessRect.setTo(safe.centerX + row.gap / 2 * s, rowY, half, this.controlSize);
+    } else {
+      this.tutorialRect.setTo(safe.centerX - row.single / 2 * s, rowY, row.single * s, this.controlSize);
+      this.endlessRect.setTo(0, 0, 0, 0);
+    }
     drawPanel(this.tutorialButton.clear(), this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
     this.layers[1]!.invalidate();
     placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
-    resize(this.tutorialLabel, 32 * s, SHELL.cream);
+    resize(this.tutorialLabel, (this.endlessOpen ? row.splitLabel : row.label) * s, SHELL.cream);
+    if (this.endlessOpen) {
+      placeSurface(this.endlessSurface, this.endlessRect, s);
+      resize(this.endlessLabel, row.splitLabel * s, SHELL.cream);
+    }
     this.objectivesAt = { x: safe.left + 56 * s, y: this.tutorialRect.centerY };
     this.drawPucks(s, 0);
     this.objectivesCard.layout(safe, full, s);
+    this.endlessCard.layout(safe, full, s);
     // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
     if (!this.primed) {
       this.primed = true;
@@ -213,7 +260,8 @@ export class MenuScene extends BaseScene {
 
   private drawPucks(s: number, press: number): void {
     const g = this.pucks.clear();
-    const sinkOf = (key: 'mute' | 'setup' | 'book' | 'objectives') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'mute' | 'setup' | 'book' | 'objectives' | 'endless') => (this.puckPressed === key ? press : 0);
+    this.drawEndless(s, sinkOf('endless'));
     drawPuck(g, this.muteAt.x, this.muteAt.y, s, sinkOf('mute'));
     drawPuck(g, this.setupAt.x, this.setupAt.y, s, sinkOf('setup'));
     drawPuck(g, this.bookAt.x, this.bookAt.y, s, sinkOf('book'));
@@ -237,6 +285,27 @@ export class MenuScene extends BaseScene {
     }
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), r * 0.52, PALETTE.ink, 1);
     this.layers[2]?.invalidate();
+  }
+
+  /** The infinity and the word centred together on the block, with the unseen dot on its corner. */
+  private drawEndless(s: number, press: number): void {
+    if (!this.endlessOpen) return;
+    const g = this.endlessButton.clear();
+    const r = this.endlessRect;
+    drawPanel(g, r, s, { fill: SHELL.wood, depth: 8, press });
+    const sink = 8 * s * press * 0.8;
+    placeSurface(this.endlessSurface, r, s, sink);
+    const glyph = 18 * s, gap = 12 * s;
+    const span = glyph * 2 + gap + this.endlessLabel.displayWidth;
+    const left = r.centerX - span / 2;
+    drawInfinity(g, left + glyph, r.centerY + sink, glyph, SHELL.cream);
+    this.endlessLabel.setPosition(left + glyph * 2 + gap + this.endlessLabel.displayWidth / 2, r.centerY + sink);
+    if (this.endlessDot) {
+      const dx = r.right - 10 * s, dy = r.y + 10 * s + sink;
+      g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+      g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+    }
+    this.layers[3]?.invalidate();
   }
 
   /** The block sinks on the tap and springs back: one press, one rebound, then still. */
@@ -290,6 +359,7 @@ export class MenuScene extends BaseScene {
     this.struckOnMusic = pulse.onMusic;
     this.illustration.update(now);
     this.objectivesCard.update(now, reducedMotion());
+    this.endlessCard.update(now, reducedMotion());
     const s = this.uiScale;
     const t = STYLE.current;
     const age = now - this.enteredAt;
@@ -333,6 +403,21 @@ export class MenuScene extends BaseScene {
     if (this.curtain.active || this.busy) return;
     // An open card takes every tap: its Close, or anywhere off it, puts it away.
     if (this.objectivesCard.tap(tap.x, tap.y)) { this.puckDirty = true; return; }
+    const endlessTap = this.endlessCard.tap(tap.x, tap.y);
+    if (endlessTap !== null) {
+      if (endlessTap === 'start') void this.startEndless();
+      else if (endlessTap === 'leaderboard') void this.openEndlessBoard();
+      return;
+    }
+    if (this.endlessOpen && Phaser.Geom.Rectangle.Contains(this.endlessRect, tap.x, tap.y)) {
+      this.puckPressed = 'endless';
+      this.puckPressedAt = performance.now() / 1000;
+      this.puckDirty = true;
+      vibrate('tap');
+      this.showEndlessCard();
+      this.openTheme();
+      return;
+    }
     const half = this.controlSize / 2;
     if (Math.abs(tap.x - this.objectivesAt.x) < half && Math.abs(tap.y - this.objectivesAt.y) < half) {
       this.puckPressed = 'objectives';
@@ -507,6 +592,47 @@ export class MenuScene extends BaseScene {
     }
   }
   /**
+   * The same card the map's Endless puck opens, so the mode reads the same from either
+   * door: the best, the badges, Start and the leaderboard. Opening it is what marks the
+   * unlock seen, on this screen as on the map.
+   */
+  private showEndlessCard(): void {
+    const progress = loadProgress();
+    const unlocked = endlessUnlocked(progress);
+    const stored = loadEndlessProgress();
+    const justUnlocked = unlocked && !stored.seenUnlock;
+    if (justUnlocked) saveEndlessProgress(markEndlessUnlockSeen(stored));
+    this.endlessDot = false;
+    this.puckDirty = true;
+    track('endless_opened', { unlocked: unlocked ? 1 : 0 });
+    this.endlessCard.show({
+      unlocked, cleared: Math.max(0, progress.unlocked - 1), record: endlessRecord(stored),
+      leaderboard: endlessLeaderboardOffered(), justUnlocked,
+    }, performance.now() / 1000);
+  }
+
+  /**
+   * Start, from the card. The tap is the gesture the engine's unlock needs, so it is asked
+   * here; a refusal still goes on, because Endless asks again and says so on its plaque,
+   * with Try again as the next gesture. The run's way out comes back to this screen.
+   */
+  private async startEndless(): Promise<void> {
+    if (this.busy || this.curtain.active) return;
+    const request = ++this.request;
+    this.busy = true;
+    try { await sharedAudio(this).unlock(); } catch { /* Endless asks again, and names the failure. */ }
+    if (this.disposed || request !== this.request) return;
+    this.closeTheme();
+    this.curtain.cover(() => this.scene.start(SceneKey.Endless, { from: SceneKey.Menu }));
+  }
+
+  private async openEndlessBoard(): Promise<void> {
+    if (this.endlessBoardBusy) return;
+    this.endlessBoardBusy = true;
+    try { await openEndlessLeaderboard(); } finally { this.endlessBoardBusy = false; }
+  }
+
+  /**
    * Android's back on the title screen: an open card is put away; otherwise nothing here
    * takes it, and the app goes to the background, which is what back on a root screen does
    * (`core/backButton.ts`).
@@ -514,6 +640,7 @@ export class MenuScene extends BaseScene {
   public handleBack(): boolean {
     if (this.disposed || this.curtain.active) return true;
     if (this.objectivesCard.open) { this.objectivesCard.hide(); return true; }
+    if (this.endlessCard.open) { this.endlessCard.hide(); return true; }
     return false;
   }
 
