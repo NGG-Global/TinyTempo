@@ -3,14 +3,19 @@ import { silenceInBackground, type SuspendableContext, type VisibilitySource } f
 
 function fakeContext(state: AudioContextState = 'running', refuseResume = false) {
   const calls: string[] = [];
-  const context: SuspendableContext & { state: AudioContextState; calls: string[] } = {
+  const stateListeners = new Set<() => void>();
+  const context: SuspendableContext & { state: AudioContextState; calls: string[]; set(state: AudioContextState): void } = {
     state, calls,
-    async suspend() { calls.push('suspend'); this.state = 'suspended'; },
+    // Like the real one, the state changes and `statechange` fires after the call returns.
+    set(next) { this.state = next; for (const listener of Array.from(stateListeners)) listener(); },
+    async suspend() { calls.push('suspend'); this.set('suspended'); },
     async resume() {
       calls.push('resume');
       if (refuseResume) { refuseResume = false; return; }
-      this.state = 'running';
+      this.set('running');
     },
+    addEventListener(_type, listener) { stateListeners.add(listener); },
+    removeEventListener(_type, listener) { stateListeners.delete(listener); },
   };
   return context;
 }
@@ -39,26 +44,92 @@ describe('sound while the game is off screen', () => {
   it('suspends a running context when the page is hidden, and resumes it when it comes back', async () => {
     const context = fakeContext();
     const page = fakePage();
+    const silence = silenceInBackground(context, page);
+    expect(silence.hidden).toBe(false);
+    page.hidden = true;
+    page.fire('visibilitychange');
+    await settle();
+    expect(context.state).toBe('suspended');
+    expect(silence.hidden).toBe(true);
+    page.hidden = false;
+    page.fire('visibilitychange');
+    await settle();
+    expect(context.calls).toEqual(['suspend', 'resume']);
+    expect(context.state).toBe('running');
+    expect(silence.hidden).toBe(false);
+  });
+
+  it('suspends on the activity\'s pause while the page still says it is visible, and resumes on its resume', async () => {
+    // Capacitor never pauses the WebView with its activity: behind Home and behind a
+    // rewarded ad `document.hidden` stays false, and the activity's own word is all there is.
+    const context = fakeContext();
+    const page = fakePage();
+    const silence = silenceInBackground(context, page);
+    silence.setAppActive(false);
+    await settle();
+    expect(page.hidden).toBe(false);
+    expect(silence.hidden).toBe(true);
+    expect(context.state).toBe('suspended');
+    // The same word twice (pause, then appStateChange from onStop) changes nothing.
+    silence.setAppActive(false);
+    await settle();
+    expect(context.calls).toEqual(['suspend']);
+    silence.setAppActive(true);
+    await settle();
+    expect(context.calls).toEqual(['suspend', 'resume']);
+    expect(context.state).toBe('running');
+    expect(silence.hidden).toBe(false);
+  });
+
+  it('stays silent until both the page and the activity say the game is back', async () => {
+    const context = fakeContext();
+    const page = fakePage();
+    const silence = silenceInBackground(context, page);
+    page.hidden = true;
+    page.fire('visibilitychange');
+    silence.setAppActive(false);
+    await settle();
+    expect(context.calls).toEqual(['suspend']);
+    silence.setAppActive(true);
+    await settle();
+    expect(context.state).toBe('suspended');
+    expect(silence.hidden).toBe(true);
+    page.hidden = false;
+    page.fire('visibilitychange');
+    await settle();
+    expect(context.state).toBe('running');
+  });
+
+  it('puts back a context that something else resumed while the game is off screen', async () => {
+    // The level answers every `statechange` with `recover()`, which resumed the context on
+    // the very event the suspend had fired, and the music played on behind the ad.
+    const context = fakeContext();
+    const page = fakePage();
     silenceInBackground(context, page);
     page.hidden = true;
     page.fire('visibilitychange');
     await settle();
     expect(context.state).toBe('suspended');
+    await context.resume();
+    await settle();
+    expect(context.state).toBe('suspended');
+    expect(context.calls).toEqual(['suspend', 'resume', 'suspend']);
     page.hidden = false;
     page.fire('visibilitychange');
     await settle();
-    expect(context.calls).toEqual(['suspend', 'resume']);
     expect(context.state).toBe('running');
   });
 
   it('leaves alone a context it did not suspend', async () => {
     const context = fakeContext('suspended');
     const page = fakePage();
-    silenceInBackground(context, page);
+    const silence = silenceInBackground(context, page);
     page.hidden = true;
     page.fire('visibilitychange');
     page.hidden = false;
     page.fire('visibilitychange');
+    silence.setAppActive(false);
+    silence.setAppActive(true);
     await settle();
     expect(context.calls).toEqual([]);
   });
@@ -81,15 +152,41 @@ describe('sound while the game is off screen', () => {
     expect(page.count('pointerdown')).toBe(0);
   });
 
-  it('stops following the page when released, and does nothing without one', async () => {
-    const context = fakeContext();
+  it('does not let the touch retry resume a context while the game is off screen again', async () => {
+    const context = fakeContext('running', true);
     const page = fakePage();
-    const release = silenceInBackground(context, page);
-    release();
+    const silence = silenceInBackground(context, page);
     page.hidden = true;
     page.fire('visibilitychange');
     await settle();
+    page.hidden = false;
+    page.fire('visibilitychange');
+    await settle();
+    expect(page.count('pointerdown')).toBe(1);
+    silence.setAppActive(false);
+    page.fire('pointerdown');
+    await settle();
+    expect(context.state).toBe('suspended');
+  });
+
+  it('stops following the page, the activity and the context when released, and works without a page', async () => {
+    const context = fakeContext();
+    const page = fakePage();
+    const silence = silenceInBackground(context, page);
+    silence.release();
+    page.hidden = true;
+    page.fire('visibilitychange');
+    silence.setAppActive(false);
+    await settle();
     expect(context.calls).toEqual([]);
-    expect(() => silenceInBackground(context, undefined)()).not.toThrow();
+    const pageless = fakeContext();
+    const alone = silenceInBackground(pageless, undefined);
+    alone.setAppActive(false);
+    await settle();
+    expect(pageless.state).toBe('suspended');
+    alone.setAppActive(true);
+    await settle();
+    expect(pageless.state).toBe('running');
+    expect(() => alone.release()).not.toThrow();
   });
 });

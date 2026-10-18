@@ -1496,6 +1496,11 @@ export class PlayScene extends BaseScene {
   private tick(): void {
     if (this.disposed || !this.audio || this.blocked()) return;
     if (this.audio.context.state !== 'running') {
+      // Off screen behind an ad or a purchase sheet, the engine holds the context quiet and
+      // its clock still: the level stands where it was and goes on from the same sample
+      // when the player comes back, with the restart ticket intact. Home or a call, with
+      // no commerce out, pauses the level below, like a hidden page does.
+      if (this.commerceBusy && this.audio.background.hidden) return;
       // A Bluetooth rebuffer can suspend the context for a frame when the player first
       // sounds. Interrupting here ended the response while the demonstration — whose
       // voices were already scheduled — had played in time. A context that stays out is
@@ -1505,7 +1510,7 @@ export class PlayScene extends BaseScene {
       const wall = performance.now();
       this.suspendedSince ??= wall;
       if (suspendedTooLong(this.suspendedSince, wall) && !this.summaryShown && this.controller !== null && this.controller.phase !== 'idle' && this.controller.phase !== 'paused') {
-        breadcrumb('audio suspended', { state: this.audio.context.state, level: this.spec.level });
+        breadcrumb('audio suspended', { state: this.audio.context.state, level: this.spec.level, offScreen: this.audio.background.hidden });
         this.suspendedSince = null;
         this.interrupt();
       }

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { AudioEngine } from './AudioEngine';
+import { followAppLifecycle } from './appLifecycle';
 import { loadSettings, saveSettings, withVolume, type Settings, type VolumeBus } from '../game/settings';
 import { clearActiveCalibration, saveActiveCalibration, syncClockCalibration } from './audioRoute';
 import { setMusicBed } from './musicBed';
@@ -25,8 +26,10 @@ export function sharedAudio(scene: Phaser.Scene): AudioEngine {
   // The active route's offset. An engine is made before any plan, so this is a boundary.
   syncClockCalibration(engine.clock);
   applyMix(engine, settings);
+  // The activity's pause and resume, which the WebView never passes on to the page.
+  const releaseLifecycle = followAppLifecycle(engine.background);
   scene.registry.set(KEY, engine);
-  scene.game.events.once(Phaser.Core.Events.DESTROY, () => { engine.dispose(); scene.registry.remove(KEY); });
+  scene.game.events.once(Phaser.Core.Events.DESTROY, () => { releaseLifecycle(); engine.dispose(); scene.registry.remove(KEY); });
   return engine;
 }
 
