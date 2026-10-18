@@ -10,7 +10,7 @@ import { RHYTHM } from '../src/config/rhythm';
 import { RoundController, type RoundEvents } from '../src/game/RoundController';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { windowsFor } from '../src/rhythm/judge';
-import { VIGNETTES } from '../src/vignettes/registry';
+import { DEBUT_LEVELS, VIGNETTES } from '../src/vignettes/registry';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -59,16 +59,11 @@ describe('level progression', () => {
       expect(now.peakBpm).toBeGreaterThanOrEqual(was.peakBpm);
       expect(now.maxTier).toBeGreaterThanOrEqual(was.maxTier);
       expect(spec.clearAccuracy).toBeGreaterThanOrEqual(previous.clearAccuracy);
-      // The first twenty-five acts twice, then the first twenty-eight from level 51, then
-      // twenty-nine from 107, thirty-one from 165, thirty-two from 227, then every act
-      // from 291, each era opening on the acts it added.
-      const act = level <= 50 ? (level - 1) % 25
-        : level < 107 ? (level - 51 + 25) % 28
-          : level < 165 ? (level - 107 + 28) % 29
-            : level < 227 ? (level - 165 + 29) % 31
-              : level < 291 ? (level - 227 + 31) % 32
-                : (level - 291 + 32) % VIGNETTES.length;
-      expect(spec.vignette).toBe(VIGNETTES[act]!.id);
+      // A debut level plays its new act; every other level an act the road has already met
+      // (`DEBUT_LEVELS`, `vignettes/rotation.ts`).
+      const debut = DEBUT_LEVELS.indexOf(level);
+      if (debut >= 0) expect(spec.vignette).toBe(VIGNETTES[debut]!.id);
+      else expect(played.has(spec.vignette), `level ${level}`).toBe(true);
       expect(spec.vignette).not.toBe(previous.vignette);
       // The lap counts the act's own earlier levels, which is what its looks are indexed by.
       expect(spec.lap).toBe(played.get(spec.vignette) ?? 0);
@@ -150,11 +145,13 @@ describe('level progression', () => {
     expect(areaOf(11).name).toBe('Pavement'); expect(areaOf(20).name).toBe('Pavement');
     expect(areaOf(21).name).toBe('Sand');
     // Appended, never inserted: the first fifty levels keep the five areas they always had,
-    // and the four added later follow Dusk before the cycle comes round.
-    expect([1, 11, 21, 31, 41, 51, 61, 71, 81].map(level => areaOf(level).name))
-      .toEqual(['Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle']);
+    // the four added next follow Dusk, and the five after them follow Castle, before the
+    // cycle comes round.
+    expect([1, 11, 21, 31, 41, 51, 61, 71, 81, 91, 101, 111, 121, 131].map(level => areaOf(level).name))
+      .toEqual(['Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle', 'Space', 'Candy', 'Haunted', 'Hollywood', 'Art Deco']);
     expect(areaOf(90).name).toBe('Castle');
-    expect(areaOf(91).name).toBe('Grass II');
+    expect(areaOf(140).name).toBe('Art Deco');
+    expect(areaOf(141).name).toBe('Grass II');
     expect(areaOf(AREAS.length * 10 + 1).name).toBe('Grass II');
     expect(areaOf(AREAS.length * 20 + 5).name).toBe('Grass III');
   });

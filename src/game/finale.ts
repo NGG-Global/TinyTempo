@@ -102,12 +102,47 @@ export const FINALE_TREATMENTS: Readonly<Record<string, FinaleTreatment>> = Obje
     ribbon: 0x6e3420, ribbonInk: 0xfff4dc,
     confetti: [0xc8553d, 0xe0913a, 0xf2c14e, 0xfff4dc],
   }),
-  // Heraldry: crimson, gold and royal blue, the cycle's last and grandest.
+  // Heraldry: crimson, gold and royal blue.
   Castle: Object.freeze({
     id: 'castle', motif: 'bunting',
     pennants: [0x9e2a2b, 0xf2c14e, 0x1f3a6e, 0xfff4dc],
     ribbon: 0x1f3a6e, ribbonInk: 0xf2c14e,
     confetti: [0x9e2a2b, 0xf2c14e, 0x1f3a6e, 0xfff4dc],
+  }),
+  // Running lights over the deck: cyan, amber, magenta and white.
+  Space: Object.freeze({
+    id: 'space', motif: 'lanterns',
+    pennants: [0x7fd3ff, 0xf2c14e, 0xe86fa8, 0xe8edfb],
+    ribbon: 0x1b2036, ribbonInk: 0xe8edfb,
+    confetti: [0x7fd3ff, 0xf2c14e, 0xe86fa8, 0xffffff],
+  }),
+  // A sweet-shop awning: bubblegum, mint, lemon and lilac.
+  Candy: Object.freeze({
+    id: 'candy', motif: 'bunting',
+    pennants: [0xf47aa8, 0x8fd9c4, 0xfff1a8, 0xb38df0],
+    ribbon: 0x7a2450, ribbonInk: 0xfff6fa,
+    confetti: [0xf47aa8, 0x8fd9c4, 0xfff1a8, 0xb38df0],
+  }),
+  // Pumpkin lanterns, a sickly green and a violet, over the fog.
+  Haunted: Object.freeze({
+    id: 'haunted', motif: 'lanterns',
+    pennants: [0xf28b30, 0x9be58f, 0xb58df0, 0xf2c14e],
+    ribbon: 0x1f1c27, ribbonInk: 0xe6efd2,
+    confetti: [0xf28b30, 0x9be58f, 0xb58df0, 0xe6efd2],
+  }),
+  // Premiere night: carpet red, gold, black and cream.
+  Hollywood: Object.freeze({
+    id: 'hollywood', motif: 'bunting',
+    pennants: [0xb8333b, 0xf2c14e, 0x1a1a1a, 0xfff4dc],
+    ribbon: 0x6e0f1c, ribbonInk: 0xf6d98a,
+    confetti: [0xf2c14e, 0xb8333b, 0xfff4dc, 0xf6d98a],
+  }),
+  // Black lacquer, gold leaf, cream and jade: the cycle's last and grandest.
+  'Art Deco': Object.freeze({
+    id: 'artdeco', motif: 'bunting',
+    pennants: [0x10261f, 0xd8b45a, 0xf8f3e6, 0x2e7d6b],
+    ribbon: 0x10261f, ribbonInk: 0xe0c068,
+    confetti: [0xd8b45a, 0xe0c068, 0xf8f3e6, 0x2e7d6b],
   }),
 });
 

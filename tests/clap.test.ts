@@ -13,15 +13,11 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('clapping hands act', () => {
-  it('is appended as the twenty-first act and keeps every earlier level', () => {
+  it('is the twenty-first act, and first plays level 61, the opener of area 7', () => {
     expect(VIGNETTES[20]?.id).toBe('clap');
-    expect(levelSpec(21).vignette).toBe('clap');
-    // Its second visit is where it has always been: the rotation grew at level 51, after it.
-    expect(actLevel('clap', 1)).toBe(46);
-    expect(levelSpec(46).vignette).toBe('clap');
-    expect([1, 9, 19, 20].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'scratch', 'trombone']);
-    expect(levelSpec(26).vignette).toBe('hammer');
-    expect(levelSpec(26).lap).toBe(1);
+    expect(levelSpec(61)).toMatchObject({ vignette: 'clap', lap: 0 });
+    expect(actLevel('clap', 1)).toBe(87);
+    expect(levelSpec(87)).toMatchObject({ vignette: 'clap', lap: 1 });
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {

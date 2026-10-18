@@ -1,7 +1,7 @@
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
 import { parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
-import { ROTATION, VIGNETTES } from '../vignettes/registry';
+import { DEBUT_LEVELS, VIGNETTES } from '../vignettes/registry';
 import { levelAt, placementAt } from '../vignettes/rotation';
 
 /** A grid finer than the tiers' eighth note. Null for a task on the tiers. */
@@ -54,8 +54,8 @@ export interface LevelSpec {
  * no save stores a name, so a new area changes only how the road past it is dressed.
  *
  * **Append, never insert.** Levels 1–50 are the first five, as they always were; the four
- * added later run 51–90, and the cycle repeats from 91. Inserting would re-dress roads
- * players have already walked. An area's index is also what picks its terrain motif and
+ * added next run 51–90, the five after them 91–140, and the cycle repeats from 141.
+ * Inserting would re-dress roads players have already walked. An area's index is also what picks its terrain motif and
  * props in `MapScene` and its ambience (`AMBIENCE_BY_AREA`), and its name its finale
  * (`FINALE_TREATMENTS`), so a new one needs all three; `tests/finale.test.ts` and
  * `tests/mapAmbience.test.ts` fail without them. Every palette is held to the same
@@ -73,8 +73,19 @@ export const AREAS: readonly Area[] = Object.freeze([
   { name: 'Swamp', sky: 0xd6dcc8, ground: 0x7f8c5e, road: 0x8a6a4a, ink: 0x162012, paper: 0xeef0e0 },
   // Autumn fields and a cobbled lane.
   { name: 'Village', sky: 0xf4e8d8, ground: 0xc69a6c, road: 0x9b8b7d, ink: 0x3d2414, paper: 0xfbf0e3 },
-  // Slate under a cool sky, and pale flagstones up to the gate: the cycle's last area.
+  // Slate under a cool sky, and pale flagstones up to the gate.
   { name: 'Castle', sky: 0xd3d9e4, ground: 0x7f8ea3, road: 0xa8a2a6, ink: 0x141a29, paper: 0xeef1f6 },
+  // Sci-fi: an indigo deck under a night sky, crossed on a pale steel walkway. Dark, so it
+  // reads like Dusk, light on dark; the five that follow alternate light and dark.
+  { name: 'Space', sky: 0x2f3760, ground: 0x262c4a, road: 0x8c95b5, ink: 0xe8edfb, paper: 0x1b2036 },
+  // Pink frosting and a mint path. Not "Candy Land", which is a board game's trademark.
+  { name: 'Candy', sky: 0xfde9f1, ground: 0xf5c4da, road: 0x9edcc8, ink: 0x5a1f3d, paper: 0xfff6fa },
+  // A dark heath under a grey fog, and a dusty path; ghostly pale ink.
+  { name: 'Haunted', sky: 0x4b4a5f, ground: 0x302c3c, road: 0x8b7f6e, ink: 0xe6efd2, paper: 0x1f1c27 },
+  // A sunset boulevard of pale stone, and the red carpet up the middle.
+  { name: 'Hollywood', sky: 0xfbe2c8, ground: 0xe6c0ad, road: 0xcf4a52, ink: 0x2e1219, paper: 0xfff4ec },
+  // Jade and gold under a cream sky: the cycle's last area, and its most formal.
+  { name: 'Art Deco', sky: 0xf2ead6, ground: 0x7fa89a, road: 0xd8b45a, ink: 0x10261f, paper: 0xf8f3e6 },
 ]);
 
 /**
@@ -527,7 +538,7 @@ export function levelSpec(level: number): LevelSpec {
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
   const finale = isAreaFinale(level);
-  const act = placementAt(ROTATION, level);
+  const act = placementAt(DEBUT_LEVELS, level);
   const spec = Object.freeze({
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
@@ -541,13 +552,13 @@ export function levelSpec(level: number): LevelSpec {
 
 /**
  * The level where an act plays for the `lap`-th time: `levelSpec`'s vignette and lap, read
- * backwards. Never `level + VIGNETTES.length` — the rotation grows in eras, so that sum
- * stopped naming an act's next level the day the registry outgrew its first era.
+ * backwards. Never `level + VIGNETTES.length`: acts debut on their own levels and come round
+ * by who has waited longest (`vignettes/rotation.ts`), so no sum names an act's next level.
  */
 export function actLevel(vignette: string, lap: number): number {
   const index = VIGNETTES.findIndex(definition => definition.id === vignette);
   if (index < 0 || !Number.isInteger(lap) || lap < 0) throw new Error(`No level for ${vignette} lap ${lap}.`);
-  return levelAt(ROTATION, index, lap);
+  return levelAt(DEBUT_LEVELS, index, lap);
 }
 
 export function starsFor(accuracy: number, spec: LevelSpec): 0 | 1 | 2 | 3 {

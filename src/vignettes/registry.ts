@@ -63,7 +63,6 @@ import { PaintbrushVignette } from './PaintbrushVignette';
 import { createCanvasSounds } from '@/audio/canvasSounds';
 import { CANVAS_REVEAL_SEC } from './canvasMotion';
 import { CANVAS_LOOKS } from './canvasLooks';
-import type { RotationEra } from './rotation';
 import { NoseBlowingVignette } from './NoseBlowingVignette';
 import { DishCleaningVignette } from './DishCleaningVignette';
 import { DISH_LOOKS } from './dishLooks';
@@ -73,6 +72,10 @@ import { ProspectorVignette } from './ProspectorVignette';
 import { PROSPECTOR_LOOKS } from './prospectorLooks';
 import { PROSPECTOR_REVEAL_SEC } from './prospectorMotion';
 import { createProspectorSounds } from '@/audio/prospectorSounds';
+import { CameraVignette } from './CameraVignette';
+import { CAMERA_LOOKS } from './cameraLooks';
+import { CAMERA_REVEAL_SEC } from './cameraMotion';
+import { createCameraSounds } from '@/audio/cameraSounds';
 import { IceCreamVignette } from './IceCreamVignette';
 import { ICE_CREAM_LOOKS } from './iceCreamLooks';
 import { ICE_CREAM_REVEAL_SEC } from './iceCreamMotion';
@@ -251,7 +254,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     // A pear, a peach and a donut follow the apple, and each is called what it is.
     looks: APPLE_LOOKS.map(look => look.copy),
   },
-  // Acts 26 to 28, appended at request. They join the rotation at level 51 (`ROTATION`).
+  // Acts 26 to 28, appended at request. They debut on levels 82, 91 and 92 (`DEBUT_LEVELS`).
   {
     id: 'barber', title: 'Barber', intro: 'Just a\nlittle off.', ink: BARBER_INK,
     success: ['Looking\nsharp.', 'A cut above.'],
@@ -272,7 +275,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     endingSec: BRUSH_REVEAL_SEC, endingHoldBeats: 5,
     create: (scene, lap) => new ToothbrushVignette(scene, lap), sounds: createBrushSounds,
   },
-  // Act 29, appended at request. It joins the rotation at level 107 (`ROTATION`), past every keepsake.
+  // Act 29, appended at request. It debuts on level 101 (`DEBUT_LEVELS`), as do the acts after it, one an area.
   {
     id: 'paintbrush', title: 'Paintbrush', intro: 'Stroke by\nstroke.', ink: HOME_INK,
     success: ['Signed and\ndone.', 'Every stroke where it belongs.'],
@@ -301,7 +304,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new ProspectorVignette(scene, lap), sounds: createProspectorSounds,
     looks: PROSPECTOR_LOOKS.map(look => look.copy),
   },
-  // Act 33, appended at request. It joins at level 291 (`ROTATION`), past every keepsake.
+  // Act 33, appended at request. It debuts on level 141 (`DEBUT_LEVELS`).
   {
     id: 'icecream', title: 'Ice cream', intro: 'Lick by\nlick.', ink: HOME_INK,
     success: ['Licked\nclean!', 'Not a drop wasted.'], rough: ['Dropped\nit!', 'The scoop hit the floor.'],
@@ -309,7 +312,7 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     create: (scene, lap) => new IceCreamVignette(scene, lap), sounds: createIceCreamSounds,
     looks: ICE_CREAM_LOOKS.map(look => look.copy),
   },
-  // Acts 34 and 35, appended at request. They join at level 357 (`ROTATION`), past every keepsake.
+  // Acts 34 and 35, appended at request. They debut on levels 151 and 161 (`DEBUT_LEVELS`).
   {
     id: 'frog', title: 'Frog & lily pad', intro: 'Ribbit,\nribbit.', ink: HOME_INK,
     success: ['Three-part\nharmony.', 'The whole pond is singing.'], rough: ['Ker-\nsplash!', 'Off the pad and into the pond.'],
@@ -322,34 +325,45 @@ export const VIGNETTES: readonly VignetteDefinition[] = [
     endingSec: GLASS_REVEAL_SEC, endingHoldBeats: 5,
     create: (scene, lap) => new GlassesVignette(scene, lap), sounds: createGlassesSounds,
   },
+  // Act 36, appended at request: an instant camera, the first act past the original cast. It
+  // debuts on level 171 (`DEBUT_LEVELS`), the opener of area 18.
+  {
+    id: 'camera', title: 'Snapshot', intro: 'Click on\nthe beat.', ink: HOME_INK,
+    success: ['Picture\nperfect!', 'One for the album.'], rough: ['Blurry\nshot.', 'Somebody blinked.'],
+    endingSec: CAMERA_REVEAL_SEC, endingHoldBeats: 5,
+    create: (scene, lap) => new CameraVignette(scene, lap), sounds: createCameraSounds,
+    looks: CAMERA_LOOKS.map(look => look.copy),
+  },
 ];
 
 /**
- * How the rotation has grown, oldest first (`vignettes/rotation.ts`). Levels 1–50 play the
- * first twenty-five acts twice, exactly as they did before the barber, popcorn and
- * toothbrush arrived — every keepsake earned on those levels stays put — and from level 51
- * the rotation carries the first twenty-eight. The paintbrush joins at level 107, past
- * every earlier keepsake, opening on the act it adds. Nose blowing and washing up join
- * at level 165, after the paintbrush's two keepsakes and two complete 29-act laps. The
- * prospector joins at level 227, after two complete 31-act laps, which is the first such
- * boundary past the nose and dish keepsakes on 196 and 197. Ice cream joins at level 291,
- * after two complete 32-act laps, the first such boundary past the prospector's keepsakes
- * on 227 and 259. The frog and the glasses join together at level 357, after two complete
- * 33-act laps, the first such boundary past ice cream's keepsakes on 291 and 324.
+ * The level each act first plays on, in registry order (`vignettes/rotation.ts`): every
+ * other level plays the act that has gone longest without a turn.
  *
- * **Appending an act means adding an era here**, at a level past every keepsake players
- * could hold: the tests fail on a registry the last era does not cover.
+ * **Every area introduces at least one act until the cast is complete**, on its opener or
+ * its first pattern level, the two easiest steps of an area, and never on a finale, which
+ * reprises its area. Levels 1–9 open the game one act a level, as it always has. Then the
+ * pace is set by Endless Mode: it unlocks on clearing level 100 and draws on the acts a
+ * player has met by then (`eligibleActs`), and its rules version 1 pinned that pool as the
+ * first twenty-eight acts in registry order (`tests/fixtures/endless-rules-v1.json`). So
+ * exactly those twenty-eight are in by level 100 — three in area 2, two in each of areas 3
+ * to 10 — and the seven after them follow one an area, to level 161. Acts appended since
+ * keep that pace, one an area: the instant camera opens area 18, on level 171.
+ *
+ * **Appending an act means appending its debut level here**, after the last one: it moves
+ * every level from that debut onward, keepsakes included, so it goes past the furthest
+ * level players have reached. A debut at or below 100 also changes Endless Mode's pool,
+ * which is a new rules version and a new leaderboard.
  */
-export const ROTATION: readonly RotationEra[] = [
-  { fromLevel: 1, acts: 25 },
-  { fromLevel: 51, acts: 28 },
-  { fromLevel: 107, acts: 29 },
-  // Two complete paintbrush-era laps preserve its second keepsake at level 136.
-  { fromLevel: 165, acts: 31 },
-  // Two complete laps of that era preserve the nose and dish keepsakes at 196 and 197.
-  { fromLevel: 227, acts: 32 },
-  // Two complete laps of that era preserve the prospector's keepsakes at 227 and 259.
-  { fromLevel: 291, acts: 33 },
-  // Two complete laps of that era preserve ice cream's keepsakes at 291 and 324.
-  { fromLevel: 357, acts: 35 },
-];
+export const DEBUT_LEVELS: readonly number[] = Object.freeze([
+  // Area 1: the first nine acts, one a level. Level 10, the finale, reprises.
+  1, 2, 3, 4, 5, 6, 7, 8, 9,
+  // Area 2: egg, bubble wrap, light switch.
+  11, 12, 13,
+  // Areas 3–10: two each, doorbell to toothbrush.
+  21, 22, 31, 32, 41, 42, 51, 52, 61, 62, 71, 72, 81, 82, 91, 92,
+  // Areas 11–17: one each, paintbrush to the glasses.
+  101, 111, 121, 131, 141, 151, 161,
+  // Area 18: the instant camera, appended past every level any player had reached.
+  171,
+]);

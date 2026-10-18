@@ -1,5 +1,7 @@
 # Frog and glasses
 
+> **Where it plays has changed.** On the debut schedule (the frog now first plays level 151 and the glasses 161), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Acts 34 and 35, requested together: a frog croaking on a lily pad, which leaps into the
 water on failure and is joined by two more frogs singing in harmony on success; and two
 glasses clinking, with "Cheers!" on success and a broken glass on failure. Both are on the

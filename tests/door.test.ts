@@ -25,8 +25,8 @@ describe('doorbell doors', () => {
         expect(Number.isInteger(look[key]) && look[key] >= 0 && look[key] <= 0xffffff).toBe(true);
       }
     }
-    expect(levelSpec(13).vignette).toBe('doorbell');
-    expect(levelSpec(13).lap).toBe(0);
+    expect(levelSpec(21).vignette).toBe('doorbell');
+    expect(levelSpec(21).lap).toBe(0);
     expect(levelSpec(actLevel('doorbell', 1)).lap).toBe(1);
     expect(levelSpec(actLevel('doorbell', 3)).lap).toBe(3);
   });

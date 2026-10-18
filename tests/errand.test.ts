@@ -11,10 +11,9 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('errand acts', () => {
-  it('appends four acts after the household ones and keeps every earlier level', () => {
+  it('appends four acts after the household ones, introduced in areas 3 to 5', () => {
     expect(VIGNETTES.map(v => v.id).slice(13, 17)).toEqual(['roller', 'bell', 'balloon', 'stapler']);
-    expect([14, 15, 16, 17].map(n => levelSpec(n).vignette)).toEqual(['roller', 'bell', 'balloon', 'stapler']);
-    expect([1, 4, 9, 13].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'saw', 'paper', 'doorbell']);
+    expect([22, 31, 32, 41].map(n => levelSpec(n))).toMatchObject(['roller', 'bell', 'balloon', 'stapler'].map(vignette => ({ vignette, lap: 0 })));
     // A five-beat hold, so every finale completes and the next task stays on the downbeat.
     for (const definition of VIGNETTES.slice(13, 17)) {
       expect(definition.endingHoldBeats).toBe(5);

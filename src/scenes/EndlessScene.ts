@@ -49,10 +49,14 @@ import { punch } from '@/ui/punch';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive, settle, squash } from '@/ui/spring';
 import { blockGeometry, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
-import { body, display, label, resize, wrapWidth } from '@/ui/type';
+import { planEndlessPlaque, type PlaqueFrame } from '@/ui/endlessPlaque';
+import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 import { easeOut } from '@/vignettes/motion';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap, type Vignette, type VignetteDefinition } from '@/vignettes/Vignette';
+
+/** The cloth texture's alpha over the Try again block, which the play disc shows through. */
+const AGAIN_CLOTH_ALPHA = 0.35;
 
 /** The count-in numeral's size in design units, from the quietest "3" to the "Go!". */
 const TURN_CALL = { min: 42, max: 54 } as const;
@@ -109,6 +113,10 @@ export class EndlessScene extends BaseScene {
   private recorded: RunRecorded | null = null;
   private saveFailed = false;
   private postingNote = '';
+  /** Where an interrupted run's clock stood when it stopped, shown greyed; null when it never started. */
+  private stoppedMs: number | null = null;
+  /** The screen that opened Endless, and the one its way out goes back to. */
+  private returnTo: typeof SceneKey.Map | typeof SceneKey.Menu = SceneKey.Map;
   private layers = OPENING_LAYERS;
   /** The beat-aligned slide between acts; `next` is the next act's demonstration downbeat. */
   private transition: { slide: number; swap: number; next: number; swapped: boolean; step: EndlessStep } | null = null;
@@ -203,6 +211,8 @@ export class EndlessScene extends BaseScene {
     // Assigned here, never left to the field initializers: a second visit reuses the instance.
     this.disposed = false;
     this.starting = false;
+    const data = this.sys.settings.data as { from?: string } | undefined;
+    this.returnTo = data?.from === SceneKey.Menu ? SceneKey.Menu : SceneKey.Map;
     this.audio = null;
     this.controller = null;
     this.sequence = null;
@@ -234,15 +244,16 @@ export class EndlessScene extends BaseScene {
     this.sheetKeep = display(this, 'Keep playing', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
     this.sheetLeave = display(this, 'Leave', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
     this.plaque = this.add.graphics().setDepth(30).setVisible(false);
-    this.plaqueEyebrow = label(this, 'Endless Mode', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(31).setVisible(false);
-    this.plaqueTitle = display(this, '', { size: 44, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(31).setVisible(false);
-    this.plaqueTime = display(this, '', { size: 84, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(31).setVisible(false);
-    this.plaqueStats = body(this, '', { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5).setDepth(31).setVisible(false);
-    this.plaqueBest = label(this, '', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setDepth(31).setVisible(false);
+    // Every row hangs from its top edge: the plaque is stacked from the rows' measured heights.
+    this.plaqueEyebrow = label(this, 'Endless Mode', { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
+    this.plaqueTitle = display(this, '', { size: 44, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
+    this.plaqueTime = display(this, '', { size: 84, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
+    this.plaqueStats = body(this, '', { size: 24, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
+    this.plaqueBest = label(this, '', { size: 22, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
     this.plaqueNote = body(this, '', { size: 21, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setDepth(31).setVisible(false);
     this.againLabel = display(this, 'Try again', { size: 36, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(32).setVisible(false);
-    this.againSurface = surface(this, MaterialKey.cloth, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, PALETTE.coral, 0.35).setDepth(31).setVisible(false);
-    this.mapLabel = display(this, 'Map', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(32).setVisible(false);
+    this.againSurface = surface(this, MaterialKey.cloth, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, PALETTE.coral, AGAIN_CLOTH_ALPHA).setDepth(31).setVisible(false);
+    this.mapLabel = display(this, this.returnTo === SceneKey.Menu ? 'Home' : 'Map', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(32).setVisible(false);
     this.boardLabel = label(this, 'Leaderboard', { size: 22, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(32).setVisible(false);
     this.curtain = new SceneCurtain(this);
     this.taps = new TapInput(this, tap => this.handleTap(tap));
@@ -269,6 +280,7 @@ export class EndlessScene extends BaseScene {
     this.recorded = null;
     this.saveFailed = false;
     this.postingNote = '';
+    this.stoppedMs = null;
     this.layers = OPENING_LAYERS;
     this.transition = null;
     this.nextStep = null;
@@ -645,7 +657,9 @@ export class EndlessScene extends BaseScene {
     this.audio?.music.stop();
     this.act?.vignette.pause();
     this.hideSheet();
-    const elapsed = this.runStartSec > -Infinity ? Math.max(0, Math.floor(this.now() - this.runStartSec)) : 0;
+    // Kept for the plaque only, greyed and unranked: nothing is recorded from it.
+    this.stoppedMs = this.runStartSec > -Infinity ? Math.max(0, (this.now() - this.runStartSec) * 1000) : null;
+    const elapsed = this.stoppedMs === null ? 0 : Math.floor(this.stoppedMs / 1000);
     breadcrumb('endless interrupted', { reason });
     track('endless_abandoned', { elapsed_sec: elapsed, vignettes: this.vignettesScored, reason });
     this.showPlaque();
@@ -664,7 +678,7 @@ export class EndlessScene extends BaseScene {
     }
     if (this.plaqueShown) {
       if (this.againRect.contains(tap.x, tap.y)) { this.press('again', wall); void this.start(); return; }
-      if (this.mapRect.contains(tap.x, tap.y)) { this.press('map', wall); this.leaveForMap(); return; }
+      if (this.mapRect.contains(tap.x, tap.y)) { this.press('map', wall); this.leaveRun(); return; }
       if (this.boardRect.width > 0 && this.boardRect.contains(tap.x, tap.y)) { this.press('board', wall); void this.openBoard(); return; }
       return;
     }
@@ -677,7 +691,7 @@ export class EndlessScene extends BaseScene {
     if (near(this.mapAt)) {
       this.pressPuck('map');
       // Before the clock has started there is nothing to lose: straight back.
-      if (this.runStartSec === -Infinity && !this.starting) { this.leaveForMap(); return; }
+      if (this.runStartSec === -Infinity && !this.starting) { this.leaveRun(); return; }
       this.showSheet();
       return;
     }
@@ -709,30 +723,36 @@ export class EndlessScene extends BaseScene {
   public handleBack(): boolean {
     if (this.disposed || this.curtain.active) return true;
     if (this.sheetOpen) { this.hideSheet(); return true; }
-    if (this.plaqueShown || this.over || this.invalid !== null) { this.leaveForMap(); return true; }
-    if (this.runStartSec === -Infinity && !this.starting) { this.leaveForMap(); return true; }
+    if (this.plaqueShown || this.over || this.invalid !== null) { this.leaveRun(); return true; }
+    if (this.runStartSec === -Infinity && !this.starting) { this.leaveRun(); return true; }
     this.showSheet();
     return true;
   }
 
   private abandon(): void {
-    if (this.over) { this.leaveForMap(); return; }
+    if (this.over) { this.leaveRun(); return; }
     const elapsed = this.runStartSec > -Infinity ? Math.max(0, Math.floor(this.now() - this.runStartSec)) : 0;
     track('endless_abandoned', { elapsed_sec: elapsed, vignettes: this.vignettesScored, reason: 'user' });
     this.invalid = 'user';
-    this.leaveForMap();
+    this.leaveRun();
   }
 
-  private leaveForMap(): void {
+  /**
+   * Back to the screen that opened Endless: the map, or the title screen when the run was
+   * started from its Endless block. The loop goes back to rate 1 either way — the map
+   * claims it as the shell bed (`musicBed.canReuseShell`), exactly as it does after a
+   * level, and the title screen hushes it under its own theme.
+   */
+  private leaveRun(): void {
     if (this.curtain.active) return;
     ++this.startRequest;
     this.controller?.dispose();
     this.transition = null;
     this.audio?.cancel();
-    // The map claims this loop as the shell bed at rate 1 rather than starting a second
-    // source over it (`musicBed.canReuseShell`), exactly as it does after a level.
     this.audio?.music.setRate(1, this.audio.context.currentTime);
-    this.curtain.cover(() => this.scene.start(SceneKey.Map, { focus: loadProgress().unlocked }));
+    this.curtain.cover(() => (this.returnTo === SceneKey.Menu
+      ? this.scene.start(SceneKey.Menu)
+      : this.scene.start(SceneKey.Map, { focus: loadProgress().unlocked })));
   }
 
   private async openBoard(): Promise<void> {
@@ -784,9 +804,9 @@ export class EndlessScene extends BaseScene {
       this.pressDirty = press > 0.001;
       if (!this.pressDirty) this.pressed = null;
     }
-    if (this.plaqueShown && !still) {
+    if (this.plaqueShown && !still && this.plaque.alpha < 1) {
       const rise = arrive(wall - this.plaqueAt, 0.4);
-      this.plaque.setAlpha(rise.alpha);
+      for (const [part, alpha] of this.plaqueParts()) part.setAlpha(rise.alpha * alpha);
     }
     const verdict = this.verdictPose(now);
     if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
@@ -1012,54 +1032,83 @@ export class EndlessScene extends BaseScene {
     this.verdict.setAlpha(0);
     this.changeHeadline('');
     this.setCaption('');
-    this.placePlaque();
+    // The plaque carries the run's time and its own ways on, so the HUD goes: its clock
+    // kept counting under an interrupted run's plaque and disagreed with it, and its
+    // pucks sat dimmed under the scrim taking no taps.
+    this.setHud(false);
+    for (const [part, alpha] of this.plaqueParts()) part.setAlpha(this.reducedMotion ? alpha : 0);
     this.dressPlaque();
-    this.drawPlaque(0);
   }
 
   private hidePlaque(): void {
     this.plaqueShown = false;
     this.plaque.clear().setVisible(false);
     this.againSurface.setVisible(false);
-    for (const text of [this.plaqueEyebrow, this.plaqueTitle, this.plaqueTime, this.plaqueStats, this.plaqueBest, this.plaqueNote, this.againLabel, this.mapLabel, this.boardLabel]) text.setVisible(false);
+    for (const text of this.plaqueTexts()) text.setVisible(false);
+    this.setHud(true);
   }
 
+  private setHud(visible: boolean): void {
+    for (const part of [this.timeText, this.tempoLabel, this.livesMark, this.chrome]) part.setVisible(visible);
+  }
+
+  private plaqueTexts(): Phaser.GameObjects.Text[] {
+    return [this.plaqueEyebrow, this.plaqueTitle, this.plaqueTime, this.plaqueStats, this.plaqueBest, this.plaqueNote, this.againLabel, this.mapLabel, this.boardLabel];
+  }
+
+  /**
+   * Every part of the plaque and the alpha it rests at. The cloth over Try again rests at
+   * its tint's own alpha, which is what lets the block's play disc show through it: faded
+   * up to 1 with the rest, it covered the disc.
+   */
+  private plaqueParts(): [{ setAlpha(value: number): unknown }, number][] {
+    return [[this.plaque, 1], [this.againSurface, AGAIN_CLOTH_ALPHA], ...this.plaqueTexts().map(text => [text, 1] as [Phaser.GameObjects.Text, number])];
+  }
+
+  /** Size the plaque's words, measure them and stack the plaque (`planEndlessPlaque`). */
   private placePlaque(): void {
     const s = this.uiScale, { safe } = this.viewport;
-    const w = Math.min(600 * s, safe.width - 40 * s);
-    const board = endlessLeaderboardOffered() && this.invalid === null;
-    const h = (board ? 720 : 630) * s;
-    const x = safe.centerX - w / 2, y = Math.max(safe.top + 150 * s, safe.centerY - h / 2);
-    const blockH = Math.max(96 * s, this.controlSize);
-    const inner = w - 56 * s;
-    const againW = inner * 0.6, mapW = inner - againW - 20 * s;
-    const rowY = y + h - 28 * s - blockH;
-    this.againRect.setTo(x + 28 * s, rowY, againW, blockH);
-    this.mapRect.setTo(x + 28 * s + againW + 20 * s, rowY, mapW, blockH);
-    if (board) this.boardRect.setTo(x + 28 * s + (inner - Math.min(360 * s, inner)) / 2, rowY - 24 * s - 72 * s, Math.min(360 * s, inner), 72 * s);
-    else this.boardRect.setTo(0, 0, 0, 0);
-    this.plaqueFrame = { x, y, w, h };
     resize(this.plaqueEyebrow, 20 * s, PALETTE.muted, STYLE.current, false);
     resize(this.plaqueTitle, 44 * s, PALETTE.ink);
-    resize(this.plaqueTime, 84 * s, PALETTE.ink);
+    // An unranked run's time is the clock where it stopped, greyed: shown, never counted.
+    resize(this.plaqueTime, 84 * s, this.invalid ? PALETTE.muted : PALETTE.ink);
     resize(this.plaqueStats, 24 * s, PALETTE.muted, STYLE.current, false);
     resize(this.plaqueBest, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
     resize(this.plaqueNote, 21 * s, PALETTE.muted, STYLE.current, false);
-    wrapWidth(this.plaqueNote, w - 72 * s);
+    const width = Math.min(600 * s, safe.width - 40 * s);
+    balanceWrap(this.plaqueNote, width - 72 * s);
     resize(this.againLabel, 36 * s, SHELL.cream);
     resize(this.mapLabel, 30 * s, SHELL.cream);
     resize(this.boardLabel, 22 * s, PALETTE.ink, STYLE.current, false);
+    const height = (text: Phaser.GameObjects.Text) => (text.text === '' ? 0 : text.displayHeight);
+    const plan = planEndlessPlaque({
+      s, safe, controlSize: this.controlSize,
+      board: endlessLeaderboardOffered() && this.invalid === null,
+      rows: {
+        eyebrow: height(this.plaqueEyebrow), title: height(this.plaqueTitle), time: height(this.plaqueTime),
+        stats: height(this.plaqueStats), best: height(this.plaqueBest), note: height(this.plaqueNote),
+      },
+    });
+    const setRect = (rect: Phaser.Geom.Rectangle, frame: PlaqueFrame | null) => rect.setTo(frame?.x ?? 0, frame?.y ?? 0, frame?.width ?? 0, frame?.height ?? 0);
+    setRect(this.againRect, plan.again);
+    setRect(this.mapRect, plan.exit);
+    setRect(this.boardRect, plan.board);
+    this.plaqueFrame = { x: plan.frame.x, y: plan.frame.y, w: plan.frame.width, h: plan.frame.height };
+    this.plaqueTops = plan.tops;
     if (this.plaqueShown) this.drawPlaque(0);
   }
 
   private plaqueFrame = { x: 0, y: 0, w: 0, h: 0 };
+  private plaqueTops: { readonly [row: string]: number | null } = {};
 
-  /** The words on the plaque, from the run's facts; set once when it opens, and again when a posting lands. */
+  /** The words on the plaque, from the run's facts; set when it opens, and again when a posting lands. */
   private dressPlaque(): void {
     const invalid = this.invalid;
     const ms = this.runStartSec > -Infinity && this.runEndSec > -Infinity ? elapsedMs(this.runStartSec, this.runEndSec) : null;
     this.plaqueTitle.setText(invalid ? 'Run interrupted' : 'Out of lives');
-    this.plaqueTime.setText(invalid ? (ms === null ? '—' : formatSurvival(ms, true)) : formatSurvival(ms ?? 0, true));
+    // No time row at all for a run whose clock never started, rather than a dash at 84 units.
+    const shown = invalid ? this.stoppedMs : ms ?? 0;
+    this.plaqueTime.setText(shown === null ? '' : formatSurvival(shown, true));
     const acts = `${this.vignettesScored} ${this.vignettesScored === 1 ? 'act' : 'acts'}`;
     this.plaqueStats.setText(invalid ? `${acts} · not ranked` : `${acts} · peak ${this.peakBpm} BPM`);
     const recorded = this.recorded;
@@ -1068,17 +1117,16 @@ export class EndlessScene extends BaseScene {
       this.plaqueNote.setText(invalid === 'orientation' ? 'The run stopped when the phone turned. Nothing was recorded.'
         : invalid === 'audio' ? 'Sound could not start. Nothing was recorded.'
           : 'The run was interrupted, so it is not ranked. Nothing was recorded.');
-    } else if (recorded) {
-      const best = recorded.record.bestMs;
-      this.plaqueBest.setText(this.saveFailed ? 'Couldn’t save this run' : recorded.newBest ? 'New best' : `Best ${formatSurvival(best, true)}`);
-      const badges = recorded.newMilestones.map(id => MILESTONES.find(m => m.id === id)?.sec).filter((sec): sec is number => sec !== undefined)
+    } else {
+      this.plaqueBest.setText(!recorded ? '' : this.saveFailed ? 'Couldn’t save this run' : recorded.newBest ? 'New best' : `Best ${formatSurvival(recorded.record.bestMs, true)}`);
+      const badges = (recorded?.newMilestones ?? []).map(id => MILESTONES.find(m => m.id === id)?.sec).filter((sec): sec is number => sec !== undefined)
         .map(sec => `${sec / 60} min`);
       const lines = [];
       if (badges.length > 0) lines.push(`New badge: ${badges.join(', ')}`);
       if (this.postingNote !== '') lines.push(this.postingNote);
       this.plaqueNote.setText(lines.join('\n'));
     }
-    if (this.plaqueShown) this.drawPlaque(0);
+    if (this.plaqueShown) this.placePlaque();
   }
 
   private drawPlaque(press: number): void {
@@ -1088,14 +1136,19 @@ export class EndlessScene extends BaseScene {
     g.fillStyle(0x1a201c, 0.45).fillRect(this.viewport.full.x, this.viewport.full.y, this.viewport.full.width, this.viewport.full.height);
     drawPanel(g, new Rect(x, y, w, h), s, { fill: SHELL.cream, depth: 12, radius: 32, hero: true });
     const centerX = x + w / 2;
-    const place = (text: Phaser.GameObjects.Text, ty: number) => text.setPosition(centerX, ty).setVisible(true);
-    place(this.plaqueEyebrow, y + 48 * s);
-    drawInfinity(g, x + 48 * s, y + 48 * s, 16 * s, PALETTE.coral);
-    place(this.plaqueTitle, y + 100 * s);
-    place(this.plaqueTime, y + 198 * s);
-    place(this.plaqueStats, y + 262 * s);
-    place(this.plaqueBest, y + 304 * s);
-    place(this.plaqueNote, y + 332 * s);
+    const rows: [Phaser.GameObjects.Text, number | null | undefined][] = [
+      [this.plaqueEyebrow, this.plaqueTops.eyebrow], [this.plaqueTitle, this.plaqueTops.title], [this.plaqueTime, this.plaqueTops.time],
+      [this.plaqueStats, this.plaqueTops.stats], [this.plaqueBest, this.plaqueTops.best], [this.plaqueNote, this.plaqueTops.note],
+    ];
+    for (const [text, top] of rows) {
+      if (top === null || top === undefined) text.setVisible(false);
+      else text.setPosition(centerX, top).setVisible(true);
+    }
+    // The mark beside the words it belongs to, not out at the plaque's corner.
+    const eyebrowTop = this.plaqueTops.eyebrow;
+    if (eyebrowTop !== null && eyebrowTop !== undefined) {
+      drawInfinity(g, centerX - this.plaqueEyebrow.displayWidth / 2 - 26 * s, eyebrowTop + this.plaqueEyebrow.displayHeight / 2, 14 * s, PALETTE.coral);
+    }
     const againPress = this.pressed === 'again' ? press : 0, mapPress = this.pressed === 'map' ? press : 0, boardPress = this.pressed === 'board' ? press : 0;
     drawPanel(g, this.againRect, s, { fill: PALETTE.coral, depth: CHROME.block.depth, press: againPress, hero: true });
     placeSurface(this.againSurface.setVisible(true), this.againRect, s, CHROME.block.depth * s * againPress * 0.8);

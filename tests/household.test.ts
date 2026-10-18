@@ -117,7 +117,7 @@ describe('household finales and integration', () => {
     expect(eggReveal(0.7, true, true).splash).toBe(0);
   });
   it('appends four acts and leaves enough time for every final sound and animation', () => {
-    expect([10, 11, 12, 13].map(n => levelSpec(n).vignette)).toEqual(['egg', 'bubble', 'light', 'doorbell']);
+    expect([11, 12, 13, 21].map(n => levelSpec(n))).toMatchObject(['egg', 'bubble', 'light', 'doorbell'].map(vignette => ({ vignette, lap: 0 })));
     for (const definition of VIGNETTES.slice(9)) for (const bpm of [120, 136, 150]) {
       const end = new TaskSequence(bpm, 0).ending(10, definition.endingHoldBeats);
       expect(end.slide - end.contact).toBeGreaterThan(HOUSEHOLD_REVEAL_SEC);

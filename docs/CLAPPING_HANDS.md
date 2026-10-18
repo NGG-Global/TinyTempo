@@ -1,5 +1,7 @@
 # Clapping hands
 
+> **Where it plays has changed.** On the debut schedule (the clapping hands now first play level 61), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 One vignette appended to the rotation at request, as act 21. Levels 1 to 20 keep
 their acts, and the act's own first level is 21.
 

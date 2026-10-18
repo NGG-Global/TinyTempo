@@ -55,7 +55,8 @@ describe('every screen answers back', () => {
       expect(readFileSync(`src/scenes/${name}Scene.ts`, 'utf8'), name).toMatch(/public handleBack\(\): boolean \{/);
     }
     expect(readFileSync('src/main.ts', 'utf8')).toContain('void bootBackButton(game);');
-    // The title screen is the only one that lets the press through, to the background.
-    expect(readFileSync('src/scenes/MenuScene.ts', 'utf8')).toMatch(/if \(this\.objectivesCard\.open\) \{ this\.objectivesCard\.hide\(\); return true; \}\n    return false;/);
+    // The title screen is the only one that lets the press through, to the background, and
+    // only once neither of its cards is open.
+    expect(readFileSync('src/scenes/MenuScene.ts', 'utf8')).toMatch(/if \(this\.objectivesCard\.open\) \{ this\.objectivesCard\.hide\(\); return true; \}\n    if \(this\.endlessCard\.open\) \{ this\.endlessCard\.hide\(\); return true; \}\n    return false;/);
   });
 });

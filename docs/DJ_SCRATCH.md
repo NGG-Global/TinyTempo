@@ -1,5 +1,7 @@
 # DJ scratch
 
+> **Where it plays has changed.** On the debut schedule (the DJ scratch now first plays level 51), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 One vignette appended to the rotation at request, as act 19. Levels 1 to 18 keep
 their acts, and the act's own first level is 19. The trombone (`docs/TROMBONE.md`)
 and the clapping hands (`docs/CLAPPING_HANDS.md`) have since been appended after it

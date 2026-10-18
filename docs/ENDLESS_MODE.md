@@ -14,7 +14,8 @@ Play Games *Time* leaderboard.
 | `src/game/endless.ts` | The mode as decisions, pure: the unlock, the eligible pool, the step generator, the difficulty schedule, lives, the ranked time, milestones, formatting. |
 | `src/game/endlessProgress.ts` | The device's record per ruleset: best time, badges, run count. `tiny-tempo.endless.v1`. |
 | `src/scenes/EndlessScene.ts` | The run on screen: one loop, one act at a time, the turn block, the leave sheet, the result plaque. |
-| `src/ui/endlessCard.ts` | The map's door: locked copy, the best, the badges, Start and Leaderboard. |
+| `src/ui/endlessCard.ts` | The door, on the map and the title screen: locked copy, the best, the badges, Start and Leaderboard. Its controls stack (`cardStack`), so Close never covers the leaderboard chip. |
+| `src/ui/endlessPlaque.ts` | The result plaque's layout, pure: rows stacked from their measured heights, then the leaderboard and the two blocks. |
 | `src/playgames/endlessLeaderboard.ts` | The leaderboard as decisions, pure: the score, the day's best, the pending policy, open. |
 | `src/playgames/endless.ts` | The same wired to the configured id, storage, the adapter and analytics. What scenes call. |
 | `src/config/leaderboards.ts` | `LEADERBOARDS.endless`: `CgkI0Mey9o8ZEAIQBw`, item 7 of the Games project. |
@@ -29,11 +30,12 @@ Play Games *Time* leaderboard.
   100 is untouched: levels 101 onward derive as they always did.
 - **Cost.** Nothing. No heart, no attempt id, no ad, no cooldown. `beginAttempt` is never
   called; Premium changes nothing; no rewarded placement exists in a run.
-- **The pool** is every act the rotation places on levels 1–100, in the order it introduces
-  them — twenty-eight acts, hammer to toothbrush. Read from `ROTATION`, not written down, so
-  an act appended to the registry in a later era (the paintbrush at 107, the frog at 357)
-  can never join the pool by accident. The list is pinned in the fixture, because the pool is
-  part of the ruleset.
+- **The pool** is every act the road introduces on levels 1–100, in the order it introduces
+  them — twenty-eight acts, hammer to toothbrush. Read from `DEBUT_LEVELS`, not written down,
+  so an act that debuts later (the paintbrush at 101, the glasses at 161) can never join the
+  pool by accident. The list is pinned in the fixture, because the pool is part of the
+  ruleset. The debut schedule was built so that exactly these twenty-eight are in by level
+  100, in this order (`docs/ACT_SCHEDULE.md`), which is why rules version 1 survived it.
 - **A step** is one act, one rhythm task — demonstration, then the player's response on the
   very next downbeat, judged by the level's own `RoundController`, judge and scorer — then
   the act's own coda — its contact, its hold and two slide beats, which complete one bar or
@@ -97,8 +99,28 @@ Play Games *Time* leaderboard.
 | How it ends | State | Recorded | Posted | Shown |
 | --- | --- | --- | --- | --- |
 | Lives reach zero | over | yes, once, by run id | if a ranked time and a day's best | "Out of lives", the time, acts, peak BPM, best/new best, new badges, the posting note |
-| The player taps the map puck and confirms | abandoned | no | no | straight to the map |
-| Backgrounded, `pagehide`, the phone turned to landscape on a handset, a stall the controller catches, the next task could not be placed, sound could not start | invalidated | no | no | "Run interrupted · not ranked", Try again, Map |
+| The player taps the map puck and confirms | abandoned | no | no | straight back to the screen that opened Endless |
+| Backgrounded, `pagehide`, the phone turned to landscape on a handset, a stall the controller catches, the next task could not be placed, sound could not start | invalidated | no | no | "Run interrupted · not ranked", the clock where it stopped in grey (no time row if it never started), Try again, Map or Home |
+
+## Two doors, one card
+
+Endless opens from the map's infinity puck and, once level 100 is cleared, from an
+**Endless** block on the title screen beside How to play (`MenuScene`): the title screen is
+where a player who has finished the road comes back to. Both open the same `EndlessCard`,
+and opening it from either marks the unlock seen, which clears the coral dot on both. The
+title screen's Start is the gesture that unlocks audio; the scene is started with
+`{ from: 'menu' }`, its way-out block reads **Home**, and every way out (the plaque, the
+leave sheet, Android's back) returns there. From the map it reads **Map** and returns to
+the map, as before.
+
+## The result plaque
+
+The plaque is as tall as what it says (`planEndlessPlaque`): eyebrow, title, time, stats,
+best, note, then the leaderboard chip where Play Games offers one, then Try again and the
+way out. A row with nothing to say takes no room, the note is balanced (`balanceWrap`), and
+a plaque taller than its frame gives up its top before its buttons. While it is up the
+run's HUD (the clock, the tempo line, the lives and both pucks) is hidden: the plaque
+carries the time, and the HUD's clock kept counting under an interrupted run's plaque.
 
 Invalidation happens once (`invalidate`): the controller is interrupted, voices cancelled,
 the loop stopped, the act paused, and `endless_abandoned` reported with its reason. A
@@ -174,7 +196,7 @@ keeps, and a size check — a deliberate change, not a side effect of this one.
 Anything in `src/config/endless.ts` is part of the ruleset the board ranks against: the
 seed, the tempo band and ramp, the threshold ramp, the lives, the step's shape, the grid rules,
 the cycle, the recent-acts window, the lap range, the milestones, and the pool (which
-follows `ROTATION` through level 100, so a change to the rotation below level 100 is a
+follows `DEBUT_LEVELS` through level 100, so a change to the schedule below level 100 is a
 ruleset change too). Changing any of them:
 
 1. raise `ENDLESS.rulesVersion`;

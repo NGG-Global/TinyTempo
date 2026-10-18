@@ -1,5 +1,7 @@
 # Trombone
 
+> **Where it plays has changed.** On the debut schedule (the trombone now first plays level 52), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 One vignette appended to the rotation at request, as act 20. Levels 1 to 19 keep
 their acts, and the act's own first level is 20. The clapping hands
 (`docs/CLAPPING_HANDS.md`) have since been appended after it as act 21, so the

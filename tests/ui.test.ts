@@ -140,17 +140,21 @@ describe('workshop contrast', () => {
     for (const ink of [...VIGNETTES.map(v => v.ink), ...AREAS.map(a => a.ink)]) {
       const stroke = typeStroke(ink);
       if (stroke === null) { refused += 1; continue; }
-      // Dusk's ink is a light cream on a dark sky, so it keeps a border — and earns it.
+      // The dark areas' inks — Dusk, Space, Haunted — are light on a dark ground, so they
+      // keep a border, and earn it.
       expect(relativeLuminance(ink)).toBeGreaterThan(0.45);
       expect(contrastRatio(ink, stroke)).toBeGreaterThanOrEqual(OUTLINE_CONTRAST);
     }
     // Every dark one loses it; each used to carry a near-black border at under 2:1.
-    expect(refused).toBe(VIGNETTES.length + AREAS.length - 1);
+    expect(refused).toBe(VIGNETTES.length + AREAS.length - 3);
   });
   it('copies every area into the lists below, so none is left out of them', () => {
     // The copies keep this file off the vignette registry's Phaser import at call sites that
     // only need colours; this keeps them from drifting from `AREAS`.
-    expect(AREAS.map(area => area.name)).toEqual(['Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle']);
+    expect(AREAS.map(area => area.name)).toEqual([
+      'Grass', 'Pavement', 'Sand', 'Snow', 'Dusk', 'Garden', 'Swamp', 'Village', 'Castle',
+      'Space', 'Candy', 'Haunted', 'Hollywood', 'Art Deco',
+    ]);
   });
   it('keeps empty stars readable on their plate', () => {
     const areas = [
@@ -163,6 +167,11 @@ describe('workshop contrast', () => {
       { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
       { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
       { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
+      { name: 'Space', ground: 0x262c4a, ink: 0xe8edfb, paper: 0x1b2036 },
+      { name: 'Candy', ground: 0xf5c4da, ink: 0x5a1f3d, paper: 0xfff6fa },
+      { name: 'Haunted', ground: 0x302c3c, ink: 0xe6efd2, paper: 0x1f1c27 },
+      { name: 'Hollywood', ground: 0xe6c0ad, ink: 0x2e1219, paper: 0xfff4ec },
+      { name: 'Art Deco', ground: 0x7fa89a, ink: 0x10261f, paper: 0xf8f3e6 },
     ] as const;
     for (const area of areas) {
       const plate = shade(area.paper, -0.03);
@@ -187,6 +196,11 @@ describe('workshop contrast', () => {
       { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
       { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
       { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
+      { name: 'Space', ground: 0x262c4a, ink: 0xe8edfb, paper: 0x1b2036 },
+      { name: 'Candy', ground: 0xf5c4da, ink: 0x5a1f3d, paper: 0xfff6fa },
+      { name: 'Haunted', ground: 0x302c3c, ink: 0xe6efd2, paper: 0x1f1c27 },
+      { name: 'Hollywood', ground: 0xe6c0ad, ink: 0x2e1219, paper: 0xfff4ec },
+      { name: 'Art Deco', ground: 0x7fa89a, ink: 0x10261f, paper: 0xf8f3e6 },
     ] as const;
     for (const area of areas) {
       const fill = mix(area.paper, area.ground, 0.62);
@@ -207,6 +221,11 @@ describe('workshop contrast', () => {
       { name: 'Swamp', ground: 0x7f8c5e, ink: 0x162012, paper: 0xeef0e0 },
       { name: 'Village', ground: 0xc69a6c, ink: 0x3d2414, paper: 0xfbf0e3 },
       { name: 'Castle', ground: 0x7f8ea3, ink: 0x141a29, paper: 0xeef1f6 },
+      { name: 'Space', ground: 0x262c4a, ink: 0xe8edfb, paper: 0x1b2036 },
+      { name: 'Candy', ground: 0xf5c4da, ink: 0x5a1f3d, paper: 0xfff6fa },
+      { name: 'Haunted', ground: 0x302c3c, ink: 0xe6efd2, paper: 0x1f1c27 },
+      { name: 'Hollywood', ground: 0xe6c0ad, ink: 0x2e1219, paper: 0xfff4ec },
+      { name: 'Art Deco', ground: 0x7fa89a, ink: 0x10261f, paper: 0xf8f3e6 },
     ] as const;
     for (const area of areas) {
       const fill = mix(area.paper, area.ground, 0.42);

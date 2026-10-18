@@ -89,15 +89,19 @@ colours are `puckColours`** (`ui/roadLayout.ts`): frontier coral, then a cleared
 settled mid-tone of the area's road, then locked and preview, and every number clears
 `OUTLINE_CONTRAST` on its puck — a preview's is drawn whole in its faintest legible colour,
 never faded by alpha. **One ambient layer per area** (`ui/mapAmbience.ts`) — pollen, lamp
-glow, dust, snow, fireflies, petals, mist, leaves, embers — is a fixed pool of 40 world-anchored images posed as pure
+glow, dust, snow, fireflies, petals, mist, leaves, embers, stars, sprinkles, wisps, glitter, bubbles — is a fixed pool of 40 world-anchored images posed as pure
 `f(seed, t, view)`, under every prop and stop, off under reduced motion and on blur. **The
 frontier hops on beat 1 of the music**: `ui/musicPulse.ts` turns `MusicSystem.playheadAt`
 (the loop's position across its rate history, read at the heard clock) into a bar pose, and
 falls back to the frame clock at 120 BPM, never freezing. See `docs/VISUAL_POLISH.md`.
 
-**Nine areas, appended, never inserted** (`AREAS` in `game/levels.ts`): Grass, Pavement, Sand,
+**Fourteen areas, appended, never inserted** (`AREAS` in `game/levels.ts`): Grass, Pavement, Sand,
 Snow and Dusk on levels 1–50 as they always were, then Garden, Swamp, Village and Castle on
-51–90, and Grass II from 91. An area is only a look and a name — gates count areas by index,
+51–90, then Space, Candy, Haunted, Hollywood and Art Deco on 91–140, and Grass II from 141. The
+last five alternate dark and light, so the road never runs three dark areas in a row, and the two
+dark ones (Space, Haunted) take a light ink as Dusk does, which `tests/ui.test.ts` counts. The
+sci-fi area is named Space and the candyland one Candy: names are printed as places ("Space is
+open", "The best of Candy"), and "Candy Land" is a board game's trademark. An area is only a look and a name — gates count areas by index,
 analytics by number, and no save stores a name — so appending re-dresses the road past level
 50 and changes nothing a player owns; inserting would re-dress roads already walked. A new
 area needs four things, each failing a test without it: a palette held to every per-area
@@ -127,11 +131,15 @@ it has landed. See `docs/STAR_GATES.md`.
 **Endless Mode is a ruleset, not a level** (`config/endless.ts`, `game/endless.ts`,
 `scenes/EndlessScene.ts`, `docs/ENDLESS_MODE.md`). It opens when level 100 is *cleared*
 (`endlessUnlocked`, read from the road's save, stored nowhere) and costs nothing: no heart,
-no attempt, no ad. A run is a sequence of steps — one act, one rhythm task, the act's coda,
+no attempt, no ad. **It has two doors and one card**: the map's infinity puck and, once open,
+an Endless block beside How to play on the title screen, both showing `EndlessCard`; a run
+started from the title screen goes back there (`from`, the plaque's **Home**). The result
+plaque is stacked from its rows' measured heights (`ui/endlessPlaque.ts`) and hides the run's
+HUD while it is up. A run is a sequence of steps — one act, one rhythm task, the act's coda,
 and **nothing else**: the next act's demonstration starts on the downbeat the coda's slide
 lands on, with no lead-in, as one task follows another in a level — generated as a pure function of
-`(seed, rulesVersion, index)` in bounded memory, from the pool of acts the rotation places
-on levels 1–100 (`eligibleActs`, read from `ROTATION`, pinned in
+`(seed, rulesVersion, index)` in bounded memory, from the pool of acts the road introduces
+on levels 1–100 (`eligibleActs`, read from `DEBUT_LEVELS`, pinned in
 `tests/fixtures/endless-rules-v1.json`). Tempo (130→150 BPM in even steps), the clear bar
 (75→90%, compared strictly against the unrounded accuracy) and the tier follow the *planned*
 clock, never the player, and change only on the next act's demonstration downbeat with the stems. Three
@@ -146,41 +154,41 @@ filed into the windows current when it arrives. **Any change to `ENDLESS` is a n
 version and a new leaderboard.** Five achievements were appended with their Console ids (items 8–12); the config is a
 union of three rule shapes and `hasEarned` takes the save and the Endless record.
 
-Thirty-five vignettes rotate by registry order, **in eras**: `levelSpec` places a level
-with `placementAt(ROTATION, level)` (`vignettes/rotation.ts`, the table beside the
-registry). Levels 1–50 cycle the first twenty-five exactly as the old single rotation
-did, from level 51 the first twenty-eight, from level 107 the first twenty-nine,
-from level 165 the first thirty-one, from level 227 the first thirty-two, from
-level 291 the first thirty-three, and from level 357 all thirty-five,
-each era opening on the acts it added. The paintbrush is act 29: one stroke a
-beat on an easel, four paintings by lap (`canvasLooks.ts`). See `docs/PAINTBRUSH.md`. Reordering
-or inserting an entry in `src/vignettes/registry.ts` still silently reassigns every
-level's vignette, and **appending one now also needs an era**, starting past every
-keepsake level: a keepsake is earned on the level where its act plays a lap, and an
-append under the old `VIGNETTES[(level - 1) % VIGNETTES.length]` would have moved every
-keepsake on 26–50. `LevelSpec.lap` is how many earlier levels the act played, and
-`actLevel` is its inverse — never `level + VIGNETTES.length`. See
-`docs/BARBER_POPCORN_TOOTHBRUSH.md`.
-Nose blowing and washing up are acts 30–31, with four people and three dish types.
-Their era begins at 165 to preserve the paintbrush keepsake at 136. See
+Thirty-six vignettes, **each with a debut level, and a new one in every area until the cast
+is complete** (`DEBUT_LEVELS` in `vignettes/registry.ts`, read by `placementAt` in
+`vignettes/rotation.ts`): an act first plays on its debut level, and every other level plays
+the act that has gone longest without a turn. Levels 1–9 open one act a level as they always
+did, area 2 brings three, areas 3–10 two each, on the area's opener and first pattern level,
+never a finale, and areas 11–18 one each, to the camera on level 171. **Exactly the
+twenty-eight acts of Endless's v1 pool are in by level 100, in its order**, which is what kept
+its rules and leaderboard valid. It replaced eras that could only add an act two full laps past
+the last keepsake, which had put the last seven acts between 107 and 358 and left thirty-one of
+the first forty areas with nothing new. **The schedule moved every keepsake from level 10 on,
+once**: `game/keepsakeLegacy.ts` freezes the old levels and records on a device's first launch
+of this build what its save held under them (`tiny-tempo.keepsakes.v1`), and those stay owned.
+Reordering or inserting an entry in `src/vignettes/registry.ts` silently reassigns every
+level's vignette, and **appending one needs a debut level past the furthest level players have
+reached**, since it moves every level from its debut on, keepsakes included; one at or below 100
+is also an Endless rules change. `LevelSpec.lap` is how many earlier levels the act played, and
+`actLevel` is its inverse — never `level + VIGNETTES.length`. See `docs/ACT_SCHEDULE.md`.
+The paintbrush is act 29: one stroke a beat on an easel, four paintings by lap
+(`canvasLooks.ts`). See `docs/PAINTBRUSH.md`.
+Nose blowing and washing up are acts 30–31, with four people and three dish types. See
 `docs/NOSE_AND_DISHES.md` for sounds, progress, endings and preview levels.
-The prospector is act 32, from level 227 — two whole 31-act laps past 165, the first era
-boundary past the nose and dish keepsakes on 196 and 197. A pick blow a beat on a boulder;
+The prospector is act 32, from level 131. A pick blow a beat on a boulder;
 **only judged hits crack it**, and the coda's last blow splits it open in both endings,
 because finding nothing still means opening the stone: success shows the dig's gem — gold
 in a canyon, a diamond in a timbered mine, an emerald in a green cliff, by lap
 (`prospectorLooks.ts`), each with its own words and its own prospector — and failure an
 empty hollow and a puff of grit. Synthesized voices in `audio/prospectorSounds.ts`. See
 `docs/PROSPECTOR.md`.
-Ice cream is act 33, from level 291 — two whole 32-act laps past 227, the first era boundary
-past the prospector's keepsakes on 227 and 259. A lick a beat, voiced by the one recorded
+Ice cream is act 33, from level 141. A lick a beat, voiced by the one recorded
 slurp (`sfx/lick.wav`, cut so its main transient is the start, and centred); **only judged
 hits wear the treat down**, up to `LICKABLE`, and the coda finishes it on success — a grin and
 a tongue the treat's colour — or drops what is left on the floor. A waffle cone, an ice pop
 and a lollipop by lap (`iceCreamLooks.ts`), each with its own words, place and licker. See
 `docs/ICE_CREAM.md`.
-The frog and the glasses are acts 34 and 35, from levels 357 and 358 — two whole 33-act laps
-past 291, the first era boundary past ice cream's keepsakes on 291 and 324. The frog croaks a
+The frog and the glasses are acts 34 and 35, from levels 151 and 161. The frog croaks a
 beat, its throat sac ballooning on the contact; **only judged hits bring two listeners up out
 of the water**, and the coda either hops them onto their pads to sing a C major triad with it
 or sends it off its pad and into the pond. The glasses clink a beat, rim to rim where
@@ -189,11 +197,17 @@ mistake leaves a hairline crack, and the coda either raises them to a "Cheers!" 
 `Text` made at construction and only posed — or shatters the cracked one onto the cloth.
 Three ponds and three toasts by lap; the drinks are soft ones. Both synthesized. See
 `docs/FROG_AND_GLASSES.md`.
+The instant camera is act 36, from level 171, titled *Snapshot* and never named as a brand.
+A shutter press, flash and click a beat; **only judged hits peg prints to the clothesline**,
+and the coda ejects one print that rises and develops — sharp, glossy and smiling on
+success, washed out, ghosted and sagging on a rough one, the two codas identical until the
+motor's whir ends (`CAMERA_PARTING_SEC`). A cat, a birthday cake and a sandcastle by lap
+(`cameraLooks.ts`), each with its own words. Synthesized. See `docs/CAMERA.md`.
 Snare drum, bongos, slushy and apple are acts 22–25, on the household lifecycle.
 Their coda contacts and voices share `treatMotion.ts`; the two food acts consume
 judged hits and reserve the last portion for success. See `docs/PERCUSSION_AND_PICNIC.md`.
 Barber, popcorn and toothbrush are acts 26–28, on the household lifecycle, first played
-on levels 51–53. Each advances only on judged hits and keeps a share of its subject for a
+on levels 82, 91 and 92. Each advances only on judged hits and keeps a share of its subject for a
 clean round's coda: the barber cuts a twelve-lock mop in `BARBER_MOTION.order` and is the
 fourth act with three endings — the cape whisked off, a lopsided cut, a beanie over the
 damage — with a middle voice of its own; popcorn fills its bowl a layer at a time and ends
@@ -223,7 +237,7 @@ the roller's wall and gallery (`rollerImage`, leaving `paintImage` on the origin
 three), the hotel bell, the balloons, the stapler, the fisherman's mac, the DJ
 booth, the trombone, the clap's sleeves, the snare's lacquer, the bongos, the barber's
 customer, the popcorn's bowl and the toothbrush's mirror.
-Lap 0 is always the original look, so the first twenty-five levels are unchanged.
+Lap 0 is always the original look, so every act debuts in the look it shipped with.
 Add variety this way, as a new look inside an existing act, rather than as a
 registry entry. **A look that changes
 what the subject is also changes its words**: `VignetteDefinition.looks` holds a
@@ -765,11 +779,13 @@ and level 1 wait on the same pending load), and finishing the lesson marks level
 demonstration seen, so a player who passed it does not watch the loop again — a skip does
 not. Each pass reports `tutorial_step_started`/`tutorial_step_ended`. See `docs/TUTORIAL.md`.
 
-**Three stars on a designated level earns a keepsake, and ownership is never stored.**
+**Three stars on a designated level earns a keepsake, and ownership is derived, not stored.**
 `game/scrapbook.ts` lists every keepsake as `{ id, vignette, lap, name }`; its level is where
-that act plays for the `lap`-th time, and it is owned exactly when that level has three stars
+that act plays for the `lap`-th time, and it is owned when that level has three stars
 — so old saves, save codes, merges and Auto Backup carry the collection without knowing it
-exists, and nothing can be owned twice. **The list is append-only**: an entry's `id`,
+exists, and nothing can be owned twice. The one stored exception only adds: the keepsakes a
+device held when the debut schedule moved them (`game/keepsakeLegacy.ts`), which a save code
+or a Saved Games restore onto another device does not carry. **The list is append-only**: an entry's `id`,
 `vignette` and `lap` are pinned by `tests/fixtures/keepsakes.json`, because changing one moves
 a keepsake players hold. Each has a drawing in `ui/keepsakes.ts` whose identifying detail sits
 in `pen.detail`, which is what keeps it out of the silhouette. `ScrapbookScene` is reached from
@@ -897,8 +913,8 @@ them.
 
 Two standing rules that predate the current state and still hold: debug replay
 controls exist only with DEV and `?debug`, and **do not add a vignette without a
-request** — a new entry in the registry reassigns levels unless it joins through a new
-era in `ROTATION`, past every keepsake.
+request** — a new entry in the registry reassigns every level from its debut on, so it
+takes a debut level in `DEBUT_LEVELS` past the furthest level players have reached.
 
 ## History
 
@@ -1061,7 +1077,8 @@ src/
     beatTrack.ts       What the two rows show, and the handover, as pure functions
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
     conceptIntro.ts    A new rhythm's one-time introduction (offbeat, long phrase, grids): where, which, and its tries
-    scrapbook.ts       Keepsakes: which level earns each, and what a save owns; stores nothing
+    scrapbook.ts       Keepsakes: which level earns each, and what a save owns
+    keepsakeLegacy.ts  The keepsakes a device held before the debut schedule, recorded once and kept
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
@@ -1134,7 +1151,8 @@ src/
     groove.ts          The room's groove pose, the bar's breath and the mastery payoff, as pure f(t)
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
-    endlessCard.ts     Endless Mode's door on the map: locked copy, the best, the badges, Start, Leaderboard
+    endlessCard.ts     Endless Mode's door, on the map and the title screen: locked copy, the best, the badges, Start, Leaderboard
+    endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
@@ -1153,8 +1171,8 @@ src/
     native.ts          The PlayReview plugin wrap, unloaded in the browser
     boot.ts            Native-only install; the browser keeps the stub
   vignettes/
-    registry.ts        The acts, and ROTATION: their order and eras are the level assignment.
-    rotation.ts        Which act plays a level, and its lap: the eras, forwards and back
+    registry.ts        The acts, and DEBUT_LEVELS: their order and debut levels are the level assignment
+    rotation.ts        Which act plays a level, and its lap: debuts, then whoever waited longest; forwards and back
     staging.ts         The household shelf and card light: geometry pure, drawn once per layout
     floorSpan.ts       How much floor an open-table act lays: the frame and a slide either side; pure
     Vignette.ts        The contract a vignette implements

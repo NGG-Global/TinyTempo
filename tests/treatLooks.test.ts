@@ -17,10 +17,10 @@ describe('picnic looks', () => {
     expect(appleLook(APPLE_LOOKS.length)).toBe(appleLook(0));
     expect(appleLook(2.6)).toBe(appleLook(2));
     for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) expect(appleLook(bad)).toBe(appleLook(0));
-    expect(levelSpec(25).vignette).toBe('apple');
-    expect(levelSpec(25).lap).toBe(0);
+    expect(levelSpec(81).vignette).toBe('apple');
+    expect(levelSpec(81).lap).toBe(0);
     expect(appleLook(levelSpec(actLevel('apple', 1)).lap).id).toBe('pear');
-    expect(actLevel('apple', 1)).toBe(50);
+    expect(actLevel('apple', 1)).toBe(110);
     expect(appleLook(levelSpec(actLevel('apple', 3)).lap).id).toBe('donut');
   });
 
@@ -96,8 +96,8 @@ describe('picnic looks', () => {
         expect(colour(look[key]), `${look.id}.${key}`).toBe(true);
       }
     }
-    expect(levelSpec(24).vignette).toBe('slushy');
+    expect(levelSpec(72).vignette).toBe('slushy');
     expect(slushyLook(levelSpec(actLevel('slushy', 1)).lap).id).toBe('blue');
-    expect(actLevel('slushy', 1)).toBe(49);
+    expect(actLevel('slushy', 1)).toBe(100);
   });
 });

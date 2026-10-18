@@ -1,5 +1,7 @@
 # Errand acts
 
+> **Where it plays has changed.** On the debut schedule (the roller now first plays level 22, the hotel bell 31, the balloon 32 and the stapler 41), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Four vignettes appended to the rotation at request, as acts 14 to 17. Levels 1 to
 13 keep their acts. The fisherman (`docs/FISHERMAN.md`), the DJ scratch
 (`docs/DJ_SCRATCH.md`) and the trombone (`docs/TROMBONE.md`) have since been

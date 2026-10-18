@@ -4,9 +4,11 @@ import { FxKey } from './feedback';
 /**
  * One quiet ambient layer per area on the map: pollen over the grass, a breathing glow on
  * the street lamps, dust over the sand, snowfall, fireflies at dusk, petals in the garden,
- * mist over the swamp, leaves tumbling through the village and embers rising off the
- * castle's torches (which glow, as the lamps do). The frontier's hop and its ring used to be
- * the only life on the road.
+ * mist over the swamp, leaves tumbling through the village, embers rising off the
+ * castle's torches (which glow, as the lamps do), stars twinkling over the space deck,
+ * sprinkles falling on the candy, wisps rising off the haunted heath, glitter flashing over
+ * the Hollywood boulevard and bubbles rising through the Art Deco band. The frontier's hop
+ * and its ring used to be the only life on the road.
  *
  * Bounded by construction: a fixed pool of `AMBIENCE.motes` images and `AMBIENCE.lamps`
  * glows, made once and never more, so nothing grows with the length of the road or the
@@ -32,8 +34,15 @@ export const AMBIENCE = Object.freeze({
 });
 
 /** Which ambience an area carries, by its index in `AREAS`: the same index the props use. */
-export type AmbienceKind = 'pollen' | 'lamps' | 'dust' | 'snow' | 'fireflies' | 'petals' | 'mist' | 'leaves' | 'embers';
-export const AMBIENCE_BY_AREA: readonly AmbienceKind[] = Object.freeze(['pollen', 'lamps', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers']);
+export type AmbienceKind = 'pollen' | 'lamps' | 'dust' | 'snow' | 'fireflies' | 'petals' | 'mist' | 'leaves' | 'embers'
+  | 'stars' | 'sprinkles' | 'wisps' | 'glitter' | 'bubbles';
+export const AMBIENCE_BY_AREA: readonly AmbienceKind[] = Object.freeze([
+  'pollen', 'lamps', 'dust', 'snow', 'fireflies', 'petals', 'mist', 'leaves', 'embers',
+  'stars', 'sprinkles', 'wisps', 'glitter', 'bubbles',
+]);
+
+/** The sprinkles' colours, one per mote by its seed. */
+const SPRINKLES = [0xf47aa8, 0x8fd9c4, 0xfff1a8, 0xb38df0] as const;
 
 /** The rectangle of world the camera shows. */
 export interface AmbienceView { readonly left: number; readonly top: number; readonly width: number; readonly height: number }
@@ -126,6 +135,39 @@ export function motePose(kind: AmbienceKind, i: number, t: number, view: Ambienc
       dy = -(14 + 10 * b) * s * t;
       alpha = Math.max(0, Math.sin(t * (2.2 + b) + phase)) * 0.9;
       scale = 0.1 + 0.08 * b; tint = 0xffa64d; glow = true;
+      break;
+    case 'stars':
+      // Fixed in the sky and twinkling, each on its own beat: the one kind that barely moves.
+      dx = Math.sin(t * 0.05 + phase) * 4 * s;
+      alpha = 0.3 + 0.6 * Math.max(0, Math.sin(t * (1.5 + 2 * b) + phase)) ** 3;
+      scale = 0.08 + 0.08 * b; tint = c < 0.3 ? 0xbfe4ff : 0xffffff; glow = true;
+      break;
+    case 'sprinkles':
+      // Falling faster than leaves and spinning as they go, in the finale's four colours.
+      dx = 6 * s * t + Math.sin(t * 1.5 + phase) * 10 * s;
+      dy = 18 * s * t;
+      alpha = 0.9; scale = 0.12 + 0.06 * b; tint = SPRINKLES[Math.floor(c * SPRINKLES.length)]!;
+      flake = true; angle = t * (2 + 2 * b) + phase;
+      break;
+    case 'wisps':
+      // Large, faint and rising, swaying as they go: a ghost of the swamp's mist that glows.
+      dx = Math.sin(t * 0.4 + phase) * 26 * s;
+      dy = -(8 + 6 * b) * s * t;
+      alpha = 0.07 + 0.09 * (1 + Math.sin(t * 0.7 + phase)) / 2;
+      scale = 0.4 + 0.35 * b; tint = 0xcfeedd; glow = true;
+      break;
+    case 'glitter':
+      // A flash and gone: dark most of the time, so the boulevard sparkles rather than shines.
+      dx = Math.sin(t * 0.6 + phase) * 12 * s;
+      dy = 6 * s * t;
+      alpha = Math.max(0, Math.sin(t * (3 + 3 * b) + phase)) ** 6;
+      scale = 0.1 + 0.08 * b; tint = c < 0.5 ? 0xf6d98a : 0xfff4dc; glow = true;
+      break;
+    case 'bubbles':
+      // Rising and wobbling like a glass of something fizzy, flat on the paint.
+      dx = Math.sin(t * 1.8 + phase) * 6 * s;
+      dy = -(18 + 10 * b) * s * t;
+      alpha = 0.55; scale = 0.1 + 0.1 * b; tint = 0xf6e6bc;
       break;
   }
   return {

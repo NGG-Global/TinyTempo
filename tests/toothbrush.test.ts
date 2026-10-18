@@ -11,10 +11,10 @@ vi.mock('phaser', () => ({ default: {} }));
 const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'judder'];
 
 describe('toothbrush act', () => {
-  it('is the twenty-eighth act, and first plays level 53', () => {
+  it('is the twenty-eighth act, and first plays level 92, the last act in by level 100', () => {
     expect(VIGNETTES[27]?.id).toBe('toothbrush');
-    expect(levelSpec(53).vignette).toBe('toothbrush');
-    expect(actLevel('toothbrush', 1)).toBe(81);
+    expect(levelSpec(92)).toMatchObject({ vignette: 'toothbrush', lap: 0 });
+    expect(actLevel('toothbrush', 1)).toBe(123);
     const definition = VIGNETTES[27]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(BRUSH_REVEAL_SEC);

@@ -1,5 +1,7 @@
 # Nose blowing and washing up
 
+> **Where it plays has changed.** On the debut schedule (the nose now first plays level 111 and the dish 121), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Two acts join the rotation at levels 165 and 166, after two complete 29-act laps.
 Levels 1–164 and every existing keepsake retain their assignments. Their era is two
 whole 31-act laps, 165–226; the prospector's era from 227 carries 32 acts, so their third

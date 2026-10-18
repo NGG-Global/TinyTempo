@@ -1,5 +1,7 @@
 # Paintbrush
 
+> **Where it plays has changed.** On the debut schedule (the paintbrush now first plays level 101), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Act 29, appended at request. It joins the rotation at level 107 (`ROTATION`), which is
 past every keepsake, so levels 1–106 keep the acts they had. Level 107 is its first
 appearance and level 136 its second.

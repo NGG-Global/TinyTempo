@@ -17,19 +17,11 @@ vi.mock('phaser', () => ({ default: {} }));
 vi.mock('../src/ui/backdrop', () => ({ Backdrop: class { open() {} layout() {} destroy() {} } }));
 
 describe('nose blowing and washing up', () => {
-  it('opens a new era after two complete paintbrush laps and rotates every variation', () => {
+  it('open areas 12 and 13, one each, and rotate every variation', () => {
     expect(VIGNETTES.slice(29, 31).map(v => v.id)).toEqual(['nose', 'dish']);
-    for (let level = 107; level < 165; level++) {
-      expect(levelSpec(level).vignette).toBe(VIGNETTES[(28 + level - 107) % 29]!.id);
-    }
-    // Their era is two whole laps, 165–226; the prospector's era from 227 carries 32 acts,
-    // so their first two laps, and both keepsakes, stay where they were.
-    for (let level = 165; level < 227; level++) {
-      expect(levelSpec(level).vignette).toBe(VIGNETTES[(29 + level - 165) % 31]!.id);
-    }
-    for (const [id, first, looks] of [['nose', 165, 4], ['dish', 166, 3]] as const) {
+    for (const [id, levels, looks] of [['nose', [111, 144, 180, 216], 4], ['dish', [121, 155, 191], 3]] as const) {
       for (let lap = 0; lap < looks; lap++) {
-        const level = lap < 2 ? first + 31 * lap : first + 92 + 32 * (lap - 2);
+        const level = levels[lap]!;
         expect(actLevel(id, lap)).toBe(level);
         expect(levelSpec(level)).toMatchObject({ vignette: id, lap });
       }

@@ -2,7 +2,7 @@ import { ENDLESS, type EndlessRole } from '../config/endless';
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
 import type { Pattern } from '../rhythm/patterns';
-import { ROTATION, VIGNETTES } from '../vignettes/registry';
+import { DEBUT_LEVELS, VIGNETTES } from '../vignettes/registry';
 import { placementAt } from '../vignettes/rotation';
 import { gridFits, PATTERN_TIERS, SUBDIVIDED_TIERS, type Grid } from './levels';
 import { isCleared } from './health';
@@ -69,7 +69,7 @@ export function endlessUnlocked(progress: Progress, unlockLevel: number = ENDLES
 /**
  * The acts a run may draw from: every act the road has introduced by the unlock level,
  * in the order the road introduced them, read from the rotation rather than written
- * down — so an act that joins the registry later (an era past level 100) is never in the
+ * down — so an act that debuts later (past level 100, `DEBUT_LEVELS`) is never in the
  * pool by accident. `tests/fixtures/endless-rules-v1.json` pins the list, because the
  * pool is part of the ruleset: a change to it is a change to the leaderboard.
  */
@@ -77,7 +77,7 @@ export function eligibleActs(throughLevel: number = ENDLESS.unlockLevel): readon
   const seen = new Set<number>();
   const out: number[] = [];
   for (let level = 1; level <= throughLevel; level++) {
-    const { index } = placementAt(ROTATION, level);
+    const { index } = placementAt(DEBUT_LEVELS, level);
     if (seen.has(index)) continue;
     seen.add(index);
     out.push(index);

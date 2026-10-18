@@ -35,15 +35,11 @@ function recorder() {
 }
 
 describe('the prospector', () => {
-  it('joins at level 227, past every keepsake players could hold, and digs a different gem each lap', () => {
+  it('first plays level 131, the opener of area 14, and digs a different gem each lap', () => {
     expect(VIGNETTES[31]?.id).toBe('prospector');
-    for (let level = 1; level < 227; level++) expect(levelSpec(level).vignette).not.toBe('prospector');
-    const earlier = new Set(VIGNETTES.slice(0, 31).map(v => v.id));
-    for (const keepsake of KEEPSAKES.filter(k => earlier.has(k.vignette))) expect(keepsake.level).toBeLessThan(227);
-    // Its era is two whole laps, 227–290; ice cream's era from 291 carries 33 acts, so its
-    // first two laps, and both keepsakes, stay where they were.
+    for (let level = 1; level < 131; level++) expect(levelSpec(level).vignette).not.toBe('prospector');
     for (let lap = 0; lap < 4; lap++) {
-      const level = lap < 2 ? 227 + 32 * lap : 323 + 33 * (lap - 2);
+      const level = [131, 166, 202, 238][lap]!;
       expect(actLevel('prospector', lap)).toBe(level);
       expect(levelSpec(level)).toMatchObject({ vignette: 'prospector', lap });
     }
@@ -57,7 +53,7 @@ describe('the prospector', () => {
     // Failure finds nothing, whatever the dig.
     for (const d of words) expect(d.rough[0]).toBe('Nothing\nbut rock.');
     // Its keepsakes are the first two finds, on the levels that dig them.
-    expect(KEEPSAKES.filter(k => k.vignette === 'prospector').map(k => [k.name, k.level])).toEqual([['Gold nugget', 227], ['Rough diamond', 259]]);
+    expect(KEEPSAKES.filter(k => k.vignette === 'prospector').map(k => [k.name, k.level])).toEqual([['Gold nugget', 131], ['Rough diamond', 166]]);
   });
 
   it('holds its ending long enough to split the stone and show what is in it, and lands the next task on the bar', () => {

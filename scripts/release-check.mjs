@@ -51,6 +51,9 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Every act ending read against the level bar', text: 'partialBand', source: 'src/game/taskVerdict.ts' },
   { feature: 'The plateau vocabulary', text: 'X X - X X - - X X - X - X X X -', source: 'src/game/levels.ts' },
   { feature: 'A steady lean named on the route card', text: 'Tune the Tap offset for this audio.', source: 'src/game/routeCalibration.ts' },
+  { feature: 'A new act in every area, and the keepsakes testers held kept', text: 'tiny-tempo.keepsakes.v1', source: 'src/game/keepsakeLegacy.ts' },
+  { feature: 'Five more areas, Space to Art Deco', text: 'Art Deco', source: 'src/game/levels.ts' },
+  { feature: 'The instant camera act', text: 'One for the album.', source: 'src/vignettes/registry.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

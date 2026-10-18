@@ -25,11 +25,11 @@ function fakeContext(sampleRate = 48000): AudioContext {
 }
 
 describe('barber act', () => {
-  it('is the twenty-sixth act, and first plays level 51', () => {
+  it('is the twenty-sixth act, and first plays level 82, area 9’s second new act', () => {
     expect(VIGNETTES[25]?.id).toBe('barber');
-    expect(levelSpec(51).vignette).toBe('barber');
-    expect(actLevel('barber', 1)).toBe(79);
-    expect([1, 25, 26, 50].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'apple', 'hammer', 'apple']);
+    expect(levelSpec(82)).toMatchObject({ vignette: 'barber', lap: 0 });
+    expect(actLevel('barber', 1)).toBe(112);
+    expect([81, 82, 83].map(n => levelSpec(n).vignette)).toEqual(['apple', 'barber', 'doorbell']);
   });
 
   it('holds its reveal for five beats, and settles inside the hold at every tempo', () => {

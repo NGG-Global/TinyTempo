@@ -25,6 +25,17 @@ import { castShadow } from '@/ui/light';
 /** A lit point on a prop, a lamp's glass or a torch's flame, where the ambience breathes a glow. */
 export interface PropLight { readonly x: number; readonly y: number }
 
+/** Candy's sprinkles, the same four colours its finale and its ambience use. */
+const SPRINKLE_COLOURS = [0xf47aa8, 0x8fd9c4, 0xfff1a8, 0xb38df0] as const;
+
+/** A flat rod `length` long and `width` wide, centred on `(x, y)` and turned by `angle`. */
+function rod(g: Phaser.GameObjects.Graphics, x: number, y: number, length: number, width: number, angle: number): void {
+  const cos = Math.cos(angle), sin = Math.sin(angle);
+  const ax = cos * length / 2, ay = sin * length / 2, bx = -sin * width / 2, by = cos * width / 2;
+  g.fillTriangle(x - ax - bx, y - ay - by, x + ax - bx, y + ay - by, x + ax + bx, y + ay + by);
+  g.fillTriangle(x - ax - bx, y - ay - by, x + ax + bx, y + ay + by, x - ax + bx, y - ay + by);
+}
+
 /**
  * One cell of an area's terrain motif, centred on `(x, y)`. `n` and `jitter` are the map's
  * stable per-cell and per-row noise, `row` the row's index in its band.
@@ -102,6 +113,62 @@ export function drawGroundMotif(g: Phaser.GameObjects.Graphics, area: Area, x: n
         g.fillStyle(shade(area.ground, j % 2 ? -0.13 : -0.07), 0.55).fillRoundedRect(cx - w * size * s / 2, cy - h * size * s / 2, w * size * s, h * size * s, 3 * s);
         g.fillStyle(shade(area.ground, 0.2), 0.35).fillRect(cx - (w * size / 2 - 2) * s, cy - (h * size / 2 - 1) * s, (w * size - 4) * s, 1.6 * s);
       });
+      return;
+    }
+    case 'Space': {
+      // Deck plating: a panel with a lit seam and four rivets, and a running light on some.
+      const plate = shade(area.ground, 0.07);
+      g.fillStyle(plate, 0.55).fillRoundedRect(x - 26 * s, y - 12 * s, 52 * s, 24 * s, 4 * s);
+      g.fillStyle(shade(area.ground, 0.22), 0.4).fillRect(x - 23 * s, y - 10 * s, 46 * s, 2 * s);
+      g.fillStyle(shade(area.ground, 0.3), 0.6);
+      for (const [rx, ry] of [[-21, -7], [21, -7], [-21, 7], [21, 7]] as const) g.fillCircle(x + rx * s, y + ry * s, 1.6 * s);
+      if (n > 0.72) g.fillStyle(0x7fd3ff, 0.85).fillCircle(x + (n - 0.86) * 60 * s, y + 2 * s, 2.2 * s);
+      return;
+    }
+    case 'Candy': {
+      // Sprinkles on the frosting, four to a patch, each lying its own way.
+      for (let j = 0; j < 4; j++) {
+        const angle = n * 7 + j * 1.9;
+        g.fillStyle(SPRINKLE_COLOURS[(j + Math.floor(n * 4)) % 4]!, 0.9);
+        rod(g, x + (j - 1.5) * 11 * s + (jitter - 0.5) * 6 * s, y + ((j * 7) % 3 - 1) * 6 * s, 10 * s, 3.2 * s, angle);
+      }
+      return;
+    }
+    case 'Haunted': {
+      // A tuft of dead grass, the blades splayed from one root and none of them kinked: a
+      // two-segment blade read as a stray letter at the map's scale.
+      g.lineStyle(2 * s, shade(area.ground, 0.22), 0.5);
+      for (let t = -2; t <= 2; t++) {
+        const lean = (jitter - 0.5) * 4 * s;
+        g.lineBetween(x + t * 1.5 * s, y + 5 * s, x + t * 5 * s + lean, y - (8 + (2 - Math.abs(t)) * 3 + n * 4) * s);
+      }
+      if (n > 0.5) g.fillStyle(shade(area.ground, 0.16), 0.6).fillEllipse(x + 16 * s, y + 3 * s, 9 * s, 5 * s, 8);
+      return;
+    }
+    case 'Hollywood': {
+      // A scrap of film in the pavement: the dark strip and its two rows of sprocket holes.
+      const w = (40 + n * 14) * s;
+      g.fillStyle(shade(area.ground, -0.42), 0.32).fillRect(x - w / 2, y - 7 * s, w, 14 * s);
+      g.fillStyle(shade(area.ground, 0.18), 0.55);
+      for (let h = x - w / 2 + 3 * s; h < x + w / 2 - 4 * s; h += 7 * s) {
+        g.fillRect(h, y - 5.5 * s, 3.4 * s, 2.4 * s);
+        g.fillRect(h, y + 3 * s, 3.4 * s, 2.4 * s);
+      }
+      return;
+    }
+    case 'Art Deco': {
+      // A gold fan set in the jade: five rays from one point, its edge a stepped arc.
+      const gold = mix(0xd8b45a, area.ground, 0.2);
+      g.lineStyle(2 * s, gold, 0.5);
+      for (let r = 0; r < 5; r++) {
+        const a = Math.PI * (1.15 + r * 0.175);
+        g.lineBetween(x, y + 6 * s, x + Math.cos(a) * 16 * s, y + 6 * s + Math.sin(a) * 16 * s);
+      }
+      g.fillStyle(gold, 0.45);
+      for (let r = 0; r < 4; r++) {
+        const a = Math.PI * (1.2 + r * 0.2);
+        g.fillCircle(x + Math.cos(a) * 18 * s, y + 6 * s + Math.sin(a) * 18 * s, 1.8 * s);
+      }
       return;
     }
     default:
@@ -347,6 +414,177 @@ export function drawProp(g: Phaser.GameObjects.Graphics, area: Area, variant: nu
         g.fillStyle(0xf6cf4a).fillCircle(x, y - 67 * k, 5 * k);
       }
       return { x, y: y - 72 * k };
+    case 'Space':
+      if (variant === 0) {
+        // A radar mast: a lattice tower, a dish turned to the sky and a beacon on top.
+        const steel = 0x9aa3c2, dark = shade(steel, -0.35);
+        g.fillStyle(dark).fillTriangle(x - 16 * k, y, x - 10 * k, y, x - 2 * k, y - 82 * k);
+        g.fillStyle(dark).fillTriangle(x + 16 * k, y, x + 10 * k, y, x + 2 * k, y - 82 * k);
+        g.lineStyle(1.6 * k, steel, 0.8);
+        for (let c = 0; c < 4; c++) {
+          const cy = y - (12 + c * 18) * k, half = (14 - c * 3) * k;
+          g.lineBetween(x - half, cy, x + half, cy - 14 * k);
+          g.lineBetween(x + half, cy, x - half, cy - 14 * k);
+        }
+        g.fillStyle(steel).fillEllipse(x + 4 * k, y - 96 * k, 58 * k, 20 * k, 14);
+        g.fillStyle(shade(steel, 0.25)).fillEllipse(x + 4 * k, y - 99 * k, 46 * k, 11 * k, 12);
+        g.lineStyle(2 * k, dark, 1).lineBetween(x + 4 * k, y - 99 * k, x, y - 116 * k);
+        g.fillStyle(0xe86fa8).fillCircle(x, y - 118 * k, 5 * k);
+        g.fillStyle(0xffffff, 0.8).fillCircle(x - 1.5 * k, y - 119.5 * k, 1.8 * k);
+        return { x, y: y - 118 * k };
+      }
+      {
+        // A rocket on its pad: hull, nose cone, two fins and a porthole.
+        const hull = 0xe8edfb, trim = 0xe0703d, pad = 0x5c6488;
+        g.fillStyle(pad).fillRect(x - 30 * k, y - 8 * k, 60 * k, 8 * k);
+        g.fillStyle(shade(pad, 0.2)).fillRect(x - 30 * k, y - 8 * k, 60 * k, 2.5 * k);
+        g.fillStyle(trim).fillTriangle(x - 12 * k, y - 30 * k, x - 12 * k, y - 8 * k, x - 28 * k, y - 8 * k);
+        g.fillStyle(trim).fillTriangle(x + 12 * k, y - 30 * k, x + 12 * k, y - 8 * k, x + 28 * k, y - 8 * k);
+        g.fillStyle(hull).fillRoundedRect(x - 12 * k, y - 96 * k, 24 * k, 88 * k, 6 * k);
+        g.fillStyle(shade(hull, -0.16)).fillRect(x + 4 * k, y - 94 * k, 8 * k, 86 * k);
+        g.fillStyle(trim).fillTriangle(x - 12 * k, y - 94 * k, x + 12 * k, y - 94 * k, x, y - 126 * k);
+        g.fillStyle(0x2f3760).fillCircle(x, y - 66 * k, 7 * k);
+        g.fillStyle(0x7fd3ff).fillCircle(x, y - 66 * k, 5 * k);
+        g.fillStyle(0xffffff, 0.7).fillCircle(x - 1.8 * k, y - 68 * k, 1.8 * k);
+        g.fillStyle(trim).fillRect(x - 12 * k, y - 30 * k, 24 * k, 5 * k);
+      }
+      return null;
+    case 'Candy':
+      if (variant === 0) {
+        // A lollipop: a swirl of rings on a white stick.
+        g.fillStyle(0xf7f1ea).fillRect(x - 2.5 * k, y - 72 * k, 5 * k, 72 * k);
+        g.fillStyle(shade(0xf7f1ea, -0.18)).fillRect(x + 0.5 * k, y - 72 * k, 2 * k, 72 * k);
+        const rings = [0xe0457b, 0xfff6fa, 0xe0457b, 0xfff6fa, 0xe0457b];
+        rings.forEach((colour, i) => g.fillStyle(colour).fillCircle(x + i * 0.8 * k, y - 96 * k - i * 0.4 * k, (26 - i * 5) * k));
+        g.fillStyle(0xffffff, 0.35).fillCircle(x - 10 * k, y - 106 * k, 6 * k);
+        return null;
+      }
+      {
+        // A candy cane planted in the frosting, and two gumdrops at its foot.
+        const red = 0xd8364a, white = 0xfff6fa;
+        for (let c = 0; c < 9; c++) {
+          g.fillStyle(c % 2 ? white : red).fillRect(x + 8 * k, y - (c + 1) * 9 * k, 11 * k, 9 * k);
+        }
+        for (let c = 0; c <= 8; c++) {
+          const a = Math.PI * (c / 8);
+          g.fillStyle(c % 2 ? white : red).fillCircle(x + 13.5 * k - 13 * k + Math.cos(a) * 13 * k, y - 81 * k - Math.sin(a) * 13 * k, 5.6 * k);
+        }
+        for (const [gx, w, colour] of [[-24, 22, 0x8fd9c4], [-6, 18, 0xfff1a8]] as const) {
+          g.fillStyle(colour).fillEllipse(x + gx * k, y - 9 * k, w * k, 22 * k, 12);
+          g.fillStyle(colour).fillRect(x + (gx - w / 2) * k, y - 9 * k, w * k, 9 * k);
+          g.fillStyle(0xffffff, 0.45).fillCircle(x + (gx - w / 5) * k, y - 14 * k, 2.4 * k);
+        }
+      }
+      return null;
+    case 'Haunted':
+      if (variant === 0) {
+        // Two gravestones: a rounded headstone, leaning, and a stone cross behind it.
+        const stone = 0x8d8a99, dark = shade(stone, -0.25);
+        g.fillStyle(dark).fillRect(x + 10 * k, y - 70 * k, 8 * k, 70 * k);
+        g.fillStyle(dark).fillRect(x + 1 * k, y - 56 * k, 26 * k, 8 * k);
+        quad(x - 30 * k, y, x + 4 * k, y, x + 6 * k, y - 46 * k, x - 26 * k, y - 50 * k);
+        g.fillStyle(stone).fillCircle(x - 10 * k, y - 48 * k, 16 * k);
+        g.fillStyle(stone);
+        quad(x - 26 * k, y, x + 4 * k, y, x + 6 * k, y - 46 * k, x - 26 * k, y - 50 * k);
+        g.fillStyle(shade(stone, 0.18), 0.6).fillRect(x - 20 * k, y - 40 * k, 6 * k, 36 * k);
+        g.fillStyle(0x6c8a5a, 0.7).fillEllipse(x - 12 * k, y - 2 * k, 40 * k, 8 * k, 10);
+        return null;
+      }
+      {
+        // A jack-o'-lantern hung from a crooked post, its face lit: where the glow breathes.
+        const wood = 0x4a3b3f, orange = 0xe0702a;
+        g.fillStyle(0xf2a03a, 0.16).fillEllipse(x, y + 2 * k, 76 * k, 20 * k, 10);
+        g.fillStyle(wood);
+        quad(x - 26 * k, y, x - 18 * k, y, x - 20 * k, y - 104 * k, x - 26 * k, y - 100 * k);
+        quad(x - 24 * k, y - 104 * k, x - 20 * k, y - 98 * k, x + 4 * k, y - 104 * k, x + 2 * k, y - 110 * k);
+        g.lineStyle(1.6 * k, wood, 1).lineBetween(x, y - 104 * k, x, y - 86 * k);
+        g.fillStyle(shade(orange, -0.2)).fillEllipse(x - 8 * k, y - 70 * k, 18 * k, 28 * k, 12);
+        g.fillStyle(shade(orange, -0.2)).fillEllipse(x + 8 * k, y - 70 * k, 18 * k, 28 * k, 12);
+        g.fillStyle(orange).fillEllipse(x, y - 70 * k, 22 * k, 30 * k, 12);
+        g.fillStyle(0x4d6b35).fillRect(x - 2 * k, y - 89 * k, 4 * k, 6 * k);
+        g.fillStyle(0xffd76a);
+        g.fillTriangle(x - 9 * k, y - 76 * k, x - 3 * k, y - 76 * k, x - 6 * k, y - 82 * k);
+        g.fillTriangle(x + 3 * k, y - 76 * k, x + 9 * k, y - 76 * k, x + 6 * k, y - 82 * k);
+        g.fillTriangle(x - 10 * k, y - 66 * k, x + 10 * k, y - 66 * k, x, y - 60 * k);
+      }
+      return { x, y: y - 70 * k };
+    case 'Hollywood':
+      if (variant === 0) {
+        // A palm tree, leaning a little toward the light, its fronds splayed.
+        const bark = 0x8a6440, frond = 0x4f8a4a;
+        for (let c = 0; c < 10; c++) {
+          const cx = x + c * c * 0.1 * k, cy = y - c * 10.4 * k;
+          g.fillStyle(c % 2 ? bark : shade(bark, -0.14)).fillRoundedRect(cx - 5 * k, cy - 11 * k, 10 * k, 12 * k, 3 * k);
+        }
+        const crown = { x: x + 8 * k, y: y - 106 * k };
+        // Eight fronds, the outer ones drooping past the crown, each a broad leaf: six thin
+        // ones left the crown reading as a twig on a tall trunk.
+        for (const [a, reach, droop] of [[-3.05, 30, 20], [-2.6, 30, 6], [-2.1, 26, -2], [-1.6, 20, -4], [-1.1, 24, -2], [-0.6, 30, 4], [-0.1, 31, 16], [0.35, 26, 24]] as const) {
+          const tipX = crown.x + Math.cos(a) * reach * k, tipY = crown.y + Math.sin(a) * 16 * k + droop * k;
+          const midX = (crown.x + tipX) / 2, midY = (crown.y + tipY) / 2 - 6 * k;
+          g.fillStyle(a < -1.35 ? shade(frond, 0.12) : frond);
+          g.fillTriangle(crown.x, crown.y, midX, midY - 6 * k, tipX, tipY);
+          g.fillTriangle(crown.x, crown.y, midX, midY + 5 * k, tipX, tipY);
+        }
+        g.fillStyle(0x6b4a2c).fillCircle(crown.x - 3 * k, crown.y + 4 * k, 3.4 * k);
+        g.fillStyle(0x6b4a2c).fillCircle(crown.x + 3 * k, crown.y + 5 * k, 3.4 * k);
+        return null;
+      }
+      {
+        // A film camera on its tripod, two reels on top.
+        const body = 0x2e2a2c, metal = 0x8c8a90;
+        g.lineStyle(3 * k, body, 1);
+        g.lineBetween(x - 2 * k, y - 52 * k, x - 26 * k, y);
+        g.lineBetween(x - 2 * k, y - 52 * k, x + 22 * k, y);
+        g.lineBetween(x - 2 * k, y - 52 * k, x + 2 * k, y);
+        g.fillStyle(body).fillRoundedRect(x - 20 * k, y - 76 * k, 34 * k, 26 * k, 4 * k);
+        g.fillStyle(shade(body, 0.25)).fillRect(x - 18 * k, y - 74 * k, 30 * k, 4 * k);
+        g.fillStyle(metal).fillRect(x + 14 * k, y - 70 * k, 14 * k, 12 * k);
+        g.fillStyle(shade(metal, -0.3)).fillCircle(x + 28 * k, y - 64 * k, 7 * k);
+        g.fillStyle(0x9fd0e6, 0.8).fillCircle(x + 28 * k, y - 64 * k, 4 * k);
+        for (const [rx, r] of [[-11, 14], [9, 12]] as const) {
+          const cy = y - 76 * k - r * k;
+          g.fillStyle(body).fillCircle(x + rx * k, cy, r * k);
+          g.fillStyle(metal).fillCircle(x + rx * k, cy, r * 0.32 * k);
+          for (let h = 0; h < 4; h++) {
+            const a = h * Math.PI / 2 + 0.4;
+            g.fillStyle(shade(body, 0.35)).fillCircle(x + rx * k + Math.cos(a) * r * 0.62 * k, cy + Math.sin(a) * r * 0.62 * k, r * 0.18 * k);
+          }
+        }
+      }
+      return null;
+    case 'Art Deco':
+      if (variant === 0) {
+        // A sunburst on a fluted column: alternate gold and black rays, stepped at the foot.
+        const gold = 0xd8b45a, black = 0x10261f, cream = 0xf8f3e6;
+        g.fillStyle(black).fillRect(x - 22 * k, y - 8 * k, 44 * k, 8 * k);
+        g.fillStyle(black).fillRect(x - 16 * k, y - 16 * k, 32 * k, 8 * k);
+        g.fillStyle(cream).fillRect(x - 9 * k, y - 78 * k, 18 * k, 62 * k);
+        g.fillStyle(shade(cream, -0.15));
+        for (const fx of [-5, 0, 5]) g.fillRect(x + (fx - 0.8) * k, y - 76 * k, 1.6 * k, 58 * k);
+        const cx = x, cy = y - 80 * k, r = 36 * k;
+        for (let ray = 0; ray < 9; ray++) {
+          const a0 = Math.PI + ray * Math.PI / 9, a1 = Math.PI + (ray + 1) * Math.PI / 9;
+          g.fillStyle(ray % 2 ? black : gold).fillTriangle(cx, cy, cx + Math.cos(a0) * r, cy + Math.sin(a0) * r, cx + Math.cos(a1) * r, cy + Math.sin(a1) * r);
+        }
+        g.fillStyle(gold).fillCircle(cx, cy, 8 * k);
+        g.fillStyle(gold).fillRect(x - 38 * k, y - 82 * k, 76 * k, 4 * k);
+        return null;
+      }
+      {
+        // A streamlined lamp: a stepped base, a slim pole with three rings, a frosted globe.
+        const black = 0x10261f, gold = 0xd8b45a;
+        g.fillStyle(0xf6e6bc, 0.16).fillEllipse(x, y + 2 * k, 70 * k, 18 * k, 10);
+        g.fillStyle(black).fillRect(x - 14 * k, y - 8 * k, 28 * k, 8 * k);
+        g.fillStyle(black).fillRect(x - 9 * k, y - 16 * k, 18 * k, 8 * k);
+        g.fillStyle(black).fillRect(x - 3 * k, y - 100 * k, 6 * k, 84 * k);
+        for (const ry of [-40, -64, -88]) g.fillStyle(gold).fillRect(x - 7 * k, y + ry * k, 14 * k, 4 * k);
+        g.fillStyle(gold).fillRect(x - 10 * k, y - 102 * k, 20 * k, 4 * k);
+        g.fillStyle(0xfff4d6).fillCircle(x, y - 114 * k, 12 * k);
+        g.fillStyle(0xffffff, 0.7).fillCircle(x - 4 * k, y - 118 * k, 4 * k);
+        g.fillStyle(gold).fillRect(x - 2 * k, y - 130 * k, 4 * k, 5 * k);
+      }
+      return { x, y: y - 114 * k };
     default:
       if (variant === 0) {
         // Pine: stacked canopy, each tier hazed a little further toward the sky.

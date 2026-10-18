@@ -127,9 +127,12 @@ frames.
    `FinaleStage.drawLine`. PlayScene does not change.
 3. An area with no entry wears `DEFAULT_TREATMENT`.
 
-Nine areas have their own: Grass, Pavement, Sand, Snow and Dusk, and the four appended after
+Fourteen areas have their own: Grass, Pavement, Sand, Snow and Dusk, the four appended after
 them (`AREAS` in `src/game/levels.ts`) — Garden's rose-and-leaf bunting, Swamp's green and
-gold lanterns, Village's harvest bunting and Castle's heraldic crimson, gold and royal blue.
+gold lanterns, Village's harvest bunting and Castle's heraldic crimson, gold and royal blue —
+and the five after Castle: Space's running lights in cyan, amber and magenta, Candy's
+sweet-shop bunting, Haunted's pumpkin-and-violet lanterns, Hollywood's premiere red, gold and
+black, and Art Deco's black lacquer, gold leaf and jade, the last of the cycle.
 
 ## Analytics
 
