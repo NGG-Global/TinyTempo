@@ -1,5 +1,7 @@
 # Barber, popcorn and toothbrush
 
+> **Where it plays has changed.** On the debut schedule (the barber now first plays level 82, the popcorn 91 and the toothbrush 92), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Acts 26–28, appended to the registry at request. All three are on the household lifecycle
 (`HouseholdVignette`): one stage re-anchored every frame, demonstration state kept apart
 from the player's, judged hits alone advancing the subject, a pause freezing the heard

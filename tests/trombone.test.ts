@@ -13,15 +13,11 @@ import { PATTERN_TIERS } from '../src/game/levels';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('trombone act', () => {
-  it('is the twentieth act and keeps every earlier level', () => {
+  it('is the twentieth act, and first plays level 52, area 6’s second new act', () => {
     expect(VIGNETTES[19]?.id).toBe('trombone');
-    expect(levelSpec(20).vignette).toBe('trombone');
-    // Its second visit is where it has always been: the rotation grew at level 51, after it.
-    expect(actLevel('trombone', 1)).toBe(45);
-    expect(levelSpec(45).vignette).toBe('trombone');
-    expect([1, 9, 18, 19].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'fisherman', 'scratch']);
-    expect(levelSpec(26).vignette).toBe('hammer');
-    expect(levelSpec(26).lap).toBe(1);
+    expect(levelSpec(52)).toMatchObject({ vignette: 'trombone', lap: 0 });
+    expect(actLevel('trombone', 1)).toBe(76);
+    expect(levelSpec(76)).toMatchObject({ vignette: 'trombone', lap: 1 });
   });
 
   it('holds its finale for five beats, long enough for the two-second recorded endings at every tempo', () => {

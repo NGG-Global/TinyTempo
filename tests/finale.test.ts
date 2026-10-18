@@ -108,9 +108,9 @@ describe('the finale’s rules are every level’s', () => {
     const failed = recordResult(before, level, levelSpec(level).clearAccuracy - 1);
     expect(failed).toMatchObject({ cleared: false, stars: 0 });
     expect(failed.progress.unlocked).toBe(level);
-    // The act keepsakes the first finales already carried stay where they were.
-    expect(keepsakeAt(10)?.id).toBe('egg-painted');
-    expect(keepsakeAt(20)?.id).toBe('trombone-mouthpiece');
+    // A finale carries the keepsake of whatever act lap it plays, like any level.
+    expect(keepsakeAt(10)?.id).toBe('hammer-brass-head');
+    expect(keepsakeAt(20)?.id).toBe('banana-green-sticker');
     // And the star gates are a function of the area, not of the finale.
     expect([1, 2, 3, 4].map(starsRequired)).toEqual([12, 25, 39, 53]);
   });

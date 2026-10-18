@@ -1,5 +1,7 @@
 # Fisherman
 
+> **Where it plays has changed.** On the debut schedule (the fisherman now first plays level 42), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 One vignette appended to the rotation at request, as act 18. Levels 1 to 17 keep
 their acts, and the fisherman's own first level is 18. The DJ scratch
 (`docs/DJ_SCRATCH.md`) has since been appended after it as act 19.

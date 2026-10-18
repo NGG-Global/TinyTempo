@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 
 import { SceneKey } from '@/config/scenes';
 import { hideBootOverlay } from '@/core/shell';
+import { keptKeepsakes } from '@/game/keepsakeLegacy';
 import { generateMaterials } from '@/textures/materials';
 import { generateFeedbackTextures } from '@/ui/feedback';
 
@@ -43,6 +44,10 @@ export class PreloadScene extends Phaser.Scene {
     // The DOM boot panel stays up until a scene is genuinely on screen, so a
     // slow first paint never shows a blank canvas.
     hideBootOverlay();
+
+    // Before any level can be played on the debut schedule: the keepsakes this save held
+    // under the old one are recorded once, from the save as it stands (`keepsakeLegacy.ts`).
+    keptKeepsakes();
 
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(location.search);

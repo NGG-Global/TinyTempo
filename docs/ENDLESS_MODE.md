@@ -30,11 +30,12 @@ Play Games *Time* leaderboard.
   100 is untouched: levels 101 onward derive as they always did.
 - **Cost.** Nothing. No heart, no attempt id, no ad, no cooldown. `beginAttempt` is never
   called; Premium changes nothing; no rewarded placement exists in a run.
-- **The pool** is every act the rotation places on levels 1–100, in the order it introduces
-  them — twenty-eight acts, hammer to toothbrush. Read from `ROTATION`, not written down, so
-  an act appended to the registry in a later era (the paintbrush at 107, the frog at 357)
-  can never join the pool by accident. The list is pinned in the fixture, because the pool is
-  part of the ruleset.
+- **The pool** is every act the road introduces on levels 1–100, in the order it introduces
+  them — twenty-eight acts, hammer to toothbrush. Read from `DEBUT_LEVELS`, not written down,
+  so an act that debuts later (the paintbrush at 101, the glasses at 161) can never join the
+  pool by accident. The list is pinned in the fixture, because the pool is part of the
+  ruleset. The debut schedule was built so that exactly these twenty-eight are in by level
+  100, in this order (`docs/ACT_SCHEDULE.md`), which is why rules version 1 survived it.
 - **A step** is one act, one rhythm task — demonstration, then the player's response on the
   very next downbeat, judged by the level's own `RoundController`, judge and scorer — then
   the act's own coda — its contact, its hold and two slide beats, which complete one bar or
@@ -195,7 +196,7 @@ keeps, and a size check — a deliberate change, not a side effect of this one.
 Anything in `src/config/endless.ts` is part of the ruleset the board ranks against: the
 seed, the tempo band and ramp, the threshold ramp, the lives, the step's shape, the grid rules,
 the cycle, the recent-acts window, the lap range, the milestones, and the pool (which
-follows `ROTATION` through level 100, so a change to the rotation below level 100 is a
+follows `DEBUT_LEVELS` through level 100, so a change to the schedule below level 100 is a
 ruleset change too). Changing any of them:
 
 1. raise `ENDLESS.rulesVersion`;

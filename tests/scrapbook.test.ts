@@ -39,8 +39,9 @@ function memory(initial: Record<string, string> = {}): Storage & { readonly data
 
 describe('the collection', () => {
   it('is the recorded set, so no keepsake can move to another level unnoticed', () => {
-    // A keepsake's level is where players earned it. Moving one would take it from some
-    // players and hand it to others; appending a new one is the only safe change.
+    // A keepsake's level is where players earn it. Moving one takes it from some players and
+    // hands it to others, so it moves only deliberately: the debut schedule moved them all
+    // once, and grandfathered what devices held (`keepsakeLegacy.ts`).
     const pinned = JSON.parse(readFileSync(new URL('./fixtures/keepsakes.json', import.meta.url), 'utf8')) as Record<string, [string, number, number]>;
     for (const [id, [vignette, lap, level]] of Object.entries(pinned)) {
       const keepsake = KEEPSAKES.find(k => k.id === id);
@@ -76,8 +77,8 @@ describe('the collection', () => {
       expect(keepsake.level).toBe(levelOf(keepsake.vignette, keepsake.lap));
     }
     expect(keepsakeAt(1)!.id).toBe('hammer-lucky-nail');
-    expect(keepsakeAt(28)!.id).toBe('bug-ladybird');
-    expect(keepsakeAt(26)!.id).toBe('hammer-brass-head');
+    expect(keepsakeAt(15)!.id).toBe('bug-ladybird');
+    expect(keepsakeAt(10)!.id).toBe('hammer-brass-head');
     expect(() => levelOf('nobody', 0)).toThrow();
   });
 
@@ -124,8 +125,8 @@ describe('what earns a keepsake', () => {
   });
 
   it('reports the moment a finished level earns its keepsake, and never again after', () => {
-    const level = 12;
-    let progress = road(11, 3);
+    const level = 13;
+    let progress = road(12, 3);
     const results = [on(level, 1), on(level, 2), on(level, 3), 100, on(level, 3), on(level, 2)];
     const earned = results.map(accuracy => {
       const outcome = recordResult(progress, level, accuracy);
@@ -138,10 +139,10 @@ describe('what earns a keepsake', () => {
   });
 
   it('never reports a keepsake for a level that has none', () => {
-    // Level 54 is the hammer's third visit, which has no keepsake of its own.
-    expect(levelSpec(54)).toMatchObject({ vignette: 'hammer', lap: 2 });
-    const outcome = recordResult(road(53, 3), 54, 100);
-    expect(keepsakeEarned(road(53, 3), outcome.progress, 54)).toBeNull();
+    // Level 24 is the hammer's third visit, which has no keepsake of its own.
+    expect(levelSpec(24)).toMatchObject({ vignette: 'hammer', lap: 2 });
+    const outcome = recordResult(road(23, 3), 24, 100);
+    expect(keepsakeEarned(road(23, 3), outcome.progress, 24)).toBeNull();
   });
 });
 
@@ -172,26 +173,26 @@ describe('existing saves', () => {
 describe('restores and merges', () => {
   it('only ever add keepsakes: a merge owns exactly what either side owned', () => {
     const phone = { ...road(20, 2), best: { ...road(20, 2).best, 3: on(3, 3), 9: on(9, 3) } };
-    const tablet = { ...road(30, 1), best: { ...road(30, 1).best, 9: on(9, 3), 14: 100, 28: 100 } };
+    const tablet = { ...road(30, 1), best: { ...road(30, 1).best, 9: on(9, 3), 14: 100, 15: 100 } };
     const merged = mergeProgress(phone, tablet);
     const ids = (p: Progress) => ownedKeepsakes(p).map(k => k.id).sort();
     expect(ids(merged)).toEqual([...new Set([...ids(phone), ...ids(tablet)])].sort());
-    // Levels 3 and 9 from the phone; 9, 14 and 28 from the tablet.
-    expect(ids(merged)).toEqual(['bug-ladybird', 'bug-plum-beetle', 'paper-star', 'roller-swatch'].sort());
+    // Levels 3 and 9 from the phone; 9, 14 and 15 from the tablet.
+    expect(ids(merged)).toEqual(['bug-ladybird', 'bug-plum-beetle', 'paper-star', 'window-harbour-frame'].sort());
     // Merging again changes nothing: no keepsake is counted twice.
     expect(ids(mergeProgress(merged, tablet))).toEqual(ids(merged));
     expect(collectionCount(mergeProgress(merged, merged)).owned).toBe(ids(merged).length);
   });
 
   it('travel in a save code without the code knowing about them', () => {
-    const progress = { ...road(50, 2), best: { ...road(50, 2).best, 1: 100, 24: on(24, 3), 50: on(50, 3) } };
+    const progress = { ...road(50, 2), best: { ...road(50, 2).best, 1: 100, 23: on(23, 3), 50: on(50, 3) } };
     const code = encodeSaveCode({ progress, settings: { calibrationMs: 0, muted: false, music: 1, sfx: 1, haptics: true }, tutorialComplete: true });
     const decoded = decodeSaveCode(code);
     expect(decoded.ok).toBe(true);
     if (!decoded.ok) return;
     expect(ownedKeepsakes(decoded.data.progress).map(k => k.id)).toEqual(ownedKeepsakes(progress).map(k => k.id));
-    expect(ownedKeepsakes(decoded.data.progress).map(k => k.level)).toEqual([1, 24, 50]);
+    expect(ownedKeepsakes(decoded.data.progress).map(k => k.level)).toEqual([1, 23, 50]);
     // And the stars that carry them survived intact.
-    for (const level of [1, 24, 50]) expect(levelStars(decoded.data.progress, level)).toBe(3);
+    for (const level of [1, 23, 50]) expect(levelStars(decoded.data.progress, level)).toBe(3);
   });
 });

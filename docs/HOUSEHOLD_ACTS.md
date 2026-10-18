@@ -1,5 +1,7 @@
 # Household acts
 
+> **Where it plays has changed.** On the debut schedule (the egg now first plays level 11, the bubble wrap 12, the light switch 13 and the doorbell 21), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Four procedural vignettes are appended to the rotation. Levels 1–9 retain their
 introductions; later levels cycle through the whole registry, twenty-one entries
 now that the errand acts, the fisherman, the DJ scratch, the trombone and the

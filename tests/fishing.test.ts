@@ -11,16 +11,11 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('fisherman act', () => {
-  it('is the eighteenth act and keeps every earlier level', () => {
+  it('is the eighteenth act, and first plays level 42, area 5’s second new act', () => {
     expect(VIGNETTES[17]?.id).toBe('fisherman');
-    expect(levelSpec(18).vignette).toBe('fisherman');
-    // Its second visit is where it has always been: the rotation grew at level 51, after it.
-    expect(actLevel('fisherman', 1)).toBe(43);
-    expect(levelSpec(43).vignette).toBe('fisherman');
-    expect([1, 4, 9, 13, 14, 17].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'saw', 'paper', 'doorbell', 'roller', 'stapler']);
-    // The hammer comes round again after the first twenty-five, on lap 1.
-    expect(levelSpec(26).vignette).toBe('hammer');
-    expect(levelSpec(26).lap).toBe(1);
+    expect(levelSpec(42)).toMatchObject({ vignette: 'fisherman', lap: 0 });
+    expect(actLevel('fisherman', 1)).toBe(64);
+    expect(levelSpec(64)).toMatchObject({ vignette: 'fisherman', lap: 1 });
   });
 
   it('holds its finale for five beats, and every ending settles inside the hold at every tempo', () => {

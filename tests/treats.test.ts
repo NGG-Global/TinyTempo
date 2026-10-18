@@ -12,9 +12,9 @@ const ACTS: readonly TreatAct[] = ['snare', 'bongos', 'slushy', 'apple'];
 const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'judder'];
 
 describe('percussion and picnic acts', () => {
-  it('adds levels 22–25 after all existing introductory acts', () => {
+  it('follows every earlier act, introduced on levels 62, 71, 72 and 81', () => {
     expect(VIGNETTES.slice(21, 25).map(v => v.id)).toEqual(ACTS);
-    expect([22, 23, 24, 25].map(level => levelSpec(level).vignette)).toEqual(ACTS);
+    expect([62, 71, 72, 81].map(level => levelSpec(level))).toMatchObject(ACTS.map(vignette => ({ vignette, lap: 0 })));
     expect(VIGNETTES.slice(0, 21).map(v => v.id)).toEqual([
       'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
       'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler',

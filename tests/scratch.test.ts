@@ -8,15 +8,11 @@ import { TaskSequence } from '../src/game/TaskSequence';
 vi.mock('phaser', () => ({ default: {} }));
 
 describe('DJ scratch act', () => {
-  it('is the nineteenth act and keeps every earlier level', () => {
+  it('is the nineteenth act, and first plays level 51, the opener of area 6', () => {
     expect(VIGNETTES[18]?.id).toBe('scratch');
-    expect(levelSpec(19).vignette).toBe('scratch');
-    // Its second visit is where it has always been: the rotation grew at level 51, after it.
-    expect(actLevel('scratch', 1)).toBe(44);
-    expect(levelSpec(44).vignette).toBe('scratch');
-    expect([1, 9, 17, 18].map(n => levelSpec(n).vignette)).toEqual(['hammer', 'paper', 'stapler', 'fisherman']);
-    expect(levelSpec(26).vignette).toBe('hammer');
-    expect(levelSpec(26).lap).toBe(1);
+    expect(levelSpec(51)).toMatchObject({ vignette: 'scratch', lap: 0 });
+    expect(actLevel('scratch', 1)).toBe(75);
+    expect(levelSpec(75)).toMatchObject({ vignette: 'scratch', lap: 1 });
   });
 
   it('holds its finale for five beats, and settles inside the hold at every tempo', () => {

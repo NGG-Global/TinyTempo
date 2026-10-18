@@ -6,12 +6,11 @@ keeps the act it had.
 
 ## How a look is chosen
 
-`levelSpec` exposes `lap`, the number of earlier levels its act played. Levels 1 to 25
-are lap 0 and 26 to 50 lap 1 for the first twenty-five acts; from level 51 the rotation
-carries the first twenty-eight (`ROTATION` in `src/vignettes/registry.ts`),
-so the first twenty-five return for lap 2 on 54 to 78, and the barber, popcorn and
-toothbrush play lap 0 on 51 to 53. From level 107 the rotation carries the paintbrush too
-(`docs/PAINTBRUSH.md`). A level's act and lap are `levelSpec`'s; the level of
+`levelSpec` exposes `lap`, the number of earlier levels its act played. An act's lap 0 is
+its debut level (`DEBUT_LEVELS` in `src/vignettes/registry.ts`, `docs/ACT_SCHEDULE.md`),
+and it comes round again when it has gone longest without a turn, so the acts met early
+reach their later looks early: the hammer plays lap 1 on level 10 and lap 3 on level 40.
+A level's act and lap are `levelSpec`'s; the level of
 an act's lap is `actLevel`, and the level numbers below are read from it.
 `PlayScene` passes it to `VignetteDefinition.create(scene, lap)`; every act indexes
 its list modulo the list's length, through `lookAt` where the list is a data module.

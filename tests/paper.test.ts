@@ -53,10 +53,10 @@ describe('paper cutting presentation', () => {
     expect((['success', 'partial', 'rough'] as const).map(o => actEnding(o, false))).toEqual(['success', 'partial', 'fail']);
     const def = VIGNETTES.find(v => v.id === 'paper')!;
     expect(def.partial?.copy).toHaveLength(2);
-    // Its introduction stays at level 9, and its second visit at 34.
+    // Its introduction stays at level 9; it comes round again at 23.
     expect(levelSpec(9).vignette).toBe('paper');
-    expect(actLevel('paper', 1)).toBe(34);
-    expect(levelSpec(34).vignette).toBe('paper');
+    expect(actLevel('paper', 1)).toBe(23);
+    expect(levelSpec(23)).toMatchObject({ vignette: 'paper', lap: 1 });
   });
 
   it('closes on contact and reopens before the next possible fast tap', () => {

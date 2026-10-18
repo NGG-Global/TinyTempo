@@ -1,5 +1,7 @@
 # Ice cream
 
+> **Where it plays has changed.** On the debut schedule (ice cream now first plays level 141), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Act 33. A person licks a treat on every beat; the coda either finishes it or drops it.
 Requested as three variations: an ice cream cone, an "icicle" and a lollipop, with a
 delivered licking sound. The icicle is drawn as an **ice pop** — a frozen lolly on a wooden

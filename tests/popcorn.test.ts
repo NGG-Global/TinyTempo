@@ -13,10 +13,10 @@ vi.mock('phaser', () => ({ default: {} }));
 const VOICES: readonly VoiceName[] = ['action', 'success', 'rough', 'scrape', 'judder'];
 
 describe('popcorn act', () => {
-  it('is the twenty-seventh act, and first plays level 52', () => {
+  it('is the twenty-seventh act, and first plays level 91, the opener of area 10', () => {
     expect(VIGNETTES[26]?.id).toBe('popcorn');
-    expect(levelSpec(52).vignette).toBe('popcorn');
-    expect(actLevel('popcorn', 1)).toBe(80);
+    expect(levelSpec(91)).toMatchObject({ vignette: 'popcorn', lap: 0 });
+    expect(actLevel('popcorn', 1)).toBe(122);
     const definition = VIGNETTES[26]!;
     expect(definition.endingHoldBeats).toBe(5);
     expect(definition.endingSec).toBe(POPCORN_REVEAL_SEC);

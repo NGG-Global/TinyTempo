@@ -17,16 +17,17 @@ no drop, no roll, no pack and no shop — a keepsake is a fact about a level's s
 
 Keepsake `lap` of an act is earned by **three stars on the level where that act plays for
 the `lap`-th time**: `actLevel(vignette, lap)` in `src/game/levels.ts`, the rotation read
-backwards. The first set is one keepsake per act on levels 1–25; the second is one per
+backwards. The first set is one keepsake per act, on its debut level; the second is one per
 act, on that act's second appearance, drawn in that look's colours — the ladybird pin is
-earned on level 28, where the shoe chases the ladybird, and the brass hammer on level 26.
-The barber, popcorn and toothbrush joined the rotation at level 51, so their two are on
-51–53 and 79–81 (`docs/BARBER_POPCORN_TOOTHBRUSH.md`).
+earned on level 15, where the shoe chases the ladybird, and the brass hammer on level 10.
+Where each act debuts is `DEBUT_LEVELS` (`docs/ACT_SCHEDULE.md`).
 
-**A new act can never move a keepsake.** Every level a keepsake is earned on belongs to an
-era of `ROTATION` (`src/vignettes/registry.ts`) that is closed: appending an act adds an
-era starting past the last keepsake level, and `tests/fixtures/keepsakes.json` pins every
-level, so an append that moved one fails the build.
+**A keepsake moves only deliberately.** `tests/fixtures/keepsakes.json` pins every level, so
+a change that moved one fails the build. The debut schedule moved every keepsake from level
+10 on, once, and kept what each device held under the old schedule
+(`src/game/keepsakeLegacy.ts`, `tiny-tempo.keepsakes.v1`): ownership is three stars on the
+keepsake's level, or that record. Appending an act moves every level from its debut on, so
+its debut goes past the furthest level players have reached (`docs/ACT_SCHEDULE.md`).
 
 Every slot prints its level whether it is found or not, and touching one says it again in
 words ("Three stars on level 14 finds it"), so a player can always see what earns what.

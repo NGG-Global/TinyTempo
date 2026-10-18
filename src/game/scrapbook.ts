@@ -1,4 +1,5 @@
 import { VIGNETTES } from '../vignettes/registry';
+import { keptKeepsakes } from './keepsakeLegacy';
 import { actLevel } from './levels';
 import type { Progress } from './progress';
 import { levelStars } from './stars';
@@ -6,7 +7,9 @@ import { levelStars } from './stars';
 /**
  * The Scrapbook: a keepsake for three stars on a designated level, and nothing else.
  *
- * **Ownership is derived, never stored.** A keepsake is owned exactly when its level has
+ * **Ownership is derived, never stored**, with one exception that only adds: the keepsakes a
+ * device held when the act schedule changed are kept (`game/keepsakeLegacy.ts`). Otherwise
+ * a keepsake is owned exactly when its level has
  * three stars, and a level's stars are already derived — its best accuracy against its
  * own thresholds (`game/stars.ts`). So there is no second record that could disagree
  * with the first: a save code, an Auto Backup restore or `mergeProgress` carries the
@@ -144,16 +147,20 @@ export function keepsakeAt(level: number): Keepsake | null {
   return BY_LEVEL.get(level) ?? null;
 }
 
-export function ownsKeepsake(progress: Progress, keepsake: Keepsake): boolean {
-  return levelStars(progress, keepsake.level) === 3;
+/**
+ * Three stars on its level, or kept from before the debut schedule moved it
+ * (`game/keepsakeLegacy.ts`). `kept` is this device's record; tests pass their own.
+ */
+export function ownsKeepsake(progress: Progress, keepsake: Keepsake, kept: ReadonlySet<string> = keptKeepsakes()): boolean {
+  return kept.has(keepsake.id) || levelStars(progress, keepsake.level) === 3;
 }
 
-export function ownedKeepsakes(progress: Progress): readonly Keepsake[] {
-  return KEEPSAKES.filter(keepsake => ownsKeepsake(progress, keepsake));
+export function ownedKeepsakes(progress: Progress, kept: ReadonlySet<string> = keptKeepsakes()): readonly Keepsake[] {
+  return KEEPSAKES.filter(keepsake => ownsKeepsake(progress, keepsake, kept));
 }
 
-export function collectionCount(progress: Progress): { readonly owned: number; readonly total: number } {
-  return { owned: ownedKeepsakes(progress).length, total: KEEPSAKES.length };
+export function collectionCount(progress: Progress, kept: ReadonlySet<string> = keptKeepsakes()): { readonly owned: number; readonly total: number } {
+  return { owned: ownedKeepsakes(progress, kept).length, total: KEEPSAKES.length };
 }
 
 /**
@@ -161,10 +168,10 @@ export function collectionCount(progress: Progress): { readonly owned: number; r
  * three. Null for a level that already had them — a replay that matches its old best
  * earns nothing new, which is what keeps "no duplicates" true at the moment of reveal too.
  */
-export function keepsakeEarned(before: Progress, after: Progress, level: number): Keepsake | null {
+export function keepsakeEarned(before: Progress, after: Progress, level: number, kept: ReadonlySet<string> = keptKeepsakes()): Keepsake | null {
   const keepsake = keepsakeAt(level);
   if (!keepsake) return null;
-  return !ownsKeepsake(before, keepsake) && ownsKeepsake(after, keepsake) ? keepsake : null;
+  return !ownsKeepsake(before, keepsake, kept) && ownsKeepsake(after, keepsake, kept) ? keepsake : null;
 }
 
 /** How a slot says what earns it, found or not. */

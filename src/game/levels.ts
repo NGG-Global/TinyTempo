@@ -1,7 +1,7 @@
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
 import { parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
-import { ROTATION, VIGNETTES } from '../vignettes/registry';
+import { DEBUT_LEVELS, VIGNETTES } from '../vignettes/registry';
 import { levelAt, placementAt } from '../vignettes/rotation';
 
 /** A grid finer than the tiers' eighth note. Null for a task on the tiers. */
@@ -527,7 +527,7 @@ export function levelSpec(level: number): LevelSpec {
   const gap = (100 - clearAccuracy) / 3;
   const { area, name } = areaOf(level);
   const finale = isAreaFinale(level);
-  const act = placementAt(ROTATION, level);
+  const act = placementAt(DEBUT_LEVELS, level);
   const spec = Object.freeze({
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
@@ -541,13 +541,13 @@ export function levelSpec(level: number): LevelSpec {
 
 /**
  * The level where an act plays for the `lap`-th time: `levelSpec`'s vignette and lap, read
- * backwards. Never `level + VIGNETTES.length` — the rotation grows in eras, so that sum
- * stopped naming an act's next level the day the registry outgrew its first era.
+ * backwards. Never `level + VIGNETTES.length`: acts debut on their own levels and come round
+ * by who has waited longest (`vignettes/rotation.ts`), so no sum names an act's next level.
  */
 export function actLevel(vignette: string, lap: number): number {
   const index = VIGNETTES.findIndex(definition => definition.id === vignette);
   if (index < 0 || !Number.isInteger(lap) || lap < 0) throw new Error(`No level for ${vignette} lap ${lap}.`);
-  return levelAt(ROTATION, index, lap);
+  return levelAt(DEBUT_LEVELS, index, lap);
 }
 
 export function starsFor(accuracy: number, spec: LevelSpec): 0 | 1 | 2 | 3 {

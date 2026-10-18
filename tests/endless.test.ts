@@ -14,7 +14,7 @@ import { scoreRound } from '../src/game/scoring';
 import { secondsPerBeat } from '../src/rhythm/patterns';
 import { createRoundPlan } from '../src/rhythm/RhythmScheduler';
 import { TaskSequence } from '../src/game/TaskSequence';
-import { ROTATION, VIGNETTES } from '../src/vignettes/registry';
+import { DEBUT_LEVELS, VIGNETTES } from '../src/vignettes/registry';
 import { placementAt } from '../src/vignettes/rotation';
 import fixture from './fixtures/endless-rules-v1.json';
 
@@ -61,9 +61,9 @@ describe('the eligible pool', () => {
     const ids = pool.map(index => VIGNETTES[index]!.id);
     expect(ids).toEqual(fixture.pool);
     // Every act in the pool plays a level at or before 100; none that joins later is in it.
-    for (let level = 1; level <= 100; level++) expect(pool).toContain(placementAt(ROTATION, level).index);
+    for (let level = 1; level <= 100; level++) expect(pool).toContain(placementAt(DEBUT_LEVELS, level).index);
     const later = new Set<number>();
-    for (let level = 101; level <= 400; level++) later.add(placementAt(ROTATION, level).index);
+    for (let level = 101; level <= 400; level++) later.add(placementAt(DEBUT_LEVELS, level).index);
     for (const index of later) if (!pool.includes(index)) expect(fixture.pool).not.toContain(VIGNETTES[index]!.id);
     expect(ids).not.toContain('paintbrush');
     expect(ids).not.toContain('frog');

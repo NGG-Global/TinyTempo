@@ -1,5 +1,7 @@
 # The prospector
 
+> **Where it plays has changed.** On the debut schedule (the prospector now first plays level 131), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Act 32. A prospector swings a pick at a boulder on every beat; the coda's last blow splits
 it open, and what is inside is the verdict. Requested as three variations, gold, diamond
 and emerald on success, and nothing on failure.

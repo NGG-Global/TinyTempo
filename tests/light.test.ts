@@ -25,8 +25,8 @@ describe('light switch interiors', () => {
         expect(Number.isInteger(look[key]) && look[key] >= 0 && look[key] <= 0xffffff).toBe(true);
       }
     }
-    expect(levelSpec(12).vignette).toBe('light');
-    expect(levelSpec(12).lap).toBe(0);
+    expect(levelSpec(13).vignette).toBe('light');
+    expect(levelSpec(13).lap).toBe(0);
     expect(levelSpec(actLevel('light', 1)).lap).toBe(1);
     expect(levelSpec(actLevel('light', 3)).lap).toBe(3);
   });

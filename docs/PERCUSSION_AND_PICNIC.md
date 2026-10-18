@@ -1,5 +1,7 @@
 # Percussion and picnic
 
+> **Where it plays has changed.** On the debut schedule (the snare now first plays level 62, the bongos 71, the slushy 72 and the apple 81), every act has its own debut level and the level numbers below describe the schedule it replaced. See `docs/ACT_SCHEDULE.md`.
+
 Four acts are appended to the registry, introducing snare drum, bongos, slushy
 and apple at levels 22–25. The first 21 levels retain their acts; levels 26–50
 rotate through all 25 entries. (From level 51 the rotation also carries the barber,

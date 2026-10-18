@@ -109,8 +109,8 @@ the offcut hanging by a splintered hinge, swinging, and the copy holds back.
   untouched, per the rule in [vertical slice](VERTICAL_SLICE.md).
 - `src/vignettes/registry.ts`: one definition, and nothing else. At the time `levelSpec`
   picked `VIGNETTES[(level - 1) % VIGNETTES.length]`, so a fourth entry entered the
-  rotation with no change to the level generator. The rotation now grows in eras
-  (`ROTATION`, `src/vignettes/rotation.ts`), so an append also names where it joins.
+  rotation with no change to the level generator. Every act now has a debut level
+  (`DEBUT_LEVELS`, `docs/ACT_SCHEDULE.md`), so an append also names where it first plays.
 
 Grading stays entirely outside the vignette. It receives `Judgement` and inspects only
 `kind` and `index`; the strong/rough boundary is the level's clear bar (`finishOutcome`, `game/taskVerdict.ts`),

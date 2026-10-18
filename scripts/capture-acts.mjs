@@ -43,18 +43,18 @@ const FPS = 30;
 const MAX_SEC = 12;
 
 /**
- * Where each act first plays on its original look. Levels 1–50 cycle the first
- * twenty-five acts, and the era that added the last three opens on them at level 51
- * (`vignettes/rotation.ts`). Checked against the running scene before anything is
- * recorded, so a reordered registry fails here rather than filing a clip under the
- * wrong name.
+ * Where each act first plays on its original look: its debut level (`DEBUT_LEVELS` in
+ * `vignettes/registry.ts`). Checked against the running scene before anything is
+ * recorded, so a reordered registry or a moved debut fails here rather than filing a clip
+ * under the wrong name.
  */
+const DEBUTS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 21, 22, 31, 32, 41, 42, 51, 52, 61, 62, 71, 72, 81, 82, 91, 92];
 const ACTS = [
   'hammer', 'window', 'bug', 'saw', 'tomato', 'curl', 'cucumber', 'banana', 'paper',
   'egg', 'bubble', 'light', 'doorbell', 'roller', 'bell', 'balloon', 'stapler',
   'fisherman', 'scratch', 'trombone', 'clap', 'snare', 'bongos', 'slushy', 'apple',
   'barber', 'popcorn', 'toothbrush',
-].map((id, i) => ({ id, level: i < 25 ? i + 1 : 51 + (i - 25) }));
+].map((id, i) => ({ id, level: DEBUTS[i] }));
 
 /** Recorded on a 390x844 handset, the size the game is laid out for most often. */
 const VIEW = { width: 390, height: 844 };

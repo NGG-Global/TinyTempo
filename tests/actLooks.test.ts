@@ -64,21 +64,21 @@ describe('looks for the acts that had one', () => {
   check('tomato', TOMATO_LOOKS, tomatoLook, 'red', 5);
   check('cucumber', CUCUMBER_LOOKS, cucumberLook, 'garden', 7);
   check('banana', BANANA_LOOKS, bananaLook, 'ripe', 8);
-  check('egg', EGG_LOOKS, eggLook, 'cream', 10);
-  check('bubble', BUBBLE_LOOKS, bubbleLook, 'mint', 11);
-  check('roller', ROLLER_LOOKS, rollerLook, 'plaster', 14);
-  check('bell', BELL_LOOKS, bellLook, 'chrome', 15);
-  check('balloon', BALLOON_LOOKS, balloonLook, 'party', 16);
-  check('stapler', STAPLER_LOOKS, staplerLook, 'red', 17);
-  check('fisherman', FISHERMAN_LOOKS, fishermanLook, 'mac', 18);
-  check('scratch', SCRATCH_LOOKS, scratchLook, 'magenta', 19);
-  check('trombone', TROMBONE_LOOKS, tromboneLook, 'gold', 20);
-  check('clap', CLAP_LOOKS, clapLook, 'green', 21);
-  check('snare', SNARE_LOOKS, snareLook, 'red', 22);
-  check('bongos', BONGO_LOOKS, bongoLook, 'terracotta', 23);
-  check('barber', BARBER_LOOKS, barberLook, 'chestnut', 51);
-  check('popcorn', POPCORN_LOOKS, popcornLook, 'butter', 52);
-  check('toothbrush', BRUSH_LOOKS, brushLook, 'mint', 53);
+  check('egg', EGG_LOOKS, eggLook, 'cream', 11);
+  check('bubble', BUBBLE_LOOKS, bubbleLook, 'mint', 12);
+  check('roller', ROLLER_LOOKS, rollerLook, 'plaster', 22);
+  check('bell', BELL_LOOKS, bellLook, 'chrome', 31);
+  check('balloon', BALLOON_LOOKS, balloonLook, 'party', 32);
+  check('stapler', STAPLER_LOOKS, staplerLook, 'red', 41);
+  check('fisherman', FISHERMAN_LOOKS, fishermanLook, 'mac', 42);
+  check('scratch', SCRATCH_LOOKS, scratchLook, 'magenta', 51);
+  check('trombone', TROMBONE_LOOKS, tromboneLook, 'gold', 52);
+  check('clap', CLAP_LOOKS, clapLook, 'green', 61);
+  check('snare', SNARE_LOOKS, snareLook, 'red', 62);
+  check('bongos', BONGO_LOOKS, bongoLook, 'terracotta', 71);
+  check('barber', BARBER_LOOKS, barberLook, 'chestnut', 82);
+  check('popcorn', POPCORN_LOOKS, popcornLook, 'butter', 91);
+  check('toothbrush', BRUSH_LOOKS, brushLook, 'mint', 92);
 
   it('pins lap 0 to the colours the acts already shipped with', () => {
     expect(hammerLook(0)).toMatchObject({ handle: 0xcf5134, head: 0x243e35, wood: 0xc99460, woodDark: 0x936542 });
