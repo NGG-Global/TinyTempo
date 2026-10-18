@@ -793,6 +793,14 @@ the book puck at the title screen's top left (the right-hand corner is the sign'
 swing); the result screen raises a card under the plaque a second into the summary, after the
 medals. The only stored bit is the `scrapbook` teach flag. See `docs/SCRAPBOOK.md`.
 
+**The Scrapbook, Settings and Endless each open with a one-time hint** (`game/screenHints.ts`,
+`ui/screenHint.ts`): a card over the dimmed screen once the curtain is up, marked seen when
+it is closed (`hintScrapbook`/`hintSettings`/`hintEndless`, device-local, outside the cloud
+save). While it is open every tap and Android's back are its. **Endless's run starts when it
+closes**, never under it, and a tap outside that card does nothing. **It draws with a camera
+of its own**, built last in `build()`, because the scrolling screens' band cameras render
+after the main one and would cover a card on it. See `docs/SCREEN_HINTS.md`.
+
 **Three daily objectives, and nothing to spend.** `game/objectives.ts` draws three a day
 from a curated pool — one *play*, one *skill*, one *mastery*, by weight — with a generator
 seeded by the local date (`calendarDay`, the daily heart's helper), filtered by what the save
@@ -1078,6 +1086,7 @@ src/
     playAnalytics.ts   Gameplay events: what a level, the tutorial and a gate report, once
     conceptIntro.ts    A new rhythm's one-time introduction (offbeat, long phrase, grids): where, which, and its tries
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns
+    screenHints.ts     The first-visit hints' words for the Scrapbook, Settings and Endless; pure
     keepsakeLegacy.ts  The keepsakes a device held before the debut schedule, recorded once and kept
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
@@ -1153,6 +1162,8 @@ src/
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     endlessCard.ts     Endless Mode's door, on the map and the title screen: locked copy, the best, the badges, Start, Leaderboard
     endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
+    screenHint.ts      A screen's first-visit hint card, on a camera of its own over the scene's
+    hintLayout.ts      Where that card's rows sit, stacked from measured heights; pure
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

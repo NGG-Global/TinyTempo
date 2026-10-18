@@ -30,6 +30,7 @@ import { faces } from '@/ui/light';
 import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { ScreenHint } from '@/ui/screenHint';
 import { Sheen } from '@/ui/sheen';
 import { arrive } from '@/ui/spring';
 import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
@@ -106,6 +107,7 @@ export class SettingsScene extends BaseScene {
   private storeRadius = 0;
   private sheenAt = Number.NaN;
   private curtain!: SceneCurtain;
+  private hint!: ScreenHint;
   private uiScale = 1;
   private bandRect = new Phaser.Geom.Rectangle();
   private scrollY = 0;
@@ -198,7 +200,9 @@ export class SettingsScene extends BaseScene {
     window.addEventListener('blur', this.cancelDrag);
     window.addEventListener('pointercancel', this.cancelDrag);
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
+    // Last, after the sections' camera: the hint draws with a camera of its own over every other.
+    this.hint = new ScreenHint(this, 'settings');
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => this.hint.showIfNew(performance.now() / 1000)));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
@@ -364,6 +368,7 @@ export class SettingsScene extends BaseScene {
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
     this.pressDirty = true;
+    this.hint.layout(this.viewport, s);
     // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
     if (!this.primed) {
       this.primed = true;
@@ -882,6 +887,7 @@ export class SettingsScene extends BaseScene {
 
   public override update(_time: number, delta: number): void {
     const now = performance.now() / 1000;
+    this.hint.update(now, this.reducedMotion);
     this.stepScroll(delta);
     const press = pressAmount(now, this.pressedAt);
     if (press > 0.001 || this.pressDirty) {
@@ -962,7 +968,7 @@ export class SettingsScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.hint.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.velocity = 0;
     // A level takes the gesture. The thumb drifts vertically on a horizontal drag, and
     // that drift must not scroll the section out from under the knob.
@@ -1007,6 +1013,8 @@ export class SettingsScene extends BaseScene {
    * happened to start its flick over the store would be indefensible.
    */
   private pointerUp(pointer: Phaser.Input.Pointer): void {
+    // While the hint is open every release is its, and nothing under it scrolls or fires.
+    if (this.hint.open) { this.drag = null; this.hint.tap(pointer.x, pointer.y, performance.now() / 1000); return; }
     const drag = this.drag;
     if (!drag || drag.id !== pointer.id) return;
     this.drag = null;
@@ -1023,7 +1031,7 @@ export class SettingsScene extends BaseScene {
   private readonly cancelDrag = (): void => { this.drag = null; };
 
   private wheel(_pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number): void {
-    if (this.scrollMax <= 0) return;
+    if (this.scrollMax <= 0 || this.hint.open) return;
     this.velocity = 0;
     this.setScroll(this.scrollY + dy);
   }
@@ -1251,6 +1259,7 @@ export class SettingsScene extends BaseScene {
 
   /** Android's back is this screen's own back puck (`core/backButton.ts`). */
   public handleBack(): boolean {
+    if (this.hint.back()) return true;
     this.leave();
     return true;
   }
