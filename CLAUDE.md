@@ -85,7 +85,10 @@ step. The dock's trail ends in a flag. See `docs/FINALES.md`. An **open** gate's
 laid with the road, under the stops (`drawOpenGates`), since they reach into the first
 level's star plate; and a haze in the top area's colour sits behind the header
 (`drawHaze`), so nothing on the road reads as part of the sign or the pucks. **A stop's
-colours are `puckColours`** (`ui/roadLayout.ts`): frontier coral, then a cleared stop in a
+colours are `puckColours`** (`ui/roadLayout.ts`): the frontier cream with the ink number and a
+dashed ring in the area's ink (`FRONTIER_PUCK`, `MapScene`) — **the map's one coral is the
+dock's Play disc**, so the frontier and the trail's current bead (an ink ring) no longer take
+it, and a locked stop carries no padlock, since its faded puck says so — then a cleared stop in a
 settled mid-tone of the area's road, then locked and preview, and every number clears
 `OUTLINE_CONTRAST` on its puck — a preview's is drawn whole in its faintest legible colour,
 never faded by alpha. **One ambient layer per area** (`ui/mapAmbience.ts`) — pollen, lamp
@@ -339,14 +342,18 @@ knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid
 (`ui/resultLayout.ts`, `game/resultCopy.ts`, read from `spec.starAccuracy`, never
 written down): the middle one larger and raised, nothing crossing the plaque or a rope
 at rest. Under it, in one order, a cleared finale's card (the collection and the next
-area's gate in that area's colours), then the next star ("Third star at 85%") or a new
+area's gate in that area's colours), then the next star ("Third star at 85%"), then **what
+the run changed** (`progressCopy`: stars added and the collection, a new best over the saved
+one, "Up next" on a first clear — at most two lines, nothing on a run that changed nothing,
+and laid out only where it fits without shrinking the plaque), then a new
 keepsake's card, which is as tall as its words; a clear short of three stars adds a wood
 **Replay level N** block over Continue, by the restart puck's path — coral stays on
 Continue alone. `planResult` stacks them and, on a short frame, takes rope before it
 shrinks the plaque, never below `minScale`.
 **The score is rounded down** (`scoreLabel`): every threshold is a whole percent and stars read the
 unrounded accuracy, so rounding to nearest put "79%" over an unlit 79% star.
-**The line under the score is a toggle, not a caption.** *TIMING DETAILS* swaps the tray's
+**The line under the score is a toggle, not a caption**, and is drawn as one: a raised pill
+with a chevron (`drawTimingToggle`). *TIMING DETAILS* swaps the tray's
 medals for what the scorer already measured — the counts, a hit-error bar with the Perfect
 band and a coral marker on the lean, the lean in milliseconds and one line of advice
 (`game/timingReport.ts`, pure). The lean is the **median** signed error (`RoundResult.deltasMs`,
@@ -638,7 +645,12 @@ says it ended (`resultDue`), with a report when it had to; a context that stays 
 nothing to tap; and Continue waits on Play's review for 3 s at most. Each was a way to freeze a
 finished level, which is what an Android tablet reported. See `docs/TABLETS.md`.
 
-**Whose turn it is is an object at the thumb, not a word at the top.** `ui/turnBlock.ts`
+**Whose turn it is is an object at the thumb, not a word at the top.** **The block is drawn at
+`blockScale(s)`**, the scene's scale times `BLOCK_SCALE` (1.2, `ui/trackMetrics.ts`), round the
+same face line `LAYOUT.trackOffsetFromBottom` sets, so it grew without leaving the thumb;
+`verdictLine` takes the scene's scale and grows the rows inside it, which keeps the household
+shelf clear of the verdict. Not 1.4: the frame's width caps an eight-beat row, so its sockets
+come out smaller at 1.4 than at 1.2. `ui/turnBlock.ts`
 draws two rows sharing one set of column centres — the demonstration's recessed shelf above,
 the player's raised face below, where the beat track already was — and one coral baton that
 leaves a sunken slot on the shelf and lands in the slot on the face. It all runs on
@@ -800,6 +812,13 @@ save). While it is open every tap and Android's back are its. **Endless's run st
 closes**, never under it, and a tap outside that card does nothing. **It draws with a camera
 of its own**, built last in `build()`, because the scrolling screens' band cameras render
 after the main one and would cover a card on it. See `docs/SCREEN_HINTS.md`.
+**Icon-only pucks say what they are until they have been opened** (`ui/puckLabel.ts`): an ink
+tag reading *Scrapbook* (until its hint has been closed) and *Objectives* on the title screen,
+and *Opens after level 100* beside the map's locked Endless puck (`seenPuck`/`markPuckSeen`,
+device-local). **How to play leaves the title screen once the lesson is passed**
+(`lessonOnMenu`) for Settings → Help, which opens it with `source: 'settings'` and takes back
+there; a skip keeps the block, since that player has not had the lesson. PLAY still opens the
+map. See `docs/UX_PASS.md`.
 
 **Three daily objectives, and nothing to spend.** `game/objectives.ts` draws three a day
 from a curated pool — one *play*, one *skill*, one *mastery*, by weight — with a generator
@@ -1164,6 +1183,7 @@ src/
     endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
     screenHint.ts      A screen's first-visit hint card, on a camera of its own over the scene's
     hintLayout.ts      Where that card's rows sit, stacked from measured heights; pure
+    puckLabel.ts       The first-visit tag beside an icon-only puck
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

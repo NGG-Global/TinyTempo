@@ -192,7 +192,7 @@ export interface AnalyticsPayloads {
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
 
   readonly tutorial_started: {
-    readonly source: 'first_play' | 'menu';
+    readonly source: 'first_play' | 'menu' | 'settings';
     readonly repeat: Flag;
     /**
      * The page clock when the lesson opened: on a cold start, roughly the time from launch,

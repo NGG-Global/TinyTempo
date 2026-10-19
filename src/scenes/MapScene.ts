@@ -16,7 +16,8 @@ import {
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { loadProgress, markReplayTipSeen, seenReplayTip, type Progress } from '@/game/progress';
+import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, type Progress } from '@/game/progress';
+import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { mapMastered } from '@/game/mastery';
@@ -63,6 +64,21 @@ import { definitionForLap } from '@/vignettes/Vignette';
 const HAZE_ALPHA = 0.88;
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
+/** The frontier's puck: cream with the ink number. The map's one coral is the Play disc. */
+const FRONTIER_PUCK = { fill: SHELL.cream, number: PALETTE.ink } as const;
+
+/** A ring of short dashes, drawn as arcs so it stays round at any radius. */
+function drawDashedRing(g: Phaser.GameObjects.Graphics, x: number, y: number, radius: number, s: number, colour: number): void {
+  const dashes = Math.max(12, Math.round((2 * Math.PI * radius) / (14 * s)));
+  const step = (2 * Math.PI) / dashes;
+  g.lineStyle(3 * s, colour, 0.75);
+  for (let k = 0; k < dashes; k++) {
+    g.beginPath();
+    g.arc(x, y, radius, k * step, k * step + step * 0.55);
+    g.strokePath();
+  }
+}
+
 const MAP = {
   /** Spacing, padding, the window and a finale's room live in `ui/roadLayout.ts`, where they are tested. */
   step: ROAD.step, nodeRadius: 46, wobble: 0.27,
@@ -102,6 +118,13 @@ const MAP = {
   /** The frontier puck hops once a bar at the game's own tempo. */
   /** How long the frontier is off the ground, landing on each bar line. */
   hopSec: 0.32,
+  /** The dashed ring round the frontier puck, this far outside its rim. */
+  frontierRing: 13,
+  /**
+   * The dock's area trail: bead radius, pitch, and the "Finale in N" size. Raised from 6, 28
+   * and 18 so the trail reads at arm's length; 18 units was about 10 CSS pixels on a phone.
+   */
+  trail: { bead: 7.5, pitch: 31, hint: 22 },
   sign: { width: 340, height: 92, top: 20, ropeInset: 40 },
   /**
    * The star gate's motion: a barrier across the road at the foot of a closed area (its
@@ -315,6 +338,7 @@ export class MapScene extends BaseScene {
   private endlessBusy = false;
   /** Whether the mode's unlock dot is still owed, read once per entry and cleared by the card. */
   private endlessUnlockSeen = true;
+  private endlessLabel!: PuckLabel;
   /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
   private routeNotice!: RouteNotice;
   private stopWatchingRoute: (() => void) | null = null;
@@ -447,6 +471,9 @@ export class MapScene extends BaseScene {
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
     this.objectivesCard = new ObjectivesCard(this, 30);
+    // A locked mode that does not say how it opens leaves the player guessing: until the card
+    // has been opened once, the puck says it beside itself.
+    this.endlessLabel = new PuckLabel(this, `Opens after level ${ENDLESS.unlockLevel}`, 12).fixed();
     this.endlessCard = new EndlessCard(this, 30);
     this.endlessBusy = false;
     this.endlessUnlockSeen = loadEndlessProgress().seenUnlock;
@@ -454,7 +481,7 @@ export class MapScene extends BaseScene {
     this.routeNotice = new RouteNotice(this, 12);
     this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) this.refreshRouteNotice(); });
     this.objectives = loadObjectives(Date.now(), objectiveContext(this.progress));
-    this.dockHint = label(this, '', { size: 18, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
+    this.dockHint = label(this, '', { size: MAP.trail.hint, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     this.gateTexts = Array.from({ length: areas }, () => display(this, '', { size: 28, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
     this.gateGoals = Array.from({ length: areas }, () => body(this, '', { size: 22, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(4).setVisible(false));
     // Between every strip's detail (1) and the frontier (3): the horizon has to cover the
@@ -684,6 +711,9 @@ export class MapScene extends BaseScene {
       // A finale's crown, baked into its stage, is its plate.
       if (!this.finaleTexts.has(this.frontierIndex)) this.drawStars(g, node.x, node.y + p.r + (p.depth + 24) * s, 0, area, s);
       this.drawLevelPuck(g, this.frontierIndex, 0);
+      // A dashed ring round it: where the player is, said without the coral the Play disc owns.
+      // In the area's ink, which is the colour that reads on its ground — light on Dusk's.
+      if (p.state === 'frontier') drawDashedRing(g, node.x, node.y, p.r + MAP.frontierRing * s, s, area.ink);
     }
     this.frontier.invalidate();
   }
@@ -1074,7 +1104,8 @@ export class MapScene extends BaseScene {
     // standing in the road below it is what says why.
     const held = state === 'frontier' && this.heldBy(level) !== null;
     const shown = held ? 'locked' : state;
-    const colours = puckColours(area, shown, { fill: PALETTE.coral, number: SHELL.cream });
+    // Cream with the ink number, not coral: the map's one coral is the Play disc on the dock.
+    const colours = puckColours(area, shown, FRONTIER_PUCK);
     if (shown === 'frontier') return { ...big(MAP.nodeRadius * 1.1 * s, 34 * s), depth: 10, fill: colours.fill, number: colours.number, state };
     if (shown === 'cleared') return { ...big(MAP.nodeRadius * s, 30 * s), depth: 8, fill: colours.fill, number: colours.number, state };
     if (shown === 'preview') return { ...big(MAP.nodeRadius * 0.72 * s, 22 * s), depth: 3, fill: colours.fill, number: colours.number, state };
@@ -1223,7 +1254,7 @@ export class MapScene extends BaseScene {
     return text;
   }
 
-  /** Raised pucks with cast shadows, a star plate under each cleared one and a padlock under each locked one. */
+  /** Raised pucks with cast shadows and a star plate under each cleared one. */
   private drawNodes(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     // `frontierIndex` is reset by the caller: each node is visited by exactly one strip,
     // so a reset here would clear whatever an earlier strip had found.
@@ -1245,9 +1276,9 @@ export class MapScene extends BaseScene {
         // Until they land, the stars in the air are not on the plate they left.
         const inFlight = this.earned !== null && !this.flightSettled && level === this.earned.level;
         this.drawStars(g, node.x, plateY, inFlight ? this.earned!.before : levelStars(this.progress, level), area, s);
-      } else if (p.state === 'locked') {
-        drawPadlock(g, node.x, plateY - 10 * s, 26 * s, area.ink, p.fill);
       }
+      // A locked stop carries no padlock: its faded puck already says so, and four padlocks
+      // in a row repeated it four times. A closed gate's barrier says why.
     }
   }
 
@@ -1641,6 +1672,8 @@ export class MapScene extends BaseScene {
     this.backAt = { x: this.setupAt.x - gap, y: this.muteAt.y };
     this.objectivesAt = { x: safe.left + 56 * s, y: safe.top + 190 * s };
     this.endlessAt = ENDLESS.available ? { x: this.objectivesAt.x, y: this.objectivesAt.y + gap } : { x: -1000, y: -1000 };
+    this.endlessLabel.place(this.endlessAt.x, this.endlessAt.y, CHROME.puckRadius * s, 'right', s,
+      ENDLESS.available && !endlessUnlocked(this.progress) && !seenPuck('endless'));
     const g = this.pucks.graphics.clear();
     const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless') => (this.puckPressed === key ? press : 0);
     for (const [key, at] of [['back', this.backAt], ['setup', this.setupAt], ['mute', this.muteAt]] as const) {
@@ -1727,16 +1760,23 @@ export class MapScene extends BaseScene {
     const trail = areaTrail(level);
     let trailEnd = this.blockRect.x;
     trail.forEach((bead, i) => {
-      const x = this.blockRect.x + 12 * s + i * 28 * s;
-      const colour = bead.state === 'current' ? PALETTE.coral : bead.state === 'done' ? PALETTE.ink : shade(SHELL.bench, -0.25);
+      const x = this.blockRect.x + 12 * s + i * MAP.trail.pitch * s;
+      const colour = bead.state === 'done' || bead.state === 'current' ? PALETTE.ink : shade(SHELL.bench, -0.25);
       if (bead.finale) {
         const flag = 30 * s;
         drawFinaleFlag(g, x - 4 * s, beadY + flag * 0.45, flag, bead.state === 'ahead' ? BRASS : colour, SHELL.rope);
         trailEnd = x + flag * 0.6;
         return;
       }
+      const rr = MAP.trail.bead * s;
+      if (bead.state === 'current') {
+        // The stop the player is on: an ink ring round an empty seat, not a coral bead.
+        g.fillStyle(shade(SHELL.bench, -0.12), 1).fillCircle(x, beadY, rr);
+        g.lineStyle(3 * s, PALETTE.ink, 1).strokeCircle(x, beadY, rr + 1.5 * s);
+        trailEnd = x + rr;
+        return;
+      }
       const f = faces(colour);
-      const rr = (bead.state === 'current' ? 7 : 6) * s;
       g.fillStyle(f.edge, 1).fillCircle(x, beadY + 2.5 * s, rr);
       g.fillStyle(f.face, 1).fillCircle(x, beadY, rr);
       g.fillStyle(f.rim, 0.8).fillCircle(x - rr * 0.3, beadY - rr * 0.35, rr * 0.3);
@@ -1744,7 +1784,7 @@ export class MapScene extends BaseScene {
     });
     const { away } = nextFinale(level);
     this.dockHint.setText(away === 0 ? 'Area finale' : `Finale in ${away}`);
-    resize(this.dockHint, 18 * s, PALETTE.muted, STYLE.current, false);
+    resize(this.dockHint, MAP.trail.hint * s, PALETTE.muted, STYLE.current, false);
     this.dockHint.setPosition(trailEnd + 12 * s, beadY);
     this.dock.invalidate();
     this.drawTally(s, performance.now() / 1000);
@@ -2252,7 +2292,7 @@ export class MapScene extends BaseScene {
       this.numbers[this.frontierIndex]?.setY(frontier.y - lift);
       if (!still) {
         const ring = spring(beat / 0.6, 4.5, 2.2);
-        g.lineStyle(STYLE.current.outline * s * 0.55, PALETTE.coral, Math.max(0, 1 - beat / 1.1) * 0.55).strokeCircle(frontier.x, frontier.y - lift, p.r + 4 * s + ring * 22 * s);
+        g.lineStyle(STYLE.current.outline * s * 0.55, areaOf(this.first + this.frontierIndex).area.ink, Math.max(0, 1 - beat / 1.1) * 0.45).strokeCircle(frontier.x, frontier.y - lift, p.r + 4 * s + ring * 22 * s);
       }
     }
     this.drawLiveGate(s, now, still);
@@ -2445,6 +2485,7 @@ export class MapScene extends BaseScene {
     if (near(this.objectivesAt) && !this.restShown) {
       this.pressPuck('objectives');
       this.objectives = markObjectivesSeen(Date.now(), objectiveContext(this.progress));
+      markPuckSeen('objectives');
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
       return;
     }
@@ -2540,6 +2581,10 @@ export class MapScene extends BaseScene {
     const justUnlocked = unlocked && !stored.seenUnlock;
     if (justUnlocked) saveEndlessProgress(markEndlessUnlockSeen(stored));
     this.endlessUnlockSeen = true;
+    if (!seenPuck('endless')) {
+      markPuckSeen('endless');
+      this.endlessLabel.place(0, 0, 0, 'right', this.uiScale, false);
+    }
     track('endless_opened', { unlocked: unlocked ? 1 : 0 });
     this.endlessCard.show({
       unlocked, cleared: Math.max(0, this.progress.unlocked - 1), record: endlessRecord(stored),

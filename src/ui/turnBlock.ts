@@ -10,7 +10,7 @@ import { drawPanel } from './panel';
 import { squash } from './spring';
 import { TRACK } from './trackMetrics';
 
-export { TRACK, VERDICT_REACH, verdictLine } from './trackMetrics';
+export { BLOCK_SCALE, blockScale, TRACK, VERDICT_REACH, verdictLine } from './trackMetrics';
 
 /**
  * The turn block: two rows at the thumb that say whose turn it is, and one token that

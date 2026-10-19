@@ -60,6 +60,26 @@ export const TRACK = {
 } as const;
 
 /**
+ * How much larger the block is drawn than the scene's own scale, around the same centre
+ * line. The block is what the player watches through their turn, and at 1 it was the
+ * smallest thing on screen under a stage several times its height. It grows in place: the
+ * face keeps its distance from the bottom edge (`LAYOUT.trackOffsetFromBottom`), because
+ * thumb reach is an absolute distance from the grip. 1.2 rather than the 1.4 first
+ * proposed, because the frame's width caps the row and the owner slots grow too: on a
+ * 720-unit-wide phone an eight-beat row's sockets come out at radius 22.6 at 1.2 and only
+ * 20.4 at 1.4, smaller than at 1.2, with the whole block taller.
+ *
+ * Scenes draw the block at `scale * BLOCK_SCALE` (`blockScale`); the verdict word and the
+ * chrome stay at the scene's scale.
+ */
+export const BLOCK_SCALE = 1.2;
+
+/** The scale the block, its count-in and its rest words are drawn at, from the scene's own. */
+export function blockScale(s: number): number {
+  return s * BLOCK_SCALE;
+}
+
+/**
  * Space between the shelf's top edge and the verdict word's centre line, in design units.
  *
  * The block stands on a sheet that reaches `BACKING_PAD` above the shelf and feathers
@@ -78,11 +98,13 @@ const VERDICT_ABOVE_SHELF = 48;
 export const VERDICT_REACH = 32;
 
 /**
- * The verdict word's centre line, above the shelf rather than above the face: the
+ * The verdict word's centre line, above the shelf rather than above the face, for a scene
+ * whose own scale is `s` (the block is drawn at `blockScale(s)`): the
  * demonstration row occupies the band the verdict used to sit in, and a word over the
  * beads is a word over the cue. PlayScene places the word here, and the household stage
  * keeps its shelf clear of it, so the two cannot drift apart.
  */
 export function verdictLine(trackY: number, s: number): number {
-  return trackY - (TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight + VERDICT_ABOVE_SHELF) * s;
+  // The rows are the block's and grow with it; the gap above them is the verdict pill's.
+  return trackY - ((TRACK.plateHeight / 2 + TRACK.rowGap + TRACK.shelfHeight) * BLOCK_SCALE + VERDICT_ABOVE_SHELF) * s;
 }

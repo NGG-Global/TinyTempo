@@ -49,7 +49,7 @@ import { punch } from '@/ui/punch';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { ScreenHint } from '@/ui/screenHint';
 import { arrive, settle, squash } from '@/ui/spring';
-import { blockGeometry, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
+import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
 import { planEndlessPlaque, type PlaqueFrame } from '@/ui/endlessPlaque';
 import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 import { easeOut } from '@/vignettes/motion';
@@ -162,6 +162,8 @@ export class EndlessScene extends BaseScene {
   private goStruck = false;
   private trackY = 0;
   private trackWidth = 0;
+  /** The scale the turn block is drawn at: the scene's, times `BLOCK_SCALE`. */
+  private blockS = 1;
   private verdictY = 0;
   private turnCallY = 0;
   // Chrome
@@ -324,17 +326,18 @@ export class EndlessScene extends BaseScene {
     this.drawChrome(s, 0);
     this.drawLives();
     this.trackY = safe.bottom - LAYOUT.trackOffsetFromBottom * s;
-    this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
-    this.columnX = safe.centerX + columnShift(s);
+    const b = this.blockS = blockScale(s);
+    this.trackWidth = columnRoom(Math.min(620 * b, safe.width - 48 * s), b);
+    this.columnX = safe.centerX + columnShift(b);
     this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
     this.verdictTag.layout(s, this.verdictColour());
-    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
       text.setPosition(safe.centerX, this.turnCallY);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * s, mix(this.ink, PALETTE.coral, heat));
+      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * b, mix(this.ink, PALETTE.coral, heat));
     });
     this.turnCalled = null;
     this.roomDim.setPosition(full.centerX, (safe.top + safe.height * 0.42 + this.trackY) / 2)
@@ -439,7 +442,7 @@ export class EndlessScene extends BaseScene {
     this.verdictTag.layout(this.uiScale, this.verdictColour());
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * this.uiScale, mix(definition.ink, PALETTE.coral, heat));
+      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * this.blockS, mix(definition.ink, PALETTE.coral, heat));
     });
   }
 
@@ -879,7 +882,7 @@ export class EndlessScene extends BaseScene {
   }
 
   private beads(count = this.outcomes.length): { readonly centres: readonly number[]; readonly radius: number } {
-    return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.uiScale, TRACK.beadRadius * this.uiScale);
+    return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.blockS, TRACK.beadRadius * this.blockS);
   }
 
   /** The turn block, as a level draws it: the plan's own times, nothing kept. */
@@ -892,7 +895,8 @@ export class EndlessScene extends BaseScene {
       return;
     }
     const { safe } = this.viewport;
-    const s = this.uiScale;
+    // Everything on the block is drawn at the block's scale; only the frame's margin is the scene's.
+    const s = this.blockS;
     const still = this.reducedMotion;
     const plan = this.controller?.plan ?? null;
     const marks = this.outcomes;
@@ -905,7 +909,7 @@ export class EndlessScene extends BaseScene {
     const last = centres.at(-1) ?? 0;
     const span = last + radius + 34 * s;
     const beadSpan = last - (centres[0] ?? 0) + radius * 2;
-    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * s);
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * this.uiScale);
     const geo = blockGeometry(safe.centerX, this.trackY, width, s);
     drawBlock(g, geo, s, {
       centres, socketRadius: radius, played: beatsPlayed(plan, now), marks, turn,
@@ -946,7 +950,8 @@ export class EndlessScene extends BaseScene {
   private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
     const call = plan && turnCount(plan, now);
     if (!plan || !call) { this.hideTurnCall(); return; }
-    const s = this.uiScale;
+    // The count belongs to the block and is drawn at its scale.
+    const s = this.blockS;
     const go = call.count === 0;
     const beat = 60 / plan.bpm;
     const still = this.reducedMotion;

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { ENDLESS } from '../src/config/endless';
-import { markScrapbookSeen, markScreenHintSeen, readTeachFlags, seenScrapbook, seenScreenHint, TEACH_FLAGS } from '../src/game/progress';
+import { markPuckSeen, markScrapbookSeen, markScreenHintSeen, readTeachFlags, seenPuck, seenScrapbook, seenScreenHint, TEACH_FLAGS } from '../src/game/progress';
 import { SCREEN_HINTS, type ScreenHintId } from '../src/game/screenHints';
 import { CLOUD_TEACH } from '../src/playgames/cloudSave';
 import { HINT, planHint } from '../src/ui/hintLayout';
@@ -104,5 +104,24 @@ describe('first-visit hints', () => {
     const endless = src('src/scenes/EndlessScene.ts');
     expect(endless).toContain("if (!this.hint.showIfNew(performance.now() / 1000)) void this.start();");
     expect(endless).toContain("how === 'back') this.leaveRun(); else void this.start();");
+  });
+
+  it('label the icon-only pucks until each has been opened, on the device only', () => {
+    const storage = memory({ 'small-acts.teach.v1': JSON.stringify({ seen: true }) });
+    expect(seenPuck('objectives', storage)).toBe(false);
+    expect(seenPuck('endless', storage)).toBe(false);
+    markPuckSeen('objectives', storage);
+    expect(seenPuck('objectives', storage)).toBe(true);
+    expect(seenPuck('endless', storage)).toBe(false);
+    expect(readTeachFlags(storage)).toMatchObject({ seen: true, puckObjectives: true });
+    for (const flag of ['puckObjectives', 'puckEndless'] as const) expect(CLOUD_TEACH as readonly string[]).not.toContain(flag);
+    // Each label goes when its puck opens, on whichever screen it was opened from.
+    const menu = src('src/scenes/MenuScene.ts'), map = src('src/scenes/MapScene.ts');
+    expect(menu).toContain("new PuckLabel(this, 'Scrapbook'");
+    expect(menu).toContain("!seenScreenHint('scrapbook')");
+    expect(menu).toContain("markPuckSeen('objectives')");
+    expect(map).toContain("markPuckSeen('objectives')");
+    expect(map).toContain("markPuckSeen('endless')");
+    expect(map).toContain('Opens after level ${ENDLESS.unlockLevel}');
   });
 });

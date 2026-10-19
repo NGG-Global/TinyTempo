@@ -12,12 +12,12 @@ import { BaseScene } from '@/core/BaseScene';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
-import { tutorialSeen } from '@/game/TutorialRun';
+import { tutorialComplete, tutorialSeen } from '@/game/TutorialRun';
 import { endlessUnlocked } from '@/game/endless';
 import { endlessRecord, loadEndlessProgress, markEndlessUnlockSeen, saveEndlessProgress } from '@/game/endlessProgress';
 import { track } from '@/monetization/analytics';
 import { endlessLeaderboardOffered, openEndlessLeaderboard } from '@/playgames/endless';
-import { loadProgress, seenScrapbook } from '@/game/progress';
+import { loadProgress, markPuckSeen, seenPuck, seenScrapbook, seenScreenHint } from '@/game/progress';
 import { ownedKeepsakes } from '@/game/scrapbook';
 import { MaterialKey } from '@/textures/materials';
 import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
@@ -31,6 +31,7 @@ import { ObjectivesCard } from '@/ui/objectivesCard';
 import { STAR_PRIZE } from '@/ui/star';
 import { faces } from '@/ui/light';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
+import { PuckLabel } from '@/ui/puckLabel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { arrive, settle } from '@/ui/spring';
@@ -88,6 +89,15 @@ export class MenuScene extends BaseScene {
   private endlessCard!: EndlessCard;
   /** Read on entry: the mode is shipped and the save has cleared its level. */
   private endlessOpen = false;
+  /**
+   * How to play keeps its block until the lesson has been passed; after that it lives in
+   * Settings → Help and the row is Endless's or nobody's, so nothing competes with Play.
+   * A skip keeps it here: that player has not had the lesson and may still want it.
+   */
+  private lessonOnMenu = true;
+  /** First-visit labels on the two pucks whose icons say least, until each has been opened. */
+  private bookLabel!: PuckLabel;
+  private objectivesLabel!: PuckLabel;
   /** A coral dot until the card has been opened once, on this screen or the map's. */
   private endlessDot = false;
   private endlessBoardBusy = false;
@@ -148,6 +158,9 @@ export class MenuScene extends BaseScene {
     // Read on every entry, so a set that turned over at midnight is today's on the way back.
     this.objectives = loadObjectives(Date.now(), objectiveContext(loadProgress()));
     this.endlessOpen = ENDLESS.available && endlessUnlocked(loadProgress());
+    this.lessonOnMenu = !(this.registry.get('tutorial-complete') === true || tutorialComplete());
+    this.bookLabel = new PuckLabel(this, 'Scrapbook', 20);
+    this.objectivesLabel = new PuckLabel(this, 'Objectives', 20);
     this.endlessDot = this.endlessOpen && !loadEndlessProgress().seenUnlock;
     this.endlessBoardBusy = false;
     // The hammer's idle sway doubles as the title illustration; it never receives a plan.
@@ -230,25 +243,36 @@ export class MenuScene extends BaseScene {
     resize(this.playLabel, 40 * s, SHELL.cream);
     const rowY = this.buttonRect.y - this.controlSize - 24 * s;
     const row = MENU.row;
-    if (this.endlessOpen) {
+    if (this.endlessOpen && this.lessonOnMenu) {
       const half = (row.split - row.gap) / 2 * s;
       this.tutorialRect.setTo(safe.centerX - row.split / 2 * s, rowY, half, this.controlSize);
       this.endlessRect.setTo(safe.centerX + row.gap / 2 * s, rowY, half, this.controlSize);
+    } else if (this.endlessOpen) {
+      this.tutorialRect.setTo(0, 0, 0, 0);
+      this.endlessRect.setTo(safe.centerX - row.single / 2 * s, rowY, row.single * s, this.controlSize);
+    } else if (!this.lessonOnMenu) {
+      this.tutorialRect.setTo(0, 0, 0, 0);
+      this.endlessRect.setTo(0, 0, 0, 0);
     } else {
       this.tutorialRect.setTo(safe.centerX - row.single / 2 * s, rowY, row.single * s, this.controlSize);
       this.endlessRect.setTo(0, 0, 0, 0);
     }
-    drawPanel(this.tutorialButton.clear(), this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
+    this.tutorialButton.clear();
+    if (this.lessonOnMenu) drawPanel(this.tutorialButton, this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
     this.layers[1]!.invalidate();
+    this.tutorialSurface.setVisible(this.lessonOnMenu);
+    this.tutorialLabel.setVisible(this.lessonOnMenu);
     placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
     resize(this.tutorialLabel, (this.endlessOpen ? row.splitLabel : row.label) * s, SHELL.cream);
     if (this.endlessOpen) {
       placeSurface(this.endlessSurface, this.endlessRect, s);
-      resize(this.endlessLabel, row.splitLabel * s, SHELL.cream);
+      resize(this.endlessLabel, (this.lessonOnMenu ? row.splitLabel : row.label) * s, SHELL.cream);
     }
-    this.objectivesAt = { x: safe.left + 56 * s, y: this.tutorialRect.centerY };
+    // The objectives puck keeps the row's line whether or not the row has a block on it.
+    this.objectivesAt = { x: safe.left + 56 * s, y: rowY + this.controlSize / 2 };
     this.drawPucks(s, 0);
+    this.placeLabels(s);
     this.objectivesCard.layout(safe, full, s);
     this.endlessCard.layout(safe, full, s);
     // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
@@ -256,6 +280,17 @@ export class MenuScene extends BaseScene {
       this.primed = true;
       for (const layer of this.layers) layer.bake();
     }
+  }
+
+  /**
+   * The pucks' first-visit labels. The objectives' tag goes right of its puck when the row
+   * beside it is empty and over it when a block stands there, so it never sits on a control.
+   */
+  private placeLabels(s: number): void {
+    const r = CHROME.puckRadius * s;
+    this.bookLabel.place(this.bookAt.x, this.bookAt.y, r, 'below', s, !seenScreenHint('scrapbook'));
+    const rowTaken = this.lessonOnMenu || this.endlessOpen;
+    this.objectivesLabel.place(this.objectivesAt.x, this.objectivesAt.y, r, rowTaken ? 'above' : 'right', s, !seenPuck('objectives'));
   }
 
   private drawPucks(s: number, press: number): void {
@@ -424,6 +459,8 @@ export class MenuScene extends BaseScene {
       this.puckPressedAt = performance.now() / 1000;
       this.objectives = markObjectivesSeen(Date.now(), objectiveContext(loadProgress()));
       this.puckDirty = true;
+      markPuckSeen('objectives');
+      this.placeLabels(this.uiScale);
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
       this.openTheme();
       return;

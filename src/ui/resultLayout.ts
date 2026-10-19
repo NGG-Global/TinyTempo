@@ -63,6 +63,11 @@ export const TIMING_TRAY = {
   /** The toggle's hit box is at least this wide, so the line is easy to find with a thumb. */
   toggleWidth: 340,
   toggleChevron: 8,
+  /** Between the words and the chevron. */
+  chevronGap: 14,
+  /** The pill the line and its chevron sit in, so it reads as a control and not a caption. */
+  pillHeight: 46,
+  pillPad: 22,
 } as const;
 
 /** Medal `k`'s seat, in the plaque's own units: x from its centre, y from its top edge. */
@@ -114,6 +119,9 @@ export const RESULT_ROWS = {
   mastery: 74,
   /** Short of three stars: what the next one asks. */
   strip: 100,
+  /** What the run changed (`progressCopy`): a line of this height each, and the pad round them. */
+  progressLine: 44,
+  progressPad: 28,
   replayWidth: 480,
   /** Between the replay block and Continue under it. */
   replayGap: 16,
@@ -130,6 +138,12 @@ export interface ResultNeeds {
   /** The keepsake card's height in world units, or 0 for none. */
   readonly keepsake: number;
   readonly replay: boolean;
+  /**
+   * How many lines of progress the run has to report (0–2). The one optional row: it is
+   * laid out only where it fits without shrinking the plaque, since it repeats what the
+   * map will show anyway, and a short frame's room belongs to the rows that do not.
+   */
+  readonly progress?: number;
 }
 
 export interface ResultFrame {
@@ -145,7 +159,7 @@ export interface ResultFrame {
   readonly replayHeight: number;
 }
 
-export type ResultRowKind = 'finale' | 'mastery' | 'strip' | 'keepsake';
+export type ResultRowKind = 'finale' | 'mastery' | 'strip' | 'progress' | 'keepsake';
 
 export interface ResultPlan {
   /** The ropes' ceiling anchor, and their length. */
@@ -159,9 +173,15 @@ export interface ResultPlan {
   readonly replayY: number | null;
 }
 
+/** The progress row's height for its line count, in world units. */
+export function progressHeight(lines: number, s: number): number {
+  return lines > 0 ? (RESULT_ROWS.progressPad + RESULT_ROWS.progressLine * lines) * s : 0;
+}
+
 /**
  * Stacks the plaque, the rows under it and the replay block over Continue. Rows go in one
- * order — the finale's card, the mastery plate, then the next star or the keepsake — so the same thing is
+ * order — the finale's card, the mastery plate, the next star, what the run changed, then
+ * the keepsake — so the same thing is
  * always in the same place. On a tall frame this hangs the plaque exactly as it hung
  * before: a fifth of the spare room down from `preferredTop`. On a short one it takes rope
  * first and then shrinks the plaque, never below `minScale`, rather than letting a row run
@@ -171,23 +191,37 @@ export function planResult(frame: ResultFrame, needs: ResultNeeds): ResultPlan {
   const s = frame.s, gap = RESULT_ROWS.gap * s;
   const replayY = needs.replay ? frame.blockTop - RESULT_ROWS.replayGap * s - frame.replayHeight : null;
   const floor = (replayY ?? frame.blockTop) - RESULT_ROWS.margin * s;
-  const heights: { kind: ResultRowKind; height: number }[] = [];
-  if (needs.finale) heights.push({ kind: 'finale', height: RESULT_ROWS.finale * s });
-  if (needs.mastery) heights.push({ kind: 'mastery', height: RESULT_ROWS.mastery * s });
-  if (needs.strip) heights.push({ kind: 'strip', height: RESULT_ROWS.strip * s });
-  if (needs.keepsake > 0) heights.push({ kind: 'keepsake', height: needs.keepsake });
-  const rowsH = heights.reduce((sum, row) => sum + gap + row.height, 0);
+  const rowsOf = (withProgress: boolean): { kind: ResultRowKind; height: number }[] => {
+    const heights: { kind: ResultRowKind; height: number }[] = [];
+    if (needs.finale) heights.push({ kind: 'finale', height: RESULT_ROWS.finale * s });
+    if (needs.mastery) heights.push({ kind: 'mastery', height: RESULT_ROWS.mastery * s });
+    if (needs.strip) heights.push({ kind: 'strip', height: RESULT_ROWS.strip * s });
+    if (withProgress) heights.push({ kind: 'progress', height: progressHeight(needs.progress ?? 0, s) });
+    if (needs.keepsake > 0) heights.push({ kind: 'keepsake', height: needs.keepsake });
+    return heights;
+  };
   const full = (needs.refund ? PLATE.keptHeight : PLATE.height) * s;
   const room = floor - frame.top;
-  let rope = PLATE.ropeLength * s;
-  let k = Math.min(1, frame.width / (PLATE.width * s));
-  let over = rope + full * k + rowsH - room;
-  if (over > 0) {
-    const cut = Math.min(over, rope - PLATE.minRope * s);
-    rope -= cut;
-    over -= cut;
+  const fit = (rowsH: number): { rope: number; k: number } => {
+    let rope = PLATE.ropeLength * s;
+    let k = Math.min(1, frame.width / (PLATE.width * s));
+    let over = rope + full * k + rowsH - room;
+    if (over > 0) {
+      const cut = Math.min(over, rope - PLATE.minRope * s);
+      rope -= cut;
+      over -= cut;
+    }
+    if (over > 0) k = Math.max(PLATE.minScale, k - over / full);
+    return { rope, k };
+  };
+  const total = (rows: readonly { height: number }[]): number => rows.reduce((sum, row) => sum + gap + row.height, 0);
+  let heights = rowsOf(false);
+  let rowsH = total(heights);
+  let { rope, k } = fit(rowsH);
+  if ((needs.progress ?? 0) > 0) {
+    const withProgress = rowsOf(true), withH = total(withProgress), placed = fit(withH);
+    if (placed.k >= k - 1e-9) ({ heights, rowsH, rope, k } = { heights: withProgress, rowsH: withH, ...placed });
   }
-  if (over > 0) k = Math.max(PLATE.minScale, k - over / full);
   const plaqueHeight = full * k;
   const stack = rope + plaqueHeight + rowsH;
   const free = Math.max(0, floor - frame.preferredTop - stack);
