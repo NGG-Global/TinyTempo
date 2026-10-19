@@ -57,12 +57,12 @@ import {
 import { collectionCount, keepsakeEarned, ownedKeepsakes, type Keepsake } from '@/game/scrapbook';
 import { drawKeepsake } from '@/ui/keepsakes';
 import { CONCEPT_INTRO, ConceptIntroRun, introConcept, introCopy, type Concept } from '@/game/conceptIntro';
-import { totalStars, type EarnedStars } from '@/game/stars';
+import { levelStars, totalStars, type EarnedStars } from '@/game/stars';
 import { attemptMode, playAnalytics, type ConceptIntroVisit, type LevelRun } from '@/game/playAnalytics';
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawInfinity, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
-import { blockGeometry, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
+import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
 import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
@@ -79,7 +79,7 @@ import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawStar, drawStarMark, drawStarSeat, prizeColour, STAR_PRIZE } from '@/ui/star';
 import {
   chipSeat, KEEPSAKE_CARD, keepsakeCardHeight, medalSeat, planResult, PLATE, RESULT_ROWS, TIMING_TRAY, trayRect, type ResultPlan } from '@/ui/resultLayout';
-import { nextGateChip, nextStarCopy, offersReplay, replayCopy, scoreLabel, thresholdLabels, type GateChip } from '@/game/resultCopy';
+import { nextGateChip, nextStarCopy, offersReplay, progressCopy, replayCopy, scoreLabel, thresholdLabels, type GateChip, type ProgressLine } from '@/game/resultCopy';
 import { dashes } from '@/ui/path';
 import { chorusBurst, chorusGlow, plaqueJolt, plaquePose, starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { SceneCurtain } from '@/ui/SceneCurtain';
@@ -142,6 +142,8 @@ function teachPhase(plan: RoundPlan, now: number): Phase {
  */
 const RESULT_REVEAL = {
   stripDelay: 0.9,
+  /** What the run changed follows the next star, so the two read in order. */
+  progressDelay: 1.1,
   finaleLag: 0.25,
 } as const;
 
@@ -292,6 +294,10 @@ export class PlayScene extends BaseScene {
   private nextStarPlate!: Phaser.GameObjects.Graphics;
   private finalePlate!: Phaser.GameObjects.Graphics;
   private nextStar!: Phaser.GameObjects.Text;
+  /** What the run changed, under the next star: up to two lines, each with its glyph. */
+  private progressPlate!: Phaser.GameObjects.Graphics;
+  private progressTexts: Phaser.GameObjects.Text[] = [];
+  private progressLines: readonly ProgressLine[] = [];
   private finaleCount!: Phaser.GameObjects.Text;
   private finaleCountLabel!: Phaser.GameObjects.Text;
   private gateLabel!: Phaser.GameObjects.Text;
@@ -421,6 +427,8 @@ export class PlayScene extends BaseScene {
   /** The row of beads under the action: the pattern, the turn and the verdict in one object. */
   private trackY = 0;
   private trackWidth = 0;
+  /** The scale the turn block is drawn at: the scene's, times `BLOCK_SCALE`. */
+  private blockS = 1;
   private verdictY = 0;
   private turnCallY = 0;
   private struckIndex = -1;
@@ -653,6 +661,9 @@ export class PlayScene extends BaseScene {
     // Over everything a level draws, under the curtain.
     this.restartSheet = new RestartSheet(this, 40);
     this.nextStar = body(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
+    this.progressPlate = this.add.graphics().setDepth(9).setVisible(false);
+    this.progressTexts = [0, 1].map(() => body(this, '', { size: 26, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false));
+    this.progressLines = [];
     this.finaleCount = display(this, '', { size: 48, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.finaleCountLabel = label(this, 'Stars', { size: 20, colour: PALETTE.muted }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.gateLabel = label(this, '', { size: 20, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
@@ -723,13 +734,14 @@ export class PlayScene extends BaseScene {
     // Same offset as the old drag track: an absolute distance from the thumb, so a tall
     // handset does not leave the beads floating in the middle of the frame.
     this.trackY = safe.bottom - LAYOUT.trackOffsetFromBottom * s;
+    const b = this.blockS = blockScale(s);
     // The columns are centred on the rows and the owner slot eats a row's left end, so
     // what the beads may use is the row less that allowance. Without it the slot landed
     // on the first socket on a dense pattern, which is the one case where the answer is
     // not simply a wider row.
-    this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
+    this.trackWidth = columnRoom(Math.min(620 * b, safe.width - 48 * s), b);
     // The block's rows are centred on the frame; its columns stand right of that centre.
-    this.columnX = safe.centerX + columnShift(s);
+    this.columnX = safe.centerX + columnShift(b);
     // Above the shelf, not above the face: the demonstration row now occupies the band
     // the verdict word used to sit in, and a word over the beads is a word over the cue.
     this.verdictY = verdictLine(this.trackY, s);
@@ -750,18 +762,18 @@ export class PlayScene extends BaseScene {
     // whole of a task: `setAction('')` on both `prepare` and `respond`, which is every
     // phase the count can appear in. A resize leaves the numeral dressed at the old
     // scale, so the cache is dropped and the next beat re-dresses it.
-    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
       text.setPosition(safe.centerX, this.turnCallY);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * s, mix(this.definition.ink, PALETTE.coral, heat));
+      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * b, mix(this.definition.ink, PALETTE.coral, heat));
     });
     this.turnCalled = null;
     this.restCall.setPosition(safe.centerX, this.turnCallY);
     this.restLabel.setX(safe.centerX);
-    resize(this.restCall, 40 * s, this.definition.ink);
-    resize(this.restLabel, 22 * s, PALETTE.muted, STYLE.current, false);
-    resize(this.restShelf, 18 * s, SHELL.cream, STYLE.current, false);
+    resize(this.restCall, 40 * b, this.definition.ink);
+    resize(this.restLabel, 22 * b, PALETTE.muted, STYLE.current, false);
+    resize(this.restShelf, 18 * b, SHELL.cream, STYLE.current, false);
     this.placeBlocks();
     this.drawAction(0);
     this.actionPressDirty = true;
@@ -1926,7 +1938,7 @@ export class PlayScene extends BaseScene {
   }
   /** The bead centres the track is drawn at, so a burst lands on the bead it belongs to. */
   private beads(count = this.outcomes.length): { readonly centres: readonly number[]; readonly radius: number } {
-    return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.uiScale, TRACK.beadRadius * this.uiScale);
+    return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.blockS, TRACK.beadRadius * this.blockS);
   }
   /**
    * The turn block: the demonstration's shelf, the player's face, and the baton between
@@ -1959,7 +1971,8 @@ export class PlayScene extends BaseScene {
       return;
     }
     const { safe } = this.viewport;
-    const s = this.uiScale;
+    // Everything on the block is drawn at the block's scale; only the frame's margin is the scene's.
+    const s = this.blockS;
     const still = this.reducedMotion;
     const plan = teach ? teach.plan : this.controller?.plan ?? null;
     const marks = teach ? teach.marks : this.outcomes;
@@ -1990,7 +2003,7 @@ export class PlayScene extends BaseScene {
     // block does not change size inside the task.
     const resting = !teach && this.resting;
     const floor = resting ? TRACK.restWidth * s : 0;
-    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s), floor), safe.width - 48 * s);
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s), floor), safe.width - 48 * this.uiScale);
     const geo = blockGeometry(safe.centerX, this.trackY, width, s);
     // The rest meter: four bar tiles for the breather's lead-in, from the plan's own lead
     // cues. It adds no cue and moves none.
@@ -2098,7 +2111,8 @@ export class PlayScene extends BaseScene {
   private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
     const call = plan && turnCount(plan, now);
     if (!plan || !call) { this.hideTurnCall(); return; }
-    const s = this.uiScale;
+    // The count belongs to the block and is drawn at its scale.
+    const s = this.blockS;
     const go = call.count === 0;
     const beat = 60 / plan.bpm;
     const still = this.reducedMotion;
@@ -2452,6 +2466,14 @@ export class PlayScene extends BaseScene {
     this.chipLabels.forEach((chip, k) => chip.setText(labels[k]!));
     this.chipEarned = [null, null, null];
     this.nextStar.setText(nextStarCopy(this.summaryStars, this.spec.starAccuracy) ?? '');
+    // What the run changed. Not on a preview, which saved nothing, nor when the save failed.
+    this.progressLines = this.previewResult || this.saveFailed ? [] : progressCopy({
+      level: this.spec.level, accuracy, cleared: outcome.cleared, bestBefore: outcome.bestBefore,
+      starsBefore: outcome.bestBefore === null ? 0 : starsFor(outcome.bestBefore, this.spec),
+      starsAfter: levelStars(outcome.progress, this.spec.level),
+      totalStars: totalStars(outcome.progress), finale: this.finaleCleared,
+    });
+    this.progressTexts.forEach((text, i) => text.setText(this.progressLines[i]?.text ?? ''));
     this.replayLabel.setText(replayCopy(this.spec.level));
     if (this.finaleCleared) {
       const stars = totalStars(outcome.progress);
@@ -2493,6 +2515,7 @@ export class PlayScene extends BaseScene {
       finale: summary && this.finaleCleared,
       mastery: summary && this.mastered,
       strip: summary && nextStarCopy(this.summaryStars, this.spec.starAccuracy) !== null,
+      progress: summary ? this.progressLines.length : 0,
       keepsake: summary && this.keepsake ? this.measureKeepsakeCard(cardW) : 0,
       replay: summary && this.replayOffered,
     });
@@ -2562,6 +2585,7 @@ export class PlayScene extends BaseScene {
     for (const chip of this.chipLabels) resize(chip, PLATE.chip.text * s * k, PALETTE.ink, STYLE.current, false);
     this.chipEarned = [null, null, null];
     resize(this.nextStar, 30 * s, PALETTE.ink, STYLE.current, false);
+    for (const text of this.progressTexts) resize(text, 26 * s, PALETTE.ink, STYLE.current, false);
     resize(this.finaleCount, 48 * s, PALETTE.ink);
     resize(this.finaleCountLabel, 20 * s, PALETTE.muted, STYLE.current, false);
     resize(this.masteryLabel, 24 * s, shade(BRASS, -0.62), STYLE.current, false);
@@ -2698,8 +2722,8 @@ export class PlayScene extends BaseScene {
     for (const text of this.timingTexts()) text.setVisible(details);
     this.replayRoot.setVisible(shown && this.replayOffered);
     if (!shown || !this.resultPlan) {
-      for (const plate of [this.nextStarPlate, this.finalePlate, this.masteryPlate]) plate.clear().setVisible(false);
-      for (const text of [this.nextStar, this.finaleCount, this.finaleCountLabel, this.gateLabel, this.masteryLabel]) text.setVisible(false);
+      for (const plate of [this.nextStarPlate, this.progressPlate, this.finalePlate, this.masteryPlate]) plate.clear().setVisible(false);
+      for (const text of [this.nextStar, ...this.progressTexts, this.finaleCount, this.finaleCountLabel, this.gateLabel, this.masteryLabel]) text.setVisible(false);
       return;
     }
     const plan = this.resultPlan;
@@ -2779,8 +2803,10 @@ export class PlayScene extends BaseScene {
     }
 
     this.hangText(this.scoreValue, 0, top + PLATE.scoreY * s, pose.tilt, drop, pose.alpha);
-    this.hangText(this.scoreNote, 0, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
-    if (this.timingReport) this.drawTimingChevron(s, top);
+    // With the details to open, the line and its chevron are centred as one control.
+    const chevronRoom = this.timingReport ? (TIMING_TRAY.chevronGap + TIMING_TRAY.toggleChevron) * s : 0;
+    if (this.timingReport) this.drawTimingToggle(s, top, chevronRoom);
+    this.hangText(this.scoreNote, -chevronRoom / 2, top + PLATE.noteY * s, pose.tilt, drop, pose.alpha);
     if (this.heartRefunded) {
       // A refunded heart is brass on brass: a small struck plate, not a coral caption.
       const keptW = PLATE.keptWidth * s, keptH = PLATE.keptTall * s, keptY = top + PLATE.keptY * s;
@@ -2854,10 +2880,20 @@ export class PlayScene extends BaseScene {
     this.hangText(this.timingAdvice, 0, ty + TIMING_TRAY.adviceY * s, tilt, drop, alpha);
   }
 
-  /** A drawn chevron beside the toggle: pointing on when closed, down when open. No symbol fonts. */
-  private drawTimingChevron(s: number, top: number): void {
+  /**
+   * The line under the score drawn as a control: a raised pill round the words, and a drawn
+   * chevron in it, pointing on when closed and down when open. A caption and a chevron alone
+   * read as a caption; players did not find the details behind it. No symbol fonts.
+   */
+  private drawTimingToggle(s: number, top: number, chevronRoom: number): void {
     const g = this.stars, size = TIMING_TRAY.toggleChevron * s;
-    const x = this.scoreNote.width / 2 + 14 * s + size / 2, y = top + PLATE.noteY * s;
+    const y = top + PLATE.noteY * s;
+    const pillW = this.scoreNote.width + chevronRoom + 2 * TIMING_TRAY.pillPad * s, pillH = TIMING_TRAY.pillHeight * s;
+    const r = pillH / 2, lip = 3 * s;
+    g.fillStyle(shade(SHELL.puck, -0.22), 1).fillRoundedRect(-pillW / 2, y - pillH / 2 + lip, pillW, pillH, r);
+    g.fillStyle(this.timingOpen ? shade(SHELL.puck, -0.06) : SHELL.puck, 1).fillRoundedRect(-pillW / 2, y - pillH / 2, pillW, pillH, r);
+    g.lineStyle(2 * s, mix(SHELL.puck, PALETTE.ink, 0.45), 1).strokeRoundedRect(-pillW / 2, y - pillH / 2, pillW, pillH, r);
+    const x = -chevronRoom / 2 + this.scoreNote.width / 2 + TIMING_TRAY.chevronGap * s + size / 2;
     g.lineStyle(3 * s, PALETTE.ink, 1);
     if (this.timingOpen) g.lineBetween(x - size, y - size / 2, x, y + size / 2).lineBetween(x, y + size / 2, x + size, y - size / 2);
     else g.lineBetween(x - size / 2, y - size, x + size / 2, y).lineBetween(x + size / 2, y, x - size / 2, y + size);
@@ -2948,6 +2984,7 @@ export class PlayScene extends BaseScene {
       drawStarSeat(g, x + 54 * s, cy, 24 * s, SHELL.bench, PALETTE.muted);
       this.nextStar.setPosition(x + 96 * s, cy).setAlpha(pose.alpha).setVisible(true);
     } else this.nextStar.setVisible(false);
+    this.drawProgressRow(plan, x, w, s, arrival(RESULT_REVEAL.progressDelay));
 
     const card = plan.rows.find(row => row.kind === 'finale');
     const f = this.finalePlate.clear().setVisible(card !== undefined && this.gateChip !== null);
@@ -2966,6 +3003,37 @@ export class PlayScene extends BaseScene {
       f.lineStyle(2 * s, shade(chip.ground, -0.35), 1).strokeRoundedRect(chipX, cy - chipH / 2, chipW, chipH, chipH / 2);
       this.gateLabel.setPosition(chipX + chipW / 2, cy).setAlpha(pose.alpha).setVisible(true);
     } else for (const text of [this.finaleCount, this.finaleCountLabel, this.gateLabel]) text.setVisible(false);
+  }
+
+  /**
+   * What the run changed, on a plain card rather than a recess, since it reports rather than
+   * asks: a brass star for stars added, an arrow up for a new best, a chevron for the next
+   * level. Drawn glyphs, no symbol fonts.
+   */
+  private drawProgressRow(plan: ResultPlan, x: number, w: number, s: number, pose: { readonly rise: number; readonly alpha: number }): void {
+    const row = plan.rows.find(r => r.kind === 'progress');
+    const g = this.progressPlate.clear().setVisible(row !== undefined);
+    if (!row) { for (const text of this.progressTexts) text.setVisible(false); return; }
+    const y = row.y + pose.rise * 24 * s;
+    g.setAlpha(pose.alpha);
+    g.fillStyle(mix(SHELL.bench, SHELL.cream, 0.35), 1).fillRoundedRect(x, y, w, row.height, 20 * s);
+    const lineH = RESULT_ROWS.progressLine * s, top = y + RESULT_ROWS.progressPad / 2 * s;
+    this.progressTexts.forEach((text, i) => {
+      const line = this.progressLines[i];
+      if (!line) { text.setVisible(false); return; }
+      const cy = top + lineH * (i + 0.5), gx = x + 48 * s;
+      if (line.kind === 'stars') drawStar(g, gx, cy, 16 * s, STAR_PRIZE);
+      else {
+        g.lineStyle(3.5 * s, PALETTE.ink, 0.85);
+        if (line.kind === 'best') g.lineBetween(gx, cy + 13 * s, gx, cy - 12 * s).lineBetween(gx - 9 * s, cy - 3 * s, gx, cy - 12 * s).lineBetween(gx + 9 * s, cy - 3 * s, gx, cy - 12 * s);
+        else g.lineBetween(gx - 5 * s, cy - 10 * s, gx + 5 * s, cy).lineBetween(gx + 5 * s, cy, gx - 5 * s, cy + 10 * s);
+      }
+      // The words shrink rather than run off the card on a narrow handset.
+      const room = w - 96 * s;
+      text.setScale(1);
+      if (text.width > room) text.setScale(room / text.width);
+      text.setPosition(x + 80 * s, cy).setAlpha(pose.alpha).setVisible(true);
+    });
   }
 
   /** Medals stamp left to right; an earned one throws confetti and sparks as it lands. */

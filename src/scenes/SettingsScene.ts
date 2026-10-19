@@ -30,6 +30,7 @@ import { faces } from '@/ui/light';
 import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { ScreenHint } from '@/ui/screenHint';
 import { Sheen } from '@/ui/sheen';
 import { arrive } from '@/ui/spring';
 import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
@@ -52,7 +53,7 @@ const SETTINGS = {
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
 type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
-  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
+  | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'lesson' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
 
@@ -106,6 +107,7 @@ export class SettingsScene extends BaseScene {
   private storeRadius = 0;
   private sheenAt = Number.NaN;
   private curtain!: SceneCurtain;
+  private hint!: ScreenHint;
   private uiScale = 1;
   private bandRect = new Phaser.Geom.Rectangle();
   private scrollY = 0;
@@ -198,7 +200,9 @@ export class SettingsScene extends BaseScene {
     window.addEventListener('blur', this.cancelDrag);
     window.addEventListener('pointercancel', this.cancelDrag);
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
+    // Last, after the sections' camera: the hint draws with a camera of its own over every other.
+    this.hint = new ScreenHint(this, 'settings');
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => this.hint.showIfNew(performance.now() / 1000)));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     this.refreshCopy();
@@ -246,6 +250,10 @@ export class SettingsScene extends BaseScene {
       refill: rowTitle(STORE_COPY.refillTitle),
       refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
       refillPrice: chip(''),
+      // The lesson, here once it has been passed: the title screen gives its row back to Play.
+      lesson: rowTitle('How to play'),
+      lessonNote: rowNote('Take the short lesson again'),
+      lessonGo: chip('Open'),
       help: rowTitle('Contact us'),
       helpNote: rowNote('Report a problem, or ask for a hand'),
       helpGo: chip('Open'),
@@ -364,6 +372,7 @@ export class SettingsScene extends BaseScene {
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
     this.pressDirty = true;
+    this.hint.layout(this.viewport, s);
     // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
     if (!this.primed) {
       this.primed = true;
@@ -617,11 +626,19 @@ export class SettingsScene extends BaseScene {
     // might have prevented it. Only the credits follow it, and they ask nothing of anyone.
     y += SETTINGS.sectionGap * s;
     eyebrow(6);
+    const helpW = Math.max(150 * s, control);
+    const lesson = plate(row);
+    this.rows.lessonCard = lesson;
+    this.texts.lesson!.setPosition(left + 28 * s, lesson.centerY - 15 * s);
+    this.texts.lessonNote!.setPosition(left + 28 * s, lesson.centerY + 19 * s);
+    const lessonRect = new Phaser.Geom.Rectangle(lesson.right - 26 * s - helpW, lesson.centerY - control / 2, helpW, control);
+    this.rows.lesson = lessonRect;
+    this.texts.lessonGo!.setPosition(lessonRect.centerX - 14 * s, lessonRect.centerY);
+    this.hits.push({ name: 'lesson', rect: lessonRect, pinned: false });
     const help = plate(row);
     this.rows.helpCard = help;
     this.texts.help!.setPosition(left + 28 * s, help.centerY - 15 * s);
     this.texts.helpNote!.setPosition(left + 28 * s, help.centerY + 19 * s);
-    const helpW = Math.max(150 * s, control);
     const helpRect = new Phaser.Geom.Rectangle(help.right - 26 * s - helpW, help.centerY - control / 2, helpW, control);
     this.rows.help = helpRect;
     this.texts.helpGo!.setPosition(helpRect.centerX - 14 * s, helpRect.centerY);
@@ -793,6 +810,12 @@ export class SettingsScene extends BaseScene {
       drawChevron(g, this.rows.adPrivacy.right - 30 * s, this.rows.adPrivacy.centerY + sink, 13 * s, PALETTE.ink);
       this.texts.adPrivacyGo!.setPosition(this.rows.adPrivacy.centerX - 14 * s, this.rows.adPrivacy.centerY + sink);
     }
+    if (this.rows.lesson) {
+      drawPanel(g, this.rows.lesson, s, { fill: SHELL.cream, depth: 8, press: sunk('lesson'), radius: 18 });
+      const sink = 8 * s * sunk('lesson') * 0.8;
+      drawChevron(g, this.rows.lesson.right - 30 * s, this.rows.lesson.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.lessonGo!.setPosition(this.rows.lesson.centerX - 14 * s, this.rows.lesson.centerY + sink);
+    }
     if (this.rows.help) {
       drawPanel(g, this.rows.help, s, { fill: SHELL.cream, depth: 8, press: sunk('help'), radius: 18 });
       const sink = 8 * s * sunk('help') * 0.8;
@@ -882,6 +905,7 @@ export class SettingsScene extends BaseScene {
 
   public override update(_time: number, delta: number): void {
     const now = performance.now() / 1000;
+    this.hint.update(now, this.reducedMotion);
     this.stepScroll(delta);
     const press = pressAmount(now, this.pressedAt);
     if (press > 0.001 || this.pressDirty) {
@@ -962,7 +986,7 @@ export class SettingsScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.hint.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.velocity = 0;
     // A level takes the gesture. The thumb drifts vertically on a horizontal drag, and
     // that drift must not scroll the section out from under the knob.
@@ -1007,6 +1031,8 @@ export class SettingsScene extends BaseScene {
    * happened to start its flick over the store would be indefensible.
    */
   private pointerUp(pointer: Phaser.Input.Pointer): void {
+    // While the hint is open every release is its, and nothing under it scrolls or fires.
+    if (this.hint.open) { this.drag = null; this.hint.tap(pointer.x, pointer.y, performance.now() / 1000); return; }
     const drag = this.drag;
     if (!drag || drag.id !== pointer.id) return;
     this.drag = null;
@@ -1023,7 +1049,7 @@ export class SettingsScene extends BaseScene {
   private readonly cancelDrag = (): void => { this.drag = null; };
 
   private wheel(_pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number): void {
-    if (this.scrollMax <= 0) return;
+    if (this.scrollMax <= 0 || this.hint.open) return;
     this.velocity = 0;
     this.setScroll(this.scrollY + dy);
   }
@@ -1055,6 +1081,9 @@ export class SettingsScene extends BaseScene {
       case 'offsetReset': this.resetOffset(); return;
       case 'transfer':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Transfer, { from: this.from })));
+        return;
+      case 'lesson':
+        this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Tutorial, { source: 'settings', from: this.from })));
         return;
       case 'help':
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Support, { from: this.from })));
@@ -1251,6 +1280,7 @@ export class SettingsScene extends BaseScene {
 
   /** Android's back is this screen's own back puck (`core/backButton.ts`). */
   public handleBack(): boolean {
+    if (this.hint.back()) return true;
     this.leave();
     return true;
   }

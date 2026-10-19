@@ -9,6 +9,10 @@ import { reducedMotion } from '@/core/motionPreference';
 import { playAnalytics } from '@/game/playAnalytics';
 import { loadProgress, markScrapbookSeen } from '@/game/progress';
 import { collectionCount, earnedBy, ownsKeepsake, scrapbookPages, type Keepsake } from '@/game/scrapbook';
+import { badgeAreas, badgeName, loadGates, ownsAreaBadge } from '@/game/areaGates';
+import { AREAS } from '@/game/levels';
+import { firstLevelOfArea, starsRequired } from '@/game/stars';
+import { drawAreaBadge } from '@/ui/areaBadge';
 import { VIGNETTES } from '@/vignettes/registry';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
@@ -19,6 +23,7 @@ import { scrollStep } from '@/ui/navigation';
 import { BakedLayer } from '@/ui/bakedLayer';
 import { BRASS, drawPanel } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
+import { ScreenHint } from '@/ui/screenHint';
 import { drawStar, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 
@@ -55,7 +60,8 @@ const INK = {
   corner: shade(SHELL.rope, -0.1),
 } as const;
 
-interface Slot { readonly keepsake: Keepsake; readonly owned: boolean; readonly rect: Phaser.Geom.Rectangle }
+/** A card on a page: a keepsake, or an area's badge on the first page. */
+interface Slot { readonly keepsake: Keepsake | null; readonly area: number | null; readonly owned: boolean; readonly rect: Phaser.Geom.Rectangle }
 
 /**
  * The Scrapbook: every keepsake, grouped by the act it came from.
@@ -100,8 +106,11 @@ export class ScrapbookScene extends BaseScene {
   private titles: Phaser.GameObjects.Text[] = [];
   private captions: Phaser.GameObjects.Text[] = [];
   private slots: Slot[] = [];
-  private selected: Keepsake | null = null;
+  /** How many cards each page holds, in the book's order: the badges' page, then an act's each. */
+  private pageCounts: number[] = [];
+  private selected: Slot | null = null;
   private curtain!: SceneCurtain;
+  private hint!: ScreenHint;
   private uiScale = 1;
   private bandRect = new Phaser.Geom.Rectangle();
   private backRect = new Phaser.Geom.Rectangle();
@@ -137,27 +146,33 @@ export class ScrapbookScene extends BaseScene {
     this.cameras.main.ignore(this.band);
     const progress = loadProgress();
     const pages = scrapbookPages();
-    const art = pages.map(() => this.add.graphics());
-    this.pageSpans = pages.map(() => ({ top: 0, bottom: 0 }));
+    // The first page is the road's: a badge for every area opened, and one still to open.
+    const gates = loadGates(progress);
+    const areas = badgeAreas(progress, gates, AREAS.length);
+    this.pageCounts = [areas.length, ...pages.map(page => page.keepsakes.length)];
+    const art = this.pageCounts.map(() => this.add.graphics());
+    this.pageSpans = this.pageCounts.map(() => ({ top: 0, bottom: 0 }));
     this.highlight = this.add.graphics();
     this.band.add([...art, this.highlight]);
     // After the Graphics are in the band, so each raster is placed beside its own page.
     this.pageArt = art.map(graphics => new BakedLayer(this, graphics));
     this.primed = false;
-    this.slots = pages.flatMap(page => page.keepsakes.map(keepsake => ({
-      keepsake, owned: ownsKeepsake(progress, keepsake), rect: new Phaser.Geom.Rectangle(),
-    })));
-    this.slotPage = pages.flatMap((page, i) => page.keepsakes.map(() => i));
-    this.titles = pages.map(page => {
-      const title = VIGNETTES.find(v => v.id === page.vignette)!.title;
+    this.slots = [
+      ...areas.map(area => ({ keepsake: null, area, owned: ownsAreaBadge(area, progress, gates), rect: new Phaser.Geom.Rectangle() })),
+      ...pages.flatMap(page => page.keepsakes.map(keepsake => ({
+        keepsake, area: null, owned: ownsKeepsake(progress, keepsake), rect: new Phaser.Geom.Rectangle(),
+      }))),
+    ];
+    this.slotPage = this.pageCounts.flatMap((count, i) => Array.from({ length: count }, () => i));
+    this.titles = ['Area badges', ...pages.map(page => VIGNETTES.find(v => v.id === page.vignette)!.title)].map(title => {
       const text = label(this, title, { size: 22, colour: SHELL.cream }).setOrigin(0, 0.5);
       this.band.add(text);
       return text;
     });
     this.captions = this.slots.map(slot => {
       const text = slot.owned
-        ? body(this, slot.keepsake.name, { size: 20, colour: PALETTE.ink, align: 'center' })
-        : label(this, `Level ${slot.keepsake.level}`, { size: 19, colour: PALETTE.muted, align: 'center' });
+        ? body(this, slot.keepsake?.name ?? badgeName(slot.area ?? 0), { size: 20, colour: PALETTE.ink, align: 'center' })
+        : label(this, `Level ${slot.keepsake?.level ?? firstLevelOfArea(slot.area ?? 0)}`, { size: 19, colour: PALETTE.muted, align: 'center' });
       text.setOrigin(0.5, 0);
       this.band.add(text);
       return text;
@@ -180,7 +195,9 @@ export class ScrapbookScene extends BaseScene {
     window.addEventListener('blur', this.cancelDrag);
     window.addEventListener('pointercancel', this.cancelDrag);
     this.curtain = new SceneCurtain(this);
-    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal());
+    // Last, after the pages' camera: the hint draws with a camera of its own over every other.
+    this.hint = new ScreenHint(this, 'scrapbook');
+    this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => this.hint.showIfNew(performance.now() / 1000)));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     // Opening the book is also how a player learns what it is: the first reveal after this
@@ -229,6 +246,7 @@ export class ScrapbookScene extends BaseScene {
     this.applyScroll();
     this.drawHighlight();
     this.drawPinned(0);
+    this.hint.layout(this.viewport, s);
     if (!this.primed) {
       this.primed = true;
       this.pageArt.forEach(art => { if (art.visible) art.bake(); });
@@ -237,60 +255,69 @@ export class ScrapbookScene extends BaseScene {
 
   /** The pages, drawn once per real change of size. Returns the height they take. */
   private bakePages(left: number, width: number, s: number): number {
-    const pages = scrapbookPages();
+    const counts = this.pageCounts;
     const cols = width >= BOOK.spreadFrom * s ? 2 : 1;
     const gap = BOOK.pageGap * s;
     const pageW = (width - (cols - 1) * gap) / cols;
-    const perRow = Math.max(1, Math.floor((pageW - 2 * BOOK.margin * s + BOOK.cardGap * s) / ((BOOK.card + BOOK.cardGap) * s)));
-    const rowOf = (count: number) => Math.max(1, Math.ceil(count / perRow));
-    const pageHeight = (count: number) => (BOOK.cardTop + rowOf(count) * (BOOK.card + BOOK.caption) + BOOK.pageFoot) * s;
-    // A spread's two pages share one height, so the book reads as facing pages.
-    const spreads: number[] = [];
-    for (let i = 0; i < pages.length; i += cols) {
-      spreads.push(Math.max(...pages.slice(i, i + cols).map(page => pageHeight(page.keepsakes.length))));
+    const fit = (w: number): number => Math.max(1, Math.floor((w - 2 * BOOK.margin * s + BOOK.cardGap * s) / ((BOOK.card + BOOK.cardGap) * s)));
+    const perRowOf = (i: number): number => fit(i === 0 ? width : pageW);
+    const rowOf = (count: number, perRow: number) => Math.max(1, Math.ceil(count / perRow));
+    const pageHeight = (count: number, perRow: number) => (BOOK.cardTop + rowOf(count, perRow) * (BOOK.card + BOOK.caption) + BOOK.pageFoot) * s;
+    // The badges' page runs the book's whole width on a row of its own; the acts' pages
+    // follow two to a spread, each spread as tall as its taller page so they face.
+    const rows: { pages: number[]; height: number }[] = [{ pages: [0], height: pageHeight(counts[0] ?? 0, perRowOf(0)) }];
+    for (let i = 1; i < counts.length; i += cols) {
+      const pages = Array.from({ length: Math.min(cols, counts.length - i) }, (_, k) => i + k);
+      rows.push({ pages, height: Math.max(...pages.map(p => pageHeight(counts[p]!, perRowOf(p)))) });
     }
-    const height = spreads.reduce((sum, h) => sum + h + gap, 0) + 16 * s;
+    const height = rows.reduce((sum, row) => sum + row.height + gap, 0) + 16 * s;
     const key = `${left}|${width}|${s}|${this.bandRect.y}`;
     if (key === this.bakeKey) return height;
     this.bakeKey = key;
     let slot = 0;
     let y = this.bandRect.y + 8 * s;
-    pages.forEach((page, i) => {
-      const col = i % cols;
-      const spread = Math.floor(i / cols);
-      if (col === 0 && i > 0) y += spreads[spread - 1]! + gap;
-      const x = left + col * (pageW + gap);
-      const g = this.pageArt[i]!.graphics.clear();
-      // The tape stands above the page's edge and the panel's shadow falls below it.
-      this.pageSpans[i] = { top: y - 16 * s, bottom: y + spreads[spread]! + 24 * s };
-      drawPanel(g, new Phaser.Geom.Rectangle(x, y, pageW, spreads[spread]!), s, { fill: INK.page, depth: 6, radius: 14 });
-      // The act's name on a strip of tape laid across the page's top edge, a little askew.
-      const title = this.titles[i]!;
-      resize(title, 22 * s, SHELL.cream, STYLE.current, false);
-      const tapeW = Math.min(pageW - 24 * s, title.width + 44 * s), tapeH = 40 * s, tx = x + 16 * s, ty = y - 8 * s;
-      g.fillStyle(INK.tape, 0.92).fillPoints(new Phaser.Geom.Polygon([
-        { x: tx, y: ty + 3 * s }, { x: tx + tapeW, y: ty }, { x: tx + tapeW - 3 * s, y: ty + tapeH }, { x: tx + 3 * s, y: ty + tapeH + 2 * s },
-      ]).points, true);
-      title.setPosition(tx + 22 * s, ty + tapeH / 2 + 1 * s);
-      page.keepsakes.forEach((_, j) => {
-        const entry = this.slots[slot]!;
-        const cx = x + BOOK.margin * s + (j % perRow) * (BOOK.card + BOOK.cardGap) * s;
-        const cy = y + (BOOK.cardTop + Math.floor(j / perRow) * (BOOK.card + BOOK.caption)) * s;
-        entry.rect.setTo(cx, cy, BOOK.card * s, BOOK.card * s);
-        this.drawCard(g, entry, s);
-        const caption = this.captions[slot]!;
-        if (entry.owned) resize(caption, 19 * s, PALETTE.ink, STYLE.current, false);
-        else resize(caption, 18 * s, PALETTE.muted, STYLE.current, false);
-        // One line where a name is only a little long for the card ("Plum beetle pin" left
-        // "pin" alone on a second line); a longer name wraps into two even lines instead.
-        const room = (BOOK.card + BOOK.cardGap - 4) * s;
-        caption.setWordWrapWidth(0, false).setScale(1);
-        if (caption.width <= room * CAPTION_SQUEEZE) caption.setScale(Math.min(1, room / caption.width));
-        else balanceWrap(caption, room);
-        caption.setPosition(entry.rect.centerX, entry.rect.bottom + 8 * s);
-        slot++;
+    rows.forEach(row => {
+      row.pages.forEach((i, col) => {
+        const count = counts[i]!;
+        const perRow = perRowOf(i);
+        const w = i === 0 ? width : pageW;
+        // The badges sit centred on their wide page; an act's cards start at its margin.
+        const grid = perRow * BOOK.card * s + (perRow - 1) * BOOK.cardGap * s;
+        const inset = i === 0 ? Math.max(BOOK.margin * s, (w - grid) / 2) : BOOK.margin * s;
+        const x = left + col * (pageW + gap);
+        const g = this.pageArt[i]!.graphics.clear();
+        // The tape stands above the page's edge and the panel's shadow falls below it.
+        this.pageSpans[i] = { top: y - 16 * s, bottom: y + row.height + 24 * s };
+        drawPanel(g, new Phaser.Geom.Rectangle(x, y, w, row.height), s, { fill: INK.page, depth: 6, radius: 14 });
+        // The act's name on a strip of tape laid across the page's top edge, a little askew.
+        const title = this.titles[i]!;
+        resize(title, 22 * s, SHELL.cream, STYLE.current, false);
+        const tapeW = Math.min(w - 24 * s, title.width + 44 * s), tapeH = 40 * s, tx = x + 16 * s, ty = y - 8 * s;
+        g.fillStyle(INK.tape, 0.92).fillPoints(new Phaser.Geom.Polygon([
+          { x: tx, y: ty + 3 * s }, { x: tx + tapeW, y: ty }, { x: tx + tapeW - 3 * s, y: ty + tapeH }, { x: tx + 3 * s, y: ty + tapeH + 2 * s },
+        ]).points, true);
+        title.setPosition(tx + 22 * s, ty + tapeH / 2 + 1 * s);
+        for (let j = 0; j < count; j++) {
+          const entry = this.slots[slot]!;
+          const cx = x + inset + (j % perRow) * (BOOK.card + BOOK.cardGap) * s;
+          const cy = y + (BOOK.cardTop + Math.floor(j / perRow) * (BOOK.card + BOOK.caption)) * s;
+          entry.rect.setTo(cx, cy, BOOK.card * s, BOOK.card * s);
+          this.drawCard(g, entry, s);
+          const caption = this.captions[slot]!;
+          if (entry.owned) resize(caption, 19 * s, PALETTE.ink, STYLE.current, false);
+          else resize(caption, 18 * s, PALETTE.muted, STYLE.current, false);
+          // One line where a name is only a little long for the card ("Plum beetle pin" left
+          // "pin" alone on a second line); a longer name wraps into two even lines instead.
+          const room = (BOOK.card + BOOK.cardGap - 4) * s;
+          caption.setWordWrapWidth(0, false).setScale(1);
+          if (caption.width <= room * CAPTION_SQUEEZE) caption.setScale(Math.min(1, room / caption.width));
+          else balanceWrap(caption, room);
+          caption.setPosition(entry.rect.centerX, entry.rect.bottom + 8 * s);
+          slot++;
+        }
+        this.pageArt[i]!.invalidate();
       });
-      this.pageArt[i]!.invalidate();
+      y += row.height + gap;
     });
     return height;
   }
@@ -307,21 +334,27 @@ export class ScrapbookScene extends BaseScene {
       for (const [cx, cy, dx, dy] of [[r.x, r.y, 1, 1], [r.right, r.y, -1, 1], [r.x, r.bottom, 1, -1], [r.right, r.bottom, -1, -1]] as const) {
         g.fillTriangle(cx - dx * 3 * s, cy - dy * 3 * s, cx + dx * c, cy - dy * 3 * s, cx - dx * 3 * s, cy + dy * c);
       }
-      drawKeepsake(g, slot.keepsake.id, r.centerX, r.centerY - 8 * s, r.width * 0.7, false, INK.card);
-      for (let k = -1; k <= 1; k++) drawStar(g, r.centerX + k * stars.gap, stars.y, stars.radius, STAR_PRIZE);
+      if (slot.area !== null) drawAreaBadge(g, slot.area, r.centerX, r.centerY, r.width * 0.38, true);
+      else {
+        drawKeepsake(g, slot.keepsake!.id, r.centerX, r.centerY - 8 * s, r.width * 0.7, false, INK.card);
+        for (let k = -1; k <= 1; k++) drawStar(g, r.centerX + k * stars.gap, stars.y, stars.radius, STAR_PRIZE);
+      }
     } else {
       const well = shade(INK.page, -0.08);
       g.fillStyle(well, 1).fillRoundedRect(r.x, r.y, r.width, r.height, 8 * s);
       g.lineStyle(2 * s, shade(INK.page, -0.28), 0.6).strokeRoundedRect(r.x, r.y, r.width, r.height, 8 * s);
-      drawKeepsake(g, slot.keepsake.id, r.centerX, r.centerY - 8 * s, r.width * 0.7, true, well);
-      for (let k = -1; k <= 1; k++) drawStarSeat(g, r.centerX + k * stars.gap, stars.y, stars.radius, well, shade(INK.page, -0.35));
+      if (slot.area !== null) drawAreaBadge(g, slot.area, r.centerX, r.centerY, r.width * 0.38, false, well);
+      else {
+        drawKeepsake(g, slot.keepsake!.id, r.centerX, r.centerY - 8 * s, r.width * 0.7, true, well);
+        for (let k = -1; k <= 1; k++) drawStarSeat(g, r.centerX + k * stars.gap, stars.y, stars.radius, well, shade(INK.page, -0.35));
+      }
     }
   }
 
   /** The brass ring round the card that was touched. Its own Graphics, so a touch never rebakes the pages. */
   private drawHighlight(): void {
     const g = this.highlight.clear();
-    const slot = this.slots.find(entry => entry.keepsake === this.selected);
+    const slot = this.selected;
     if (!slot) return;
     const s = this.uiScale, r = slot.rect;
     g.lineStyle(5 * s, BRASS, 1).strokeRoundedRect(r.x - 7 * s, r.y - 7 * s, r.width + 14 * s, r.height + 14 * s, 12 * s);
@@ -346,17 +379,30 @@ export class ScrapbookScene extends BaseScene {
         : 'Touch one to see where it came from.');
       return;
     }
-    const act = VIGNETTES.find(v => v.id === slot.keepsake.vignette)!.title;
+    if (slot.area !== null) {
+      const level = firstLevelOfArea(slot.area);
+      if (slot.owned) {
+        this.infoName.setText(`${badgeName(slot.area)} badge`);
+        this.infoWhere.setText(slot.area === 0 ? 'Earned on your first cleared level' : `Opened at the gate before level ${level}`);
+      } else {
+        this.infoName.setText('Not opened yet');
+        this.infoWhere.setText(slot.area === 0 ? 'Clear level 1 to earn it' : `The gate before level ${level} opens at ${starsRequired(slot.area)} stars. Tap it open on the map.`);
+      }
+      return;
+    }
+    const keepsake = slot.keepsake!;
+    const act = VIGNETTES.find(v => v.id === keepsake.vignette)!.title;
     if (slot.owned) {
-      this.infoName.setText(slot.keepsake.name);
-      this.infoWhere.setText(`${earnedBy(slot.keepsake)} · ${act}`);
+      this.infoName.setText(keepsake.name);
+      this.infoWhere.setText(`${earnedBy(keepsake)} · ${act}`);
     } else {
       this.infoName.setText('Not found yet');
-      this.infoWhere.setText(`${earnedBy(slot.keepsake)} finds it · ${act}`);
+      this.infoWhere.setText(`${earnedBy(keepsake)} finds it · ${act}`);
     }
   }
 
   public override update(_time: number, delta: number): void {
+    this.hint.update(performance.now() / 1000, reducedMotion());
     this.stepScroll(delta);
     // One page a frame, as it scrolls into the band; one well off it gives its raster back.
     const top = this.bandRect.y + this.scrollY, bottom = top + this.bandRect.height;
@@ -401,7 +447,7 @@ export class ScrapbookScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.hint.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.velocity = 0;
     this.drag = {
       id: pointer.id, lastY: pointer.y, lastAt: performance.now(), startY: pointer.y, moved: false,
@@ -426,6 +472,8 @@ export class ScrapbookScene extends BaseScene {
 
   /** On the release, never the press: a press here may be the start of a scroll. */
   private pointerUp(pointer: Phaser.Input.Pointer): void {
+    // While the hint is open every release is its, and nothing under it scrolls or fires.
+    if (this.hint.open) { this.drag = null; this.hint.tap(pointer.x, pointer.y, performance.now() / 1000); return; }
     const drag = this.drag;
     if (!drag || drag.id !== pointer.id) return;
     this.drag = null;
@@ -436,7 +484,7 @@ export class ScrapbookScene extends BaseScene {
   private readonly cancelDrag = (): void => { this.drag = null; };
 
   private wheel(_pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number): void {
-    if (this.scrollMax <= 0) return;
+    if (this.scrollMax <= 0 || this.hint.open) return;
     this.velocity = 0;
     this.setScroll(this.scrollY + dy);
   }
@@ -454,13 +502,14 @@ export class ScrapbookScene extends BaseScene {
     const slot = this.slots.find(entry => Phaser.Geom.Rectangle.Contains(entry.rect, x, worldY)) ?? null;
     if (!slot) return;
     vibrate('tap');
-    this.selected = slot.keepsake;
+    this.selected = slot;
     this.describe(slot, 0);
     this.drawHighlight();
   }
 
   /** Android's back is this screen's own back puck (`core/backButton.ts`). */
   public handleBack(): boolean {
+    if (this.hint.back()) return true;
     this.leave();
     return true;
   }

@@ -46,6 +46,7 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   star_improved: ['level', 'area', 'stars', 'previous_stars', 'accuracy', 'gate_have'],
   star_gate_reached: ['area', 'level', 'gate_required', 'gate_have', 'gate_short', 'unlocked'],
   star_gate_opened: ['area', 'level', 'gate_required', 'gate_have', 'unlocked', 'replays', 'improvements', 'stars_gained'],
+  area_opened: ['area', 'level', 'gate_have'],
   concept_intro_shown: ['concept', 'level', 'mode'],
   concept_intro_completed: ['concept', 'level', 'tries', 'accuracy', 'passed'],
   scrapbook_opened: ['source', 'owned', 'total'],

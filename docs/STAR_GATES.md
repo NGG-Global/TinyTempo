@@ -89,8 +89,8 @@ finished level's plate showing what it had before, and after the curtain and the
 drop the new stars leave their sockets on the plate one at a time, arc up and across the
 screen, and land on the tally's star. Each landing steps the count, rings the star and
 ticks the engine's count voice; the gate's plate counts along with it. The landing that
-meets the requirement lifts the bar on a damped spring and fades it, leaving the posts,
-and the frontier turns coral. When the last star has settled, the strips holding the
+meets the requirement makes the gate **ready**: it flashes once and waits for the player's
+tap (below). Nothing opens by itself. When the last star has settled, the strips holding the
 finished level and the frontier are painted again with the collection as it now stands; the
 rest of the road keeps its raster (`MapScene.rebake`).
 
@@ -107,3 +107,37 @@ gate's sign, the dock — so nothing opens before the star that opens it has lan
 painted with the rest of the world, because it is the one thing on the road that changes
 during a visit. It is drawn again only while its count or its bar moves, and is a raster
 the rest of the time (`drawLiveGate`).
+
+## Opening a gate is a tap
+
+A gate whose ask is met no longer lifts on the landing star. It is **ready**, and the area
+opens when the player taps it (`src/game/areaGates.ts`, `src/ui/gateCeremony.ts`):
+
+- **Ready.** The bar's stripes turn brass, and the plate glows, breathes and sends out a
+  ring once a breath. It reads *Tap to open* beside a padlock that nudges every couple of
+  seconds. The bench says *Open Pavement*, and its coral disc carries the lock. The frontier
+  behind the gate stays held.
+- **The tap.** It can land on the gate's bar or plate, the held frontier puck, or the bench's
+  disc. The plate squashes under the thumb and the lock shakes, then pops: the hasp springs,
+  sparks and confetti burst from the plate, and the unlock voice (`audio/gateSounds.ts`) and
+  a buzz land together. The plate drops away and the bar swings up on a spring and fades.
+- **The badge.** As the bar clears the road, a banner comes down a third of the way down
+  the frame: the area's badge drops in large and stamps to size under *Pavement is open*,
+  with the finale's fanfare and a second buzz. The road behind is repainted and the frontier
+  is free to hop. The whole ceremony takes about 3.5 s. Under reduced motion there is no
+  squash, shake, swing or burst: the bar is simply gone and the banner fades in and out.
+
+What is stored is only the highest area **this device** has opened by its gate
+(`tiny-tempo.gates.v1`). It is written before the unlock plays, so an app closed
+mid-ceremony keeps the area. Everything else is derived:
+
+- An area is open when it is at or below that record, or when the player has already gone
+  past its first level. A save code, a cloud restore or a merge never leaves a gate standing
+  behind the player, and a cleared level is still never held.
+- On a device's first launch of this build, the record starts at every gate the save's stars
+  already meet (`recordGateBaseline`, run in `PreloadScene`). Nobody is asked to tap open a
+  road they have already walked.
+- The record travels in no save code or cloud snapshot, like the teach flags. A new phone
+  opens the frontier's gate with one tap.
+
+`star_gate_opened` still reports when the stars met the ask. `area_opened` reports the tap.

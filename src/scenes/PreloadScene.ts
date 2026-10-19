@@ -3,6 +3,8 @@ import Phaser from 'phaser';
 import { SceneKey } from '@/config/scenes';
 import { hideBootOverlay } from '@/core/shell';
 import { keptKeepsakes } from '@/game/keepsakeLegacy';
+import { recordGateBaseline } from '@/game/areaGates';
+import { loadProgress } from '@/game/progress';
 import { generateMaterials } from '@/textures/materials';
 import { generateFeedbackTextures } from '@/ui/feedback';
 
@@ -48,6 +50,9 @@ export class PreloadScene extends Phaser.Scene {
     // Before any level can be played on the debut schedule: the keepsakes this save held
     // under the old one are recorded once, from the save as it stands (`keepsakeLegacy.ts`).
     keptKeepsakes();
+    // And the gates its stars already meet count as opened: tap-to-open is for gates met from
+    // here on, not for a road already walked under the old rule (`areaGates.ts`).
+    recordGateBaseline(loadProgress());
 
     if (import.meta.env.DEV) {
       const params = new URLSearchParams(location.search);

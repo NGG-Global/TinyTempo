@@ -489,6 +489,7 @@ describe('every gameplay event, as the game actually fires it', () => {
     ledger.beginPractice(2)!.complete(60);
     ledger.beginConceptIntro('triplet', 43, 'frontier')!.complete(2, 64.6, true);
     ledger.scrapbookOpened('menu', 3, 32);
+    ledger.areaOpened(1, 14);
     ledger.collectibleUnlocked({ id: 'bug-ladybird', vignette: 'bug', level: 28 }, false, 4);
     // A flawless level: groove 2 and 3 reached, then mastered.
     const locked = start(2, road(1, 3));

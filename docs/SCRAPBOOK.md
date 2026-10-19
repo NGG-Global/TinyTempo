@@ -184,3 +184,26 @@ reveal card with and without the refunded-heart plaque, and first versus later n
 reveal was attached to a real result screen rather than earned, because that environment
 renders at ~12 fps and its replayed taps cannot score three stars. Not yet seen on a device
 or a tablet.
+
+## Area badges
+
+The book's first page, across its whole width, is the road's: a badge for every area
+(`ui/areaBadge.ts`).
+
+- **What a badge shows.** A brass-rimmed medallion with the area's sky over its ground, a low
+  sun, and the first of the area's two roadside props, the same silhouette the map plants. A
+  badge from a later lap of the road (Grass II) carries a brass dot for each lap past the
+  first.
+- **How it is earned.** The badge is the player's once the area has been opened, stamped by
+  the gate's unlock on the map (`docs/STAR_GATES.md`). Grass's is earned on the first cleared
+  level.
+- **Unearned.** Shown as a pressed padlock captioned with the level the gate stands before.
+  It is a padlock rather than the prop's silhouette because several props carry colours of
+  their own.
+- **Touching a badge** names it and says where it was opened, or what its gate asks for.
+- **Which badges are listed.** Every area of the first lap, and past that as far as the next
+  area still to open (`badgeAreas`), so there is always one to aim at.
+- **Storage.** Ownership is derived (`ownsAreaBadge` in `game/areaGates.ts`) from the save and
+  the device's gate record. It reads the same record the map does, and adds nothing to a
+  save.
+- **The tally.** The tag in the corner still counts keepsakes only.

@@ -42,6 +42,7 @@ export const GAMEPLAY_EVENTS = [
   'star_improved',
   'star_gate_reached',
   'star_gate_opened',
+  'area_opened',
   'concept_intro_shown',
   'concept_intro_completed',
   'scrapbook_opened',
@@ -192,7 +193,7 @@ export interface AnalyticsPayloads {
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
 
   readonly tutorial_started: {
-    readonly source: 'first_play' | 'menu';
+    readonly source: 'first_play' | 'menu' | 'settings';
     readonly repeat: Flag;
     /**
      * The page clock when the lesson opened: on a cold start, roughly the time from launch,
@@ -298,6 +299,16 @@ export interface AnalyticsPayloads {
     readonly replays?: number;
     readonly improvements?: number;
     readonly stars_gained?: number;
+  };
+  /**
+   * The player tapped a ready gate open on the map (`game/areaGates.ts`): the unlock and the
+   * area's badge. `star_gate_opened` is when the stars met the ask; this is the tap after it.
+   */
+  readonly area_opened: {
+    /** 1-based area opened, and the level its gate stands in front of. */
+    readonly area: number;
+    readonly level: number;
+    readonly gate_have: number;
   };
   /** The first meeting with a new kind of rhythm began, on this level (`game/conceptIntro.ts`). */
   readonly concept_intro_shown: { readonly concept: Concept; readonly level: number; readonly mode: AttemptMode };

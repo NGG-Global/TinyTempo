@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { AudioEngine } from '@/audio/AudioEngine';
-import { hushMusic, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { hushMusic, sharedAudio, stopTheme, toggleMute } from '@/audio/sharedAudio';
 import { syncClockCalibration } from '@/audio/audioRoute';
 import { RHYTHM } from '@/config/rhythm';
 import { SceneKey } from '@/config/scenes';
@@ -24,7 +24,7 @@ import { drawSpeaker } from '@/ui/icons';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { settle, squash } from '@/ui/spring';
-import { batonCrossing, blockGeometry, blockWidth, columnRoom, drawBlock, faceLift, TRACK, type Ghost } from '@/ui/turnBlock';
+import { batonCrossing, blockGeometry, blockScale, blockWidth, columnRoom, drawBlock, faceLift, TRACK, type Ghost } from '@/ui/turnBlock';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 import { VIGNETTES } from '@/vignettes/registry';
@@ -103,13 +103,19 @@ export class TutorialScene extends BaseScene {
   private suspendedSince: number | null = null;
   private lastCopy = '';
 
+  /** Where Android's back leaves the lesson for: the screen that opened it. */
+  private backTo: { readonly key: SceneKey; readonly data?: object } = { key: SceneKey.Menu };
+
   public constructor() { super(SceneKey.Tutorial); }
 
   protected override build(): void {
     this.run = new TutorialRun();
-    const data = this.sys.settings.data as { source?: TutorialSource } | undefined;
+    const data = this.sys.settings.data as { source?: TutorialSource; from?: string } | undefined;
     const repeat = this.registry.get('tutorial-complete') === true || tutorialComplete();
-    this.visit = playAnalytics.beginTutorial(data?.source === 'menu' ? 'menu' : 'first_play', repeat);
+    const source: TutorialSource = data?.source === 'menu' || data?.source === 'settings' ? data.source : 'first_play';
+    this.visit = playAnalytics.beginTutorial(source, repeat);
+    // Opened from Settings, back goes back there; from anywhere else, to the title screen.
+    this.backTo = source === 'settings' ? { key: SceneKey.Settings, data: { from: data?.from === SceneKey.Map ? SceneKey.Map : SceneKey.Menu } } : { key: SceneKey.Menu };
     this.controller = null;
     this.watching = null;
     this.marks = [];
@@ -122,6 +128,8 @@ export class TutorialScene extends BaseScene {
     this.illustration = new HammerNailVignette(this, true);
     this.audio = sharedAudio(this);
     hushMusic(this);
+    // The lesson plays no music: the title theme too, when Settings brought it along.
+    stopTheme(this.audio);
     this.audio.setSounds(VIGNETTES[0]!.sounds(this.audio.context));
     this.panels = this.add.graphics().setDepth(10);
     this.signSurface = surface(this, MaterialKey.wood, this.sign, 1, SHELL.wood, 0.5).setDepth(11);
@@ -178,16 +186,18 @@ export class TutorialScene extends BaseScene {
     // The face sits where a level puts it relative to the thumb, and the labels take
     // the band around it.
     this.trackY = safe.bottom - 300 * s;
-    this.trackWidth = columnRoom(Math.min(620 * s, safe.width - 48 * s), s);
+    // The block at a level's size, so what is learned here is what is read there.
+    const b = blockScale(s);
+    this.trackWidth = columnRoom(Math.min(620 * b, safe.width - 48 * s), b);
     resize(this.theirsLabel, 21 * s, PALETTE.ink, STYLE.current, false);
     resize(this.yoursLabel, 21 * s, PALETTE.ink, STYLE.current, false);
     // The same offset under the face a level uses, so the count is met here where it
     // will be met there. The size is set per numeral in `drawTurnCall`.
-    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * s;
+    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
     this.turnCalls.forEach((text, i) => {
       const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
       text.setPosition(safe.centerX, this.turnCallY);
-      resize(text, (36 + 18 * weight) * s, mix(VIGNETTES[0]!.ink, PALETTE.coral, heat));
+      resize(text, (36 + 18 * weight) * b, mix(VIGNETTES[0]!.ink, PALETTE.coral, heat));
     });
     this.hideTurnCall();
     this.action.setTo(safe.centerX - 280 * s, safe.bottom - 194 * s, 560 * s, Math.max(100 * s, this.target));
@@ -433,7 +443,7 @@ export class TutorialScene extends BaseScene {
     const g = this.block.clear();
     this.hand.clear();
     const { safe } = this.viewport;
-    const s = this.s;
+    const s = blockScale(this.s);
     const still = reducedMotion();
     const plan = this.run.plan;
     const live = this.started && !this.paused && !this.busy && plan !== null;
@@ -442,7 +452,7 @@ export class TutorialScene extends BaseScene {
     const last = centres.at(-1) ?? 0;
     const span = last + radius + 34 * s;
     const beadSpan = last - (centres[0] ?? 0) + radius * 2;
-    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * s);
+    const width = Math.min(Math.max(span * 2, 220 * s, blockWidth(beadSpan, s)), safe.width - 48 * this.s);
     const geo = blockGeometry(safe.centerX, this.trackY, width, s);
     const turn = live ? handover(plan, now) : { runway: 0, yours: 0 };
     // Held on the answered picture once a pass is over, so the verdict can be read
@@ -507,7 +517,7 @@ export class TutorialScene extends BaseScene {
   private drawTurnCall(plan: RoundPlan | null, now: number, still: boolean): void {
     const call = plan && turnCount(plan, now);
     if (!plan || !call) { this.hideTurnCall(); return; }
-    const s = this.s;
+    const s = blockScale(this.s);
     const pose = turnCountPose(call, 60 / plan.bpm, still);
     const ink = mix(VIGNETTES[0]!.ink, PALETTE.coral, pose.heat);
     const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
@@ -595,7 +605,7 @@ export class TutorialScene extends BaseScene {
   }
 
   /**
-   * Android's back in the lesson goes back to the title screen it was opened from. It is
+   * Android's back in the lesson goes back to the screen it was opened from. It is
    * not *Skip*: nothing is stored, so the next Play opens the lesson again, and the visit's
    * last `tutorial_step_started` is where the funnel shows it was left.
    */
@@ -605,7 +615,7 @@ export class TutorialScene extends BaseScene {
     this.stop();
     this.illustration.pause();
     this.paused = true;
-    this.curtain.cover(() => this.scene.start(SceneKey.Menu));
+    this.curtain.cover(() => this.scene.start(this.backTo.key, this.backTo.data));
     return true;
   }
 

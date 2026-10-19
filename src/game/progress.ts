@@ -1,4 +1,5 @@
 import type { Concept } from './conceptIntro';
+import type { ScreenHintId } from './screenHints';
 import { levelSpec, starsFor } from './levels';
 
 export interface Progress {
@@ -176,8 +177,52 @@ export function markScrapbookSeen(storage: Storage | null = safeStorage()): bool
   return writeTeach(storage, { scrapbook: true });
 }
 
+/**
+ * Has the first-visit hint for this screen been closed (`game/screenHints.ts`)? Once each,
+ * ever, on this device. A hint is marked when it is closed rather than when it opens, so a
+ * player whose app was killed while reading it sees it again.
+ *
+ * Separate from `scrapbook`, which says what a keepsake is and is also set by the first
+ * reveal's longer note: a player told that on a result has still never been shown the book.
+ */
+export function seenScreenHint(id: ScreenHintId, storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage)[SCREEN_HINT_FLAG[id]] === true;
+}
+
+/** False means nothing was written, and the hint will simply be shown once more. */
+export function markScreenHintSeen(id: ScreenHintId, storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { [SCREEN_HINT_FLAG[id]]: true });
+}
+
+/**
+ * The first-visit labels on icon-only pucks — "Objectives" on the title screen, Endless's
+ * unlock rule on the map — stay until the puck has been opened once. Device-local, as the
+ * screen hints are. The Scrapbook's label goes with its screen hint, not with a flag of its own.
+ */
+export type LabelledPuck = 'objectives' | 'endless';
+
+export function seenPuck(puck: LabelledPuck, storage: Storage | null = safeStorage()): boolean {
+  return readTeach(storage)[PUCK_FLAG[puck]] === true;
+}
+
+/** False means nothing was written, and the label will simply show once more. */
+export function markPuckSeen(puck: LabelledPuck, storage: Storage | null = safeStorage()): boolean {
+  return writeTeach(storage, { [PUCK_FLAG[puck]]: true });
+}
+
+const PUCK_FLAG = { objectives: 'puckObjectives', endless: 'puckEndless' } as const satisfies Record<LabelledPuck, TeachFlag>;
+
+const SCREEN_HINT_FLAG = {
+  scrapbook: 'hintScrapbook',
+  settings: 'hintSettings',
+  endless: 'hintEndless',
+} as const satisfies Record<ScreenHintId, TeachFlag>;
+
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
-export const TEACH_FLAGS = ['seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase'] as const;
+export const TEACH_FLAGS = [
+  'seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase',
+  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless',
+] as const;
 export type TeachFlag = typeof TEACH_FLAGS[number];
 type Teach = { readonly [K in TeachFlag]?: unknown };
 

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import { AREAS, levelSpec, starsFor } from '../src/game/levels';
-import { nextGateChip, nextStarCopy, offersReplay, replayCopy, scoreLabel, thresholdLabels } from '../src/game/resultCopy';
+import { nextGateChip, nextStarCopy, offersReplay, progressCopy, replayCopy, scoreLabel, thresholdLabels, type ResultProgress } from '../src/game/resultCopy';
 import { contrastRatio } from '../src/ui/colour';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -82,5 +82,27 @@ describe('the score under the medals', () => {
     const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
     expect(scene).toContain('this.scoreValue.setText(scoreLabel(accuracy));');
     expect(scene).not.toMatch(/scoreValue\.setText\(`\$\{Math\.round/);
+  });
+
+  it('says what the run changed, in at most two lines, and nothing on a run that changed nothing', () => {
+    const base: ResultProgress = { level: 13, accuracy: 81.4, cleared: true, bestBefore: 74.9, starsBefore: 1, starsAfter: 2, totalStars: 39, finale: false };
+    expect(progressCopy(base)).toEqual([
+      { kind: 'stars', text: '+1 star · 39 in all' },
+      { kind: 'best', text: 'New best, up from 74%' },
+    ]);
+    // A first clear: the stars it brought and where Continue leads.
+    expect(progressCopy({ ...base, bestBefore: null, starsBefore: 0, starsAfter: 3, totalStars: 39 })).toEqual([
+      { kind: 'stars', text: '+3 stars · 39 in all' },
+      { kind: 'next', text: 'Up next: level 14' },
+    ]);
+    // A new best that adds no star, on a replay: no "Up next", since Continue does not lead on.
+    expect(progressCopy({ ...base, starsBefore: 2 })).toEqual([{ kind: 'best', text: 'New best, up from 74%' }]);
+    // Under a whole percent is not a new best: both numbers would read the same.
+    expect(progressCopy({ ...base, starsBefore: 2, accuracy: 74.95, bestBefore: 74.2 })).toEqual([]);
+    // A replay below its best, and a failed run, report nothing.
+    expect(progressCopy({ ...base, accuracy: 60, starsBefore: 2, starsAfter: 2 })).toEqual([]);
+    expect(progressCopy({ ...base, cleared: false })).toEqual([]);
+    // A finale's own card names the gate, so a first-clear finale says only its stars.
+    expect(progressCopy({ ...base, level: 10, bestBefore: null, starsBefore: 0, finale: true })).toEqual([{ kind: 'stars', text: '+2 stars · 39 in all' }]);
   });
 });

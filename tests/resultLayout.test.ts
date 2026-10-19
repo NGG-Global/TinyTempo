@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  chipSeat, keepsakeCardHeight, KEEPSAKE_CARD, medalSeat, planResult, PLATE, RESULT_ROWS, trayRect, type ResultNeeds,
+  chipSeat, keepsakeCardHeight, KEEPSAKE_CARD, medalSeat, planResult, PLATE, progressHeight, RESULT_ROWS, trayRect, type ResultNeeds,
 } from '../src/ui/resultLayout';
 
 /** A star's extent round its centre: the top point, the two lower points, the widest arms. */
@@ -105,6 +105,28 @@ describe('the result stack', () => {
         ...(needs.finale ? ['finale'] : []), ...(needs.strip ? ['strip'] : []), ...(needs.keepsake > 0 ? ['keepsake'] : []),
       ]);
     }
+  });
+
+  it('lays out what the run changed only where it fits without shrinking the plaque', () => {
+    for (const f of FRAMES) for (const base of allNeeds(f.s)) for (const progress of [1, 2]) {
+      const frame = frameFor(f), without = planResult(frame, base), withRow = planResult(frame, { ...base, progress });
+      const label = `${f.name} ${JSON.stringify(base)} +${progress}`;
+      // Never at the plaque's expense, and never past the floor.
+      expect(withRow.k, label).toBe(without.k);
+      const kinds = withRow.rows.map(r => r.kind);
+      const shown = kinds.includes('progress');
+      if (shown) {
+        // After the next star, before the keepsake: the same place every time.
+        const order = ['finale', 'mastery', 'strip', 'progress', 'keepsake'];
+        expect([...kinds].sort((a, b) => order.indexOf(a) - order.indexOf(b)), label).toEqual(kinds);
+        expect(withRow.rows.find(r => r.kind === 'progress')!.height, label).toBeCloseTo(progressHeight(progress, f.s), 6);
+        const last = withRow.rows.at(-1)!;
+        expect(last.y + last.height, label).toBeLessThanOrEqual((withRow.replayY ?? frame.blockTop) + 1e-6);
+      } else expect(withRow, label).toEqual(without);
+    }
+    // On a tall phone with the strip and the replay, there is room for two lines.
+    const tall = planResult(frameFor(FRAMES[1]), { refund: true, finale: false, strip: true, keepsake: 0, replay: true, progress: 2 });
+    expect(tall.rows.map(r => r.kind)).toEqual(['strip', 'progress']);
   });
 
   it('only shrinks the plaque when the frame is short, and hangs it the same way when it is not', () => {
