@@ -19,14 +19,19 @@ import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, 
 import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
-import { areaIndexOf, areaOpen, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
+import { areaIndexOf, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
 import { mapMastered } from '@/game/mastery';
 import { watchForHeart } from '@/game/restart';
 import { MaterialKey } from '@/textures/materials';
 import { mix, relativeLuminance, shade, starColour } from '@/ui/colour';
 import { fillContour, traceContour } from '@/ui/illustration';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
-import { FxKey } from '@/ui/feedback';
+import { Feedback, FxKey } from '@/ui/feedback';
+import { areaOpened, badgeName, gateState, loadGates, lowestUnopened, openArea, type GateRecord, type GateState } from '@/game/areaGates';
+import { drawAreaBadge, drawGateLock } from '@/ui/areaBadge';
+import { BADGE_STAMP_AT, ceremonyPose, GATE_CEREMONY, readyPose } from '@/ui/gateCeremony';
+import { createUnlockSound } from '@/audio/gateSounds';
+import { createFinaleSound } from '@/audio/finaleSounds';
 import { dashes, pathIndexAt, pathXAt, smoothPath, type Point } from '@/ui/path';
 import {
   beyondY, buntingPosts, CREST, crestY, crownHollow, crownSeats, FINALE_STOP, finalePlate, finaleStageBounds, finaleStopLook, GATE,
@@ -64,6 +69,20 @@ import { definitionForLap } from '@/vignettes/Vignette';
 const HAZE_ALPHA = 0.88;
 
 /** Design-unit metrics of the road map; every one is multiplied by the viewport scale. */
+/** How a live gate's plate is posed: ready and breathing, or under the thumb and springing open. */
+interface GateLook {
+  readonly ready: boolean;
+  readonly glow: number;
+  /** The ring leaving a ready plate, 0–1 through its travel; 0 for none. */
+  readonly ring: number;
+  readonly bob: number;
+  readonly wiggle: number;
+  readonly press: number;
+  readonly lockOpen: number;
+  readonly plateAlpha: number;
+  readonly plateDrop: number;
+}
+
 /** The frontier's puck: cream with the ink number. The map's one coral is the Play disc. */
 const FRONTIER_PUCK = { fill: SHELL.cream, number: PALETTE.ink } as const;
 
@@ -313,7 +332,25 @@ export class MapScene extends BaseScene {
    * every frame to show that.
    */
   private liveGate = -1;
-  private gateLiftAt = -Infinity;
+  /** Which areas this device has opened by their gates (`game/areaGates.ts`). */
+  private gateRecord: GateRecord = { opened: 0 };
+  /**
+   * The unlock playing, from the tap that opened `area`: `cleared` once its bar is off the
+   * road and the frontier behind it freed, and the beats already struck so each lands once.
+   */
+  private ceremony: { area: number; at: number; cleared: boolean; popped: boolean; stamped: boolean } | null = null;
+  /** When the live gate became ready this visit (a landing star met it), for its entrance flash. */
+  private readySince = -Infinity;
+  /** Where a tap opens the ready gate: its bar and plate, in world space. */
+  private gateHit = new Phaser.Geom.Rectangle();
+  /** The ready gate and the ceremony, drawn every frame they move rather than rasterised. */
+  private gateFx!: Phaser.GameObjects.Graphics;
+  private fx!: Feedback;
+  /** The banner the badge stamps into, in screen space over the road. */
+  private bannerPlate!: Phaser.GameObjects.Graphics;
+  private bannerBadge!: Phaser.GameObjects.Graphics;
+  private bannerTitle!: Phaser.GameObjects.Text;
+  private bannerNote!: Phaser.GameObjects.Text;
   private frontierIndex = -1;
   private dockRect = new Phaser.Geom.Rectangle();
   private blockRect = new Phaser.Geom.Rectangle();
@@ -413,8 +450,12 @@ export class MapScene extends BaseScene {
     this.tallyShown = this.flightSettled ? this.stars : this.stars - (this.earned!.after - this.earned!.before);
     this.landedCount = 0;
     this.landedAt = -Infinity;
-    this.gateLiftAt = -Infinity;
-    this.liveGate = firstClosedArea(this.tallyShown);
+    this.gateRecord = loadGates(this.progress);
+    this.ceremony = null;
+    this.readySince = -Infinity;
+    this.gateHit.setTo(0, 0, 0, 0);
+    // The first gate still standing — closed, or ready for its tap — is drawn live.
+    this.liveGate = lowestUnopened(this.progress, this.gateRecord);
     const view = mapWindow(this.progress.unlocked, this.focus);
     this.first = view.first;
     this.shown = view.shown;
@@ -440,6 +481,10 @@ export class MapScene extends BaseScene {
     this.pulse = this.add.graphics().setDepth(3);
     this.gate = new BakedLayer(this, this.add.graphics().setDepth(3), world);
     this.gateDrawn = '';
+    this.gateFx = this.add.graphics().setDepth(3.2);
+    this.fx = new Feedback(this, 3.4);
+    this.fx.prime('sparks', [BRASS, SHELL.cream, STAR_PRIZE]);
+    this.fx.prime('confetti', [PALETTE.coral, SHELL.cream, STAR_PRIZE]);
     this.feedback = this.add.graphics().setDepth(3);
     this.ambience = new MapAmbience(this);
     this.ambienceFocused = true;
@@ -504,6 +549,11 @@ export class MapScene extends BaseScene {
     this.tallyGoal = body(this, '', { size: 22, colour: PALETTE.muted }).setOrigin(1, 0.5).setScrollFactor(0).setDepth(11);
     // Above the bench and the sign: a star in the air crosses both on its way down.
     this.flight = this.add.graphics().setScrollFactor(0).setDepth(13);
+    // The unlock's banner, over the road and under the sheets a puck can open.
+    this.bannerPlate = this.add.graphics().setScrollFactor(0).setDepth(14).setVisible(false);
+    this.bannerBadge = this.add.graphics().setScrollFactor(0).setDepth(15).setVisible(false);
+    this.bannerTitle = display(this, '', { size: 40, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(15).setVisible(false);
+    this.bannerNote = label(this, 'Area badge collected', { size: 19, colour: PALETTE.muted }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(15).setVisible(false);
     this.restScrim = this.add.graphics().setScrollFactor(0).setDepth(19).setVisible(false);
     this.restPlate = this.add.graphics().setScrollFactor(0).setDepth(20);
     this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.28).setScrollFactor(0).setDepth(20);
@@ -838,9 +888,17 @@ export class MapScene extends BaseScene {
   private heldBy(level: number): StarGate | null {
     if (levelStars(this.progress, level) > 0) return null;
     const area = areaIndexOf(level);
-    if (areaOpen(area, this.tallyShown)) return null;
+    // A met gate still holds its first level until it is tapped open: `short` 0 is "ready".
+    if (this.gateAt(area, this.tallyShown) === 'open') return null;
     const required = starsRequired(area);
-    return { area, level: firstLevelOfArea(area), required, have: this.tallyShown, short: required - this.tallyShown };
+    return { area, level: firstLevelOfArea(area), required, have: this.tallyShown, short: Math.max(0, required - this.tallyShown) };
+  }
+
+  /** An area's gate against a star count: closed, ready for its tap, or open. */
+  private gateAt(area: number, stars: number): GateState {
+    // A gate being tapped open still stands until its bar is off the road.
+    if (this.ceremony?.area === area && !this.ceremony.cleared) return 'ready';
+    return gateState(area, stars, this.progress, this.gateRecord);
   }
 
   /** The gate the shown count is working toward: the first one it does not open. */
@@ -1362,7 +1420,7 @@ export class MapScene extends BaseScene {
   private drawOpenGates(g: Phaser.GameObjects.Graphics, s: number, strip: Strip): void {
     for (let k = 0; k < this.gateTexts.length; k++) {
       const area = this.firstBand + k;
-      if (area < 1 || area === this.liveGate || !areaOpen(area, this.stars)) continue;
+      if (area < 1 || area === this.liveGate || !areaOpened(area, this.progress, this.gateRecord)) continue;
       const y = this.boundaryY(area);
       if (y === null || y < strip.top || y >= strip.bottom) continue;
       this.drawBarrier(g, this.roadXAt(y), y, s, areaOf(firstLevelOfArea(area)).area, false, 1, 0, null);
@@ -1386,8 +1444,13 @@ export class MapScene extends BaseScene {
         goal.setText('').setVisible(false);
         continue;
       }
-      this.placeGateSign(k, this.roadXAt(y), y, s, area === this.liveGate ? this.tallyShown : null, starsRequired(area));
+      this.placeGateSign(k, this.roadXAt(y), y, s, area === this.liveGate ? this.tallyShown : null, starsRequired(area), area === this.liveGate && this.liveReady());
     }
+  }
+
+  /** Whether the live gate is met and waiting for its tap (or being tapped open). */
+  private liveReady(): boolean {
+    return this.liveGate >= 1 && (this.ceremony?.area === this.liveGate || this.gateAt(this.liveGate, this.tallyShown) === 'ready');
   }
 
   /**
@@ -1396,8 +1459,8 @@ export class MapScene extends BaseScene {
    * open against the collection.
    */
   private gateClosed(area: number): boolean {
-    if (area === this.liveGate) return this.gateLiftAt === -Infinity || performance.now() / 1000 - this.gateLiftAt < MAP.barrier.liftSec + MAP.barrier.barFadeSec;
-    return !areaOpen(area, this.stars);
+    if (area === this.liveGate) return true;
+    return !areaOpened(area, this.progress, this.gateRecord);
   }
 
   /** The barrier of every closed gate standing in this strip, but the live one. */
@@ -1416,11 +1479,12 @@ export class MapScene extends BaseScene {
    * `/ need` on the gate being worked toward, or the requirement alone further up the road.
    * World objects at the barrier, so the plate is never anywhere but on its own road.
    */
-  private placeGateSign(k: number, x: number, y: number, s: number, have: number | null, need: number): void {
+  private placeGateSign(k: number, x: number, y: number, s: number, have: number | null, need: number, ready = false): void {
     const sign = this.gateTexts[k]!, goal = this.gateGoals[k]!;
-    sign.setText(String(have ?? need));
-    resize(sign, 28 * s, PALETTE.ink, STYLE.current, false);
-    goal.setText(have === null ? '' : `/ ${need}`);
+    // A met gate asks for the tap instead of counting: the stars have done their part.
+    sign.setText(ready ? 'Tap to open' : String(have ?? need));
+    resize(sign, (ready ? 25 : 28) * s, PALETTE.ink, STYLE.current, false);
+    goal.setText(have === null || ready ? '' : `/ ${need}`);
     resize(goal, 22 * s, PALETTE.muted, STYLE.current, false);
     const layout = this.gatePlateLayout(k, x, s);
     const cy = gatePlateTop(y, s) + GATE.plate.height * s / 2;
@@ -1448,14 +1512,14 @@ export class MapScene extends BaseScene {
     const k = this.liveGate - this.firstBand;
     const y = this.gateTexts[k] && this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
     if (y === null) return;
-    this.placeGateSign(k, this.roadXAt(y), y, this.uiScale, this.tallyShown, starsRequired(this.liveGate));
+    this.placeGateSign(k, this.roadXAt(y), y, this.uiScale, this.tallyShown, starsRequired(this.liveGate), this.liveReady());
   }
 
   /**
    * Two posts, a striped bar pivoting on the left one, and a plate hanging under it.
    * `lift` is 0 for a bar across the road and 1 for one swung clear of it.
    */
-  private drawBarrier(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, area: Area, active: boolean, lift: number, bar: number, plate: number | null): void {
+  private drawBarrier(g: Phaser.GameObjects.Graphics, x: number, y: number, s: number, area: Area, active: boolean, lift: number, bar: number, plate: number | null, look?: GateLook): void {
     const B = GATE;
     const half = (MAP.roadWidth / 2 + B.reach) * s;
     const post = B.post * s, height = B.height * s;
@@ -1483,7 +1547,8 @@ export class MapScene extends BaseScene {
     const slab = (from: number, to: number, colour: number, alpha = 1, inset = 0): void => {
       g.fillStyle(colour, alpha * bar).fillPoints([at(from, -thick / 2 + inset), at(to, -thick / 2 + inset), at(to, thick / 2 - inset), at(from, thick / 2 - inset)], true);
     };
-    const stripeA = active ? PALETTE.coral : shade(area.ground, -0.28);
+    // A ready gate's bar is brass: the ask is met, and the bar is now the thing to tap.
+    const stripeA = look?.ready ? BRASS : active ? PALETTE.coral : shade(area.ground, -0.28);
     const stripeB = active ? SHELL.cream : mix(area.paper, area.ground, 0.3);
     if (lift < 0.05) {
       g.fillStyle(0x1a1410, shadow.alpha * bar).fillPoints([at(0, thick * 0.6 + 4 * s), at(length, thick * 0.6 + 4 * s), at(length, thick * 0.9 + 4 * s), at(0, thick * 0.9 + 4 * s)], true);
@@ -1501,21 +1566,38 @@ export class MapScene extends BaseScene {
     // worked toward is the brighter of the two creams.
     if (plate !== null) {
       const sign = this.gateTexts[plate]!, goal = this.gateGoals[plate]!;
-      const alpha = Math.max(0, 1 - Math.min(1, lift * 2));
+      const alpha = look ? look.plateAlpha : Math.max(0, 1 - Math.min(1, lift * 2));
       sign.setAlpha(alpha);
       goal.setAlpha(alpha);
       if (alpha > 0) {
         const layout = this.gatePlateLayout(plate, x, s);
-        const w = layout.width, h = B.plate.height * s, r = B.plate.radius * s;
+        const press = look?.press ?? 0;
+        const w = layout.width * (1 + press * 0.06), h = B.plate.height * s * (1 - press * 0.14), r = B.plate.radius * s;
         const barBottom = pivot.y + thick / 2;
-        const top = gatePlateTop(y, s);
+        const top = gatePlateTop(y, s) + ((look?.bob ?? 0) + (look?.plateDrop ?? 0)) * s + B.plate.height * s * press * 0.14;
+        if (look) {
+          // The plate's halo: warm, breathing, the brightest thing on the road while it waits,
+          // and a ring that leaves it once a breath, so the eye finds it from anywhere on screen.
+          const glow = look.glow * alpha;
+          g.fillStyle(0xffe7a0, 0.45 * glow).fillRoundedRect(x - w / 2 - 14 * s, top - 12 * s, w + 28 * s, h + 24 * s, r + 12 * s);
+          g.fillStyle(0xffe7a0, 0.25 * glow).fillRoundedRect(x - w / 2 - 30 * s, top - 26 * s, w + 60 * s, h + 52 * s, r + 26 * s);
+          if (look.ring > 0 && look.ring < 1) {
+            const grow = 10 + look.ring * 46;
+            g.lineStyle((4 - look.ring * 3) * s, STAR_PRIZE, (1 - look.ring) * 0.8 * alpha)
+              .strokeRoundedRect(x - w / 2 - grow * s, top - grow * s, w + grow * 2 * s, h + grow * 2 * s, r + grow * s);
+          }
+          const cy = top + h / 2;
+          sign.setPosition(layout.count, cy + 1 * s);
+          goal.setPosition(layout.goal, cy + 2 * s);
+        }
         g.lineStyle(2.5 * s, SHELL.rope, alpha).lineBetween(x - w * 0.3, barBottom, x - w * 0.3, top).lineBetween(x + w * 0.3, barBottom, x + w * 0.3, top);
         const fill = active ? SHELL.cream : SHELL.puck;
         g.fillStyle(0x1a1410, shadow.alpha * alpha).fillRoundedRect(x - w / 2 + shadow.dx * s, top + shadow.dy * s + 5 * s, w, h, r);
         g.fillStyle(faces(fill).shade, alpha).fillRoundedRect(x - w / 2, top + 4 * s, w, h, r);
         g.fillStyle(fill, alpha).fillRoundedRect(x - w / 2, top, w, h, r);
         g.lineStyle(STYLE.current.outline * s * 0.5, shade(fill, -0.62), alpha).strokeRoundedRect(x - w / 2, top, w, h, r);
-        drawStar(g, layout.star, top + h / 2, 12 * s, STAR_PRIZE, alpha);
+        if (look?.ready) drawGateLock(g, layout.star, top + h / 2 + 2 * s, 22 * s, BRASS, look.lockOpen, look.wiggle);
+        else drawStar(g, layout.star, top + h / 2, 12 * s, STAR_PRIZE, alpha);
       }
     }
   }
@@ -1561,6 +1643,22 @@ export class MapScene extends BaseScene {
    * the shown count, so only the strips holding those two are painted again — the rest keep
    * their rasters, and the frame the last star lands on stays light.
    */
+  /** Paint again the strips holding these levels, and everything that reads the gates. */
+  private rebakeAround(levels: readonly number[]): void {
+    const s = this.uiScale;
+    const touched = levels
+      .map(level => this.stripOf(level - this.first))
+      .filter((strip, i, all): strip is Strip => strip !== undefined && all.indexOf(strip) === i);
+    for (const strip of touched) if (strip.painted) this.paintStrip(strip);
+    this.frontierIndex = this.findFrontier();
+    this.drawFrontier(s);
+    this.placeGateSigns(s);
+    this.drawDock(s, 0);
+    this.drawTally(s, performance.now() / 1000);
+    this.pressDirty = true;
+    this.cullStrips();
+  }
+
   private rebake(): void {
     const s = this.uiScale;
     const touched = [this.earned?.level, this.progress.unlocked]
@@ -1733,8 +1831,11 @@ export class MapScene extends BaseScene {
     const bx = this.blockRect.x, by = this.blockRect.y + sink;
     // Held at a gate, the block stops being the next level's and becomes the errand:
     // how many stars the area wants, and a way back down the road to find them.
-    this.dockTitle.setText(held !== null ? `${held.short} more ${held.short === 1 ? 'star' : 'stars'} for ${areaOf(held.level).name}`
-      : spec.finale ? `Finale: ${definition.title}` : definition.title);
+    // Met but not yet opened, it is the invitation: the coral disc opens the gate.
+    const ready = held !== null && held.short === 0;
+    this.dockTitle.setText(ready ? `Open ${areaOf(held.level).name}`
+      : held !== null ? `${held.short} more ${held.short === 1 ? 'star' : 'stars'} for ${areaOf(held.level).name}`
+        : spec.finale ? `Finale: ${definition.title}` : definition.title);
     // Caption size on cream: the same undressed Fredoka the locked numbers use, so the
     // outline does not close the counters on a 30-unit word.
     resize(this.dockTitle, 30 * s, PALETTE.ink, STYLE.current, false);
@@ -1746,6 +1847,9 @@ export class MapScene extends BaseScene {
     if (held === null) {
       drawDisc(g, cx, cy, r, s, { fill: PALETTE.coral, depth: 9, press });
       drawPlay(g, cx + 2 * s, cy + 9 * s * press * 0.8, r * 0.42, SHELL.cream);
+    } else if (ready) {
+      drawDisc(g, cx, cy, r, s, { fill: PALETTE.coral, depth: 9, press });
+      drawGateLock(g, cx, cy + 4 * s + 9 * s * press * 0.8, r * 0.62, SHELL.cream, this.ceremony ? 1 : 0);
     } else {
       // Brass, and a chevron back down the road: the tap replays the finished level with
       // the most to give, which never costs a heart.
@@ -2296,6 +2400,7 @@ export class MapScene extends BaseScene {
       }
     }
     this.drawLiveGate(s, now, still);
+    this.stepCeremony(s, now, still);
     if (!this.flightSettled) this.drawFlight(s, now);
     if (now - this.landedAt < STAR_FLIGHT.ring) this.drawTally(s, now);
     // A tapped locked puck: its number squashes and a ring says "not yet".
@@ -2348,25 +2453,146 @@ export class MapScene extends BaseScene {
   }
 
   /**
-   * The gate the collection is working toward, live: its sign counts the landings and its
-   * bar lifts on the one that meets it. Under reduced motion a met gate is simply up. Drawn
-   * again only when what it shows has moved — a count, a bar on its way up — so a gate
-   * standing still is a raster like the rest of the road.
+   * The gate the collection is working toward, live. Closed, its sign counts the landings
+   * and it is a raster between them. Met, it is **ready**: brass-striped, its plate glowing and
+   * asking for the tap, its lock nudging — drawn every frame on `gateFx`, since it moves. And
+   * tapped, it plays the unlock (`ui/gateCeremony.ts`).
    */
   private drawLiveGate(s: number, now: number, still: boolean): void {
     const liveY = this.liveGate >= 1 ? this.boundaryY(this.liveGate) : null;
-    if (liveY === null) return;
-    const lifting = this.gateLiftAt > -Infinity;
-    const age = now - this.gateLiftAt;
-    const lift = !lifting ? 0 : still ? 1 : spring(age / MAP.barrier.liftSec, 4.2, 1.6);
-    // Once up, the bar goes and the posts stay, as every passed gate's do.
-    const bar = !lifting ? 1 : still ? 0 : Math.max(0, 1 - (age - MAP.barrier.liftSec) / MAP.barrier.barFadeSec);
+    const fx = this.gateFx.clear();
+    if (liveY === null) { this.gateHit.setTo(0, 0, 0, 0); return; }
     const k = this.liveGate - this.firstBand;
-    const key = `${lift.toFixed(4)}|${bar.toFixed(4)}|${this.gateTexts[k]?.text ?? ''}`;
-    if (key === this.gateDrawn) return;
-    this.gateDrawn = key;
-    this.drawBarrier(this.gate.graphics.clear(), this.roadXAt(liveY), liveY, s, areaOf(firstLevelOfArea(this.liveGate)).area, true, lift, bar, this.gateTexts[k] ? k : null);
-    this.gate.invalidate();
+    const plate = this.gateTexts[k] ? k : null;
+    const x = this.roadXAt(liveY);
+    const area = areaOf(firstLevelOfArea(this.liveGate)).area;
+    const ceremony = this.ceremony?.area === this.liveGate ? this.ceremony : null;
+    if (!ceremony && !this.liveReady()) {
+      this.gateHit.setTo(0, 0, 0, 0);
+      const key = `closed|${this.gateTexts[k]?.text ?? ''}`;
+      if (key === this.gateDrawn) return;
+      this.gateDrawn = key;
+      this.drawBarrier(this.gate.graphics.clear(), x, liveY, s, area, true, 0, 1, plate);
+      this.gate.invalidate();
+      return;
+    }
+    // Ready or opening: off the raster and onto the live layer.
+    if (this.gateDrawn !== 'live') {
+      this.gateDrawn = 'live';
+      this.gate.graphics.clear();
+      this.gate.invalidate();
+    }
+    const half = (MAP.roadWidth / 2 + GATE.reach) * s;
+    this.gateHit.setTo(x - half - 20 * s, liveY - GATE.height * s - 30 * s, half * 2 + 40 * s, GATE.height * s + 30 * s + gatePlateTop(liveY, s) - liveY + GATE.plate.height * s + 20 * s);
+    if (ceremony) {
+      const pose = ceremonyPose(now - ceremony.at, still);
+      this.drawBarrier(fx, x, liveY, s, area, true, pose.lift, pose.bar, plate, {
+        ready: true, glow: 1 - pose.lockOpen * 0.6, ring: 0, bob: 0, wiggle: pose.lockShake, press: pose.press,
+        lockOpen: pose.lockOpen, plateAlpha: pose.plateAlpha, plateDrop: pose.plateDrop,
+      });
+      return;
+    }
+    const ready = readyPose(now, still);
+    // The landing that met it flashes the plate once, brighter than its breathing.
+    const flash = still ? 0 : Math.max(0, 1 - (now - this.readySince) / 0.8);
+    this.drawBarrier(fx, x, liveY, s, area, true, 0, 1, plate, {
+      ready: true, glow: Math.min(1, ready.glow + flash), ring: ready.ring, bob: ready.bob, wiggle: ready.wiggle, press: 0,
+      lockOpen: 0, plateAlpha: 1, plateDrop: 0,
+    });
+  }
+
+  /**
+   * The player tapped a ready gate: write the area open, then play its unlock. Written
+   * first, so an app closed mid-ceremony keeps the area; the scene holds the record it got
+   * back whether or not storage took it.
+   */
+  private openGate(area: number): void {
+    if (this.ceremony || area !== this.liveGate || !this.liveReady() || this.curtain.active) return;
+    const now = performance.now() / 1000;
+    this.gateRecord = openArea(area, this.progress).record;
+    this.ceremony = { area, at: now, cleared: false, popped: false, stamped: false };
+    this.gateDrawn = '';
+    vibrate('tap');
+    // Bring the gate into view if it was opened from the bench while scrolled away.
+    const y = this.boundaryY(area);
+    if (y !== null && (y - this.scrollY < this.hudHeight || y - this.scrollY > this.footerTop)) {
+      this.velocity = 0;
+      this.scrollTo(firstLevelOfArea(area));
+    }
+    const audio = currentAudio(this);
+    if (audio && !this.reducedMotion) {
+      // The hasp's ring is 0.13 s into the voice: it lands on the pop.
+      audio.playStinger(audio.context.currentTime + Math.max(0, GATE_CEREMONY.popAt - 0.13), createUnlockSound(audio.context), 0.7);
+      audio.playStinger(audio.context.currentTime + BADGE_STAMP_AT - 0.05, createFinaleSound(audio.context, 'fanfare'), 0.5);
+    } else if (audio) {
+      audio.playStinger(audio.context.currentTime, createUnlockSound(audio.context), 0.7);
+    }
+    playAnalytics.areaOpened(area, this.tallyShown);
+    this.drawDock(this.uiScale, 0);
+  }
+
+  /** The unlock's beats that happen once — the pop, the road clearing, the stamp — and its banner. */
+  private stepCeremony(s: number, now: number, still: boolean): void {
+    const c = this.ceremony;
+    if (!c) return;
+    const age = now - c.at;
+    const pose = ceremonyPose(age, still);
+    const y = this.boundaryY(c.area);
+    if (!c.popped && age >= GATE_CEREMONY.popAt) {
+      c.popped = true;
+      vibrate('stamp');
+      if (y !== null && !still) {
+        const x = this.roadXAt(y), py = gatePlateTop(y, s) + GATE.plate.height * s / 2;
+        this.fx.burst('sparks', x, py, [BRASS, SHELL.cream, STAR_PRIZE], 18);
+        this.fx.burst('confetti', x, py - 20 * s, [PALETTE.coral, SHELL.cream, STAR_PRIZE, areaOf(firstLevelOfArea(c.area)).area.ground], 22);
+      }
+    }
+    if (!c.cleared && pose.cleared) {
+      // The bar is off the road: the gate becomes posts in the bake, and the frontier hops.
+      c.cleared = true;
+      this.liveGate = lowestUnopened(this.progress, this.gateRecord);
+      this.gateDrawn = '';
+      this.gateFx.clear();
+      this.rebakeAround([firstLevelOfArea(c.area), firstLevelOfArea(c.area) - 1]);
+    }
+    if (!c.stamped && age >= BADGE_STAMP_AT) {
+      c.stamped = true;
+      vibrate('hit');
+    }
+    this.drawBanner(s, c.area, pose);
+    if (pose.done) {
+      this.ceremony = null;
+      for (const part of [this.bannerPlate, this.bannerBadge, this.bannerTitle, this.bannerNote]) part.setVisible(false);
+    }
+  }
+
+  /** The banner the area's badge stamps into, under the header, over the road. */
+  private drawBanner(s: number, areaIndex: number, pose: ReturnType<typeof ceremonyPose>): void {
+    const shown = pose.banner.alpha > 0.01;
+    for (const part of [this.bannerPlate, this.bannerBadge, this.bannerTitle, this.bannerNote]) part.setVisible(shown);
+    if (!shown) return;
+    const { safe } = this.viewport;
+    const w = Math.min(560 * s, safe.width - 40 * s), h = 150 * s;
+    // A third of the way down the frame: clear of the header's pucks, over the road, never on the bench.
+    const x = safe.centerX - w / 2, y = safe.y + safe.height * 0.3 - h / 2 + pose.banner.rise * s;
+    const area = areaOf(firstLevelOfArea(areaIndex)).area;
+    const g = this.bannerPlate.clear().setAlpha(pose.banner.alpha);
+    drawPanel(g, new Phaser.Geom.Rectangle(x, y, w, h), s, { fill: SHELL.cream, depth: 10, radius: 26, hero: true });
+    // A band of the area's own ground down the badge's side: the colour of where it opens onto.
+    g.fillStyle(area.ground, 1).fillRoundedRect(x + 14 * s, y + 14 * s, 132 * s, h - 28 * s, 18 * s);
+    const bx = x + 80 * s, by = y + h / 2, br = 52 * s;
+    if (pose.badge.ring > 0) {
+      g.lineStyle((5 - 3.5 * pose.badge.ring) * s, STAR_PRIZE, 1 - pose.badge.ring).strokeCircle(bx, by, br * (1 + pose.badge.ring * 0.7));
+    }
+    const badge = this.bannerBadge.clear().setPosition(bx, by).setScale(pose.badge.scale).setRotation(pose.badge.spin).setAlpha(pose.badge.alpha * pose.banner.alpha);
+    drawAreaBadge(badge, areaIndex, 0, 0, br, true);
+    this.bannerTitle.setText(`${badgeName(areaIndex)} is open`);
+    resize(this.bannerTitle, 38 * s, PALETTE.ink);
+    const room = w - 176 * s;
+    this.bannerTitle.setScale(this.bannerTitle.width > room ? room / this.bannerTitle.width : 1);
+    this.bannerTitle.setPosition(x + 160 * s, by - 16 * s).setAlpha(pose.banner.alpha);
+    resize(this.bannerNote, 19 * s, PALETTE.muted, STYLE.current, false);
+    this.bannerNote.setPosition(x + 162 * s, by + 28 * s).setAlpha(pose.banner.alpha);
   }
 
   /**
@@ -2388,8 +2614,11 @@ export class MapScene extends BaseScene {
       // A tick per landing on the engine's own count voice, and the readiness tick for the last.
       audio?.play(audio.context.currentTime, landed === count ? 'ready' : 'count');
       this.refreshLiveSign();
-      // The landing that meets the ask lifts the bar, a beat after the count shows it.
-      if (this.gateLiftAt === -Infinity && this.liveGate >= 1 && areaOpen(this.liveGate, this.tallyShown)) this.gateLiftAt = now + 0.12;
+      // The landing that meets the ask makes the gate ready: it flashes and waits for the tap.
+      if (this.readySince === -Infinity && this.liveGate >= 1 && this.gateAt(this.liveGate, this.tallyShown) === 'ready') {
+        this.readySince = now;
+        this.refreshLiveSign();
+      }
       this.drawDock(s, 0);
     }
     const g = this.flight.clear();
@@ -2541,6 +2770,7 @@ export class MapScene extends BaseScene {
       this.pressDirty = true;
       const held = this.heldBy(this.progress.unlocked);
       if (held === null) { this.openLevel(this.progress.unlocked); return; }
+      if (held.short === 0) { this.openGate(held.area); return; }
       // The errand: the finished level with the most to give, or a look at the gate
       // itself when every finished level already has its three.
       const replay = levelToPolish(this.progress);
@@ -2550,11 +2780,16 @@ export class MapScene extends BaseScene {
     }
     if (y < this.hudHeight || y >= this.footerTop) return;
     const worldY = y + this.scrollY;
+    // A ready gate takes a tap on its bar or its plate.
+    if (this.gateHit.width > 0 && this.gateHit.contains(x, worldY)) { this.openGate(this.liveGate); return; }
     // A finale's hit area is its larger puck.
     const reach = (i: number) => Math.max(this.finaleTexts.has(i) ? FINALE_STOP.puck * this.uiScale : MAP.nodeRadius * this.uiScale, this.controlSize / 2);
     const index = this.nodes.findIndex((node, i) => Math.hypot(node.x - x, node.y - worldY) <= reach(i));
     if (index < 0) return;
-    if (this.first + index > this.progress.unlocked || this.heldBy(this.first + index) !== null) {
+    const holding = this.heldBy(this.first + index);
+    // The held frontier of a ready gate is the gate's to open, from its puck too.
+    if (holding !== null && holding.short === 0 && this.first + index <= this.progress.unlocked) { this.openGate(holding.area); return; }
+    if (this.first + index > this.progress.unlocked || holding !== null) {
       if (this.lockedIndex >= 0) this.numbers[this.lockedIndex]?.setScale(1);
       this.lockedIndex = index;
       this.feedbackAt = performance.now() / 1000;

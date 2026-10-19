@@ -12,7 +12,7 @@ import type { LevelOutcome, Progress } from './progress';
 import type { AudioRoute } from './routeCalibration';
 import type { RoundResult } from './scoring';
 import { median } from './timingReport';
-import { areaIndexOf, gateFor, levelStars, totalStars } from './stars';
+import { areaIndexOf, firstLevelOfArea, gateFor, levelStars, totalStars } from './stars';
 
 /**
  * Gameplay analytics: what the scenes report, and the rules that keep each report single.
@@ -565,6 +565,11 @@ export class PlayAnalytics {
 
   public scrapbookOpened(source: 'menu' | 'map', owned: number, total: number): void {
     guard(undefined, () => this.emit('scrapbook_opened', { source, owned, total }));
+  }
+
+  /** The player tapped a ready gate open on the map (`game/areaGates.ts`). `area` is 0-based here, 1-based as sent. */
+  public areaOpened(area: number, have: number): void {
+    guard(undefined, () => this.emit('area_opened', { area: area + 1, level: firstLevelOfArea(area), gate_have: have }));
   }
 
   /**

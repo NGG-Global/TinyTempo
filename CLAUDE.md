@@ -129,7 +129,15 @@ gate's count is written, so it can never sit under the header — the collection
 bench, and flies a finished level's new stars
 from its plate to the tally (`ui/starFlight.ts`); **while a flight is on, everything that
 reads the collection reads the shown count**, so nothing opens before the star that opens
-it has landed. See `docs/STAR_GATES.md`.
+it has landed. **A met gate opens on the player's tap, never by itself** (`game/areaGates.ts`,
+`ui/gateCeremony.ts`): it turns **ready** — brass bar, glowing plate, *Tap to open*, the bench's
+coral disc carrying a lock — and holds its first level until it is tapped (bar, plate, held
+puck or bench). The tap plays the unlock: press, the lock popping with sparks, confetti, the
+unlock voice and a buzz, the bar swinging off, and a banner stamping the area's badge. The
+device stores only the highest area opened by its gate (`tiny-tempo.gates.v1`), written
+before the ceremony plays. An area is also open once the player is past its first level, so
+no restore leaves a gate behind them, and the first launch of this build counts every gate
+the save already meets as opened (`recordGateBaseline`, in Preload). See `docs/STAR_GATES.md`.
 
 **Endless Mode is a ruleset, not a level** (`config/endless.ts`, `game/endless.ts`,
 `scenes/EndlessScene.ts`, `docs/ENDLESS_MODE.md`). It opens when level 100 is *cleared*
@@ -803,7 +811,10 @@ a keepsake players hold. Each has a drawing in `ui/keepsakes.ts` whose identifyi
 in `pen.detail`, which is what keeps it out of the silhouette. `ScrapbookScene` is reached from
 the book puck at the title screen's top left (the right-hand corner is the sign's rope at full
 swing); the result screen raises a card under the plaque a second into the summary, after the
-medals. The only stored bit is the `scrapbook` teach flag. See `docs/SCRAPBOOK.md`.
+medals. The only stored bit is the `scrapbook` teach flag. **Its first page is the area
+badges** (`ui/areaBadge.ts`): one medallion per area — its sky, ground and first prop in a brass
+rim — the player's once the area is opened (`ownsAreaBadge`), a pressed padlock until then,
+across the book's whole width. See `docs/SCRAPBOOK.md`.
 
 **The Scrapbook, Settings and Endless each open with a one-time hint** (`game/screenHints.ts`,
 `ui/screenHint.ts`): a card over the dimmed screen once the curtain is up, marked seen when
@@ -1059,6 +1070,7 @@ src/
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
     finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
+    gateSounds.ts      The unlock a ready gate is tapped open with, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
     backgroundSilence.ts  Suspends the one context while the game is off screen, by the page or the activity; resumes only its own suspend
     appLifecycle.ts    Native-only: the activity's pause and resume, which the WebView never passes to the page
@@ -1107,6 +1119,7 @@ src/
     scrapbook.ts       Keepsakes: which level earns each, and what a save owns
     screenHints.ts     The first-visit hints' words for the Scrapbook, Settings and Endless; pure
     keepsakeLegacy.ts  The keepsakes a device held before the debut schedule, recorded once and kept
+    areaGates.ts       Which gates are open, ready or closed; the device's tap-to-open record; area badges
     finale.ts          Area finales: the area, the next one, the treatment, the map's marks
     groove.ts          Groove: the level-local state a flawless task raises, and mastery; pure
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
@@ -1184,6 +1197,8 @@ src/
     screenHint.ts      A screen's first-visit hint card, on a camera of its own over the scene's
     hintLayout.ts      Where that card's rows sit, stacked from measured heights; pure
     puckLabel.ts       The first-visit tag beside an icon-only puck
+    gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
+    areaBadge.ts       An area's badge medallion and the springing padlock
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

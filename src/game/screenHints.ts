@@ -38,6 +38,7 @@ export const SCREEN_HINTS: Readonly<Record<ScreenHintId, ScreenHintCopy>> = Obje
     lines: [
       'Some levels hold a keepsake. Each empty slot names its level.',
       'Finish that level with three stars and the keepsake is yours.',
+      'Opening a new area on the map stamps its badge on the first page.',
       'Touch a keepsake to see where it came from.',
     ],
     action: 'Got it',

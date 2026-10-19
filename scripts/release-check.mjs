@@ -56,6 +56,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'The instant camera act', text: 'One for the album.', source: 'src/vignettes/registry.ts' },
   { feature: 'First-visit hints on the Scrapbook, Settings and Endless', text: 'Keepsakes for three stars', source: 'src/game/screenHints.ts' },
   { feature: 'How to play moves to Settings after the lesson', text: 'Take the short lesson again', source: 'src/scenes/SettingsScene.ts' },
+  { feature: 'Tap-to-open gates and area badges', text: 'Area badge collected', source: 'src/scenes/MapScene.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */
