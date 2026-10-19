@@ -47,6 +47,57 @@ a milestone earned signed out is handed over by the next sync from anywhere. An 
 or abandoned run writes no record and so earns nothing. The config is a union of three
 shapes (`clearLevel`, `endlessMs`, `endlessRuns`), append-only as before.
 
+## The third batch: ready to import, not yet created
+
+Thirty more, proposed and packaged for the Console's **Import achievements**
+(`store/achievements/tiny-tempo-achievements-batch-3.zip`), with a review sheet of every
+icon beside it (`store/achievements/preview.png`). Nothing in the game earns them yet: once
+the Console has created them, each is appended to `ACHIEVEMENTS` with its id, as the first
+ten were, and the rule shapes it needs are added (`stars`, `threeStarLevels`, `mastered`,
+`areaSweep`, `keepsakes`, `stamps`).
+
+| File | What it holds |
+| --- | --- |
+| `src/config/achievementImport.ts` | The batch: name, description, points, list order, the rule each will take, its icon. The one source. |
+| `src/ui/achievementArt.ts` | Each icon, drawn with the game's own helpers: the area badges, prize stars, keepsakes and glyphs. Not imported by the game. |
+| `scripts/achievement-import.mjs` | Runs the dev build in Chromium, rasterises every icon at 1024 through the canvas renderer and halves it to 512, writes both CSVs and zips them flat. |
+| `tests/achievementImport.test.ts` | Holds every row to the import's rules and to the game: no commas, unique names (the Console's ten included), points in fives from 5 to 200, each finale named for its area, each new rhythm on the level `conceptIntro` first asks for it, the ZIP's CSVs equal to the list. |
+
+**What is in it.** The early game had nothing before the level 10 finale, and Google's
+quality checklist asks for achievements spread across a game's life, so six are first-session
+goals: the first clear, three stars, the first keepsake, the offbeat at level 6, a day's
+stamp, a mastered level. Then the four new rhythms on the levels they arrive, the eight
+finales past Dusk (Space's is *Century of Tempo*), stars, mastery, keepsakes and stamps in
+tiers, a three-star area, *Full Cast* at level 171 where the last act debuts, and two for
+Endless: 25 runs and fifteen minutes.
+
+**Every one is derived, as the first ten are.** Each reads something the game already keeps —
+the save, the Scrapbook, the Endless record, the objectives' stamp count — so none needs a
+ledger, and a player already past one is owed it on their next signed-in launch.
+
+**All are standard and revealed.** Neither choice can be changed once published.
+Incremental would show a progress bar in Play Games for the counted ones (stars, mastery,
+keepsakes, stamps), at the cost of a `setSteps` call the plugin does not have; the game
+already shows each count on its own screens, so standard keeps the sync to `unlock`. Decide
+before importing, not after.
+
+**Points: 565 in all.** Google's current guide allows a game 2,000; an older Google page says
+1,000. Check what the first ten were given: under 435 keeps the whole game under 1,000.
+
+**Icons.** 512 x 512 PNG, as Google asks, with everything that identifies the achievement
+on a medallion inside the circle an unlock toast crops to, the rim in bronze, silver or gold
+by points, and no words. Play greys the icon for the locked look, so each keeps a strong
+colour and silhouette. Re-run `node scripts/achievement-import.mjs` after any change to the
+list or the drawings; the test fails until the ZIP matches.
+
+### Importing it
+
+1. Play Console → Tiny Tempo → **Grow users → Play Games Services → Setup and management →
+   Achievements → Import achievements → Upload**, pick the ZIP, **Save as draft**.
+2. Review the drafts, drop any you do not want, and check the total points.
+3. Copy each new **Achievement ID** with the copy button into a new `ACHIEVEMENTS` entry,
+   and add the rule shapes. Test with a tester account, then publish under **Publishing**.
+
 ## Earned is derived; unlocking is re-sent
 
 **Nothing is stored.** An achievement is earned exactly when the save has cleared its level
@@ -160,9 +211,8 @@ the app release that depends on them.
 Google's achievement guidelines list "a minimum of ten achievements spread across the
 lifetime of the game" as a baseline quality recommendation, and tie extra requirements to
 Quests eligibility. I could not confirm whether the Console refuses to publish with fewer, so
-check the Publishing page's checklist after creating these five. Natural next ones for this
-game: finales at 60–100, the first keepsake, a full Scrapbook page, a flawless task, a
-three-star area, and seven daily-objective stamps.
+check the Publishing page's checklist after creating these five. Ten are in the Console now,
+and the third batch above brings the game to forty.
 
 ## Checked, and not
 

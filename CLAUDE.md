@@ -485,7 +485,10 @@ past a finale is owed it on their first signed-in launch. v2's `unlock` queues o
 ignores repeats, so `playgames/achievementSync.ts` hands every earned one over once a
 session — after a *saved* result (an unlock cannot be taken back) and at boot once signed
 in — and keeps no ledger. All ten ids are set and pinned by `tests/achievements.test.ts`; an
-empty id leaves an achievement off; the list is append-only. See `docs/ACHIEVEMENTS.md`.
+empty id leaves an achievement off; the list is append-only. **Thirty more wait in the
+Console's import ZIP** (`store/achievements/`), built from `config/achievementImport.ts` with
+icons the game draws (`ui/achievementArt.ts`, `scripts/achievement-import.mjs`); none is
+earned until its id is appended to `ACHIEVEMENTS`. See `docs/ACHIEVEMENTS.md`.
 
 **A sound the tap starts is heard one output lag after the tap.** The demonstration is
 scheduled on the grid and drawn from the heard clock, so it stays together on any route; the
@@ -1084,6 +1087,7 @@ src/
     leaderboards.ts    Play Games leaderboard ids and the daily reset clock
     endless.ts         Endless Mode's ruleset: versioned; any change is a new leaderboard
     achievements.ts    Play Games achievements: key, the level that earns it, Console id
+    achievementImport.ts  The next batch for the Console's import ZIP; read by a script and a test, not the game
     rhythm.ts          Timing windows and scheduling constants
     scenes.ts          Scene keys
     support.ts         The address a player writes to; mirrored in the legal pages
@@ -1199,6 +1203,7 @@ src/
     puckLabel.ts       The first-visit tag beside an icon-only puck
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
+    achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
     restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
