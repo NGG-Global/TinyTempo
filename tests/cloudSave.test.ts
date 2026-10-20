@@ -179,9 +179,9 @@ describe('the payload', () => {
 
   it('leaves the device-local introductions behind when the device changes hands', () => {
     const storage = memoryStorage();
-    setTeachFlags({ seen: true, offbeat: true, longPhrase: true }, storage);
+    setTeachFlags({ seen: true, offbeat: true, lastOffbeat: true, longPhrase: true }, storage);
     localCloudSave(storage).replace(emptyCloudSave());
-    expect(readTeachFlags(storage)).toMatchObject({ offbeat: false, longPhrase: false });
+    expect(readTeachFlags(storage)).toMatchObject({ offbeat: false, lastOffbeat: false, longPhrase: false });
   });
 
   it('round-trips, bounds what it carries, and is canonical', () => {

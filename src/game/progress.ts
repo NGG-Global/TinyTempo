@@ -147,13 +147,13 @@ export function markReplayTipSeen(storage: Storage | null = safeStorage()): bool
  *
  * Absent means no — which is exactly what a save written before the introductions existed
  * says. For a finer grid that means a player already past the first triplet level meets the
- * introduction the next time a level they start uses one; the offbeat and the long phrase
+ * introduction the next time a level they start uses one; the offbeats and the long phrase
  * are kept from a player already past them by `introConcept`, from the save, not from here.
  */
 export function seenConcepts(storage: Storage | null = safeStorage()): Readonly<Record<Concept, boolean>> {
   const teach = readTeach(storage);
   return {
-    offbeat: teach.offbeat === true, longPhrase: teach.longPhrase === true,
+    offbeat: teach.offbeat === true, lastOffbeat: teach.lastOffbeat === true, longPhrase: teach.longPhrase === true,
     triplet: teach.triplet === true, sixteenth: teach.sixteenth === true,
   };
 }
@@ -221,7 +221,7 @@ const SCREEN_HINT_FLAG = {
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
 export const TEACH_FLAGS = [
   'seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase',
-  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless',
+  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless', 'lastOffbeat',
 ] as const;
 export type TeachFlag = typeof TEACH_FLAGS[number];
 type Teach = { readonly [K in TeachFlag]?: unknown };

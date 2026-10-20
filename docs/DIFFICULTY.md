@@ -180,6 +180,42 @@ The road moved again, deliberately, in exactly those seven rows of
 the composed road untouched. The independence property above now compares `composedTasks`,
 the stage before a debut is placed.
 
+## The last-beat offbeat waits for level 11
+
+User testing found one offbeat consistently confusing: a phrase whose last tap is the second
+eighth of its last beat, the "and" of 4 (`endsOffBeat` in `rhythm/patterns.ts`). That tap
+lands half a beat before the next phrase's downbeat, and players read it as early or as part
+of what came next. Three tier phrases end that way: `t1-0` (`X - X - X - - X`), `t2-2` and
+`t2-3`. Before this change they played on levels 6, 7, 9 and 10, and `t2-2` was level 9's
+debut phrase.
+
+**Held back below `PROGRESSION.lastOffbeat.from` (11).** `tierTasks` draws as it always has,
+then replaces any phrase that ends that way with one of its own tier that does not and that
+neither neighbour plays (`holdLastOffbeat`), from a random stream of its own. A narrower pool
+was rejected: it would move the index every later draw lands on, and with it phrases that
+never ended off the beat. Tiers 1 and 2 always keep such phrases, so no task changes tier.
+
+**Debuts on 11, as task 2, with its own introduction.** Level 11 had no such phrase. Its
+first task on a tier with offbeats takes `t1-0` and trades into the second slot as any debut
+does (`placeLastOffbeat`, `DEBUT_SLOT`): every slot keeps its tempo and lead-in, and the
+level keeps its task count, peak, top tier and number of tasks per tier. It plays at 121 BPM
+in its second task, after one bar of quarter notes. The tiers bring the phrase back on their
+own from 12. The introduction is `lastOffbeat` in `game/conceptIntro.ts`
+(`docs/SUBDIVISIONS.md`). Level 11 is a fixed level rather than a point on the curve,
+because the request was a level: the first of the second area.
+
+| Level | Before | After |
+| --- | --- | --- |
+| 6 | task 4 `t1-0` | `t1-1` |
+| 7 | task 4 `t1-0` | `t1-3` |
+| 9 | tasks 2 and 5 `t2-2`, `t2-3` | `t2-0`, `t2-1` (tier 2 still debuts here) |
+| 10 | finale reprise of the above | a reprise of the new 1–9 |
+| 11 | `t0-3 t0-0 t1-2 t1-3` | `t0-3 t1-0 t0-0 t1-3` |
+
+Those five rows of `tests/fixtures/levels-choreography.json` moved, deliberately, and no
+others. Clear bars and star thresholds are untouched, so no saved star total moves. Endless
+reads `PATTERN_TIERS` directly, so its rules version is unchanged.
+
 ## The plateau's vocabulary
 
 The curve stops adding anything new once both grids are in play, and the road goes on for

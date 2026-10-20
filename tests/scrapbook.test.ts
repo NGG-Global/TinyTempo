@@ -166,7 +166,7 @@ describe('existing saves', () => {
     markScrapbookSeen(storage);
     markDemonstrationSeen(storage);
     expect(seenScrapbook(storage)).toBe(true);
-    expect(seenConcepts(storage)).toEqual({ offbeat: false, longPhrase: false, triplet: true, sixteenth: false });
+    expect(seenConcepts(storage)).toEqual({ offbeat: false, lastOffbeat: false, longPhrase: false, triplet: true, sixteenth: false });
   });
 });
 

@@ -41,14 +41,19 @@ with task 2, each slot keeping its tempo and lead-in, so it is met fresh near th
 rather than last at the level's peak; debuts are found by scanning `composedTasks`, never
 written down, and tasks, peak tempo and top tier never move (levels 6, 9, 18, 28, 43, 59, 72
 today). **Each new kind of rhythm is introduced once, in the level that first asks for it**
-(`game/conceptIntro.ts`): the offbeat (level 6), the long phrase (18), triplets (43) and
-sixteenths (59) — one unscored task in front of the level's first, at 0.75× on the act, block
+(`game/conceptIntro.ts`): the offbeat (level 6), the last-beat offbeat (11), the long phrase
+(18), triplets (43) and sixteenths (59) — one unscored task in front of the level's first, at 0.75× on the act, block
 and judge the level uses — "New rhythm / Between the beats", one example, one answer, one
 retry below 50% — on ordinary windows, never wider. `introConcept` triggers on a level that
 asks for an unseen concept; a save from before the feature meets a grid on the next such
-level, never at launch, but never meets the offbeat or the long phrase once it has cleared
-the level where they first appear. The teach flags live beside `seenDemonstration`;
-`offbeat`/`longPhrase` are device-local, outside the cloud save. See `docs/SUBDIVISIONS.md`. Subdivided phrases
+level, never at launch, but never meets the offbeat, the last-beat offbeat or the long phrase
+once it has cleared the level where they first appear. The teach flags live beside
+`seenDemonstration`; `offbeat`/`lastOffbeat`/`longPhrase` are device-local, outside the cloud
+save. **A phrase ending on the "and" of 4 waits for level 11** (`PROGRESSION.lastOffbeat`,
+`endsOffBeat`): user testing found it the most confusing offbeat, so below 11
+`holdLastOffbeat` replaces it in `tierTasks` from its own stream, so no other task moves, and
+on 11 `placeLastOffbeat` makes it the second task. That moved fixture rows 6, 7, 9, 10 and 11
+and no others. See `docs/DIFFICULTY.md`. See `docs/SUBDIVISIONS.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the

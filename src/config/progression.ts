@@ -65,6 +65,21 @@ export const PROGRESSION = {
     from: 0.9,
   },
   /**
+   * The offbeat on the last beat — a phrase ending on the "and" of 4 (`endsOffBeat`) — waits
+   * until `from`. User testing found it the most confusing offbeat: the last tap lands half a
+   * beat before the next phrase begins, and read as early or as part of what came next. Below
+   * `from` a phrase that ends that way is replaced, from its own random stream, by one of its
+   * tier that does not, so no other task moves; on `from` itself it is the level's second
+   * task, with its own introduction (`game/conceptIntro.ts`).
+   *
+   * A level, not a point on the curve, because the request was a level: the first of the
+   * second area. Endless reads `PATTERN_TIERS` directly and opens at level 100, so its rules
+   * version is untouched.
+   */
+  lastOffbeat: {
+    from: 11,
+  },
+  /**
    * A long level gets one rest at its midpoint, because nothing else in a task waits any
    * more: demonstration runs straight into response and one task straight into the next.
    * Four bars, and only from the length at which a level starts to feel relentless.
