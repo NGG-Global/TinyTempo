@@ -85,6 +85,8 @@ before calibration existed, and it is already corrected by the platform's report
 - **The calibration screen** names the route it is measuring ("Bluetooth audio · currently
   +142 ms", or "not calibrated yet"), saves to that route only, and drops a run in progress or
   an unkept result if the route changes, because that measurement belongs to the old route.
+  After Keep it stays, with *saved +142 ms · run again to check* and a **Check** button, so
+  the kept offset can be verified at once (`docs/UI_REFINEMENTS.md`).
 - **The map** shows a small card above the next-level block: "Bluetooth audio detected /
   Calibrate timing for the best accuracy.", with Tune and a close mark. Tune opens the
   calibration screen, and Back returns to the map. It never appears over a level.

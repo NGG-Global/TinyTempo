@@ -70,6 +70,8 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   reminder_offer_closed: ['choice'],
   reminder_permission: ['source', 'result'],
   reminder_disabled: ['source'],
+  calibration_measured: ['route', 'outcome', 'offset_ms', 'spread_ms', 'reported_ms', 'check'],
+  calibration_kept: ['route', 'offset_ms', 'change_ms', 'check'],
   practice_started: ['level'],
   practice_completed: ['level', 'accuracy', 'duration_ms'],
   endless_unlocked: ['source'],

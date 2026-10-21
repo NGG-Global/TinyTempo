@@ -38,7 +38,7 @@ import { arrive } from '@/ui/spring';
 import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
 import { drawSwitch, SWITCH } from '@/ui/switch';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
-import { formatOffset } from './CalibrateScene';
+import { formatOffset } from '@/game/calibrationCopy';
 
 /** Design-unit metrics. Sections are labelled bands of rows, not a flat list of cards. */
 const SETTINGS = {

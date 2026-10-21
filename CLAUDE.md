@@ -625,7 +625,12 @@ subtraction judged every tap late by the device's whole output lag, which on Blu
 a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
-when it is large enough to be the reason a player is failing levels.
+when it is large enough to be the reason a player is failing levels. **The calibration screen
+shows where every tap lands** (`ui/calibrationLane.ts`): a lane with the beat at its centre
+drops a tick at each tap's residual, a tap outside the window flashes the edge it fell past,
+the result names its reason — the spread and the offset before, too few taps, too uneven
+(`CalibrationRun.verdict`, `game/calibrationCopy.ts`) — and **Keep stays on the screen**, the
+next run a *Check* against the kept offset that reads *Spot on* within `CALIBRATION.spotOnMs`.
 **The Tap offset is per audio route** (`game/routeCalibration.ts`, `audio/audioRoute.ts`,
 `docs/AUDIO_ROUTES.md`): `speaker`, `wired`, `bluetooth` and `unknown`, each with its own
 value in `Settings.calibration` (settings version 2), because one phone differs by a fifth of
@@ -1153,6 +1158,7 @@ src/
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
+    calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
@@ -1229,6 +1235,7 @@ src/
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
+    calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
     restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

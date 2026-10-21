@@ -323,6 +323,8 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `reminder_offer_closed` | The offer closed | `choice` (`remind` \| `not_now` \| `back`) |
 | `reminder_permission` | The player asked for the reminder, and what Android answered | `source` (`offer` \| `settings`), `result` (`granted` \| `denied`) |
 | `reminder_disabled` | The reminder switched off in Settings | `source` (`settings`) |
+| `calibration_measured` | A Tap offset run finished (`docs/UI_REFINEMENTS.md`) | `route`, `outcome` (`measured` \| `few_taps` \| `uneven`), `offset_ms` (proposed; 0 on a failure), `spread_ms`, `reported_ms` (the platform's own lag), `check` (a run against an offset kept this visit) |
+| `calibration_kept` | A measured offset was kept for its route | `route`, `offset_ms`, `change_ms`, `check` |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 

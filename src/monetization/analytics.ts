@@ -77,6 +77,8 @@ export const SERVICE_EVENTS = [
   'reminder_offer_closed',
   'reminder_permission',
   'reminder_disabled',
+  'calibration_measured',
+  'calibration_kept',
 ] as const;
 
 /**
@@ -460,6 +462,17 @@ export interface AnalyticsPayloads {
   readonly reminder_permission: { readonly source: 'offer' | 'settings'; readonly result: 'granted' | 'denied' };
   /** The reminder switched off in Settings. */
   readonly reminder_disabled: { readonly source: 'settings' };
+  /**
+   * A Tap offset run finished (`docs/UI_REFINEMENTS.md`). `offset_ms` is the offset it
+   * proposes (0 on a failure), `spread_ms` how far the taps disagreed, `reported_ms` what the
+   * platform admits to, `check` 1 when the run checked an offset kept this visit.
+   */
+  readonly calibration_measured: {
+    readonly route: AudioRoute; readonly outcome: 'measured' | 'few_taps' | 'uneven';
+    readonly offset_ms: number; readonly spread_ms: number; readonly reported_ms: number; readonly check: Flag;
+  };
+  /** A measured offset was kept for its route, and by how much it moved. */
+  readonly calibration_kept: { readonly route: AudioRoute; readonly offset_ms: number; readonly change_ms: number; readonly check: Flag };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
   /** Level 100 was cleared for the first time on this device: the mode opened. */
