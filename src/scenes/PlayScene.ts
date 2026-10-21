@@ -31,10 +31,11 @@ import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveL
 import { masteryResult, type MasteryResult } from '@/game/mastery';
 import {
   attemptForStart, ceilingFor, liveSheet, pauseTask, releaseAttempt, restartKind, resultArmed, resumeLeadBeats, resumeTask, scoredResponseBegins,
-  sheetFor, ticketStillApplies, tryAgainCost, watchForHeart,
+  sheetFor, ticketStillApplies, tryAgainCost, watchForHeart, watchForRestart,
   type PausedTask, type RestartFacts, type RestartSheetKind, type RestartTicket, type StartMode,
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
+import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
@@ -46,10 +47,10 @@ import { createFinaleSound } from '@/audio/finaleSounds';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
 import {
-  abandonAttempt, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
+  abandonAttempt, attemptCostsHeart, beginAttempt, canBeginAttempt, canClaimDailyHeart, createAttemptId, finishAttempt,
   HEALTH, HEALTH_COPY, healthHud, heartProgress, type Health, loadHealth, redeemDailyHeart, redeemFill, redeemHeart, saveHealth, viewHealth,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
 import {
   guidedLevel, loadProgress, markConceptSeen, markDemonstrationSeen, markReplayTipSeen, recordResult, saveProgress,
   markScrapbookSeen, seenConcepts, seenDemonstration, seenReplayTip, seenScrapbook, type LevelOutcome, type Progress,
@@ -362,6 +363,8 @@ export class PlayScene extends BaseScene {
   private heldJudgements: Judgement[] = [];
   /** The three pucks — map, restart, mute — drawn as one baked graphic. */
   private chrome!: Phaser.GameObjects.Graphics;
+  /** Today's restarts left, on the restart puck's shoulder where a restart would use one. */
+  private restartCount!: Phaser.GameObjects.Text;
   private actionRoot!: Phaser.GameObjects.Container;
   private action!: Phaser.GameObjects.Graphics;
   private actionSurface!: Phaser.GameObjects.TileSprite;
@@ -608,6 +611,7 @@ export class PlayScene extends BaseScene {
     this.timingEarly = label(this, 'EARLY', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.timingLate = label(this, 'LATE', { size: TIMING_TRAY.labelSize, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(11).setVisible(false);
     this.chrome = this.add.graphics().setDepth(10);
+    this.restartCount = label(this, '', { size: 20, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setDepth(11).setVisible(false);
     this.actionRoot = this.add.container(0, 0).setDepth(10);
     this.action = this.add.graphics();
     this.actionSurface = surface(this, MaterialKey.cloth, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, PALETTE.coral, 0.35);
@@ -856,6 +860,25 @@ export class PlayScene extends BaseScene {
     drawMap(g, this.mapAt.x, this.mapAt.y + puckSink(s, sinkOf('map')), r * 0.42, ink);
     drawRestart(g, this.restartAt.x, this.restartAt.y + puckSink(s, sinkOf('restart')), r * 0.44, ink);
     drawSpeaker(g, this.muteAt.x, this.muteAt.y + puckSink(s, sinkOf('mute')), r * 0.5, ink, this.muted);
+    this.drawRestartCount(g, s, r, puckSink(s, sinkOf('restart')));
+  }
+
+  /**
+   * Today's restarts, as a numbered badge on the restart puck — only on a level where a
+   * restart would use one (an unfinished frontier level past the protected area, without
+   * Premium), so the count is never shown where it means nothing. Ink with a cream number
+   * while any are left, a hollow cream badge at none: coral stays the action's.
+   */
+  private drawRestartCount(g: Phaser.GameObjects.Graphics, s: number, r: number, sink: number): void {
+    const counts = !monetization().premium() && attemptCostsHeart(loadProgress(), this.spec.level);
+    this.restartCount.setVisible(counts);
+    if (!counts) return;
+    const left = restartsLeft(loadDailyRestarts(), Date.now());
+    const x = this.restartAt.x + r * 0.74, y = this.restartAt.y - r * 0.7 + sink, radius = r * 0.4;
+    g.fillStyle(left > 0 ? PALETTE.ink : SHELL.cream, 1).fillCircle(x, y, radius);
+    g.lineStyle(Math.max(1.5, 2.5 * s), left > 0 ? SHELL.cream : PALETTE.muted, 1).strokeCircle(x, y, radius);
+    this.restartCount.setText(String(left)).setPosition(x, y);
+    resize(this.restartCount, 20 * s, left > 0 ? SHELL.cream : PALETTE.muted, STYLE.current, false);
   }
 
   /**
@@ -1009,8 +1032,8 @@ export class PlayScene extends BaseScene {
 
   /**
    * Start the level from its first task. `mode` says what happens to the attempt in hand,
-   * explicitly (`attemptForStart`): Resume and a free restart continue it, a paid restart and
-   * Try again end it and begin another. Never inferred from whether a result exists alone.
+   * explicitly (`attemptForStart`): Resume and every restart from the puck continue it, Try
+   * again ends it and begins another. Never inferred from whether a result exists alone.
    */
   private async startRound(mode: StartMode, study = false): Promise<void> {
     const rehearsal = import.meta.env.DEV && study;
@@ -1036,7 +1059,8 @@ export class PlayScene extends BaseScene {
       this.levelRun?.abandon();
       this.levelRun = null;
     }
-    if (resumeId === null) this.scoredResponseBegun = false;
+    // A new pass starts unscored: a restart after this one is free again until it scores.
+    if (resumeId === null || mode === 'free_restart') this.scoredResponseBegun = false;
     // Resume picks the attempt up at the task it stopped in, keeping the tasks it finished;
     // a pause no longer sends the player back to task 1 for free (`docs/RESTART.md`). Only
     // a kept attempt continues, and only Resume: any other start is a new pass, and a pass
@@ -3240,28 +3264,28 @@ export class PlayScene extends BaseScene {
   }
 
   // ---- Restart -----------------------------------------------------------------------
-  // One heart is one real attempt at an unfinished frontier level (`docs/RESTART.md`).
+  // A heart pays for an attempt; a restart in its scored part pays with one of the day's
+  // restarts, and an ad buys one more (`docs/RESTART.md`, `game/dailyRestarts.ts`).
 
   private restartFacts(): RestartFacts {
+    const now = Date.now();
     return {
-      level: this.spec.level, progress: loadProgress(), health: loadHealth(), now: Date.now(),
+      level: this.spec.level, progress: loadProgress(), health: loadHealth(), now,
       premium: monetization().premium(), attemptId: this.attemptId,
       outcomeRecorded: this.outcome !== null, scoredResponseBegun: this.scoredResponseBegun,
+      restartsLeft: restartsLeft(loadDailyRestarts(), now),
     };
-  }
-
-  private heartsNow(facts: RestartFacts): number {
-    return viewHealth(facts.health, facts.now).hearts;
   }
 
   /**
    * The restart puck. A recorded result is the result's own Try again; a free level, Premium
    * or a start not yet on its first downbeat restarts at once; an unfinished frontier
-   * attempt asks first, saying whether a heart is used, and nothing is spent by asking.
+   * attempt asks first, saying whether one of today's restarts is used, and nothing is spent
+   * by asking.
    */
   private requestRestart(): void {
-    // A second tap on the puck while the sheet is up, or while a purchase is out, is the
-    // same request: the sheet is already its answer.
+    // A second tap on the puck while the sheet is up, or while an ad is out, is the same
+    // request: the sheet is already its answer.
     if (this.restartSheet.open || this.commerceBusy) return;
     const facts = this.restartFacts();
     const kind = restartKind(facts);
@@ -3269,37 +3293,25 @@ export class PlayScene extends BaseScene {
     // No attempt yet — the first start still loading, or the empty-hearts screen — means
     // no run to restart: the puck is a start, gated and reported like any other.
     if (facts.attemptId === null) { void this.startRound('resume'); return; }
-    const hearts = this.heartsNow(facts);
     if (kind === 'immediate') {
-      // Nothing is charged on a finished or protected level, under Premium, or before the
+      // Nothing is used on a finished or protected level, under Premium, or before the
       // first downbeat, so the restart is the free reset of the same attempt, as it was.
-      playAnalytics.restartRequested(this.spec.level, 'none', hearts, facts.premium);
-      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
+      playAnalytics.restartRequested(this.spec.level, 'none', facts.restartsLeft, facts.premium);
+      playAnalytics.restartConfirmed(this.spec.level, 'free', facts.restartsLeft, facts.premium);
       void this.startRound('free_restart');
       return;
     }
     const sheet = sheetFor(kind)!;
-    playAnalytics.restartRequested(this.spec.level, sheet, hearts, facts.premium);
-    this.openRestartSheet(sheet);
+    playAnalytics.restartRequested(this.spec.level, sheet, facts.restartsLeft, facts.premium);
+    this.openRestartSheet(sheet, facts.restartsLeft);
   }
 
-  private openRestartSheet(kind: RestartSheetKind): void {
+  private openRestartSheet(kind: RestartSheetKind, left: number): void {
     const previous = this.restartSheet.kind;
-    const store = monetization();
-    const purchases = store.purchasesAvailable();
-    const premium = store.premium();
-    this.restartSheet.show(kind, performance.now() / 1000, {
-      refill: purchases,
-      premium: purchases && !premium,
-      refillPrice: store.productPrice(PRODUCT.heartRefill),
-      premiumPrice: store.productPrice(PRODUCT.premium),
-    });
-    // The offers are reported when the empty sheet is what the player is looking at, once
-    // per showing of it, never for the paid sheet: an ad is never offered beside a heart.
-    if (kind === 'empty' && previous !== 'empty') {
-      track('rewarded_offer_shown', { placement: 'restart' });
-      if (purchases) track('purchase_offer_shown', { product: PRODUCT.heartRefill });
-    }
+    this.restartSheet.show(kind, performance.now() / 1000, left);
+    // The ad is reported when the empty sheet is what the player is looking at, once per
+    // showing of it, never for the daily sheet: an ad is never offered beside a restart.
+    if (kind === 'empty' && previous !== 'empty') track('rewarded_offer_shown', { placement: 'restart' });
   }
 
   /**
@@ -3309,18 +3321,19 @@ export class PlayScene extends BaseScene {
    */
   private refreshRestartSheet(): void {
     if (!this.restartSheet.open || this.restartSheet.busy) return;
-    const next = liveSheet(this.restartFacts());
+    const facts = this.restartFacts();
+    const next = liveSheet(facts);
     if (next === null) { this.closeRestartSheet('run_ended'); return; }
-    this.openRestartSheet(next);
+    this.openRestartSheet(next, facts.restartsLeft);
   }
 
-  /** Close without restarting. Reported once; a sheet waiting on an ad or a purchase is reported by that path instead. */
+  /** Close without restarting. Reported once; a sheet waiting on an ad is reported by that path instead. */
   private closeRestartSheet(reason: 'keep_playing' | 'run_ended' | 'paused' | 'left'): void {
     const kind = this.restartSheet.kind;
     if (kind === null) return;
     if (!this.restartSheet.busy) {
       const facts = this.restartFacts();
-      playAnalytics.restartCancelled(this.spec.level, kind, reason, this.heartsNow(facts), facts.premium);
+      playAnalytics.restartCancelled(this.spec.level, kind, reason, facts.restartsLeft, facts.premium);
     }
     this.restartSheet.hide();
   }
@@ -3329,27 +3342,25 @@ export class PlayScene extends BaseScene {
     if (choice === 'swallow') return;
     vibrate('tap');
     if (choice === 'keep') { this.closeRestartSheet('keep_playing'); return; }
-    if (choice === 'refill') { void this.buyToRestart(PRODUCT.heartRefill); return; }
-    if (choice === 'premium') { void this.buyToRestart(PRODUCT.premium); return; }
     // Confirm: only what the sheet said. If the run has moved under it — the response has
-    // begun, a heart came back, Premium arrived — the sheet changes and asks again.
+    // begun, the day turned, Premium arrived — the sheet changes and asks again.
     const facts = this.restartFacts();
     const shown = this.restartSheet.kind;
     if (liveSheet(facts) !== shown) { this.refreshRestartSheet(); return; }
-    const kind = restartKind(facts);
-    const hearts = this.heartsNow(facts);
     if (shown === 'free') {
       this.restartSheet.hide();
-      playAnalytics.restartConfirmed(this.spec.level, 'free', hearts, facts.premium);
-      // A free sheet is either a frontier attempt before its scored part, or a run that no
-      // longer costs anything (Premium arrived): both are the same attempt again.
-      void this.startRound(kind === 'confirm_free' || kind === 'immediate' ? 'free_restart' : 'new_attempt');
+      playAnalytics.restartConfirmed(this.spec.level, 'free', facts.restartsLeft, facts.premium);
+      void this.startRound('free_restart');
       return;
     }
-    if (shown === 'paid') {
+    if (shown === 'daily') {
+      // Written before the restart runs: a restart that went ahead has always been paid for.
+      const used = useDailyRestart();
+      if (used === null) { this.refreshRestartSheet(); return; }
       this.restartSheet.hide();
-      playAnalytics.restartConfirmed(this.spec.level, 'heart', hearts, facts.premium);
-      void this.startRound('new_attempt');
+      this.puckDirty = true;
+      playAnalytics.restartConfirmed(this.spec.level, 'daily', restartsLeft(used, Date.now()), facts.premium);
+      void this.startRound('free_restart');
       return;
     }
     void this.watchToRestart();
@@ -3367,11 +3378,10 @@ export class PlayScene extends BaseScene {
   }
 
   /**
-   * Watch ad & Restart: the same rewarded video and the same one-heart grant the play
-   * screen's Watch uses (`watchForHeart`, `redeemHeart`, a fresh claim id). Only once the
-   * reward is confirmed does the run end and the next begin, and the next attempt's
-   * `beginAttempt` spends the heart the ad just gave. A failed, closed or unavailable ad
-   * ends nothing and spends nothing: the run is still running behind the sheet.
+   * Watch ad & Restart: the same rewarded video every placement shows, for one restart used
+   * at once (`watchForRestart`). Nothing is banked, so a reward for a run that ended or moved
+   * on while the ad played is simply not used. A failed, closed or unavailable ad ends
+   * nothing and spends nothing: the run is still running behind the sheet.
    */
   private async watchToRestart(): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
@@ -3380,8 +3390,7 @@ export class PlayScene extends BaseScene {
     const level = this.spec.level;
     this.restartSheet.setBusy(RESTART_COPY.watching);
     try {
-      const watch = await watchForHeart(() => monetization().showRewarded(), redeemHeart, `restart:${++this.watchClaims}`);
-      // The heart, if granted, is already in the ledger; a dead scene restarts nothing.
+      const watch = await watchForRestart(() => monetization().showRewarded());
       if (this.disposed) {
         playAnalytics.rewardedRestartFailed(level, watch.kind === 'failed' ? watch.reason : 'run_ended');
         return;
@@ -3393,56 +3402,16 @@ export class PlayScene extends BaseScene {
         return;
       }
       if (!this.ticketHolds(ticket)) {
-        // The run finished, paused or was replaced while the ad played. The heart is kept
-        // for the player's next attempt; nothing restarts into a run that is not there.
+        // The run finished, paused or was replaced while the ad played: there is no run to
+        // restart, and a restart is not banked for later.
         playAnalytics.rewardedRestartFailed(level, 'run_ended');
         this.restartSheet.hide();
         return;
       }
       const facts = this.restartFacts();
-      if (this.heartsNow(facts) <= 0) {
-        playAnalytics.rewardedRestartFailed(level, 'no_heart');
-        this.restartSheet.say(rewardedFeedback('failed'));
-        return;
-      }
       this.restartSheet.hide();
-      playAnalytics.restartConfirmed(level, 'rewarded', this.heartsNow(facts), facts.premium);
-      void this.startRound('new_attempt');
-    } finally {
-      this.commerceBusy = false;
-      if (!this.disposed) this.restartSheet.setBusy(null);
-    }
-  }
-
-  /**
-   * Refill or Premium from the empty sheet, through the same purchase and the same fill
-   * the play screen's offers use. A successful refill restarts on one of the five hearts;
-   * Premium restarts on none.
-   */
-  private async buyToRestart(product: ProductId): Promise<void> {
-    if (this.commerceBusy || this.curtain.active) return;
-    if (product === PRODUCT.premium && monetization().premium()) { this.refreshRestartSheet(); return; }
-    this.commerceBusy = true;
-    const ticket = this.restartTicket();
-    this.restartSheet.setBusy(RESTART_COPY.buying);
-    if (product === PRODUCT.premium) track('purchase_offer_shown', { product });
-    try {
-      const result = await monetization().purchase(product);
-      // A refill is the player's the moment the store confirms it, scene or no scene.
-      const filled = result.ok && product === PRODUCT.heartRefill ? redeemFill(result.claimId) : null;
-      if (this.disposed) return;
-      this.restartSheet.setBusy(null);
-      if (!result.ok) { this.restartSheet.say(purchaseFeedback(result.reason)); return; }
-      if (!this.ticketHolds(ticket)) { this.restartSheet.hide(); return; }
-      const facts = this.restartFacts();
-      if (filled !== null && !facts.premium && this.heartsNow(facts) <= 0) {
-        this.restartSheet.say(purchaseFeedback('failed'));
-        return;
-      }
-      if (product === PRODUCT.premium) vibrate('stamp');
-      this.restartSheet.hide();
-      playAnalytics.restartConfirmed(this.spec.level, product === PRODUCT.premium ? 'premium' : 'refill', this.heartsNow(facts), facts.premium);
-      void this.startRound('new_attempt');
+      playAnalytics.restartConfirmed(level, 'rewarded', facts.restartsLeft, facts.premium);
+      void this.startRound('free_restart');
     } finally {
       this.commerceBusy = false;
       if (!this.disposed) this.restartSheet.setBusy(null);

@@ -852,25 +852,31 @@ completed day — no currency, no streak to lose, nothing to buy. Every stored f
 validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
 tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
 
-**One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
-`ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
+**A heart pays for an attempt; a restart pays with a restart** (`game/restart.ts`,
+`game/dailyRestarts.ts`, `ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
 that paid, **from the task it stopped in** (`resumeTask`): finished tasks are kept, and the
 cut-short task replays from a fresh count-in **held to a ceiling** (`scoreCeiling`,
 `capRound`, `pauseTask`) — the most the interrupted pass could still have made — so an
 interruption can cost a task but never improve it. Groove is kept with the pass, so mastery
-stays the same fact as a best of 100. The restart puck is free before the attempt's first scored response
+stays the same fact as a best of 100. The restart puck is free before the pass's first scored response
 (`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
-an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
-first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
-heart*, or at zero hearts *Out of hearts* with Watch ad & Restart, the refill, Premium and
-Keep playing. A finished, protected or Premium level restarts at once and free. Opening a
-sheet spends and ends nothing, and the sheet re-reads the run and re-arms before it acts.
+an introduction or the rehearsal). **After it, on an unfinished frontier level past 10 without
+Premium, a restart uses one of the day's two restarts** (`RESTARTS.daily`, reset at the local
+midnight, `tiny-tempo.restarts.v1`, device-local) instead of the heart it used to cost, and
+goes back to task 1 on the same attempt and heart (`free_restart`), so nothing is charged
+twice. It asks first, on a sheet over the still-running level: *No restart will be used*,
+*Uses 1 of today's 2 restarts*, or with none left *No restarts left* with Watch ad & Restart
+(`watchForRestart`: one restart, used at once, banked never) and Keep playing. The puck wears
+a badge with today's count where restarts count. A finished, protected or Premium level
+restarts at once and free, unlimited — Premium is sold as unlimited hearts and no ads, so it
+could neither run out nor watch the ad. Opening a sheet spends and ends nothing, the sheet
+re-reads the run and re-arms before it acts, and the daily restart is written
+(`useDailyRestart`) before the restart runs.
 **`startRound(mode)` names what happens to the attempt** — `resume`, `free_restart`,
 `new_attempt` (`attemptForStart`), never inferred from whether a result exists — and a new
-attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
-id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
-same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
-and it restarts only if its `RestartTicket` still holds. **Try again says what it costs and
+attempt (Try again, the replay block) is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
+id spends exactly one heart and a failed start leaves the heart with the player. A restart's
+ad restarts only if its `RestartTicket` still holds. **Try again says what it costs and
 does not take a stray tap**: the block carries the sheet's ♥ 1 chip when `tryAgainCost` says a
 heart goes, and a result ignores taps for `RESULT_ARM_SEC` after it appears (`resultArmed`),
 because a player still tapping the rhythm landed on it and paid for an attempt unread.
@@ -1134,7 +1140,8 @@ src/
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
-    restart.ts         The restart puck: free, paid or out of hearts; start modes, the handover, the rewarded heart; pure
+    restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
+    dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
@@ -1209,7 +1216,7 @@ src/
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
-    restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
+    restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure

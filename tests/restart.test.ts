@@ -1,21 +1,23 @@
 import { readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  HEALTH, beginAttempt, canBeginAttempt, claimHeart, finishAttempt, type GrantHeartResult, type Health,
+  HEALTH, beginAttempt, canBeginAttempt, claimHeart, finishAttempt, type Health,
 } from '../src/game/health';
 import { levelSpec } from '../src/game/levels';
 import { PlayAnalytics } from '../src/game/playAnalytics';
 import type { Progress } from '../src/game/progress';
 import {
   attemptForStart, ceilingFor, liveSheet, pauseTask, releaseAttempt, restartKind, resumeLeadBeats, resumeTask, scoredResponseBegins, sheetFor,
-  ticketStillApplies, watchForHeart, type RestartFacts, type StartMode,
+  ticketStillApplies, watchForHeart, watchForRestart, type RestartFacts, type StartMode,
 } from '../src/game/restart';
+import { RESTARTS, restartsLeft, spendRestart, type DailyRestarts } from '../src/game/dailyRestarts';
+import { calendarDay } from '../src/game/health';
 import { RHYTHM } from '../src/config/rhythm';
 import type { JudgeState } from '../src/rhythm/judge';
 import { capRound, scoreCeiling, scoreRound } from '../src/game/scoring';
 import type { AnalyticsEvent } from '../src/monetization/analytics';
 import type { RewardedResult } from '../src/monetization/types';
-import { guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout } from '../src/ui/restartSheet';
+import { dailyNote, guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout, sheetNote } from '../src/ui/restartSheet';
 
 vi.mock('phaser', () => ({ default: { Geom: { Rectangle: class {} } } }));
 
@@ -42,6 +44,8 @@ class Visit {
   public begun = false;
   public outcome = false;
   public starts = 0;
+  /** Today's restart record, as `tiny-tempo.restarts.v1` would hold it. */
+  public restarts: DailyRestarts | null = null;
   private ids = 0;
 
   public constructor(public health: Health, public readonly progress: Progress, public readonly level: number, public premium = false) {}
@@ -50,6 +54,7 @@ class Visit {
     return {
       level: this.level, progress: this.progress, health: this.health, now, premium: this.premium,
       attemptId: this.attemptId, outcomeRecorded: this.outcome, scoredResponseBegun: this.begun,
+      restartsLeft: restartsLeft(this.restarts, now),
     };
   }
 
@@ -58,7 +63,7 @@ class Visit {
     const handover = attemptForStart(mode, this.attemptId, this.outcome);
     if (!canBeginAttempt(this.health, this.progress, this.level, NOW, this.premium, handover.keep)) return false;
     this.health = releaseAttempt(this.health, handover, NOW);
-    if (handover.keep === null) this.begun = false;
+    if (handover.keep === null || mode === 'free_restart') this.begun = false;
     this.attemptId = handover.keep;
     this.outcome = false;
     if (!audio) return false;
@@ -79,7 +84,12 @@ class Visit {
     if (kind === 'try_again') return this.start('new_attempt');
     if (this.attemptId === null) return this.start('resume');
     if (kind === 'immediate' || kind === 'confirm_free') return this.start('free_restart');
-    if (kind === 'confirm_paid') return this.start('new_attempt');
+    if (kind === 'confirm_restart') {
+      const used = spendRestart(this.restarts, NOW);
+      if (used === null) return false;
+      this.restarts = used;
+      return this.start('free_restart');
+    }
     return false;
   }
 
@@ -108,65 +118,61 @@ describe('heart accounting', () => {
     expect(visit.health.hearts).toBe(4);
   });
 
-  it('ends the attempt and begins another once the scored response has begun', () => {
+  it('uses one of today\'s restarts once the scored response has begun: the same attempt, on its heart', () => {
     const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
     const first = visit.attemptId;
     visit.respond();
-    expect(restartKind(visit.facts())).toBe('confirm_paid');
+    expect(restartKind(visit.facts())).toBe('confirm_restart');
+    expect(sheetFor('confirm_restart')).toBe('daily');
     expect(visit.restart()).toBe(true);
-    expect(visit.attemptId).not.toBe(first);
+    expect(visit.attemptId).toBe(first);
+    expect(visit.health.hearts).toBe(4);
+    expect(restartsLeft(visit.restarts, NOW)).toBe(RESTARTS.daily - 1);
+    // The new pass is unscored again: a restart before it scores is free.
     expect(visit.begun).toBe(false);
-  });
-
-  it('charges exactly one more heart for a confirmed paid restart, and never refunds the ended attempt', () => {
-    const visit = new Visit(health(5), frontier(PAID), PAID);
-    visit.start('resume');
-    const first = visit.attemptId!;
-    visit.respond();
-    visit.restart();
-    expect(visit.health.hearts).toBe(3);
-    expect(visit.health.spentAttempt).toBe(visit.attemptId);
-    // The ended attempt holds nothing: a late finish on it cannot refund anything.
-    expect(finishAttempt(visit.health, first, 3, NOW)).toMatchObject({ refunded: false });
+    expect(restartKind(visit.facts())).toBe('confirm_free');
   });
 
   it('consumes nothing when the sheet is opened and cancelled', () => {
     const visit = new Visit(health(3), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
-    const before = visit.health;
+    const before = { health: visit.health, restarts: visit.restarts };
     // Asking what the sheet is, again and again, is pure.
-    for (let i = 0; i < 5; i++) expect(liveSheet(visit.facts())).toBe('paid');
-    expect(visit.health).toEqual(before);
+    for (let i = 0; i < 5; i++) expect(liveSheet(visit.facts())).toBe('daily');
+    expect({ health: visit.health, restarts: visit.restarts }).toEqual(before);
     // And PlayScene's open and close paths touch no ledger call.
     const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
     for (const name of ['private requestRestart(', 'private openRestartSheet(', 'private refreshRestartSheet(', 'private closeRestartSheet(']) {
       const from = scene.indexOf(name);
       const body = scene.slice(from, scene.indexOf('\n  }\n', from));
-      expect(body, name).not.toMatch(/saveHealth|beginAttempt|abandonAttempt|releaseAttempt|redeemHeart/);
+      expect(body, name).not.toMatch(/saveHealth|beginAttempt|abandonAttempt|releaseAttempt|redeemHeart|useDailyRestart|saveDailyRestarts/);
     }
   });
 
-  it('makes every confirmed restart a new attempt that needs a heart of its own', () => {
+  it('gives two restarts a day, then offers the ad, and two more the next day', () => {
     const visit = new Visit(health(5), frontier(PAID), PAID);
     visit.start('resume');
-    const ids = new Set([visit.attemptId]);
-    for (let expected = 3; expected >= 0; expected--) {
+    const id = visit.attemptId;
+    for (let used = 1; used <= RESTARTS.daily; used++) {
       visit.respond();
-      expect(restartKind(visit.facts())).toBe('confirm_paid');
+      expect(restartKind(visit.facts())).toBe('confirm_restart');
       expect(visit.restart()).toBe(true);
-      ids.add(visit.attemptId);
-      expect(visit.health.hearts).toBe(expected);
+      expect(restartsLeft(visit.restarts, NOW)).toBe(RESTARTS.daily - used);
     }
-    expect(ids.size).toBe(5);
+    // Every restart was the same attempt on the one heart it began with.
+    expect(visit.attemptId).toBe(id);
+    expect(visit.health.hearts).toBe(4);
     visit.respond();
-    // Out of hearts: no restart until a heart is found, and the run is still the old one.
-    const held = visit.attemptId;
-    expect(restartKind(visit.facts())).toBe('out_of_hearts');
+    expect(restartKind(visit.facts())).toBe('out_of_restarts');
     expect(visit.restart()).toBe(false);
-    expect(visit.attemptId).toBe(held);
-    expect(visit.health.spentAttempt).toBe(held);
+    expect(visit.attemptId).toBe(id);
+    // The player's midnight brings two more.
+    const tomorrow = NOW + 24 * 3_600_000;
+    expect(calendarDay(tomorrow)).not.toBe(calendarDay(NOW));
+    expect(restartKind(visit.facts(tomorrow))).toBe('confirm_restart');
+    expect(restartsLeft(visit.restarts, tomorrow)).toBe(RESTARTS.daily);
   });
 
   it('never charges Resume after an interruption, before or after the response began', () => {
@@ -177,9 +183,10 @@ describe('heart accounting', () => {
     for (let i = 0; i < 3; i++) expect(visit.start('resume')).toBe(true);
     expect(visit.attemptId).toBe(id);
     expect(visit.health.hearts).toBe(1);
-    // The attempt has been played, so a restart after Resume is still a paid one.
+    expect(visit.restarts).toBeNull();
+    // The attempt has been played, so a restart after Resume still uses one of today's.
     expect(visit.begun).toBe(true);
-    expect(restartKind(visit.facts())).toBe('confirm_paid');
+    expect(restartKind(visit.facts())).toBe('confirm_restart');
     // Even at zero hearts, Resume continues what is already paid for.
     const broke = new Visit(health(1), frontier(PAID), PAID);
     broke.start('resume');
@@ -188,9 +195,10 @@ describe('heart accounting', () => {
     expect(broke.health.hearts).toBe(0);
   });
 
-  it('keeps a cleared level free, with no sheet', () => {
+  it('keeps a cleared level free and unlimited, with no sheet', () => {
     const progress = frontier(PAID + 2);
     const visit = new Visit(health(0), progress, PAID);
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
@@ -199,9 +207,10 @@ describe('heart accounting', () => {
     expect(visit.health.hearts).toBe(0);
   });
 
-  it('keeps the protected opening levels free', () => {
+  it('keeps the protected opening levels free and unlimited', () => {
     for (let level = 1; level <= HEALTH.protectedThrough; level++) {
       const visit = new Visit(health(0), frontier(level), level);
+      visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
       expect(visit.start('resume')).toBe(true);
       visit.respond();
       expect(restartKind(visit.facts())).toBe('immediate');
@@ -210,16 +219,17 @@ describe('heart accounting', () => {
     }
   });
 
-  it('keeps Premium free, and never tells Premium a heart will be used', () => {
+  it('keeps Premium unlimited: no restarts used and no ad, since Premium has none', () => {
     const visit = new Visit(health(0), frontier(PAID), PAID, true);
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
     expect(visit.restart()).toBe(true);
-    expect(visit.health.hearts).toBe(0);
-    // A sheet left open when Premium arrives turns into the one that says no heart is used.
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    // A sheet left open when Premium arrives turns into the one that says nothing is used.
     expect(liveSheet(visit.facts())).toBe('free');
-    expect(RESTART_COPY.free.note).toBe('No heart will be used.');
+    expect(RESTART_COPY.free.note).toBe('No restart will be used.');
   });
 
   it('still refunds a kept heart — two stars or more — on the attempt that earned them', () => {
@@ -227,16 +237,16 @@ describe('heart accounting', () => {
     visit.start('resume');
     visit.respond();
     visit.restart();
-    expect(visit.health.hearts).toBe(3);
-    visit.finish(HEALTH.keepAtStars);
     expect(visit.health.hearts).toBe(4);
-    // Try again after the result is a new attempt, as it always was.
+    visit.finish(HEALTH.keepAtStars);
+    expect(visit.health.hearts).toBe(5);
+    // Try again after the result is a new attempt that needs a heart, as it always was.
     expect(restartKind(visit.facts())).toBe('try_again');
     expect(visit.restart()).toBe(true);
-    expect(visit.health.hearts).toBe(3);
+    expect(visit.health.hearts).toBe(4);
   });
 
-  it('leaves the heart with the player when the restart\'s audio then fails', () => {
+  it('leaves the heart with the player when Try again\'s audio then fails', () => {
     const visit = new Visit(health(2), frontier(PAID), PAID);
     visit.start('resume');
     visit.respond();
@@ -250,92 +260,79 @@ describe('heart accounting', () => {
   });
 });
 
-describe('the zero-heart rewarded restart', () => {
+describe('the rewarded restart, with none left today', () => {
   const ok = (): Promise<RewardedResult> => Promise.resolve({ ok: true });
   const broken = (reason: 'unavailable' | 'cancelled' | 'failed') => (): Promise<RewardedResult> => Promise.resolve({ ok: false, reason });
 
-  function emptyRun(): Visit {
-    const visit = new Visit(health(1), frontier(PAID), PAID);
+  function spentRun(): Visit {
+    const visit = new Visit(health(5), frontier(PAID), PAID);
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
     visit.start('resume');
     visit.respond();
-    expect(visit.health.hearts).toBe(0);
     return visit;
   }
 
-  it('does not end the attempt at zero hearts: it offers the ad instead', () => {
-    const visit = emptyRun();
+  it('does not restart or end the run: it offers the ad, or keeping on', () => {
+    const visit = spentRun();
     const id = visit.attemptId;
-    expect(restartKind(visit.facts())).toBe('out_of_hearts');
-    expect(sheetFor('out_of_hearts')).toBe('empty');
-    expect(RESTART_COPY.empty).toMatchObject({ title: 'Out of hearts', note: 'Get a heart and restart this level.' });
+    expect(restartKind(visit.facts())).toBe('out_of_restarts');
+    expect(sheetFor('out_of_restarts')).toBe('empty');
+    expect(RESTART_COPY.empty).toMatchObject({ title: 'No restarts left', confirm: 'Watch ad & Restart' });
+    expect(RESTART_COPY.empty.note).toContain(`${RESTARTS.daily} more tomorrow`);
     expect(visit.restart()).toBe(false);
     expect(visit.attemptId).toBe(id);
-    expect(visit.health.spentAttempt).toBe(id);
+    expect(visit.health.hearts).toBe(4);
   });
 
-  it('never offers the ad while a heart is there, even one that regenerated under the sheet', () => {
-    const visit = emptyRun();
+  it('never offers the ad while a restart is there, even one the day brought under the sheet', () => {
+    const visit = spentRun();
     expect(liveSheet(visit.facts())).toBe('empty');
-    // Twenty minutes on: the refill landed while the sheet was open.
-    expect(liveSheet(visit.facts(NOW + HEALTH.regenMs))).toBe('paid');
-    for (let hearts = 1; hearts <= HEALTH.max; hearts++) {
-      expect(liveSheet({ ...visit.facts(), health: { ...health(hearts), spentAttempt: visit.attemptId } })).toBe('paid');
-    }
+    expect(liveSheet(visit.facts(NOW + 24 * 3_600_000))).toBe('daily');
+    expect(liveSheet({ ...visit.facts(), restartsLeft: 1 })).toBe('daily');
   });
 
-  it('grants one heart on the reward and restarts on it: same balance, a fresh attempt', async () => {
-    const visit = emptyRun();
-    const old = visit.attemptId!;
-    const grants: GrantHeartResult[] = [];
-    const watch = await watchForHeart(ok, id => {
-      const grant = claimHeart(visit.health, id, NOW);
-      visit.health = grant.health;
-      grants.push(grant);
-      return grant;
-    }, 'restart:t1');
-    expect(watch).toMatchObject({ kind: 'granted', granted: true, hearts: 1 });
-    expect(grants).toHaveLength(1);
-    expect(ticketStillApplies({ attemptId: old, startRequest: 4 }, { disposed: false, attemptId: old, startRequest: 4, outcomeRecorded: false })).toBe(true);
-    // The heart is there now, so the restart is the paid one, and it spends that heart once.
-    expect(restartKind(visit.facts())).toBe('confirm_paid');
-    expect(visit.start('new_attempt')).toBe(true);
-    expect(visit.attemptId).not.toBe(old);
-    expect(visit.health).toMatchObject({ hearts: 0, spentAttempt: visit.attemptId });
-    expect(finishAttempt(visit.health, old, 3, NOW).refunded).toBe(false);
+  it('restarts on the reward, the same attempt, with nothing banked or charged', async () => {
+    const visit = spentRun();
+    const id = visit.attemptId;
+    expect(await watchForRestart(ok)).toEqual({ kind: 'rewarded' });
+    expect(visit.start('free_restart')).toBe(true);
+    expect(visit.attemptId).toBe(id);
+    expect(visit.health.hearts).toBe(4);
+    expect(restartsLeft(visit.restarts, NOW)).toBe(0);
   });
 
-  it('leaves the run and the hearts alone when the ad fails, closes or is not there', async () => {
+  it('leaves the run alone when the ad fails, closes or is not there', async () => {
     for (const reason of ['unavailable', 'cancelled', 'failed'] as const) {
-      const visit = emptyRun();
-      const before = { health: visit.health, attemptId: visit.attemptId };
-      let redeemed = 0;
-      const watch = await watchForHeart(broken(reason), id => { redeemed++; return claimHeart(visit.health, id, NOW); }, `restart:${reason}`);
-      expect(watch).toEqual({ kind: 'failed', reason });
-      expect(redeemed).toBe(0);
-      expect(visit.health).toEqual(before.health);
-      expect(visit.attemptId).toBe(before.attemptId);
+      expect(await watchForRestart(broken(reason))).toEqual({ kind: 'failed', reason });
     }
     // A show that throws is a failure too, never an exception into the scene.
-    const thrown = await watchForHeart(() => Promise.reject(new Error('sdk')), () => { throw new Error('never'); }, 'restart:x');
-    expect(thrown).toEqual({ kind: 'failed', reason: 'failed' });
+    expect(await watchForRestart(() => Promise.reject(new Error('sdk')))).toEqual({ kind: 'failed', reason: 'failed' });
   });
 
-  it('cannot grant twice or restart twice for one reward', async () => {
-    // The SDK firing Rewarded and resolving show both reach the claim: one heart.
-    const first = claimHeart(health(0), 'restart:dup', NOW);
-    const second = claimHeart(first.health, 'restart:dup', NOW);
-    expect(first).toMatchObject({ granted: true, health: { hearts: 1 } });
-    expect(second).toMatchObject({ granted: false, health: { hearts: 1 } });
-    // And the scene runs one watch at a time, under the commerce lock, then hides the sheet
-    // before it starts: a second confirm has nothing to land on.
+  it('restarts once for one reward, and only into the run it was asked on', () => {
     const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
-    const watch = scene.slice(scene.indexOf('private async watchToRestart('), scene.indexOf('private async buyToRestart('));
+    const watch = scene.slice(scene.indexOf('private async watchToRestart('), scene.indexOf('private pausedByController('));
     expect(watch).toContain('if (this.commerceBusy || this.curtain.active) return;');
     expect(watch.match(/this\.startRound\(/g)).toHaveLength(1);
-    expect(watch.indexOf('this.restartSheet.hide();\n      playAnalytics.restartConfirmed')).toBeLessThan(watch.indexOf("void this.startRound('new_attempt')"));
+    expect(watch.indexOf('this.restartSheet.hide();\n      playAnalytics.restartConfirmed')).toBeLessThan(watch.indexOf("void this.startRound('free_restart')"));
+    expect(watch.indexOf('if (this.disposed) {')).toBeLessThan(watch.indexOf('this.restartSheet.setBusy(null);\n      if (watch.kind'));
+    expect(watch.indexOf('if (!this.ticketHolds(ticket))')).toBeLessThan(watch.indexOf("this.startRound('free_restart')"));
+    expect(watch).not.toMatch(/useDailyRestart|redeemHeart/);
+    // Interruptions move the start request, so an ad that returns after a pause restarts nothing.
+    const interrupt = scene.slice(scene.indexOf('  private interrupt(): void {'), scene.indexOf('  private persistAbandonedAttempt('));
+    expect(interrupt).toContain('++this.startRequest;');
   });
 
-  it('restarts nothing into a scene that went away, or a run that ended or moved on', () => {
+  it('spends a daily restart only once the sheet that said so is confirmed, and before the restart runs', () => {
+    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
+    const confirm = scene.slice(scene.indexOf('  private onRestartSheet('), scene.indexOf('  private restartTicket('));
+    expect(confirm.match(/useDailyRestart\(/g)).toHaveLength(1);
+    expect(confirm.indexOf("if (liveSheet(facts) !== shown)")).toBeLessThan(confirm.indexOf('useDailyRestart('));
+    expect(confirm.indexOf('useDailyRestart(')).toBeLessThan(confirm.indexOf("void this.startRound('free_restart');\n      return;\n    }\n    void this.watchToRestart"));
+    expect(scene).not.toContain('buyToRestart');
+  });
+
+  it('checks the ticket the scene holds against the run that came back', () => {
     const ticket = { attemptId: 'a1', startRequest: 7 };
     const live = { disposed: false, attemptId: 'a1', startRequest: 7, outcomeRecorded: false };
     expect(ticketStillApplies(ticket, live)).toBe(true);
@@ -343,24 +340,15 @@ describe('the zero-heart rewarded restart', () => {
     expect(ticketStillApplies(ticket, { ...live, outcomeRecorded: true })).toBe(false);
     expect(ticketStillApplies(ticket, { ...live, startRequest: 8 })).toBe(false);
     expect(ticketStillApplies(ticket, { ...live, attemptId: 'a2' })).toBe(false);
-    // The scene checks the dead-scene case before touching anything, and the ticket before restarting.
-    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
-    const watch = scene.slice(scene.indexOf('private async watchToRestart('), scene.indexOf('private async buyToRestart('));
-    expect(watch.indexOf('if (this.disposed) {')).toBeLessThan(watch.indexOf('this.restartSheet.setBusy(null);\n      if (watch.kind'));
-    expect(watch.indexOf('if (!this.ticketHolds(ticket))')).toBeLessThan(watch.indexOf("this.startRound('new_attempt')"));
-    // Interruptions move the start request, so an ad that returns after a pause restarts nothing.
-    const interrupt = scene.slice(scene.indexOf('  private interrupt(): void {'), scene.indexOf('  private persistAbandonedAttempt('));
-    expect(interrupt).toContain('++this.startRequest;');
   });
 
-  it('keeps the play screen\'s own Watch and the map\'s working through the same helper', async () => {
+  it('keeps the play screen\'s own Watch and the map\'s working through the heart helper', async () => {
     const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
     const play = scene.slice(scene.indexOf('  private async watchAd('), scene.indexOf('  private async buyFill('));
     expect(play).toContain('watchForHeart(() => monetization().showRewarded(), redeemHeart, claimId)');
     expect(play).toContain("void this.startRound('resume');");
     const map = readFileSync('src/scenes/MapScene.ts', 'utf8');
     expect(map).toContain('const watch = await watchForHeart(() => monetization().showRewarded()');
-    // One ad, one heart, at the empty play screen: the restart it leads to is the start's.
     const watch = await watchForHeart(ok, id => claimHeart(health(0), id, NOW), 'play:t1');
     expect(watch).toMatchObject({ kind: 'granted', granted: true, hearts: 1 });
   });
@@ -386,7 +374,7 @@ describe('when the run has genuinely begun', () => {
     expect(scene.match(/this\.scoredResponseBegun = true/g)).toHaveLength(1);
     expect(scene).toContain("this.noteScoredResponse('respond');");
     expect(scene).toContain("this.noteScoredResponse('judged');");
-    expect(scene).toContain('if (resumeId === null) this.scoredResponseBegun = false;');
+    expect(scene).toContain("if (resumeId === null || mode === 'free_restart') this.scoredResponseBegun = false;");
   });
 
   it('resets the run\'s own state on every start, and ends an attempt before anything can fail', () => {
@@ -445,50 +433,46 @@ describe('the sheet', () => {
   const frame = { centerX: 360, bottom: 1100, maxWidth: 680, s: 1, control: 88 };
 
   it('keeps every control a thumb wide and inside the card, and never overlapping', () => {
-    for (const kind of ['free', 'paid', 'empty'] as const) {
-      for (const offers of [{ refill: true, premium: true }, { refill: true, premium: false }, { refill: false, premium: false }]) {
-        const layout = restartSheetLayout(kind, frame, offers);
-        const controls = [layout.confirm, layout.refill, layout.premium, layout.keep].filter(r => r !== null);
-        for (const r of controls) {
-          expect(r.height).toBeGreaterThanOrEqual(88);
-          expect(r.x).toBeGreaterThanOrEqual(layout.card.x);
-          expect(r.x + r.width).toBeLessThanOrEqual(layout.card.x + layout.card.width + 1e-6);
-          expect(r.y + r.height).toBeLessThanOrEqual(layout.card.y + layout.card.height);
-        }
-        for (let i = 0; i < controls.length; i++) for (let j = i + 1; j < controls.length; j++) {
-          const a = controls[i]!, b = controls[j]!;
-          const apart = a.x + a.width <= b.x || b.x + b.width <= a.x || a.y + a.height <= b.y || b.y + b.height <= a.y;
-          expect(apart).toBe(true);
-        }
-        expect(layout.card.y + layout.card.height).toBeCloseTo(frame.bottom);
-        if (kind !== 'empty') expect(layout.refill ?? layout.premium).toBeNull();
+    for (const s of [1, 0.6]) {
+      const layout = restartSheetLayout({ ...frame, s });
+      const controls = [layout.confirm, layout.keep];
+      for (const r of controls) {
+        expect(r.height).toBeGreaterThanOrEqual(88);
+        expect(r.x).toBeGreaterThanOrEqual(layout.card.x);
+        expect(r.x + r.width).toBeLessThanOrEqual(layout.card.x + layout.card.width + 1e-6);
+        expect(r.y + r.height).toBeLessThanOrEqual(layout.card.y + layout.card.height);
       }
+      expect(layout.confirm.y + layout.confirm.height).toBeLessThanOrEqual(layout.keep.y);
+      expect(layout.card.y + layout.card.height).toBeCloseTo(frame.bottom);
     }
   });
 
   it('routes a tap to its control, the card face to nothing, and off the card back to the level', () => {
-    const layout = restartSheetLayout('empty', frame, { refill: true, premium: true });
+    const layout = restartSheetLayout(frame);
     const centre = (r: { x: number; y: number; width: number; height: number }) => [r.x + r.width / 2, r.y + r.height / 2] as const;
     expect(restartSheetHit(layout, ...centre(layout.confirm))).toBe('confirm');
-    expect(restartSheetHit(layout, ...centre(layout.refill!))).toBe('refill');
-    expect(restartSheetHit(layout, ...centre(layout.premium!))).toBe('premium');
     expect(restartSheetHit(layout, ...centre(layout.keep))).toBe('keep');
     expect(restartSheetHit(layout, layout.card.x + 4, layout.card.y + 4)).toBe('swallow');
     expect(restartSheetHit(layout, layout.card.x + 4, layout.card.y - 20)).toBeNull();
   });
 
-  it('holds its controls while it arms, and while an ad or a purchase is out', () => {
+  it('holds its controls while it arms, and while an ad is out', () => {
     expect(guardedSheetTap('confirm', 10, 10 + RESTART_SHEET_ARM_SEC, false)).toBe('swallow');
     expect(guardedSheetTap('confirm', 11, 10 + RESTART_SHEET_ARM_SEC, false)).toBe('confirm');
     expect(guardedSheetTap('keep', 11, 0, true)).toBe('swallow');
     expect(guardedSheetTap(null, 11, 0, true)).toBeNull();
   });
 
-  it('says the cost before anything is spent, and only where one will be', () => {
-    expect(RESTART_COPY.free).toMatchObject({ title: 'Restart from the beginning?', note: 'No heart will be used.' });
-    expect(RESTART_COPY.paid).toMatchObject({ title: 'Restart level?', note: 'This run will end. Restarting uses 1 heart.' });
+  it('says what a restart takes before anything is spent, and only where something will be', () => {
+    expect(RESTART_COPY.free).toMatchObject({ title: 'Restart from the beginning?', note: 'No restart will be used.' });
+    expect(RESTART_COPY.daily.title).toBe('Restart level?');
+    expect(dailyNote(2)).toBe("Uses 1 of today's 2 restarts.");
+    expect(dailyNote(1)).toBe('Uses your last restart for today.');
+    expect(sheetNote('daily', 1)).toBe(dailyNote(1));
+    expect(sheetNote('empty', 0)).toBe(RESTART_COPY.empty.note);
     expect(RESTART_COPY.keep).toBe('Keep playing');
-    expect(RESTART_COPY.free.note).not.toMatch(/uses/);
+    // Hearts are no longer what a restart costs, so no sheet mentions one.
+    for (const kind of ['free', 'daily', 'empty'] as const) expect(sheetNote(kind, 2) + RESTART_COPY[kind].title).not.toMatch(/heart/i);
   });
 });
 
@@ -501,20 +485,20 @@ describe('restart analytics', () => {
   });
 
   it('tells requested, confirmed, cancelled and a failed rewarded restart apart, one event each', () => {
-    ledger.restartRequested(8, 'paid', 3, false);
-    ledger.restartCancelled(8, 'paid', 'keep_playing', 3, false);
-    ledger.restartRequested(8, 'empty', 0, false);
-    ledger.rewardedRestartFailed(8, 'cancelled');
-    ledger.restartConfirmed(8, 'rewarded', 1, false);
-    ledger.restartRequested(9, 'none', 0, true);
-    ledger.restartConfirmed(9, 'free', 0, true);
+    ledger.restartRequested(12, 'daily', 2, false);
+    ledger.restartCancelled(12, 'daily', 'keep_playing', 2, false);
+    ledger.restartRequested(12, 'empty', 0, false);
+    ledger.rewardedRestartFailed(12, 'cancelled');
+    ledger.restartConfirmed(12, 'rewarded', 0, false);
+    ledger.restartRequested(13, 'none', 2, true);
+    ledger.restartConfirmed(13, 'free', 2, true);
     expect(sent.map(s => s.event)).toEqual([
       'restart_requested', 'restart_cancelled', 'restart_requested', 'rewarded_restart_failed', 'restart_confirmed',
       'restart_requested', 'restart_confirmed',
     ]);
-    expect(sent[0]!.payload).toEqual({ level: 8, area: 1, placement: 'restart', hearts: 3, premium: 0, sheet: 'paid' });
-    expect(sent[3]!.payload).toEqual({ level: 8, area: 1, placement: 'restart', reason: 'cancelled' });
-    expect(sent[4]!.payload).toMatchObject({ cost: 'rewarded', hearts: 1 });
+    expect(sent[0]!.payload).toEqual({ level: 12, area: 2, placement: 'restart', restarts_left: 2, premium: 0, sheet: 'daily' });
+    expect(sent[3]!.payload).toEqual({ level: 12, area: 2, placement: 'restart', reason: 'cancelled' });
+    expect(sent[4]!.payload).toMatchObject({ cost: 'rewarded', restarts_left: 0 });
     expect(sent[6]!.payload).toMatchObject({ cost: 'free', premium: 1 });
   });
 

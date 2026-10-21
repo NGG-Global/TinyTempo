@@ -1,5 +1,5 @@
 import {
-  abandonAttempt, attemptCostsHeart, reconcile, type GrantHeartResult, type Health,
+  abandonAttempt, attemptCostsHeart, type GrantHeartResult, type Health,
 } from './health';
 import type { Progress } from './progress';
 import type { RewardedReason, RewardedResult } from '../monetization/types';
@@ -7,11 +7,13 @@ import type { RewardedReason, RewardedResult } from '../monetization/types';
 /**
  * What the restart puck does, as pure functions of the run and the save.
  *
- * **One heart is one real attempt at an unfinished frontier level.** Resume after an
- * interruption continues the attempt that already paid. A restart before the player's
- * first scored response is a reset of the same attempt and is free. A restart after it
- * ends the attempt and begins another, which costs a heart through `beginAttempt` like any
- * other attempt. Nothing here touches storage or the scene; `PlayScene` reads the answers.
+ * **One heart is one attempt at an unfinished frontier level, and a restart is a resource of
+ * its own** (`game/dailyRestarts.ts`). Resume after an interruption continues the attempt that
+ * already paid. A restart before the player's first scored response is a reset of the same
+ * attempt and is free. A restart after it uses one of the day's restarts and is the same
+ * attempt from its first task again: the heart it began on stays its heart, so nothing is
+ * charged twice. With none left, a rewarded ad buys one restart, or the run goes on. Nothing
+ * here touches storage or the scene; `PlayScene` reads the answers.
  */
 
 /**
@@ -20,10 +22,10 @@ import type { RewardedReason, RewardedResult } from '../monetization/types';
  *   that has not reached its first downbeat yet (no attempt exists to end).
  * - `confirm_free`: a frontier attempt that has not reached a scored response. Restarting
  *   resets it at no cost, and the sheet says so.
- * - `confirm_paid`: a frontier attempt in its scored part, with a heart to spend.
- * - `out_of_hearts`: the same, with none. The run continues until a heart is found.
+ * - `confirm_restart`: a frontier attempt in its scored part, with a daily restart to use.
+ * - `out_of_restarts`: the same, with none left today. The ad buys one, or the run goes on.
  */
-export type RestartKind = 'try_again' | 'immediate' | 'confirm_free' | 'confirm_paid' | 'out_of_hearts';
+export type RestartKind = 'try_again' | 'immediate' | 'confirm_free' | 'confirm_restart' | 'out_of_restarts';
 
 export interface RestartFacts {
   readonly level: number;
@@ -37,6 +39,8 @@ export interface RestartFacts {
   readonly outcomeRecorded: boolean;
   /** The attempt has entered its first scored response (`scoredResponseBegins`). */
   readonly scoredResponseBegun: boolean;
+  /** Today's restarts still unused (`restartsLeft`). */
+  readonly restartsLeft: number;
 }
 
 export function restartKind(facts: RestartFacts): RestartKind {
@@ -44,27 +48,27 @@ export function restartKind(facts: RestartFacts): RestartKind {
   if (facts.premium || !attemptCostsHeart(facts.progress, facts.level)) return 'immediate';
   if (facts.attemptId === null) return 'immediate';
   if (!facts.scoredResponseBegun) return 'confirm_free';
-  return reconcile(facts.health, facts.now).hearts > 0 ? 'confirm_paid' : 'out_of_hearts';
+  return facts.restartsLeft > 0 ? 'confirm_restart' : 'out_of_restarts';
 }
 
 /** The three sheets the puck can raise. `immediate` and `try_again` raise none. */
-export type RestartSheetKind = 'free' | 'paid' | 'empty';
+export type RestartSheetKind = 'free' | 'daily' | 'empty';
 
 export function sheetFor(kind: RestartKind): RestartSheetKind | null {
   switch (kind) {
     case 'confirm_free': return 'free';
-    case 'confirm_paid': return 'paid';
-    case 'out_of_hearts': return 'empty';
+    case 'confirm_restart': return 'daily';
+    case 'out_of_restarts': return 'empty';
     default: return null;
   }
 }
 
 /**
  * The sheet an open sheet should become as the run moves under it. A free sheet whose
- * response has begun becomes paid; an empty sheet whose heart regenerated becomes paid,
- * because the ad is never offered while a heart is there; a run that turned free (Premium
- * arrived, or the level stopped costing) shows the free sheet, which never mentions a
- * heart. A recorded result closes it: the result has its own Try again.
+ * response has begun becomes the daily one; an empty sheet left open past midnight becomes
+ * the daily one, because the ad is never offered while a restart is there; a run that turned
+ * free (Premium arrived, or the level stopped costing) shows the free sheet, which never
+ * mentions a cost. A recorded result closes it: the result has its own Try again.
  */
 export function liveSheet(facts: RestartFacts): RestartSheetKind | null {
   const kind = restartKind(facts);
@@ -78,9 +82,10 @@ export function liveSheet(facts: RestartFacts): RestartSheetKind | null {
  * result exists.
  * - `resume`: the attempt continues (Resume, Retry after a failed audio start, the first
  *   start). A finished attempt is never resumed.
- * - `free_restart`: the same attempt from its first task; nothing is spent or ended.
- * - `new_attempt`: the attempt ends here and the next downbeat begins another — the paid
- *   restart, and Try again after a result.
+ * - `free_restart`: the same attempt from its first task; no heart is spent and nothing is
+ *   ended. Every restart from the puck, a daily or rewarded one included.
+ * - `new_attempt`: the attempt ends here and the next downbeat begins another — Try again
+ *   and the replay block after a result.
  */
 export type StartMode = 'resume' | 'free_restart' | 'new_attempt';
 
@@ -149,7 +154,8 @@ export function releaseAttempt(health: Health, handover: AttemptHandover, now: n
 /**
  * Whether a phase change, or a judgement, means the attempt's scored part has begun. The
  * first-run pass and a finer grid's introduction count toward nothing, and the DEV
- * rehearsal spends nothing, so none of them can turn a free restart into a paid one.
+ * rehearsal spends nothing, so none of them can turn a free restart into one that uses a
+ * daily restart. A restart clears it: the new pass starts free until it scores again.
  */
 export function scoredResponseBegins(event: 'respond' | 'judged' | 'other', context: {
   readonly teaching: boolean;
@@ -160,14 +166,28 @@ export function scoredResponseBegins(event: 'respond' | 'judged' | 'other', cont
   return !context.teaching && !context.introducing && !context.rehearsal;
 }
 
+/** What one rewarded watch for a restart came to: a restart, or why not. */
+export type RestartWatch = { readonly kind: 'rewarded' } | { readonly kind: 'failed'; readonly reason: RewardedReason };
+
+/**
+ * One rewarded video for one restart, used straight away: nothing is banked, so there is no
+ * grant to dedupe and nothing left over if the run ended while it played. A show that throws
+ * is a failure, never an exception into the scene.
+ */
+export async function watchForRestart(show: () => Promise<RewardedResult>): Promise<RestartWatch> {
+  let result: RewardedResult;
+  try { result = await show(); } catch { return { kind: 'failed', reason: 'failed' }; }
+  return result.ok ? { kind: 'rewarded' } : { kind: 'failed', reason: result.reason };
+}
+
 /** What one rewarded watch came to. */
 export type HeartWatch =
   | { readonly kind: 'granted'; readonly granted: boolean; readonly hearts: number }
   | { readonly kind: 'failed'; readonly reason: RewardedReason };
 
 /**
- * One rewarded video for one heart: the play screen's Watch and the restart sheet's both
- * come through here, so neither has an ad or reward path of its own. The heart is granted
+ * One rewarded video for one heart: the play screen's Watch and the map's both come through
+ * here, so neither has an ad or reward path of its own. The heart is granted
  * the moment the SDK confirms the reward, through the claim id's dedupe, whatever happened
  * to the screen meanwhile: the player watched it, so the heart is theirs. What the caller
  * does with it afterwards is the caller's to check.
@@ -183,8 +203,8 @@ export async function watchForHeart(
 }
 
 /**
- * A restart the player asked for while something asynchronous ran — a rewarded video or
- * a purchase — still applies only to the run it was asked on: the same scene, the same
+ * A restart the player asked for while something asynchronous ran — a rewarded video —
+ * still applies only to the run it was asked on: the same scene, the same
  * attempt, no result recorded since, and no other start begun in between.
  */
 export interface RestartTicket {
