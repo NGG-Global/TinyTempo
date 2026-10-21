@@ -163,6 +163,23 @@ if (!manifest.includes('android:appCategory="game"')) {
     + '    the portrait lock on every tablet and the game runs sideways at 2048 x 1280. Games are\n'
     + '    the documented exception. See docs/TABLETS.md.');
 }
+// The daily reminder (docs/REMINDERS.md). Without the removal the merged manifest carries the
+// plugin's SCHEDULE_EXACT_ALARM, which Play questions and nothing here uses; without the icon
+// every reminder shows Android's blank square in the status bar; without the sync the plugin
+// is not in the build at all, and the switch in Settings turns on nothing.
+if (!/SCHEDULE_EXACT_ALARM"\s+tools:node="remove"/.test(manifest)) {
+  notes.push('AndroidManifest.xml does not remove SCHEDULE_EXACT_ALARM, which the local-notifications plugin\n'
+    + '    declares. The reminder is scheduled inexact and needs none. See docs/REMINDERS.md.');
+}
+if (read('android/app/src/main/res/drawable/ic_stat_tiny_tempo.xml') === null) {
+  notes.push('res/drawable/ic_stat_tiny_tempo.xml is missing, so the daily reminder shows a blank square\n'
+    + '    in the status bar. See docs/REMINDERS.md.');
+}
+if (!(read('android/capacitor.settings.gradle') ?? '').includes(':capacitor-local-notifications')) {
+  notes.push('android/capacitor.settings.gradle does not include @capacitor/local-notifications: run\n'
+    + '    `npx cap sync android`, or the daily reminder is not in this build.');
+}
+
 /**
  * Firebase starts collecting the moment it is initialised unless the manifest holds it, and
  * the game only applies the player's answer once its JavaScript has booted. Without these,

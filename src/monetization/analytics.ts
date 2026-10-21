@@ -73,6 +73,10 @@ export const SERVICE_EVENTS = [
   'leaderboard_score_submitted',
   'leaderboard_opened',
   'leaderboard_submit_failed',
+  'reminder_offer_shown',
+  'reminder_offer_closed',
+  'reminder_permission',
+  'reminder_disabled',
 ] as const;
 
 /**
@@ -448,6 +452,14 @@ export interface AnalyticsPayloads {
     /** 1 when the tap had to offer Play Games sign-in first. */
     readonly sign_in: Flag;
   };
+  /** The one-time daily reminder offer opened on the map, after a first day's stamp (`docs/REMINDERS.md`). */
+  readonly reminder_offer_shown: { readonly stamps: number };
+  /** How the offer closed: Remind me, Not now, or Android's back. */
+  readonly reminder_offer_closed: { readonly choice: 'remind' | 'not_now' | 'back' };
+  /** The player asked for the reminder, and what Android answered. Never sent for a check without asking. */
+  readonly reminder_permission: { readonly source: 'offer' | 'settings'; readonly result: 'granted' | 'denied' };
+  /** The reminder switched off in Settings. */
+  readonly reminder_disabled: { readonly source: 'settings' };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
   /** Level 100 was cleared for the first time on this device: the mode opened. */

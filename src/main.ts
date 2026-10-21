@@ -10,6 +10,7 @@ import { installDiagnostics } from '@/diagnostics/boot';
 import { bootMonetization } from '@/monetization/boot';
 import { bootAudioRoute } from '@/audio/routeBoot';
 import { bootPlayGames } from '@/playgames/boot';
+import { bootReminders } from '@/reminders/sync';
 import { bootAppReview } from '@/review/boot';
 import { bootUpdates } from '@/updates/boot';
 import { installArcDetail } from '@/ui/arcDetail';
@@ -51,6 +52,8 @@ function start(): void {
     void bootAudioRoute();
     // The same line: a review milestone's flow is prepared on its result screen, never here.
     void bootAppReview();
+    // The daily reminder: rescheduled from the stamp and the setting, never asked for here.
+    void bootReminders();
     // After `installDiagnostics`, which puts the crash-breadcrumb wrapper on the event
     // bus: the provider composes with whatever is installed, so the later it attaches
     // the more it inherits, and attaching first would leave it to be wrapped instead.

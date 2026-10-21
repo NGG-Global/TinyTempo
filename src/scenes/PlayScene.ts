@@ -36,6 +36,7 @@ import {
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
+import { syncReminders } from '@/reminders/sync';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
@@ -2401,7 +2402,10 @@ export class PlayScene extends BaseScene {
         level: this.spec.level, before, after: outcome.progress, cleared: outcome.cleared, stars: outcome.stars,
         perfect: this.tally.perfect, flawless: this.tally.flawless, keepsake: this.keepsake !== null,
       });
-      playAnalytics.objectives(recordObjectives(report, Date.now(), objectiveContext(before)));
+      const objectives = recordObjectives(report, Date.now(), objectiveContext(before));
+      playAnalytics.objectives(objectives);
+      // The day's stamp cancels this evening's reminder; nothing else here changes it.
+      if (objectives?.allCompleted) void syncReminders();
       // Play Games achievements follow the saved clears. Not when the save failed: an unlock
       // cannot be taken back, and the next launch would not find the clear that earned it.
       void syncAchievements(outcome.progress);

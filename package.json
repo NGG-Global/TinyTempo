@@ -32,6 +32,7 @@
     "@capacitor/android": "^8.5.1",
     "@capacitor/app": "^8.1.2",
     "@capacitor/core": "^8.5.1",
+    "@capacitor/local-notifications": "^8.3.1",
     "@sentry/browser": "^10.75.0",
     "phaser": "^4.2.1"
   },

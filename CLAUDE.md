@@ -852,6 +852,19 @@ completed day — no currency, no streak to lose, nothing to buy. Every stored f
 validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
 tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
 
+**A daily reminder, for a player who asks for one** (`reminders/`, `docs/REMINDERS.md`): one
+local notification at 6 pm while the day's objectives are open, at most three scheduled ahead
+of the last time the game was open, never once the day is stamped. Native only. Off until
+turned on: the map offers it once, after the first day's stamp, as the screen hint with a second
+button (`SCREEN_HINTS.reminder`, *Remind me* / *Not now*), and Settings → Sound & feel has the
+switch, which reads *Turned off in Android settings* when Android refuses. **Android's prompt
+comes only from that tap** (`turnRemindersOn`): `syncReminders` checks the permission and never
+schedules without it, because the plugin's `schedule()` would ask by itself. Every reminder is
+`isExactNotification: false` and the manifest removes `SCHEDULE_EXACT_ALARM`, because the
+plugin's default opens the system's *Alarms & reminders* screen. Rescheduled at boot, on every
+background and return, and when a level stamps the day; nothing repeats on its own. The setting
+(`tiny-tempo.reminders.v1`) and the offer's flag (`hintReminder`) are device-local.
+
 **A heart pays for an attempt; a restart pays with a restart** (`game/restart.ts`,
 `game/dailyRestarts.ts`, `ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
 that paid, **from the task it stopped in** (`resumeTask`): finished tasks are kept, and the
@@ -1228,6 +1241,10 @@ src/
     playUpdate.ts      Flexible vs immediate, when to restart; no native import
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
     boot.ts            Native-only check on boot and resume
+  reminders/
+    reminder.ts        The daily reminder's rules: when, what it says, the setting, the offer; pure
+    native.ts          The local-notifications plugin: permission, schedule, cancel; inexact, never asking by itself
+    sync.ts            Native-only wiring: boot, background and return, the stamp, and the player's switch
   review/
     appReview.ts       The review milestone, the wait, when the opportunity is spent; no native import
     reviewRecord.ts    Which milestones this device has tried; never in a save code

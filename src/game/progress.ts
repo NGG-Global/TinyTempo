@@ -216,12 +216,13 @@ const SCREEN_HINT_FLAG = {
   scrapbook: 'hintScrapbook',
   settings: 'hintSettings',
   endless: 'hintEndless',
+  reminder: 'hintReminder',
 } as const satisfies Record<ScreenHintId, TeachFlag>;
 
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
 export const TEACH_FLAGS = [
   'seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase',
-  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless', 'lastOffbeat',
+  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless', 'lastOffbeat', 'hintReminder',
 ] as const;
 export type TeachFlag = typeof TEACH_FLAGS[number];
 type Teach = { readonly [K in TeachFlag]?: unknown };

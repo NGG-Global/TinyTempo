@@ -38,8 +38,11 @@ export class ScreenHint {
   private readonly title: Phaser.GameObjects.Text;
   private readonly rows: readonly { readonly bead: Phaser.GameObjects.Text; readonly line: Phaser.GameObjects.Text }[];
   private readonly actionLabel: Phaser.GameObjects.Text;
+  /** The quieter second answer, on a card that asks a question; null on a plain hint. */
+  private readonly secondaryLabel: Phaser.GameObjects.Text | null;
   private readonly cardRect = new Rect();
   private readonly actionRect = new Rect();
+  private readonly secondaryRect = new Rect();
   /** Each line's first row of text, for the bead to sit on. Measured at layout. */
   private firstLine: number[] = [];
   private shown = false;
@@ -64,8 +67,11 @@ export class ScreenHint {
       line: body(scene, text, { size: 25, colour: PALETTE.ink }).setOrigin(0, 0),
     }));
     this.actionLabel = display(scene, this.copy.action, { size: 32, colour: SHELL.cream, align: 'center' }).setOrigin(0.5);
+    this.secondaryLabel = this.copy.secondary === undefined ? null
+      : display(scene, this.copy.secondary, { size: 30, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5);
     this.layer = scene.add.container(0, 0, [
       this.scrim, this.plate, this.eyebrow, this.title, ...this.rows.flatMap(r => [r.bead, r.line]), this.actionLabel,
+      ...(this.secondaryLabel === null ? [] : [this.secondaryLabel]),
     ]).setDepth(1000).setVisible(false);
     this.camera = scene.cameras.add(0, 0, 1, 1, false, 'hint').setVisible(false);
     scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this);
@@ -101,6 +107,7 @@ export class ScreenHint {
       resize(row.line, 25 * s, PALETTE.ink, STYLE.current, false);
     }
     resize(this.actionLabel, 32 * s, SHELL.cream);
+    if (this.secondaryLabel !== null) resize(this.secondaryLabel, 30 * s, PALETTE.ink, STYLE.current, false);
     const width = this.cardWidth();
     balanceWrap(this.title, width - 2 * HINT.pad * s);
     // Balanced, so no line ends on one word alone ("…came / from.").
@@ -130,6 +137,7 @@ export class ScreenHint {
     if (!this.shown) return false;
     if (at - this.openedAt < HINT.armSec) return true;
     if (this.actionRect.contains(x, y)) { vibrate('tap'); this.close('action'); }
+    else if (this.secondaryLabel !== null && this.secondaryRect.contains(x, y)) { vibrate('tap'); this.close('secondary'); }
     else if (!this.cardRect.contains(x, y) && this.copy.outsideCloses) this.close('outside');
     return true;
   }
@@ -190,13 +198,32 @@ export class ScreenHint {
       place(row.bead, left + r, beadY);
       place(row.line, left + 2 * r + HINT.beadGap * s, top + drop[i]!);
     });
-    const bw = Math.min(HINT.buttonWidth * s, width - 2 * HINT.pad * s), bh = HINT.buttonHeight * s;
+    const bh = HINT.buttonHeight * s;
     const by = stack.buttonY + rise;
-    drawPanel(g, new Rect(f.centerX - bw / 2, by, bw, bh), s, { fill: PALETTE.coral, depth: 8 });
-    place(this.actionLabel, f.centerX, by + bh / 2);
     // The target is the touch floor at least, centred on the drawn block.
     const hit = Math.max(bh, LAYOUT.minTouchTarget * s);
-    this.actionRect.setTo(f.centerX - bw / 2, stack.buttonY + bh / 2 - hit / 2, bw, hit);
+    const inner = width - 2 * HINT.pad * s;
+    if (this.secondaryLabel === null) {
+      const bw = Math.min(HINT.buttonWidth * s, inner);
+      drawPanel(g, new Rect(f.centerX - bw / 2, by, bw, bh), s, { fill: PALETTE.coral, depth: 8 });
+      place(this.actionLabel, f.centerX, by + bh / 2);
+      this.actionRect.setTo(f.centerX - bw / 2, stack.buttonY + bh / 2 - hit / 2, bw, hit);
+      return;
+    }
+    // A question: the quieter answer in bench wood on the left, the coral one on the right,
+    // side by side and the same size, so neither is the only way out.
+    const gap = HINT.buttonGap * s / 2;
+    const bw = Math.min(HINT.buttonWidth * s, (inner - gap) / 2);
+    const quiet = f.centerX - gap / 2 - bw, right = f.centerX + gap / 2;
+    drawPanel(g, new Rect(quiet, by, bw, bh), s, { fill: SHELL.bench, depth: 8 });
+    drawPanel(g, new Rect(right, by, bw, bh), s, { fill: PALETTE.coral, depth: 8 });
+    place(this.secondaryLabel, quiet + bw / 2, by + bh / 2);
+    place(this.actionLabel, right + bw / 2, by + bh / 2);
+    for (const [text, room] of [[this.secondaryLabel, bw - 24 * s], [this.actionLabel, bw - 24 * s]] as const) {
+      text.setScale(text.width > room ? room / text.width : 1);
+    }
+    this.secondaryRect.setTo(quiet, stack.buttonY + bh / 2 - hit / 2, bw, hit);
+    this.actionRect.setTo(right, stack.buttonY + bh / 2 - hit / 2, bw, hit);
   }
 
   private destroy(): void {

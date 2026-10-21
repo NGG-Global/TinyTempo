@@ -16,7 +16,7 @@ import {
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, type Progress } from '@/game/progress';
+import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
@@ -40,7 +40,7 @@ import {
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
 import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
-import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
+import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, storedStamps, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
 import { EndlessCard } from '@/ui/endlessCard';
 import { ENDLESS } from '@/config/endless';
@@ -54,6 +54,10 @@ import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { RouteNotice } from '@/ui/routeNotice';
+import { ScreenHint } from '@/ui/screenHint';
+import type { HintClose } from '@/game/screenHints';
+import { loadReminderSettings, offerWanted } from '@/reminders/reminder';
+import { remindersAvailable, turnRemindersOn } from '@/reminders/sync';
 import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { AMBIENCE_BY_AREA, MapAmbience, type AmbienceBand } from '@/ui/mapAmbience';
 import { BakedLayer } from '@/ui/bakedLayer';
@@ -378,6 +382,12 @@ export class MapScene extends BaseScene {
   private endlessLabel!: PuckLabel;
   /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
   private routeNotice!: RouteNotice;
+  /**
+   * The daily reminder's one-time offer (`docs/REMINDERS.md`), on a native build only, and
+   * whether it is still due this visit: read once at build, opened when the map is quiet.
+   */
+  private reminderOffer: ScreenHint | null = null;
+  private reminderOfferDue = false;
   private stopWatchingRoute: (() => void) | null = null;
   private muted = false;
   /**
@@ -579,6 +589,31 @@ export class MapScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     ensureShellMusic(this);
+    // Last, after every camera: the offer draws with a camera of its own (`ui/screenHint.ts`).
+    const available = remindersAvailable();
+    this.reminderOfferDue = offerWanted({
+      available, stamps: storedStamps(Date.now()).stamps, offered: seenScreenHint('reminder'), enabled: loadReminderSettings().enabled,
+    });
+    this.reminderOffer = this.reminderOfferDue ? new ScreenHint(this, 'reminder', how => this.reminderOfferClosed(how)) : null;
+  }
+
+  /**
+   * The offer opens once the map has settled — the curtain up, the stars landed, no gate
+   * opening, no sheet or card open — so it never lands on top of something the player is
+   * watching, and it is the first thing after a day's stamp rather than in the middle of it.
+   */
+  private offerReminderWhenQuiet(now: number): void {
+    if (!this.reminderOfferDue || this.reminderOffer === null) return;
+    if (this.curtain.active || !this.flightSettled || this.ceremony !== null || this.restShown
+      || this.objectivesCard.open || this.endlessCard.open) return;
+    this.reminderOfferDue = false;
+    if (this.reminderOffer.showIfNew(now)) track('reminder_offer_shown', { stamps: storedStamps(Date.now()).stamps });
+  }
+
+  /** Remind me asks Android, from that tap; Not now and back leave it to Settings. Either way the offer is done. */
+  private reminderOfferClosed(how: HintClose): void {
+    track('reminder_offer_closed', { choice: how === 'action' ? 'remind' : how === 'secondary' ? 'not_now' : 'back' });
+    if (how === 'action') void turnRemindersOn('offer');
   }
 
   /**
@@ -650,6 +685,7 @@ export class MapScene extends BaseScene {
     this.drawDock(s, 0);
     this.drawRest(s, 0);
     this.routeNotice.layout(safe.centerX, this.footerTop, safe.width - 32 * s, s, this.controlSize);
+    this.reminderOffer?.layout(this.viewport, s);
     this.refreshRouteNotice();
     this.pressDirty = this.puckDirty = this.restPressDirty = true;
     this.cameras.main.setBounds(0, 0, full.width, this.worldHeight);
@@ -2353,6 +2389,8 @@ export class MapScene extends BaseScene {
   }
 
   public override update(_time: number, delta: number): void {
+    this.offerReminderWhenQuiet(performance.now() / 1000);
+    this.reminderOffer?.update(performance.now() / 1000, this.reducedMotion);
     this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
     this.endlessCard.update(performance.now() / 1000, this.reducedMotion);
     if (!this.drag && Math.abs(this.velocity) > 1) {
@@ -2660,7 +2698,7 @@ export class MapScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.reminderOffer?.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.drag = { id: pointer.id, scrollable: !this.restShown && !this.objectivesCard.open && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
     this.velocity = 0;
     this.touchAt = performance.now() / 1000;
@@ -2696,6 +2734,8 @@ export class MapScene extends BaseScene {
   }
   private handleTap(x: number, y: number): void {
     if (this.curtain.active) return;
+    // The offer takes every tap while it is open: nothing under it fires.
+    if (this.reminderOffer?.tap(x, y, performance.now() / 1000)) return;
     // An open card takes every tap: its Close, or anywhere off it, puts it away.
     if (this.objectivesCard.tap(x, y)) { this.puckDirty = true; return; }
     const endlessTap = this.endlessCard.tap(x, y);
@@ -2863,6 +2903,7 @@ export class MapScene extends BaseScene {
    */
   public handleBack(): boolean {
     if (this.disposed || this.curtain.active) return true;
+    if (this.reminderOffer?.back()) return true;
     if (this.objectivesCard.open) { this.objectivesCard.hide(); this.puckDirty = true; return true; }
     if (this.endlessCard.open) { this.endlessCard.hide(); this.puckDirty = true; return true; }
     if (this.restShown) { if (!this.restBusy) this.hideRest(); return true; }

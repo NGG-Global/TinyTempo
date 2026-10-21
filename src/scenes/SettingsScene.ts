@@ -25,7 +25,9 @@ import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
-import { drawBack, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawVibrate } from '@/ui/icons';
+import { drawBack, drawChecklist, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawVibrate } from '@/ui/icons';
+import { loadReminderSettings, type ReminderState } from '@/reminders/reminder';
+import { currentReminderState, remindersAvailable, turnRemindersOff, turnRemindersOn } from '@/reminders/sync';
 import { faces } from '@/ui/light';
 import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
@@ -52,7 +54,7 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
+type Action = 'back' | 'haptics' | 'reminder' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
   | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'lesson' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
@@ -133,9 +135,16 @@ export class SettingsScene extends BaseScene {
   private masterMuted = false;
   private hapticsOn = true;
   private analyticsOn = false;
+  /**
+   * The daily reminder's row, on a native build only (`docs/REMINDERS.md`): whether it is
+   * shown, and what Android says — `blocked` is on, but refused notifications.
+   */
+  private reminderRow = false;
+  private reminder: ReminderState = 'off';
+  private reminderBusy = false;
   /** 0-1 positions, so a flipped switch slides rather than jumping. */
-  private switchAt = { haptics: 1, analytics: 1 };
-  private switchedAt = { haptics: -Infinity, analytics: -Infinity };
+  private switchAt = { haptics: 1, analytics: 1, reminder: 0 };
+  private switchedAt = { haptics: -Infinity, analytics: -Infinity, reminder: -Infinity };
   private lastSfxTick = 0;
   private disposed = false;
   private stopWatchingRoute: (() => void) | null = null;
@@ -161,8 +170,13 @@ export class SettingsScene extends BaseScene {
     this.masterMuted = settings.muted;
     this.hapticsOn = settings.haptics;
     this.analyticsOn = settings.analytics;
-    this.switchAt = { haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0 };
-    this.switchedAt = { haptics: -Infinity, analytics: -Infinity };
+    this.reminderRow = remindersAvailable();
+    this.reminder = loadReminderSettings().enabled ? 'on' : 'off';
+    this.reminderBusy = false;
+    this.switchAt = { haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0, reminder: this.reminder === 'off' ? 0 : 1 };
+    this.switchedAt = { haptics: -Infinity, analytics: -Infinity, reminder: -Infinity };
+    // What Android says arrives a moment later; until then the switch shows the stored choice.
+    if (this.reminderRow) void currentReminderState().then(state => { if (!this.disposed) { this.reminder = state; this.refreshCopy(); this.pressDirty = true; } });
     this.lastSfxTick = 0;
     this.enteredAt = performance.now() / 1000;
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.16 }, glowAlpha: 0.6 });
@@ -232,6 +246,8 @@ export class SettingsScene extends BaseScene {
       mutedNote: this.banded(label(this, 'Muted', { size: 21, colour: PALETTE.coral })).setOrigin(1, 0.5),
       haptics: rowTitle('Haptics'),
       hapticsNote: rowNote('Not on this device'),
+      reminder: rowTitle('Daily reminder'),
+      reminderNote: rowNote(''),
       offset: rowTitle('Tap offset'),
       offsetNote: rowNote('· Measured on this device'),
       offsetValue: this.banded(display(this, '', { size: 48, colour: ink })).setOrigin(1, 0.5),
@@ -415,7 +431,8 @@ export class SettingsScene extends BaseScene {
     eyebrow(0);
     resize(this.texts.mutedNote!, 21 * s, PALETTE.coral, STYLE.current, false);
     this.texts.mutedNote!.setPosition(left + width - 28 * s, this.eyebrows[0]!.y).setVisible(this.masterMuted);
-    const audio = plate(row * 3);
+    // A fourth row on a build that can notify: the daily reminder's switch.
+    const audio = plate(row * (this.reminderRow ? 4 : 3));
     const level = (index: number): Phaser.Geom.Rectangle => {
       const top = audio.y + row * index;
       const trackH = SLIDER.height * s;
@@ -445,6 +462,15 @@ export class SettingsScene extends BaseScene {
     this.texts.haptics!.setPosition(left + 96 * s, audio.y + row * 2.5 - (buzzes ? 0 : 15 * s));
     this.texts.hapticsNote!.setPosition(left + 96 * s, audio.y + row * 2.5 + 19 * s);
     this.hits.push({ name: 'haptics', rect: new Phaser.Geom.Rectangle(left, audio.y + row * 2, width, row), pinned: false });
+    this.texts.reminder!.setVisible(this.reminderRow);
+    this.texts.reminderNote!.setVisible(this.reminderRow);
+    if (this.reminderRow) this.rows.reminder = switchRect(audio, audio.y + row * 3, row);
+    else delete this.rows.reminder;
+    if (this.reminderRow) {
+      this.texts.reminder!.setPosition(left + 96 * s, audio.y + row * 3.5 - 15 * s);
+      this.texts.reminderNote!.setPosition(left + 96 * s, audio.y + row * 3.5 + 19 * s);
+      this.hits.push({ name: 'reminder', rect: new Phaser.Geom.Rectangle(left, audio.y + row * 3, width, row), pinned: false });
+    }
 
     // TIMING — the measured offset, the screen that measures it, and a way back to zero.
     // A kept measurement adds to the offset already in force, so without Reset a bad
@@ -692,6 +718,11 @@ export class SettingsScene extends BaseScene {
       const row = SETTINGS.rowHeight * s;
       g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row - 1.5 * s, audio.width - 48 * s, 3 * s);
       g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row * 2 - 1.5 * s, audio.width - 48 * s, 3 * s);
+      if (this.rows.reminder) {
+        g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row * 3 - 1.5 * s, audio.width - 48 * s, 3 * s);
+        drawChecklist(g, audio.x + 56 * s, audio.y + row * 3.5, 17 * s, PALETTE.ink, this.reminder === 'off' ? 0 : 3, PALETTE.coral);
+        drawSwitch(g, this.rows.reminder, s, this.switchAt.reminder, false);
+      }
       drawNote(g, audio.x + 56 * s, audio.y + row / 2, 22 * s, PALETTE.ink);
       drawSpeaker(g, audio.x + 56 * s, audio.y + row * 1.5, 22 * s, PALETTE.ink, this.sfx === 0);
       const canBuzz = hapticsSupported();
@@ -875,6 +906,8 @@ export class SettingsScene extends BaseScene {
     this.texts.offsetValue!.setText(measured === null ? 'Not calibrated' : formatOffset(measured));
     this.texts.offsetNote!.setText(route === 'unknown' ? '· Measured on this device' : `· ${ROUTE_LABELS[route]}`);
     this.texts.hapticsNote!.setVisible(!canBuzz);
+    this.texts.reminderNote!.setText(this.reminder === 'blocked' ? 'Turned off in Android settings' : "6 pm, if today's objectives are open");
+    resize(this.texts.reminderNote!, 21 * this.uiScale, this.reminder === 'blocked' ? shade(PALETTE.coral, -0.25) : PALETTE.muted, STYLE.current, false);
     this.texts.heartCount!.setText(entitled ? '∞' : `${view.hearts}/${view.maxHearts}`);
     this.texts.heartCount!.setVisible(!entitled);
     this.texts.heartWait!.setText(entitled ? STORE_COPY.premiumOwned
@@ -915,8 +948,8 @@ export class SettingsScene extends BaseScene {
       if (!this.pressDirty) this.pressed = null;
     }
     // The switches slide rather than cut, and the slide is the only thing that redraws.
-    const switchOn = { haptics: this.hapticsOn, analytics: this.analyticsOn };
-    for (const key of ['haptics', 'analytics'] as const) {
+    const switchOn = { haptics: this.hapticsOn, analytics: this.analyticsOn, reminder: this.reminder !== 'off' };
+    for (const key of ['haptics', 'analytics', 'reminder'] as const) {
       const target = switchOn[key] ? 1 : 0;
       if (Math.abs(this.switchAt[key] - target) < 0.002) { this.switchAt[key] = target; continue; }
       const age = now - this.switchedAt[key];
@@ -1089,6 +1122,7 @@ export class SettingsScene extends BaseScene {
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Support, { from: this.from })));
         return;
       case 'haptics': this.toggleHaptics(); return;
+      case 'reminder': void this.toggleReminder(); return;
       case 'analytics': this.toggleAnalytics(); return;
       case 'adPrivacy': void this.openAdPrivacy(); return;
       case 'leaderboard': void this.openLeaderboard(); return;
@@ -1163,6 +1197,31 @@ export class SettingsScene extends BaseScene {
     saveSettings({ ...loadSettings(), haptics: this.hapticsOn });
     if (this.hapticsOn) vibrate('stamp');
     this.refreshCopy();
+  }
+
+  /**
+   * On asks Android, from this tap and only here or on the map's offer; a refusal leaves the
+   * switch on and says where to fix it, rather than a switch that will not stay on. Off
+   * cancels every scheduled reminder at once.
+   */
+  private async toggleReminder(): Promise<void> {
+    if (this.reminderBusy) return;
+    this.reminderBusy = true;
+    const turningOn = this.reminder === 'off';
+    this.reminder = turningOn ? 'on' : 'off';
+    this.switchedAt.reminder = performance.now() / 1000;
+    this.refreshCopy();
+    try {
+      if (turningOn) {
+        const state = await turnRemindersOn('settings');
+        if (!this.disposed) this.reminder = state;
+      } else {
+        await turnRemindersOff();
+      }
+    } finally {
+      this.reminderBusy = false;
+      if (!this.disposed) { this.refreshCopy(); this.pressDirty = true; }
+    }
   }
 
   /**

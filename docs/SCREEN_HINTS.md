@@ -53,3 +53,10 @@ one says a player has been told what a keepsake is, which the first keepsake's r
 also does.
 
 Players who used these screens before this build see each card once more.
+
+## A question on the same card
+
+The daily reminder's offer (`docs/REMINDERS.md`) reuses the card with a second, quieter button:
+`ScreenHintCopy.secondary`, drawn in bench wood beside the coral one, the two the same size so
+neither is the only way out, closing as `secondary`. It is the one hint that is not a screen's
+first visit: the map opens it once, after the first day's stamp, and only on a native build.

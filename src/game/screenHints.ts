@@ -10,7 +10,7 @@ import { ENDLESS } from '../config/endless';
  * or a save code. A player moving to a new phone has not seen that phone's screens, and
  * reading three short cards again costs less than a cloud schema change.
  */
-export type ScreenHintId = 'scrapbook' | 'settings' | 'endless';
+export type ScreenHintId = 'scrapbook' | 'settings' | 'endless' | 'reminder';
 
 export interface ScreenHintCopy {
   /** The screen's name, small, over the title. */
@@ -18,8 +18,10 @@ export interface ScreenHintCopy {
   readonly title: string;
   /** One idea a line, numbered on the card. Short enough to stay two lines on a handset. */
   readonly lines: readonly string[];
-  /** The one button. */
+  /** The main button. */
   readonly action: string;
+  /** A second, quieter button beside it, for a card that asks a question. None on the plain hints. */
+  readonly secondary?: string;
   /**
    * Whether a tap outside the card closes it. Not for Endless: closing it starts the run,
    * and a stray tap should not start one.
@@ -67,7 +69,22 @@ export const SCREEN_HINTS: Readonly<Record<ScreenHintId, ScreenHintCopy>> = Obje
     action: 'Start run',
     outsideCloses: false,
   },
+  // Not a screen's first visit: the daily reminder's one-time offer, on the map after the first
+  // day's stamp (`docs/REMINDERS.md`). It is a question, so it has two answers and a tap
+  // outside answers neither.
+  reminder: {
+    eyebrow: 'Daily objectives',
+    title: 'A reminder in the evening?',
+    lines: [
+      'Three new objectives arrive every day, with a stamp for finishing them.',
+      "If today's are still open at 6 pm, the game can send one reminder.",
+      'Nothing once they are done, and you can turn it off in Settings.',
+    ],
+    action: 'Remind me',
+    secondary: 'Not now',
+    outsideCloses: false,
+  },
 });
 
-/** How a hint was closed: its button, a tap outside the card, or Android's back. */
-export type HintClose = 'action' | 'outside' | 'back';
+/** How a hint was closed: its button, its second button, a tap outside the card, or Android's back. */
+export type HintClose = 'action' | 'secondary' | 'outside' | 'back';
