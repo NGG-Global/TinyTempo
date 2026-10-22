@@ -178,7 +178,7 @@ describe('successful adapters still report through the facade', () => {
 describe('analytics boundary', () => {
   it('names every prepared commerce event', () => {
     // Gameplay events share the bus (see game/playAnalytics.ts); the commerce funnel is
-    // still exactly these eleven, and still first.
+    // still exactly these twelve, and still first.
     expect([...ANALYTICS_EVENTS].slice(0, COMMERCE_EVENTS.length)).toEqual([...COMMERCE_EVENTS]);
     expect([...COMMERCE_EVENTS]).toEqual([
       'health_empty',
@@ -192,6 +192,7 @@ describe('analytics boundary', () => {
       'purchase_cancelled',
       'purchase_failed',
       'replay_timer_granted',
+      'store_opened',
     ]);
   });
 

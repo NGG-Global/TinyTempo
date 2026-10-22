@@ -18,7 +18,8 @@ never limited.
 `docs/BILLING.md`): four Play consumables — 30 minutes, 1 hour, 2 hours, 1 day — each adding
 its span to one device-local timer, from the end of a running one or from now. The puck
 restarts at once, nothing is asked, today's two are not touched, and the puck's badge turns
-brass and reads what is left ("29m", "1h", "23h"). The timers are sold on the empty sheet,
+brass and reads what is left ("29m", "1h", "23h"), as the map's store puck does, with the full
+figure on the store card (`docs/BILLING.md`). The timers are sold on the empty sheet,
 under Watch ad & Restart, as a brass **Replay timer** block that opens a picker of the four
 with Play's prices; a tap on a row buys it and restarts the level. Settings → Workshop store
 sells the same four. **Premium is unlimited and no longer sold**: it was sold as unlimited

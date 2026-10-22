@@ -25,6 +25,7 @@ export const COMMERCE_EVENTS = [
   'purchase_cancelled',
   'purchase_failed',
   'replay_timer_granted',
+  'store_opened',
 ] as const;
 
 export const GAMEPLAY_EVENTS = [
@@ -206,6 +207,8 @@ export interface AnalyticsPayloads {
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
   /** A replay timer's minutes were added, once per purchase; `minutes_left` is the whole timer after it, since purchases stack. */
   readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number };
+  /** The Workshop store's card opened from the map: whether a timer was running, the hearts held, and the legacy Premium. */
+  readonly store_opened: { readonly source: 'map'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';

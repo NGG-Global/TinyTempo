@@ -40,11 +40,18 @@ export const STORE_COPY = {
   premiumTitle: 'Premium',
   premiumShort: 'Unlimited hearts, no ads',
   premiumOwned: 'Premium · unlimited hearts',
+  premiumUnlocked: 'Unlocked',
+  /** The map's store card: its eyebrow, what it says while the store is out, and when there is none. */
+  storeTitle: 'Workshop store',
+  storeWaiting: 'Waiting for the store…',
+  storeUnavailable: "The store isn't available on this device.",
+  restore: 'Restore purchases',
   /** Replay timers: the one thing for sale beside the refill, on the sheet and in Settings. */
   timersTitle: 'Replay timers',
   timersHeadline: 'Unlimited restarts',
   timersTerms: 'Restart as often as you like while a timer runs. Buying adds time.',
   timerRunning: 'Timer running',
+  timerRunningTerms: 'Restarts are free while it runs. Buying adds time.',
   timerShort: 'Replay timer',
   timerPick: 'Restart as often as you like while it runs.',
   refillTitle: 'Heart refill',

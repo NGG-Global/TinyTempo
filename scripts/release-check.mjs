@@ -61,6 +61,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Tap-to-open gates and area badges', text: 'Area badge collected', source: 'src/scenes/MapScene.ts' },
   { feature: 'The last-beat offbeat held to level 11, with its introduction', text: 'Ends after beat 4', source: 'src/game/conceptIntro.ts' },
   { feature: 'Replay timers for sale, Premium honoured but withdrawn', text: 'replay_timer_30m', source: 'src/monetization/types.ts' },
+  { feature: 'The Workshop store on the map, with the timer left', text: 'Restore purchases', source: 'src/monetization/copy.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

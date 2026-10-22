@@ -894,6 +894,17 @@ device-local expiry (`tiny-tempo.replayTimer.v1`, from the end of a running time
 otherwise, claim ids persisted so a replayed purchase adds once, an expiry over a week ahead
 read as damage), sold from that picker, which buys and restarts, and from Settings → Workshop
 store; the puck's badge turns brass and reads what is left. Hearts are untouched by a timer.
+**The store's one door on the road is a puck** (`game/store.ts`, `ui/storeCard.ts`,
+`docs/BILLING.md`): a price tag under Objectives and Endless, labelled *Store* until opened
+(`puckStore`, device-local), opening a card over the dimmed road with the refill while there
+is room for it, the four timers at Play's prices (*Buy* until the catalogue answers, never a
+guess), Restore and Close — the objectives card's shape, Android's back included, held while a
+purchase is out. Nothing raises it but the tap. **What is left of a timer is shown wherever
+the player might wonder**: the puck wears the restart puck's brass badge (*29m*, *1h*, *2d*),
+polled once a second and redrawn only when the minute moves, and the card opens on a brass
+band reading *1 hr 12 min left*; both read `StoreFacts` from one place (`storeFacts`), so
+the badge, the card and Settings never disagree. A Premium account sees *Unlocked*, no rows and
+no badge.
 **Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
 prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
 hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
@@ -1173,6 +1184,7 @@ src/
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
     replayTimer.ts     Replay timers: the four consumables, one stacking expiry, idempotent grants, what is left; device-local
+    store.ts           The Workshop store as the map offers it: the rows for sale, the head, the stack, the puck's badge; pure
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
@@ -1241,6 +1253,7 @@ src/
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     endlessCard.ts     Endless Mode's door, on the map and the title screen: locked copy, the best, the badges, Start, Leaderboard
     endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
+    storeCard.ts       The Workshop store on the map: the rows with Play's prices, the running timer's band, Restore, Close
     screenHint.ts      A screen's first-visit hint card, on a camera of its own over the scene's
     hintLayout.ts      Where that card's rows sit, stacked from measured heights; pure
     puckLabel.ts       The first-visit tag beside an icon-only puck

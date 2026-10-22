@@ -15,7 +15,10 @@ import {
   canBeginAttempt, canClaimDailyHeart, formatCountdown, HEALTH, HEALTH_COPY, healthHud, heartProgress,
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
-import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
+import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, rewardedFeedback, STORE_COPY, track, type SoldProductId } from '@/monetization';
+import { loadReplayTimer, redeemTimer } from '@/game/replayTimer';
+import { storePuckBadge, storeRows, type StoreFacts } from '@/game/store';
+import { StoreCard } from '@/ui/storeCard';
 import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
@@ -39,7 +42,7 @@ import {
 } from '@/ui/roadLayout';
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
-import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawPriceTag, drawSpeaker } from '@/ui/icons';
 import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, storedStamps, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
 import { EndlessCard } from '@/ui/endlessCard';
@@ -377,6 +380,20 @@ export class MapScene extends BaseScene {
   /** Whether the mode's unlock dot is still owed, read once per entry and cleared by the card. */
   private endlessUnlockSeen = true;
   private endlessLabel!: PuckLabel;
+  /**
+   * The Workshop store: a puck under Endless's, opening on a card the same catalogue
+   * Settings sells — the refill and the four replay timers — with the running timer's time
+   * left on the card and, in short, on the puck's badge (`docs/BILLING.md`). It is the one
+   * way to the store from the road that is not a sheet raised by running out of something.
+   */
+  private storeAt = { x: 0, y: 0 };
+  private storeCard!: StoreCard;
+  private storeLabel!: PuckLabel;
+  private storeBadge!: Phaser.GameObjects.Text;
+  /** The badge as last drawn, so the puck is redrawn only when the minute moves. */
+  private storeBadgeShown = '';
+  private storePollAt = 0;
+  private storeBusy = false;
   /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
   private routeNotice!: RouteNotice;
   /**
@@ -417,7 +434,7 @@ export class MapScene extends BaseScene {
   private enteredAt = 0;
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | null = null;
+  private puckPressed: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | 'store' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   /** Read per use, so a preference change applies mid-scene. */
@@ -529,6 +546,14 @@ export class MapScene extends BaseScene {
     this.endlessCard = new EndlessCard(this, 30);
     this.endlessBusy = false;
     this.endlessUnlockSeen = loadEndlessProgress().seenUnlock;
+    // The store: its card over the road, a label until it has been opened, and the badge
+    // the puck wears while a replay timer runs. Assigned on every entry, like the cards.
+    this.storeLabel = new PuckLabel(this, 'Store', 12).fixed();
+    this.storeCard = new StoreCard(this, 30, product => monetization().productPrice(product));
+    this.storeBadge = label(this, '', { size: 17, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(11).setVisible(false);
+    this.storeBadgeShown = '';
+    this.storePollAt = 0;
+    this.storeBusy = false;
     // Under the objectives card and the rest sheet, over the road. Assigned on every entry.
     this.routeNotice = new RouteNotice(this, 12);
     this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) this.refreshRouteNotice(); });
@@ -600,7 +625,7 @@ export class MapScene extends BaseScene {
   private offerReminderWhenQuiet(now: number): void {
     if (!this.reminderOfferDue || this.reminderOffer === null) return;
     if (this.curtain.active || !this.flightSettled || this.ceremony !== null || this.restShown
-      || this.objectivesCard.open || this.endlessCard.open) return;
+      || this.objectivesCard.open || this.endlessCard.open || this.storeCard.open) return;
     this.reminderOfferDue = false;
     if (this.reminderOffer.showIfNew(now)) track('reminder_offer_shown', { stamps: storedStamps(Date.now()).stamps });
   }
@@ -656,6 +681,7 @@ export class MapScene extends BaseScene {
     this.footerTop = safe.bottom - 210 * s;
     this.objectivesCard.layout(safe, full, s);
     this.endlessCard.layout(safe, full, s);
+    this.storeCard.layout(safe, full, s);
     this.worldHeight = worldHeight(this.first, this.shown, s, this.hudHeight);
     // Everything the bake reads, and nothing else. The height of the frame is not in it,
     // which is the point: `layout()` runs on every resize, and on Android the commonest
@@ -1801,7 +1827,7 @@ export class MapScene extends BaseScene {
     this.endlessLabel.place(this.endlessAt.x, this.endlessAt.y, CHROME.puckRadius * s, 'right', s,
       ENDLESS.available && !endlessUnlocked(this.progress) && !seenPuck('endless'));
     const g = this.pucks.graphics.clear();
-    const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | 'store') => (this.puckPressed === key ? press : 0);
     for (const [key, at] of [['back', this.backAt], ['setup', this.setupAt], ['mute', this.muteAt]] as const) {
       drawPuck(g, at.x, at.y, s, sinkOf(key));
     }
@@ -1831,6 +1857,24 @@ export class MapScene extends BaseScene {
         g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
         g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
       }
+    }
+    // The store: a price tag on a puck under the others, and while a replay timer runs a
+    // brass badge with what is left, the same badge the level's restart puck wears. The
+    // badge is the only thing the puck ever says unasked: never a sale, never a count.
+    this.storeAt = { x: this.objectivesAt.x, y: this.objectivesAt.y + gap * (ENDLESS.available ? 2 : 1) };
+    this.storeLabel.place(this.storeAt.x, this.storeAt.y, r, 'right', s, !seenPuck('store'));
+    const sy = this.storeAt.y + puckSink(s, sinkOf('store'));
+    drawPuck(g, this.storeAt.x, this.storeAt.y, s, sinkOf('store'));
+    drawPriceTag(g, this.storeAt.x, sy, r * 0.46, PALETTE.ink, SHELL.puck);
+    const badge = storePuckBadge(this.storeFacts());
+    this.storeBadgeShown = badge;
+    this.storeBadge.setVisible(badge !== '');
+    if (badge !== '') {
+      const bx = this.storeAt.x + r * 0.72, by = sy - r * 0.7, br = r * 0.46;
+      g.fillStyle(BRASS, 1).fillCircle(bx, by, br);
+      g.lineStyle(Math.max(1.5, 2.5 * s), SHELL.cream, 1).strokeCircle(bx, by, br);
+      this.storeBadge.setText(badge).setPosition(bx, by);
+      resize(this.storeBadge, 17 * s, shade(BRASS, -0.62), STYLE.current, false);
     }
     // A press redraws this every frame, which keeps it live until the puck is back up.
     this.pucks.invalidate();
@@ -2325,6 +2369,12 @@ export class MapScene extends BaseScene {
     this.reminderOffer?.update(performance.now() / 1000, this.reducedMotion);
     this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
     this.endlessCard.update(performance.now() / 1000, this.reducedMotion);
+    this.storeCard.update(performance.now() / 1000, this.reducedMotion, Date.now());
+    // Once a second: the puck's badge moves by the minute, and a timer that ends takes it off.
+    if (performance.now() / 1000 - this.storePollAt >= 1) {
+      this.storePollAt = performance.now() / 1000;
+      if (storePuckBadge(this.storeFacts()) !== this.storeBadgeShown) this.puckDirty = true;
+    }
     if (!this.drag && Math.abs(this.velocity) > 1) {
       const step = scrollStep(this.velocity, delta, MAP.friction);
       this.scrollY += step.distance;
@@ -2630,7 +2680,7 @@ export class MapScene extends BaseScene {
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
     if (this.curtain.active || this.drag || this.reminderOffer?.open || (!pointer.wasTouch && pointer.button !== 0)) return;
-    this.drag = { id: pointer.id, scrollable: !this.restShown && !this.objectivesCard.open && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
+    this.drag = { id: pointer.id, scrollable: !this.restShown && !this.objectivesCard.open && !this.storeCard.open && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
     this.velocity = 0;
     this.touchAt = performance.now() / 1000;
     this.touchPoint = { x: pointer.x, y: pointer.y };
@@ -2658,7 +2708,7 @@ export class MapScene extends BaseScene {
     this.velocity = 0;
     this.handleTap(pointer.x, pointer.y);
   }
-  private pressPuck(key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless'): void {
+  private pressPuck(key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | 'store'): void {
     this.puckPressed = key;
     this.puckPressedAt = performance.now() / 1000;
     this.puckDirty = true;
@@ -2676,7 +2726,19 @@ export class MapScene extends BaseScene {
       else if (endlessTap === 'leaderboard') void this.openEndlessBoard();
       return;
     }
+    const storeTap = this.storeCard.tap(x, y);
+    if (storeTap !== null) {
+      this.puckDirty = true;
+      if (storeTap === 'restore') void this.restoreFromStore();
+      else if (typeof storeTap === 'object') void this.buyFromStore(storeTap.buy);
+      return;
+    }
     const near = (at: { x: number; y: number }) => Math.abs(x - at.x) < this.controlSize / 2 && Math.abs(y - at.y) < this.controlSize / 2;
+    if (near(this.storeAt) && !this.restShown) {
+      this.pressPuck('store');
+      this.showStoreCard();
+      return;
+    }
     if (ENDLESS.available && near(this.endlessAt) && !this.restShown) {
       this.pressPuck('endless');
       this.showEndlessCard();
@@ -2776,6 +2838,79 @@ export class MapScene extends BaseScene {
     this.scrollY += Math.max(-240, Math.min(240, dy)) * this.viewport.unitScale;
     this.clampScroll();
   }
+  /** What the store has to go on now: the entitlement, the hearts, the timer and whether Play answered. */
+  private storeFacts(): StoreFacts {
+    const now = Date.now();
+    return {
+      premium: monetization().premium(),
+      hearts: viewHealth(this.health, now).hearts,
+      timerExpiresAt: loadReplayTimer(undefined, now)?.expiresAt ?? 0,
+      available: monetization().purchasesAvailable(),
+      now,
+    };
+  }
+
+  /** The store card, from its puck: every row it shows is an offer, reported as the picker's are. */
+  private showStoreCard(): void {
+    if (!seenPuck('store')) {
+      markPuckSeen('store');
+      this.storeLabel.place(0, 0, 0, 'right', this.uiScale, false);
+    }
+    const facts = this.storeFacts();
+    track('store_opened', { source: 'map', timer: facts.timerExpiresAt > facts.now ? 1 : 0, hearts: facts.hearts, premium: facts.premium ? 1 : 0 });
+    for (const row of storeRows(facts)) track('purchase_offer_shown', { product: row.product });
+    this.storeCard.show(facts, performance.now() / 1000);
+  }
+
+  /**
+   * A row of the store card. The grant is the billing adapter's (`fulfilRefill`,
+   * `fulfilTimer`, idempotent per claim id), so the purchase has already been added by the
+   * time the result arrives; the re-read here is what puts the hearts on the sign and the
+   * time on the badge before the card redraws. Opening the sheet sells nothing by itself.
+   */
+  private async buyFromStore(product: SoldProductId): Promise<void> {
+    if (this.storeBusy || this.curtain.active) return;
+    this.storeBusy = true;
+    this.storeCard.setBusy(STORE_COPY.storeWaiting);
+    try {
+      const result = await monetization().purchase(product);
+      if (result.ok) {
+        if (product === PRODUCT.heartRefill) this.health = redeemFill(result.claimId).health;
+        else redeemTimer(product, result.claimId);
+      }
+      if (this.disposed) return;
+      this.storeCard.setBusy(null);
+      if (!result.ok) {
+        this.storeCard.say(purchaseFeedback(result.reason));
+        return;
+      }
+      vibrate('stamp');
+      this.puckDirty = true;
+      this.drawSign(this.uiScale, 0, 0);
+      this.storeCard.refresh(this.storeFacts());
+    } finally {
+      this.storeBusy = false;
+    }
+  }
+
+  /** Restore asks Play what the account owns: the legacy Premium comes back, a consumable never does. */
+  private async restoreFromStore(): Promise<void> {
+    if (this.storeBusy || this.curtain.active) return;
+    this.storeBusy = true;
+    this.storeCard.setBusy(STORE_COPY.storeWaiting);
+    try {
+      const result = await monetization().restorePurchases();
+      if (this.disposed) return;
+      this.storeCard.setBusy(null);
+      this.puckDirty = true;
+      this.drawSign(this.uiScale, 0, 0);
+      this.storeCard.refresh(this.storeFacts());
+      this.storeCard.say(restoreFeedback(result));
+    } finally {
+      this.storeBusy = false;
+    }
+  }
+
   /** The Endless card, with what the save and the device know; opening it marks a fresh unlock seen. */
   private showEndlessCard(): void {
     const unlocked = endlessUnlocked(this.progress);
@@ -2833,6 +2968,7 @@ export class MapScene extends BaseScene {
     if (this.reminderOffer?.back()) return true;
     if (this.objectivesCard.open) { this.objectivesCard.hide(); this.puckDirty = true; return true; }
     if (this.endlessCard.open) { this.endlessCard.hide(); this.puckDirty = true; return true; }
+    if (this.storeCard.open) { if (!this.storeBusy) { this.storeCard.hide(); this.puckDirty = true; } return true; }
     if (this.restShown) { if (!this.restBusy) this.hideRest(); return true; }
     this.pressPuck('back');
     this.curtain.cover(() => this.scene.start(SceneKey.Menu));
