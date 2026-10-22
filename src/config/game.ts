@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 
-import { DESIGN_HEIGHT, DESIGN_WIDTH } from '@/config/design';
+import { DESIGN_HEIGHT, DESIGN_WIDTH, renderScale, setRenderScale } from '@/config/design';
 import { PALETTE } from '@/config/theme';
 import { getGameRootId } from '@/core/shell';
 import { BootScene } from '@/scenes/BootScene';
@@ -23,7 +23,31 @@ import { EndlessScene } from '@/scenes/EndlessScene';
  * the reasoning so the settings are not "cargo-culted" forward on the next
  * change.
  */
+/**
+ * The parent's size in CSS pixels, read once so the render scale is settled before the
+ * Scale Manager exists. `#game-root` is fixed to the dynamic viewport by `index.html`;
+ * before layout, or outside a browser, the window stands in for it.
+ */
+function parentSize(): { width: number; height: number } {
+  if (typeof document === 'undefined' || typeof window === 'undefined') return { width: DESIGN_WIDTH, height: DESIGN_HEIGHT };
+  const root = document.getElementById(getGameRootId());
+  const width = root?.clientWidth || window.innerWidth;
+  const height = root?.clientHeight || window.innerHeight;
+  return { width, height };
+}
+
 export function createGameConfig(): Phaser.Types.Core.GameConfig {
+  /*
+   * The logical frame is the design box drawn larger by the render scale, so on a
+   * handset one logical pixel lands on one device pixel instead of being stretched
+   * across one and a half. Settled once, here: a rotation or a resize keeps the scale
+   * the game was built with, because every baked layer and text texture was rastered
+   * at it, and the game is portrait-locked. See `RENDER_SCALE_MAX` in `config/design.ts`.
+   */
+  const parent = parentSize();
+  const scale = renderScale(typeof window === 'undefined' ? 1 : window.devicePixelRatio, parent.width, parent.height);
+  setRenderScale(scale);
+
   return {
     /**
      * WebGL where available, 2D canvas otherwise. Every Android WebView worth
@@ -54,8 +78,8 @@ export function createGameConfig(): Phaser.Types.Core.GameConfig {
       mode: Phaser.Scale.EXPAND,
       autoCenter: Phaser.Scale.CENTER_BOTH,
 
-      width: DESIGN_WIDTH,
-      height: DESIGN_HEIGHT,
+      width: Math.round(DESIGN_WIDTH * scale),
+      height: Math.round(DESIGN_HEIGHT * scale),
 
       /*
        * `min` / `max` are deliberately not set.

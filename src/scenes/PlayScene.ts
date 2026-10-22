@@ -108,6 +108,18 @@ const REST_LABEL_DROP = 1.36;
  * carried down, answered below. The turn cue is what teaches; this only runs it once
  * where nothing is at stake.
  */
+/**
+ * The task marks' metrics, design units at scale 1. Sized against `TRACK.pipRadius` (6):
+ * a mark is a bead, a little under a count-in pip, and the current task's a little over,
+ * so the row is read as beads and the count-in as pips rather than as the same thing twice.
+ */
+const TASK_MARK = {
+  radius: 5.5,
+  current: 7,
+  /** Bead pitch; an eight-task row stays inside the pucks' clear middle on a 720 frame. */
+  gap: 26,
+} as const;
+
 const TEACH = {
   /** Fraction of the level's own tempo the pass plays at. */
   tempo: 0.75,
@@ -2650,10 +2662,18 @@ export class PlayScene extends BaseScene {
     this.keepsakeNote.setPosition(tx, r.y + KEEPSAKE_CARD.noteTop * s).setAlpha(pose.alpha).setVisible(true);
   }
 
+  /**
+   * The level's task marks, under the top edge between the pucks: one bead a task, lit as
+   * it is reached. They are the quietest thing on screen on purpose (`docs/VISUAL_POLISH.md`),
+   * but quiet is not the same as unreadable: at radius 4.5 a mark was two and a half CSS
+   * pixels on a handset, under the size of the count-in's own pips, and the row read as
+   * a smudge rather than a count. `TASK_MARK` keeps the row to the same height and the
+   * same place, and the pitch widens with the bead so the beads stay apart.
+   */
   private drawTaskMarks(): void {
     const s = this.uiScale, { safe } = this.viewport;
     const count = this.spec.tasks.length;
-    const gap = 20 * s, y = safe.top + 58 * s;
+    const gap = TASK_MARK.gap * s, y = safe.top + 58 * s;
     const g = this.taskMarks.clear();
     const f = faces(this.definition.ink);
     // A level with a breather marks its midpoint: a short tick between the last task before
@@ -2669,7 +2689,7 @@ export class PlayScene extends BaseScene {
       const x = at(i);
       const done = i < this.taskIndex || this.summaryShown;
       const current = i === this.taskIndex && !this.summaryShown && !this.intro;
-      const r = (current ? 5.5 : 4.5) * s;
+      const r = (current ? TASK_MARK.current : TASK_MARK.radius) * s;
       g.fillStyle(f.edge, done || current ? 1 : 0.25).fillCircle(x, y + 1.5 * s, r);
       g.fillStyle(done ? f.face : current ? f.lit : SHELL.puck, done || current ? 1 : 0.6).fillCircle(x, y, r);
       if (done || current) g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, y - r * 0.35, r * 0.28);
