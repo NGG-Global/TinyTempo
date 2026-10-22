@@ -393,7 +393,8 @@ counts the stroke into a line and draws half a stroke in, and the old stroke-wid
 every left-aligned headline a stroke right of the body text under it. **A centred caption
 that wraps goes through `balanceWrap`** (`ui/type.ts`), so no word is left alone on its last
 line; hand-broken copy ("Make it\nstick.") keeps its breaks, because those are the voice. See
-`docs/VISUAL_AUDIT.md`, which also records why the canvas still renders at its logical size.
+`docs/VISUAL_AUDIT.md`, which also records how the canvas is drawn at device resolution
+(`renderScale` and `RENDER_SCALE_MAX` in `config/design.ts`).
 
 **A dressed letter only takes an outline its own fill can carry.** `typeStroke` returns
 `null` below `OUTLINE_CONTRAST`, and `ui/type.ts` then draws no stroke and lifts the letter
