@@ -21,7 +21,8 @@ disagree with the first.
 | `small-acts.tutorial.v1`, `small-acts.teach.v1` | Lessons seen | Auto Backup, cloud (tutorial also in the code) |
 | `tiny-tempo.settings.v1` | Volumes, mute, haptics, Tap offset per audio route | Auto Backup; save code without the Tap offset |
 | `tiny-tempo.health.v1`, `.fills.v1`, `.daily-heart.v1` | Hearts and their ledgers | Auto Backup only |
-| `tiny-tempo.premium.v1` | Premium cache, expires after 30 days | Auto Backup only |
+| `tiny-tempo.premium.v1` | Legacy Premium cache, expires after 30 days | Auto Backup only |
+| `tiny-tempo.replayTimer.v1` | The replay timer's expiry and the purchases added to it; an expiry over a week ahead is read as damage | Auto Backup only |
 | `tiny-tempo.objectives.v1`, `.review.v1`, `.daily-tempo-best.v1` | Daily objectives, review record, daily best | Auto Backup only |
 | `tiny-tempo.cloud.v1` | Which Play Games player this device's progress belongs to | Auto Backup only |
 
@@ -52,7 +53,7 @@ important design decision in the system, and it is the right one.
 - Merge-only restores: no restore, conflict or second device can lose a cleared level.
 - Derived ownership: stars, keepsakes and mastery cannot drift from the accuracies.
 - Validation on every read, and a save failure the player is told about.
-- Nothing a player owes or buys (hearts, Premium, consent) travels in a code or the cloud.
+- Nothing a player owes or buys (hearts, replay timers, Premium, consent) travels in a code or the cloud.
 - Pure, tested modules: `tests/progress.test.ts`, `tests/saveCode.test.ts`,
   `tests/cloudSave.test.ts`.
 

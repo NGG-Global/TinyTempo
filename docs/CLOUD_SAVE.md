@@ -58,6 +58,7 @@ knowing it, exactly as a save code does.
 | Rewarded-ad and refill claims | `tiny-tempo.fills.v1` | a consumable ledger; replaying it re-grants |
 | Daily heart | `tiny-tempo.daily-heart.v1` | per-device, per-day |
 | Premium cache | `tiny-tempo.premium.v1` | a cache; Play Billing is the truth |
+| Replay timer and its claims | `tiny-tempo.replayTimer.v1` | paid for on this device; a consumable ledger, like the fills |
 | Calibration offset, volumes, mute, haptics | `tiny-tempo.settings.v1` | **device** preferences — a Bluetooth offset on one phone is wrong on another |
 | Analytics and advertising consent | `tiny-tempo.settings.v1`, UMP | belongs to the device and its jurisdiction |
 | Daily objectives and stamps | `tiny-tempo.objectives.v1` | the device's own calendar |

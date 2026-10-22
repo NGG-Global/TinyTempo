@@ -13,6 +13,7 @@ import { reducedMotion } from '@/core/motionPreference';
 import { HEALTH, loadHealth, viewHealth } from '@/game/health';
 import { areaOf } from '@/game/levels';
 import { loadProgress } from '@/game/progress';
+import { formatTimerLeft, loadReplayTimer, timerLeftMs } from '@/game/replayTimer';
 import { encodeSaveCode } from '@/game/saveCode';
 import { loadSettings } from '@/game/settings';
 import { supportMailto, supportReport, type SupportFacts } from '@/game/supportReport';
@@ -152,6 +153,7 @@ export class SupportScene extends BaseScene {
     const settings = loadSettings();
     const premium = monetization().premium();
     const view = viewHealth(loadHealth());
+    const timerLeft = timerLeftMs(loadReplayTimer(), Date.now());
     const native = this.game.device.os.android || this.game.device.os.iOS;
     return {
       version: __APP_VERSION__,
@@ -166,6 +168,7 @@ export class SupportScene extends BaseScene {
       cleared: Object.keys(progress.best).length,
       premium,
       hearts: premium ? 'unlimited' : `${view.hearts}/${HEALTH.max}`,
+      replayTimer: timerLeft > 0 ? `${formatTimerLeft(timerLeft)} left` : 'none',
       audio: describeAudio(this),
       crashReports: DIAGNOSTICS.dsn !== '',
       usageData: settings.analytics,

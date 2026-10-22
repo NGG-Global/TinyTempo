@@ -12,5 +12,5 @@ export { createMonetization, installMonetization, monetization } from './service
 export { stubAds, stubBilling } from './stub';
 export { PRODUCT } from './types';
 export type {
-  Billing, Monetization, ProductId, PurchaseResult, RestoreResult, RewardedAds, RewardedResult,
+  Billing, Monetization, ProductId, PurchaseResult, RestoreResult, RewardedAds, RewardedResult, SoldProductId,
 } from './types';

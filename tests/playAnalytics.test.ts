@@ -497,9 +497,9 @@ describe('every gameplay event, as the game actually fires it', () => {
     locked.spec.tasks.forEach((_, i) => { pocket.task(i, task(100, { good: 0 })); if (i === 1) pocket.groove(2, i); if (i === 2) pocket.groove(3, i); });
     pocket.finish(recordResult(road(1, 3), 2, 100), 100, 'first');
     // A restart asked for, cancelled, then confirmed on a daily restart; and a no-restarts ad that closed early.
-    ledger.restartRequested(8, 'daily', 2, false);
-    ledger.restartCancelled(8, 'daily', 'keep_playing', 2, false);
-    ledger.restartConfirmed(8, 'daily', 1, false);
+    ledger.restartRequested(8, 'daily', { restartsLeft: 2, premium: false, timer: false });
+    ledger.restartCancelled(8, 'daily', 'keep_playing', { restartsLeft: 2, premium: false, timer: false });
+    ledger.restartConfirmed(8, 'daily', { restartsLeft: 1, premium: false, timer: false });
     ledger.rewardedRestartFailed(8, 'cancelled');
     // A day of objectives: progress, a completion each, and the stamp.
     let day: ObjectivesState = {

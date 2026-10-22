@@ -28,7 +28,7 @@ falls back to a default that is not what these rules say.
 
 **The rules are file-level, and localStorage is one file.** Every key the game writes
 lives inside one opaque LevelDB store: progress, settings, the tutorial, the teach flags,
-hearts, the refill ledger, the daily heart, the premium cache, daily objectives, and the
+hearts, the refill ledger, the daily heart, the premium cache, the replay timer, daily objectives, and the
 Daily Tempo best (nothing writes it while that mode is off). "Back up progress but not
 the premium cache" cannot be expressed. Everything goes or nothing does.
 
@@ -81,7 +81,7 @@ accuracies, the mute, the two levels, the haptics switch, the tutorial flag. The
 has a calibration field, written with the active route's offset for older builds, but this
 build does not restore it: the Tap offset is per audio route and device-local
 (`docs/AUDIO_ROUTES.md`).
-Not hearts, not the refill ledger, not the daily-heart ledger, not the premium cache —
+Not hearts, not the refill ledger, not the daily-heart ledger, not the premium cache, not the replay timer —
 restoring any of those is
 either an exploit or an incoherence, and a purchase comes back through the store's own
 Restore, which is the only place it can be checked. `tests/saveCode.test.ts` asserts the

@@ -24,6 +24,7 @@ export const COMMERCE_EVENTS = [
   'purchase_completed',
   'purchase_cancelled',
   'purchase_failed',
+  'replay_timer_granted',
 ] as const;
 
 export const GAMEPLAY_EVENTS = [
@@ -172,12 +173,13 @@ export type LevelResultParams = LevelParams & {
  */
 export type RestartPlacement = 'restart';
 /**
- * Which sheet the restart puck raised: none for a free level, Premium or a start not yet
- * begun; `daily` uses one of today's restarts; `empty` is none left, with the ad.
+ * Which sheet the restart puck raised: none for a free level, Premium, a running replay
+ * timer or a start not yet begun; `daily` uses one of today's restarts; `empty` is none
+ * left, with the ad and the timers; `timers` is the picker of four opened from it.
  */
-export type RestartSheet = 'none' | 'free' | 'daily' | 'empty';
-/** What a confirmed restart cost: nothing, one of today's restarts, or an ad. */
-export type RestartCost = 'free' | 'daily' | 'rewarded';
+export type RestartSheet = 'none' | 'free' | 'daily' | 'empty' | 'timers';
+/** What a confirmed restart cost: nothing, one of today's restarts, an ad, or a timer just bought. */
+export type RestartCost = 'free' | 'daily' | 'rewarded' | 'timer';
 
 /** What every restart event carries. No device, no account: the level, and the restarts it was decided on. */
 export type RestartParams = {
@@ -187,6 +189,8 @@ export type RestartParams = {
   /** Today's restarts still unused when the event happened (after this one, on a confirm). */
   readonly restarts_left: number;
   readonly premium: Flag;
+  /** A replay timer was running when the event happened. */
+  readonly timer: Flag;
 };
 
 export interface AnalyticsPayloads {
@@ -200,6 +204,8 @@ export interface AnalyticsPayloads {
   readonly purchase_completed: { readonly product: string };
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
+  /** A replay timer's minutes were added, once per purchase; `minutes_left` is the whole timer after it, since purchases stack. */
+  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';
@@ -378,7 +384,7 @@ export interface AnalyticsPayloads {
    * The no-restarts sheet's Watch did not end in a restart. `run_ended`: the ad paid out,
    * but the run had finished or moved on meanwhile, so nothing restarted and nothing is kept.
    */
-  readonly rewarded_restart_failed: Omit<RestartParams, 'restarts_left' | 'premium'> & {
+  readonly rewarded_restart_failed: Omit<RestartParams, 'restarts_left' | 'premium' | 'timer'> & {
     readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'run_ended';
   };
   readonly collectible_unlocked: {

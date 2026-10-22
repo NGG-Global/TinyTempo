@@ -60,6 +60,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'How to play moves to Settings after the lesson', text: 'Take the short lesson again', source: 'src/scenes/SettingsScene.ts' },
   { feature: 'Tap-to-open gates and area badges', text: 'Area badge collected', source: 'src/scenes/MapScene.ts' },
   { feature: 'The last-beat offbeat held to level 11, with its introduction', text: 'Ends after beat 4', source: 'src/game/conceptIntro.ts' },
+  { feature: 'Replay timers for sale, Premium honoured but withdrawn', text: 'replay_timer_30m', source: 'src/monetization/types.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

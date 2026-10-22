@@ -119,8 +119,15 @@ export function taskParams(
   };
 }
 
-function restartParams(level: number, restartsLeft: number, premium: boolean): RestartParams {
-  return { level, area: areaNumber(level), placement: 'restart', restarts_left: restartsLeft, premium: flag(premium) };
+/** The facts a restart was decided on: today's count, the legacy Premium, and a running timer. */
+export interface RestartFlags {
+  readonly restartsLeft: number;
+  readonly premium: boolean;
+  readonly timer: boolean;
+}
+
+function restartParams(level: number, flags: RestartFlags): RestartParams {
+  return { level, area: areaNumber(level), placement: 'restart', restarts_left: flags.restartsLeft, premium: flag(flags.premium), timer: flag(flags.timer) };
 }
 
 /** What an area finale's events share, from the level's own parameters. */
@@ -588,19 +595,19 @@ export class PlayAnalytics {
   }
 
   /** The restart puck reached the restart flow (`docs/RESTART.md`). */
-  public restartRequested(level: number, sheet: RestartSheet, restartsLeft: number, premium: boolean): void {
-    guard(undefined, () => this.emit('restart_requested', { ...restartParams(level, restartsLeft, premium), sheet }));
+  public restartRequested(level: number, sheet: RestartSheet, flags: RestartFlags): void {
+    guard(undefined, () => this.emit('restart_requested', { ...restartParams(level, flags), sheet }));
   }
 
   /** A restart is going ahead. One per restart: the scene calls this from the one place a restart commits. */
-  public restartConfirmed(level: number, cost: RestartCost, restartsLeft: number, premium: boolean): void {
-    guard(undefined, () => this.emit('restart_confirmed', { ...restartParams(level, restartsLeft, premium), cost }));
+  public restartConfirmed(level: number, cost: RestartCost, flags: RestartFlags): void {
+    guard(undefined, () => this.emit('restart_confirmed', { ...restartParams(level, flags), cost }));
   }
 
   public restartCancelled(
-    level: number, sheet: Exclude<RestartSheet, 'none'>, reason: AnalyticsPayloads['restart_cancelled']['reason'], restartsLeft: number, premium: boolean,
+    level: number, sheet: Exclude<RestartSheet, 'none'>, reason: AnalyticsPayloads['restart_cancelled']['reason'], flags: RestartFlags,
   ): void {
-    guard(undefined, () => this.emit('restart_cancelled', { ...restartParams(level, restartsLeft, premium), sheet, reason }));
+    guard(undefined, () => this.emit('restart_cancelled', { ...restartParams(level, flags), sheet, reason }));
   }
 
   public rewardedRestartFailed(level: number, reason: AnalyticsPayloads['rewarded_restart_failed']['reason']): void {

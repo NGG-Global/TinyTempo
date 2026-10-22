@@ -19,7 +19,10 @@ export function purchaseFeedback(reason: PurchaseReason): string {
   }
 }
 
-/** Workshop-voice copy after Restore Purchases. Consumable refills are never restored. */
+/**
+ * Workshop-voice copy after Restore Purchases. Consumables — refills and replay timers —
+ * are never restored; what comes back is the legacy Premium, for an account that holds it.
+ */
 export function restoreFeedback(result: RestoreResult): string {
   if (!result.ok) {
     return result.reason === 'unavailable' ? "The store isn't available." : "Couldn't restore just now.";
@@ -33,12 +36,17 @@ export function restoreFeedback(result: RestoreResult): string {
  * reads as three different products.
  */
 export const STORE_COPY = {
+  /** The legacy entitlement, named only where an account holds it. Nothing offers it. */
   premiumTitle: 'Premium',
-  /** On the map, where the offer answers a wait rather than sitting in a list. */
-  premiumHeadline: 'Never wait again',
-  premiumTerms: 'Unlimited hearts · no ads · one payment',
   premiumShort: 'Unlimited hearts, no ads',
   premiumOwned: 'Premium · unlimited hearts',
+  /** Replay timers: the one thing for sale beside the refill, on the sheet and in Settings. */
+  timersTitle: 'Replay timers',
+  timersHeadline: 'Unlimited restarts',
+  timersTerms: 'Restart as often as you like while a timer runs. Buying adds time.',
+  timerRunning: 'Timer running',
+  timerShort: 'Replay timer',
+  timerPick: 'Restart as often as you like while it runs.',
   refillTitle: 'Heart refill',
   refillTerms: 'Fills all five',
   refillShort: 'Refill all five',

@@ -24,8 +24,10 @@ beside "Mute".
 - **Hearts** — status, not an offer: the five hearts, the count, and a bar the
   next heart is filling (`heartProgress` in `game/health.ts`).
 - **Workshop store** — the one brass object on the screen, because it is the one
-  thing for sale. The heart refill row under it disappears at five hearts or with
-  premium held, rather than sitting there as a control that cannot act.
+  thing for sale: the four replay timers, a row each (`docs/RESTART.md`), with *Timer
+  running* on the card's corner while one runs, and Restore for the legacy Premium. The
+  heart refill row under it disappears at five hearts or with premium held, rather than
+  sitting there as a control that cannot act.
 - **Progress** — the level, and the one control with no undo, which arms before
   it fires.
 - **Credits** — last, after Help: the original score's composer, whose chip opens
@@ -170,7 +172,7 @@ comes back, and the ways out ranked free first.
 
 **The map sheet** (`MapScene.drawRest`) dims the road, shows the five hearts with
 the next one filling, and then: the free daily heart when it is available, the one
-coral rewarded watch, the refill, premium, and a control that closes the sheet.
+coral rewarded watch, the refill, and a control that closes the sheet.
 The old sheet stacked three near-identical grey buttons and let a tap on the
 backdrop be the way out.
 
@@ -194,9 +196,9 @@ quieter standing line returns. On a short screen with every other row present th
 row keeps its title and chip and drops the sentence rather than pushing the way out off
 the bottom.
 
-Premium is offered in both places now, and a successful purchase drops straight
-back into the level the player was stopped on — entitlement lifts the heart cost
-entirely, so there is nothing left to wait for. `monetization/copy.ts` holds the
+Premium was offered in both places, and was withdrawn when the replay timers arrived:
+it was sold as unlimited hearts and no ads, and nothing sells that now, though an
+account that bought it keeps it. `monetization/copy.ts` holds the
 store's words in one place, because the same offer is made on three screens and an
 offer worded three ways reads as three products.
 

@@ -17,7 +17,9 @@ import type { JudgeState } from '../src/rhythm/judge';
 import { capRound, scoreCeiling, scoreRound } from '../src/game/scoring';
 import type { AnalyticsEvent } from '../src/monetization/analytics';
 import type { RewardedResult } from '../src/monetization/types';
-import { dailyNote, guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout, sheetNote } from '../src/ui/restartSheet';
+import { dailyNote, fromPrice, guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout, sheetNote } from '../src/ui/restartSheet';
+import { REPLAY_TIMERS } from '../src/game/replayTimer';
+import { PRODUCT } from '../src/monetization/types';
 
 vi.mock('phaser', () => ({ default: { Geom: { Rectangle: class {} } } }));
 
@@ -48,11 +50,14 @@ class Visit {
   public restarts: DailyRestarts | null = null;
   private ids = 0;
 
+  /** A replay timer running on the device, as `replayTimerActive` would read it. */
+  public timer = false;
+
   public constructor(public health: Health, public readonly progress: Progress, public readonly level: number, public premium = false) {}
 
   public facts(now = NOW): RestartFacts {
     return {
-      level: this.level, progress: this.progress, health: this.health, now, premium: this.premium,
+      level: this.level, progress: this.progress, health: this.health, now, premium: this.premium, timerActive: this.timer,
       attemptId: this.attemptId, outcomeRecorded: this.outcome, scoredResponseBegun: this.begun,
       restartsLeft: restartsLeft(this.restarts, now),
     };
@@ -230,6 +235,39 @@ describe('heart accounting', () => {
     // A sheet left open when Premium arrives turns into the one that says nothing is used.
     expect(liveSheet(visit.facts())).toBe('free');
     expect(RESTART_COPY.free.note).toBe('No restart will be used.');
+  });
+
+  it('makes every restart free while a replay timer runs: no restart used, no ad, and the heart kept', () => {
+    const visit = new Visit(health(2), frontier(PAID), PAID);
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    expect(visit.start('resume')).toBe(true);
+    visit.respond();
+    expect(restartKind(visit.facts())).toBe('out_of_restarts');
+    visit.timer = true;
+    expect(restartKind(visit.facts())).toBe('immediate');
+    expect(visit.restart()).toBe(true);
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    expect(visit.health.hearts).toBe(1);
+    // The empty sheet, and the picker over it, close into the free one the moment the timer lands.
+    expect(liveSheet(visit.facts())).toBe('free');
+    expect(liveSheet(visit.facts(), 'timers')).toBe('free');
+    // A timer that ran out hands the puck back to the day's restarts.
+    visit.timer = false;
+    visit.respond();
+    expect(restartKind(visit.facts())).toBe('out_of_restarts');
+  });
+
+  it('keeps the timer picker open while the empty sheet is what the run would raise', () => {
+    const visit = new Visit(health(2), frontier(PAID), PAID);
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.start('resume');
+    visit.respond();
+    expect(liveSheet(visit.facts(), 'timers')).toBe('timers');
+    expect(liveSheet(visit.facts(), 'empty')).toBe('empty');
+    // Midnight brings a restart: the ad and the picker both give way to the daily sheet.
+    expect(liveSheet(visit.facts(NOW + 24 * 3_600_000), 'timers')).toBe('daily');
+    visit.outcome = true;
+    expect(liveSheet(visit.facts(), 'timers')).toBeNull();
   });
 
   it('still refunds a kept heart — two stars or more — on the attempt that earned them', () => {
@@ -447,6 +485,39 @@ describe('the sheet', () => {
     }
   });
 
+  it('adds the timer block to the empty sheet and trades the action for four rows on the picker', () => {
+    const empty = restartSheetLayout(frame, 'empty');
+    expect(empty.timer.height).toBeGreaterThanOrEqual(88);
+    expect(empty.confirm.y + empty.confirm.height).toBeLessThanOrEqual(empty.timer.y);
+    expect(empty.timer.y + empty.timer.height).toBeLessThanOrEqual(empty.keep.y);
+    expect(empty.options).toEqual([]);
+    expect(restartSheetHit(empty, empty.timer.x + 10, empty.timer.y + 10)).toBe('timers');
+    const picker = restartSheetLayout(frame, 'timers');
+    expect(picker.confirm.width).toBe(0);
+    expect(picker.timer.width).toBe(0);
+    expect(picker.options).toHaveLength(REPLAY_TIMERS.length);
+    picker.options.forEach((row, i) => {
+      expect(row.height).toBeGreaterThanOrEqual(88);
+      expect(row.x).toBeGreaterThanOrEqual(picker.card.x);
+      if (i > 0) expect(picker.options[i - 1]!.y + picker.options[i - 1]!.height).toBeLessThanOrEqual(row.y);
+      expect(restartSheetHit(picker, row.x + row.width / 2, row.y + row.height / 2)).toEqual({ buy: REPLAY_TIMERS[i]!.product });
+    });
+    expect(picker.options[3]!.y + picker.options[3]!.height).toBeLessThanOrEqual(picker.keep.y);
+    expect(picker.card.y + picker.card.height).toBeCloseTo(frame.bottom);
+    // The free and daily sheets are as they were: no timer, no rows.
+    for (const kind of ['free', 'daily'] as const) {
+      const plain = restartSheetLayout(frame, kind);
+      expect(plain.timer.width).toBe(0);
+      expect(plain.options).toEqual([]);
+      expect(restartSheetHit(plain, plain.confirm.x + 4, plain.confirm.y + plain.confirm.height + 4)).toBe('swallow');
+    }
+    // The timer block's price reads from the cheapest timer, and says so until the catalogue arrives.
+    expect(fromPrice(() => null)).toBe('Buy');
+    expect(fromPrice(product => (product === PRODUCT.timer30m ? '€0.99' : '€9.99'))).toBe('from €0.99');
+    expect(RESTART_COPY.timers.title).toBe('Unlimited restarts');
+    expect(sheetNote('timers', 0)).toBe(RESTART_COPY.timers.note);
+  });
+
   it('routes a tap to its control, the card face to nothing, and off the card back to the level', () => {
     const layout = restartSheetLayout(frame);
     const centre = (r: { x: number; y: number; width: number; height: number }) => [r.x + r.width / 2, r.y + r.height / 2] as const;
@@ -485,21 +556,26 @@ describe('restart analytics', () => {
   });
 
   it('tells requested, confirmed, cancelled and a failed rewarded restart apart, one event each', () => {
-    ledger.restartRequested(12, 'daily', 2, false);
-    ledger.restartCancelled(12, 'daily', 'keep_playing', 2, false);
-    ledger.restartRequested(12, 'empty', 0, false);
+    const plain = { restartsLeft: 2, premium: false, timer: false };
+    ledger.restartRequested(12, 'daily', plain);
+    ledger.restartCancelled(12, 'daily', 'keep_playing', plain);
+    ledger.restartRequested(12, 'empty', { ...plain, restartsLeft: 0 });
     ledger.rewardedRestartFailed(12, 'cancelled');
-    ledger.restartConfirmed(12, 'rewarded', 0, false);
-    ledger.restartRequested(13, 'none', 2, true);
-    ledger.restartConfirmed(13, 'free', 2, true);
+    ledger.restartConfirmed(12, 'rewarded', { ...plain, restartsLeft: 0 });
+    ledger.restartRequested(13, 'none', { ...plain, premium: true });
+    ledger.restartConfirmed(13, 'free', { ...plain, premium: true });
+    ledger.restartRequested(14, 'timers', { ...plain, restartsLeft: 0 });
+    ledger.restartConfirmed(14, 'timer', { ...plain, restartsLeft: 0, timer: true });
     expect(sent.map(s => s.event)).toEqual([
       'restart_requested', 'restart_cancelled', 'restart_requested', 'rewarded_restart_failed', 'restart_confirmed',
-      'restart_requested', 'restart_confirmed',
+      'restart_requested', 'restart_confirmed', 'restart_requested', 'restart_confirmed',
     ]);
-    expect(sent[0]!.payload).toEqual({ level: 12, area: 2, placement: 'restart', restarts_left: 2, premium: 0, sheet: 'daily' });
+    expect(sent[0]!.payload).toEqual({ level: 12, area: 2, placement: 'restart', restarts_left: 2, premium: 0, timer: 0, sheet: 'daily' });
     expect(sent[3]!.payload).toEqual({ level: 12, area: 2, placement: 'restart', reason: 'cancelled' });
     expect(sent[4]!.payload).toMatchObject({ cost: 'rewarded', restarts_left: 0 });
     expect(sent[6]!.payload).toMatchObject({ cost: 'free', premium: 1 });
+    expect(sent[7]!.payload).toMatchObject({ sheet: 'timers', timer: 0 });
+    expect(sent[8]!.payload).toMatchObject({ cost: 'timer', timer: 1 });
   });
 
   it('closes the ended attempt\'s run and opens the new one exactly once each', () => {

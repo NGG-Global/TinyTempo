@@ -187,6 +187,21 @@ export function drawInfinity(g: Phaser.GameObjects.Graphics, x: number, y: numbe
   g.lineStyle(Math.max(2.2, r * 0.2), colour, alpha).strokePoints(points, true);
 }
 
+/**
+ * A stopwatch for the replay timer: a dial with its crown, and one hand set a little past
+ * twelve, so it reads as time running rather than a clock face telling the hour.
+ */
+export function drawTimer(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const line = Math.max(2.2, r * 0.2);
+  g.lineStyle(line, colour, alpha).strokeCircle(x, y + r * 0.1, r * 0.82);
+  // The crown and its stem.
+  g.fillStyle(colour, alpha).fillRect(x - r * 0.1, y - r * 0.95, r * 0.2, r * 0.26);
+  g.fillStyle(colour, alpha).fillRoundedRect(x - r * 0.26, y - r * 1.08, r * 0.52, r * 0.2, r * 0.08);
+  // The hand, at about one o'clock.
+  g.lineStyle(line, colour, alpha).lineBetween(x, y + r * 0.1, x + r * 0.3, y - r * 0.34);
+  g.fillStyle(colour, alpha).fillCircle(x, y + r * 0.1, line * 0.7);
+}
+
 /** A phone buzzing: the handset plus a motion mark either side. The Haptics switch. */
 export function drawVibrate(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
   const w = r * 0.62, h = r * 1.3;

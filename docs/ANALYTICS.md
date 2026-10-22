@@ -10,7 +10,11 @@ why gameplay was added to this bus rather than given one of its own.
 
 Ten commerce events were already fired at every offer, purchase and watch —
 `health_empty`, `rewarded_offer_shown`, `purchase_completed` and the rest — and every
-one of them was discarded. `monetization/analytics.ts` was a typed bus with a default
+one of them was discarded. (An eleventh, `replay_timer_granted`, joined them with the
+replay timers: `product` and `minutes_left`, the whole timer after the purchase added its
+span, since purchases stack. The `product` on every purchase event is now one of the four
+`replay_timer_*` ids or `heart_refill_full`; `tinytempo_premium` only ever appears on an
+old event, since nothing offers it.) `monetization/analytics.ts` was a typed bus with a default
 sink that logs in DEV and does nothing in a production build, so the game would have
 shipped a monetization funnel that nobody could see.
 
@@ -307,9 +311,9 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `collectible_unlocked` | A finished level earns its keepsake: three stars where it had fewer. Once per keepsake per session; never for keepsakes a save already owned | `vignette` (28 act ids), `collectible` (keepsake id), `level`, `first` (the device's first, with the longer note), `owned` |
 | `area_finale_started` | An area finale's attempt begins (`docs/FINALES.md`), beside its `level_started`. Once per attempt: Resume and every restart from the puck continue it; Try again is a new attempt | `level`, `area`, `treatment` (`grass` \| `pavement` \| `sand` \| `snow` \| `dusk` \| `garden` \| `swamp` \| `village` \| `castle` \| `default`), `mode`, `retry_count`, `heart_cost` |
 | `level_mastered` | A level's **first** IN THE POCKET run: every scored task flawless, on a level the save did not already hold at 100 (`docs/MASTERY.md`), beside its `level_completed`. Never on a flawless replay of a mastered level, never on map render | `level`, `area`, `vignette`, `mode`, `task_count`, `accuracy`, `stars` |
-| `restart_requested` | The restart puck reached the restart flow mid-level (`docs/RESTART.md`) | `level`, `area`, `placement` (`restart`), `restarts_left`, `premium`, `sheet` (`none` \| `free` \| `daily` \| `empty`) |
-| `restart_confirmed` | A restart is going ahead. Once per restart, however it was paid for | `level`, `area`, `placement`, `restarts_left` (today's, after this one), `premium`, `cost` (`free` \| `daily` \| `rewarded`) |
-| `restart_cancelled` | A restart sheet closed without restarting | `level`, `area`, `placement`, `restarts_left`, `premium`, `sheet`, `reason` (`keep_playing` \| `run_ended` \| `paused` \| `left`) |
+| `restart_requested` | The restart puck reached the restart flow mid-level (`docs/RESTART.md`) | `level`, `area`, `placement` (`restart`), `restarts_left`, `premium`, `timer` (a replay timer running), `sheet` (`none` \| `free` \| `daily` \| `empty` \| `timers`) |
+| `restart_confirmed` | A restart is going ahead. Once per restart, however it was paid for | `level`, `area`, `placement`, `restarts_left` (today's, after this one), `premium`, `timer`, `cost` (`free` \| `daily` \| `rewarded` \| `timer`, the last a timer bought on the sheet) |
+| `restart_cancelled` | A restart sheet closed without restarting | `level`, `area`, `placement`, `restarts_left`, `premium`, `timer`, `sheet`, `reason` (`keep_playing` \| `run_ended` \| `paused` \| `left`) |
 | `rewarded_restart_failed` | The no-restarts sheet's Watch did not end in a restart. `run_ended`: the run had moved on, and nothing is kept | `level`, `area`, `placement`, `reason` (`unavailable` \| `cancelled` \| `failed` \| `run_ended`) |
 | `area_finale_completed` | The finale cleared, beside its `level_completed`, from the same single close | `level`, `area`, `treatment`, `mode`, `stars`, `accuracy` |
 | `area_finale_failed` | The finale scored under its clear bar, beside its `level_failed` | `level`, `area`, `treatment`, `mode`, `accuracy` |

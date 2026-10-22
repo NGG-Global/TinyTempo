@@ -2,6 +2,8 @@ import { Capacitor } from '@capacitor/core';
 
 import { reportError } from '@/core/errors';
 import { redeemFill } from '@/game/health';
+import { redeemTimer } from '@/game/replayTimer';
+import { track } from './analytics';
 import { createAdMobAds } from './admob';
 import { createPlayBilling } from './playBilling';
 import type { PlayBilling } from './playBilling';
@@ -36,6 +38,13 @@ export async function bootMonetization(): Promise<void> {
         // Idempotent per claim id and persisted by health.ts, which is what makes a crash
         // between granting and consuming safe to replay.
         fulfilRefill: claimId => { redeemFill(claimId); },
+        // The same shape: `game/replayTimer.ts` persists the claim ids, so a replayed
+        // purchase adds its minutes once. Reported with what the timer now holds, since a
+        // purchase can stack on one still running.
+        fulfilTimer: (product, claimId) => {
+          const grant = redeemTimer(product, claimId);
+          if (grant.granted) track('replay_timer_granted', { product, minutes_left: Math.ceil(Math.max(0, grant.timer.expiresAt - Date.now()) / 60_000) });
+        },
       });
       billing = adapter;
       await adapter.boot();

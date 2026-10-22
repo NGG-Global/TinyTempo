@@ -884,11 +884,21 @@ midnight, `tiny-tempo.restarts.v1`, device-local) instead of the heart it used t
 goes back to task 1 on the same attempt and heart (`free_restart`), so nothing is charged
 twice. It asks first, on a sheet over the still-running level: *No restart will be used*,
 *Uses 1 of today's 2 restarts*, or with none left *No restarts left* with Watch ad & Restart
-(`watchForRestart`: one restart, used at once, banked never) and Keep playing. The puck wears
-a badge with today's count where restarts count. A finished, protected or Premium level
-restarts at once and free, unlimited — Premium is sold as unlimited hearts and no ads, so it
-could neither run out nor watch the ad. Opening a sheet spends and ends nothing, the sheet
-re-reads the run and re-arms before it acts, and the daily restart is written
+(`watchForRestart`: one restart, used at once, banked never), a **Replay timer** block that
+opens a picker of four, and Keep playing. The puck wears a badge with today's count where
+restarts count. A finished or protected level restarts at once and free, unlimited, and so
+does any level **while a replay timer runs** (`game/replayTimer.ts`, `docs/BILLING.md`): four
+Play consumables — `replay_timer_30m`, `_1h`, `_2h`, `_1d` — each adding its span to one
+device-local expiry (`tiny-tempo.replayTimer.v1`, from the end of a running timer, from now
+otherwise, claim ids persisted so a replayed purchase adds once, an expiry over a week ahead
+read as damage), sold from that picker, which buys and restarts, and from Settings → Workshop
+store; the puck's badge turns brass and reads what is left. Hearts are untouched by a timer.
+**Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
+prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
+hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
+non-consumable cannot be taken back. Opening a sheet spends and ends nothing, the sheet
+re-reads the run and re-arms before it acts (`liveSheet` keeps the picker open while the
+empty sheet is what the run would raise), and the daily restart is written
 (`useDailyRestart`) before the restart runs.
 **`startRound(mode)` names what happens to the attempt** — `resume`, `free_restart`,
 `new_attempt` (`attemptForStart`), never inferred from whether a result exists — and a new
@@ -1161,6 +1171,7 @@ src/
     calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
+    replayTimer.ts     Replay timers: the four consumables, one stacking expiry, idempotent grants, what is left; device-local
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere

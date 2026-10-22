@@ -40,7 +40,7 @@
             This policy describes how Dor Vadai (“we”, “us”) handles information
             in the Tiny Tempo Android app (package name <code>com.tinytempo.app</code>).
           </p>
-          <p class="meta">Effective date: 16 September 2026 · Last updated: 14 October 2026</p>
+          <p class="meta">Effective date: 16 September 2026 · Last updated: 22 October 2026</p>
         </div>
 
         <article class="document">
@@ -78,9 +78,9 @@
           <h2 id="summary">2. Summary</h2>
           <ul>
             <li>We do not ask you to create an account or give us your name or email in the app.</li>
-            <li>Level progress, settings, hearts, a short-lived Premium cache, the tutorial, a few one-time prompts and the day’s objectives are saved on the device, and are included in Android’s backup to your own Google account.</li>
+            <li>Level progress, settings, hearts, daily restarts, a replay timer, a short-lived Premium cache, the tutorial, a few one-time prompts and the day’s objectives are saved on the device, and are included in Android’s backup to your own Google account.</li>
             <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
-            <li>Optional Google Play purchases (a heart refill and a one-time Premium unlock) are processed by Google Play Billing. We never see your full payment card details. There is no separate billing company in between.</li>
+            <li>Optional Google Play purchases (a heart refill and replay timers; an earlier one-time Premium unlock is honoured but no longer sold) are processed by Google Play Billing. We never see your full payment card details. There is no separate billing company in between.</li>
             <li>On Android the app can sign you into Google Play Games. That is optional: the game plays the same if you decline. While you are signed in, Google holds your Play Games player id and display name, we ask Google to unlock achievements you have earned, your best Endless Mode time is posted to a public Play Games leaderboard under your Play Games name, and your progression (levels, best accuracies and which one-time lessons you have seen) is stored in your Play Games account as a saved game so it follows you to another device. Hearts, purchases, settings and calibration are not part of it. We do not copy that id into analytics or crash reports.</li>
             <li>If the app hits an error, a crash report is sent to
             <a href="https://sentry.io/">Sentry</a> so we can fix it. It contains the
@@ -108,14 +108,16 @@
             whether <strong>Share usage data</strong> is on, and whether that was
             your own choice or where the app started it.
           </p>
-          <h3>Hearts and Premium</h3>
+          <h3>Hearts, restarts, replay timers and Premium</h3>
           <p>
             Current hearts, refill timing, an opaque id for each heart refill
             already granted (so a purchase is not filled twice), the local day
-            a free heart was last claimed, and a cache of whether Premium was
-            last confirmed on this device. That cache is not the licence: it
-            expires after 30 days, and Premium itself is whatever Google Play
-            says you own.
+            a free heart was last claimed, how many of today’s two restarts
+            have been used, when the replay timer ends and an opaque id for
+            each timer purchase already added to it (so a purchase is not added
+            twice), and a cache of whether Premium was last confirmed on this
+            device. That cache is not the licence: it expires after 30 days,
+            and Premium itself is whatever Google Play says you own.
           </p>
           <h3>Tutorial, prompts and objectives</h3>
           <p>
@@ -165,8 +167,8 @@
             On Android, Tiny Tempo may show <strong>rewarded video ads</strong> through
             <a href="https://admob.google.com/">Google AdMob</a>. There are no banner
             or interstitial ads in the current design. Ads are optional: you can
-            wait for a heart to regenerate, buy a refill, or unlock Premium
-            (unlimited hearts).
+            wait for a heart to regenerate or buy a refill, and for a restart
+            you can wait for the next day’s allowance or buy a replay timer.
           </p>
           <p>
             If ads are available, Google’s User Messaging Platform may show a
@@ -193,7 +195,8 @@
           </p>
           <ul>
             <li><strong>Heart refill</strong> — a consumable that fills hearts. Consumables are not restored.</li>
-            <li><strong>Premium</strong> — a one-time unlock for unlimited hearts. Restore Purchases in Settings restores Premium, not consumed refills.</li>
+            <li><strong>Replay timers</strong> — four consumables (30 minutes, 1 hour, 2 hours, 1 day) that each add that span to a timer on the device, during which every restart is free. Consumables are not restored.</li>
+            <li><strong>Premium</strong> — a one-time unlock for unlimited hearts sold in earlier versions. It is no longer offered; an account that bought it keeps it, and Restore Purchases in Settings restores Premium, not consumed refills or timers.</li>
           </ul>
           <p>
             Payment is handled by Google Play Billing, called directly from the
@@ -205,7 +208,7 @@
           <p>
             We do not receive your full billing address or payment card number.
             Google tells the app that a product was bought, and gives it a
-            transaction id, so the app can grant hearts or Premium. The app
+            transaction id, so the app can grant hearts, a replay timer or Premium. The app
             keeps those transaction ids only long enough to avoid granting the
             same refill twice. It does not keep a purchase history of its own.
           </p>
@@ -358,9 +361,9 @@
 
           <h2 id="use">9. How information is used</h2>
           <ul>
-            <li>On-device data: to run the game, remember progress, mute and calibration, hearts, and Premium on that device.</li>
+            <li>On-device data: to run the game, remember progress, mute and calibration, hearts, restarts, the replay timer, and Premium on that device.</li>
             <li>Advertising data (by Google and partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
-            <li>Purchase data (by Google): to complete a purchase, grant or restore Premium, prevent a refill from being granted twice, and handle support requests you send us.</li>
+            <li>Purchase data (by Google): to complete a purchase, grant or restore Premium, prevent a refill or a replay timer from being granted twice, and handle support requests you send us.</li>
             <li>Play Games data (by Google): to sign you in if you allow it, to record achievements you have earned, and to show your Endless Mode time on its leaderboard.</li>
             <li>Feedback you send from Settings → Help → Feedback: to decide what to fix and change. It goes to a form we run on Google Forms or, where the app has no form, by email, and it holds only what you write there.</li>
             <li>Email you send us: to answer you. We do not use it for marketing lists.
@@ -412,11 +415,11 @@
 
           <h2 id="rights">12. Your choices and rights</h2>
           <ul>
-            <li>Play without watching ads: wait for hearts, buy a refill, or buy Premium.</li>
+            <li>Play without watching ads: wait for hearts or buy a refill; wait for tomorrow’s restarts or buy a replay timer.</li>
             <li>Advertising preferences: use the in-ad or consent form choices where shown, and Android’s ad settings.</li>
             <li>Analytics: the <strong>Share usage data</strong> switch in Settings, under Privacy, turns the collection of usage events on and off at any time. Turning it off stops collection on that device.</li>
             <li>Progress: Reset in Settings clears saved level progress on that device.</li>
-            <li>Purchases: manage Google Play purchases in your Google account. Restore Purchases restores Premium only.</li>
+            <li>Purchases: manage Google Play purchases in your Google account. Restore Purchases restores a previously bought Premium only.</li>
             <li>Play Games: you can decline sign-in and still play, and nothing is posted to a leaderboard while you are signed out. Achievements and your leaderboard entry stay with your Google account; Android’s Play Games settings are where that account, and what other players can see of it, are managed.</li>
           </ul>
           <p>

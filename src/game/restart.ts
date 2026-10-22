@@ -12,14 +12,16 @@ import type { RewardedReason, RewardedResult } from '../monetization/types';
  * already paid. A restart before the player's first scored response is a reset of the same
  * attempt and is free. A restart after it uses one of the day's restarts and is the same
  * attempt from its first task again: the heart it began on stays its heart, so nothing is
- * charged twice. With none left, a rewarded ad buys one restart, or the run goes on. Nothing
+ * charged twice. With none left, a rewarded ad buys one restart, a replay timer
+ * (`game/replayTimer.ts`) makes every restart free for a while, or the run goes on. Nothing
  * here touches storage or the scene; `PlayScene` reads the answers.
  */
 
 /**
  * - `try_again`: the level is already scored. The result's own path: a new attempt.
- * - `immediate`: nothing to charge. A finished or protected level, Premium, or a start
- *   that has not reached its first downbeat yet (no attempt exists to end).
+ * - `immediate`: nothing to charge. A finished or protected level, a running replay timer,
+ *   the legacy Premium, or a start that has not reached its first downbeat yet (no attempt
+ *   exists to end).
  * - `confirm_free`: a frontier attempt that has not reached a scored response. Restarting
  *   resets it at no cost, and the sheet says so.
  * - `confirm_restart`: a frontier attempt in its scored part, with a daily restart to use.
@@ -32,7 +34,10 @@ export interface RestartFacts {
   readonly progress: Progress;
   readonly health: Health;
   readonly now: number;
+  /** The legacy entitlement, for an account that holds it: free restarts, like a timer. */
   readonly premium: boolean;
+  /** A replay timer runs on this device now (`replayTimerActive`). */
+  readonly timerActive: boolean;
   /** The attempt holding this run, or null when none has begun. */
   readonly attemptId: string | null;
   /** The level's result has been recorded (`recordOutcome`). */
@@ -45,14 +50,17 @@ export interface RestartFacts {
 
 export function restartKind(facts: RestartFacts): RestartKind {
   if (facts.outcomeRecorded) return 'try_again';
-  if (facts.premium || !attemptCostsHeart(facts.progress, facts.level)) return 'immediate';
+  if (facts.premium || facts.timerActive || !attemptCostsHeart(facts.progress, facts.level)) return 'immediate';
   if (facts.attemptId === null) return 'immediate';
   if (!facts.scoredResponseBegun) return 'confirm_free';
   return facts.restartsLeft > 0 ? 'confirm_restart' : 'out_of_restarts';
 }
 
-/** The three sheets the puck can raise. `immediate` and `try_again` raise none. */
-export type RestartSheetKind = 'free' | 'daily' | 'empty';
+/**
+ * The sheets the puck can raise. `immediate` and `try_again` raise none; `timers` is the
+ * picker the empty sheet opens, never raised by a kind on its own.
+ */
+export type RestartSheetKind = 'free' | 'daily' | 'empty' | 'timers';
 
 export function sheetFor(kind: RestartKind): RestartSheetKind | null {
   switch (kind) {
@@ -67,14 +75,17 @@ export function sheetFor(kind: RestartKind): RestartSheetKind | null {
  * The sheet an open sheet should become as the run moves under it. A free sheet whose
  * response has begun becomes the daily one; an empty sheet left open past midnight becomes
  * the daily one, because the ad is never offered while a restart is there; a run that turned
- * free (Premium arrived, or the level stopped costing) shows the free sheet, which never
- * mentions a cost. A recorded result closes it: the result has its own Try again.
+ * free (a timer or Premium arrived, or the level stopped costing) shows the free sheet, which
+ * never mentions a cost. A recorded result closes it: the result has its own Try again. The
+ * timer picker stays open while the empty sheet is what the run would raise, since it is
+ * that sheet's own second page.
  */
-export function liveSheet(facts: RestartFacts): RestartSheetKind | null {
+export function liveSheet(facts: RestartFacts, shown: RestartSheetKind | null = null): RestartSheetKind | null {
   const kind = restartKind(facts);
   if (kind === 'try_again') return null;
   if (kind === 'immediate') return 'free';
-  return sheetFor(kind);
+  const next = sheetFor(kind);
+  return shown === 'timers' && next === 'empty' ? 'timers' : next;
 }
 
 /**
