@@ -893,6 +893,9 @@ device-local expiry (`tiny-tempo.replayTimer.v1`, from the end of a running time
 otherwise, claim ids persisted so a replayed purchase adds once, an expiry over a week ahead
 read as damage), sold from that picker, which buys and restarts, and from Settings → Workshop
 store; the puck's badge turns brass and reads what is left. Hearts are untouched by a timer.
+Every Console field for the products is in `docs/PLAY_PRODUCTS.md`, and their icons are
+drawn by `ui/productArt.ts` into `store/products/` (`scripts/product-icons.mjs`, which
+`tests/productArt.test.ts` holds to Google's format).
 **Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
 prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
 hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
@@ -1246,6 +1249,7 @@ src/
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
+    productArt.ts      The Play Console in-app product icons, the same way; written to store/products/ by scripts/product-icons.mjs
     calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
     restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
