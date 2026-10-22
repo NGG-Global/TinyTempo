@@ -24,6 +24,7 @@ export const COMMERCE_EVENTS = [
   'purchase_completed',
   'purchase_cancelled',
   'purchase_failed',
+  'replay_timer_granted',
 ] as const;
 
 export const GAMEPLAY_EVENTS = [
@@ -73,6 +74,12 @@ export const SERVICE_EVENTS = [
   'leaderboard_score_submitted',
   'leaderboard_opened',
   'leaderboard_submit_failed',
+  'reminder_offer_shown',
+  'reminder_offer_closed',
+  'reminder_permission',
+  'reminder_disabled',
+  'calibration_measured',
+  'calibration_kept',
 ] as const;
 
 /**
@@ -152,7 +159,7 @@ export type LevelResultParams = LevelParams & {
   /** Mean task accuracy, rounded, 0–100. */
   readonly accuracy: number;
   readonly duration_ms: number;
-  /** Times this attempt went back to its first task: Resume after a pause, or a free restart. A paid restart is a new attempt. */
+  /** Times this attempt went back to its first task: Resume after a pause, or a restart from the puck (free, daily or rewarded). Try again is a new attempt. */
   readonly restarts: number;
   /** 1-based index of the task with the lowest accuracy, and that accuracy. */
   readonly weakest_task: number;
@@ -165,19 +172,25 @@ export type LevelResultParams = LevelParams & {
  * the rewarded offer's `map` and `play`.
  */
 export type RestartPlacement = 'restart';
-/** Which sheet the restart puck raised: none for a free level, Premium or a start not yet begun. */
-export type RestartSheet = 'none' | 'free' | 'paid' | 'empty';
-/** What a confirmed restart cost: nothing, a heart, or a heart got from an ad, a refill or Premium. */
-export type RestartCost = 'free' | 'heart' | 'rewarded' | 'refill' | 'premium';
+/**
+ * Which sheet the restart puck raised: none for a free level, Premium, a running replay
+ * timer or a start not yet begun; `daily` uses one of today's restarts; `empty` is none
+ * left, with the ad and the timers; `timers` is the picker of four opened from it.
+ */
+export type RestartSheet = 'none' | 'free' | 'daily' | 'empty' | 'timers';
+/** What a confirmed restart cost: nothing, one of today's restarts, an ad, or a timer just bought. */
+export type RestartCost = 'free' | 'daily' | 'rewarded' | 'timer';
 
-/** What every restart event carries. No device, no account: the level, and the hearts it was decided on. */
+/** What every restart event carries. No device, no account: the level, and the restarts it was decided on. */
 export type RestartParams = {
   readonly level: number;
   readonly area: number;
   readonly placement: RestartPlacement;
-  /** Hearts the player held when the event happened, before any new attempt spent one. */
-  readonly hearts: number;
+  /** Today's restarts still unused when the event happened (after this one, on a confirm). */
+  readonly restarts_left: number;
   readonly premium: Flag;
+  /** A replay timer was running when the event happened. */
+  readonly timer: Flag;
 };
 
 export interface AnalyticsPayloads {
@@ -191,6 +204,8 @@ export interface AnalyticsPayloads {
   readonly purchase_completed: { readonly product: string };
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
+  /** A replay timer's minutes were added, once per purchase; `minutes_left` is the whole timer after it, since purchases stack. */
+  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';
@@ -366,12 +381,11 @@ export interface AnalyticsPayloads {
     readonly reason: 'keep_playing' | 'run_ended' | 'paused' | 'left';
   };
   /**
-   * The out-of-hearts sheet's Watch did not end in a restart. `no_heart`: the ad paid out
-   * but no heart could be granted. `run_ended`: the heart was granted and kept, but the run
-   * had finished or moved on meanwhile, so nothing restarted.
+   * The no-restarts sheet's Watch did not end in a restart. `run_ended`: the ad paid out,
+   * but the run had finished or moved on meanwhile, so nothing restarted and nothing is kept.
    */
-  readonly rewarded_restart_failed: Omit<RestartParams, 'hearts' | 'premium'> & {
-    readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'no_heart' | 'run_ended';
+  readonly rewarded_restart_failed: Omit<RestartParams, 'restarts_left' | 'premium' | 'timer'> & {
+    readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'run_ended';
   };
   readonly collectible_unlocked: {
     /** The act's registry id: 25 values. */
@@ -446,6 +460,25 @@ export interface AnalyticsPayloads {
     /** 1 when the tap had to offer Play Games sign-in first. */
     readonly sign_in: Flag;
   };
+  /** The one-time daily reminder offer opened on the map, after a first day's stamp (`docs/REMINDERS.md`). */
+  readonly reminder_offer_shown: { readonly stamps: number };
+  /** How the offer closed: Remind me, Not now, or Android's back. */
+  readonly reminder_offer_closed: { readonly choice: 'remind' | 'not_now' | 'back' };
+  /** The player asked for the reminder, and what Android answered. Never sent for a check without asking. */
+  readonly reminder_permission: { readonly source: 'offer' | 'settings'; readonly result: 'granted' | 'denied' };
+  /** The reminder switched off in Settings. */
+  readonly reminder_disabled: { readonly source: 'settings' };
+  /**
+   * A Tap offset run finished (`docs/UI_REFINEMENTS.md`). `offset_ms` is the offset it
+   * proposes (0 on a failure), `spread_ms` how far the taps disagreed, `reported_ms` what the
+   * platform admits to, `check` 1 when the run checked an offset kept this visit.
+   */
+  readonly calibration_measured: {
+    readonly route: AudioRoute; readonly outcome: 'measured' | 'few_taps' | 'uneven';
+    readonly offset_ms: number; readonly spread_ms: number; readonly reported_ms: number; readonly check: Flag;
+  };
+  /** A measured offset was kept for its route, and by how much it moved. */
+  readonly calibration_kept: { readonly route: AudioRoute; readonly offset_ms: number; readonly change_ms: number; readonly check: Flag };
   readonly practice_started: { readonly level: number };
   readonly practice_completed: { readonly level: number; readonly accuracy: number; readonly duration_ms: number };
   /** Level 100 was cleared for the first time on this device: the mode opened. */

@@ -1,16 +1,37 @@
 # Restart
 
-**One heart is one real attempt at an unfinished frontier level.** Before this change, the
-restart puck continued the attempt it was pressed on: the level started over on the same
-attempt id and the heart that id had already spent. On a frontier level that meant
-unlimited free retries for as long as the player kept pressing it before the result.
+**A heart pays for an attempt; a restart pays with a restart.** Restarts are a resource of
+their own beside hearts (`game/dailyRestarts.ts`): **two a day**, reset at the player's
+midnight. They replace the heart a mid-level restart used to cost, so no action is charged
+twice: hearts pay for starting a frontier level and for Try again, and the restart puck, once
+the run has scored, uses one of the day's restarts and goes back to task 1 on the same attempt
+and the same heart. With none left, the sheet offers a rewarded ad for one restart, or Keep
+playing.
 
-Now a restart before the player's first scored response is still free. A restart after it
-ends the attempt and begins a new one, which costs a heart through `beginAttempt` like any
-other attempt. The player is told which one it will be before anything is spent.
+Only the restarts that used to cost a heart count: a frontier attempt past the protected
+first area (`attemptCostsHeart`), after its first scored response, without a replay timer
+running or the legacy Premium. Everything else stays free and unlimited — a restart before
+the first scored tap, any finished level, levels 1–10 — so practice and star-chasing are
+never limited.
 
-Resume is unchanged. After an interruption it continues the same attempt and never costs a
-heart.
+**A replay timer makes every restart free while it runs** (`game/replayTimer.ts`,
+`docs/BILLING.md`): four Play consumables — 30 minutes, 1 hour, 2 hours, 1 day — each adding
+its span to one device-local timer, from the end of a running one or from now. The puck
+restarts at once, nothing is asked, today's two are not touched, and the puck's badge turns
+brass and reads what is left ("29m", "1h", "23h"). The timers are sold on the empty sheet,
+under Watch ad & Restart, as a brass **Replay timer** block that opens a picker of the four
+with Play's prices; a tap on a row buys it and restarts the level. Settings → Workshop store
+sells the same four. **Premium is unlimited and no longer sold**: it was sold as unlimited
+hearts and no ads, a bought one-time product cannot be taken back, and capping it would take
+something from people who paid, so an account that owns it keeps its free restarts.
+
+Resume is unchanged. After an interruption it continues the same attempt and never costs
+anything.
+
+Why it changed: a restart ending the attempt and spending a heart meant a player's whole
+session could go on restarts, and the heart that pays for a level was doing two jobs. Two a
+day, then an ad, keeps restarts from being free and unlimited (the original problem) without
+taking hearts for them.
 
 ## The states
 
@@ -18,19 +39,37 @@ heart.
 
 | Kind | When | The puck does |
 | --- | --- | --- |
-| `try_again` | The level's result is recorded | What the result's Try again does: a new attempt. No sheet. |
-| `immediate` | A finished level, a protected level (1–10), Premium, or no attempt yet | Restarts at once, free, on the same attempt. No sheet. |
-| `confirm_free` | A frontier attempt before its first scored response | **Restart from the beginning? / No heart will be used.** Restart · Keep playing |
-| `confirm_paid` | A frontier attempt after its first scored response, with a heart | **Restart level? / This run will end. Restarting uses 1 heart.** Restart (♥ 1 chip) · Keep playing |
-| `out_of_hearts` | The same, with no heart | **Out of hearts / Get a heart and restart this level.** Watch ad & Restart (♥ +1 chip) · Refill 5 hearts · ∞ Unlimited hearts · Keep playing |
+| `try_again` | The level's result is recorded | What the result's Try again does: a new attempt, which needs a heart. No sheet. |
+| `immediate` | A finished level, a protected level (1–10), a running replay timer, the legacy Premium, or no attempt yet | Restarts at once, free, on the same attempt. No sheet. |
+| `confirm_free` | A frontier attempt before its first scored response | **Restart from the beginning? / No restart will be used.** Restart · Keep playing |
+| `confirm_restart` | A frontier attempt after its first scored response, with a restart left today | **Restart level? / Uses 1 of today's 2 restarts.** (or *Uses your last restart for today.*) Restart (restart chip, **1**) · Keep playing |
+| `out_of_restarts` | The same, with none left today | **No restarts left / Watch an ad to restart now. 2 more tomorrow.** Watch ad & Restart (video chip, **+1**) · **Replay timer** (brass, *Unlimited restarts for a while*, from the cheapest price) · Keep playing |
+
+The Replay timer block opens the sheet's second page, the `timers` picker: **Unlimited
+restarts / Restart as often as you like while it runs.**, four cream rows — *30 minutes*,
+*1 hour*, *2 hours*, *1 day* — each with its Play price on a coral chip, and **Back**. A row
+buys that timer (`buyTimerToRestart`): the sheet reads *Waiting for the store…* meanwhile,
+a cancelled or failed purchase says why under the note and leaves the sheet up, and a paid
+one restarts the level at once on the same attempt (`restart_confirmed` with cost `timer`),
+if the run that asked is still the run (`ticketStillApplies`); the timer is the player's
+either way. The picker is `restart_requested`'s sheet `timers` and `purchase_offer_shown`
+once per product per opening.
 
 With no attempt yet (the first start still loading, or the empty-hearts screen), the puck
 is a start, gated like any other.
 
+**The puck carries the count.** On a level where a restart would use one, the restart puck
+wears a small badge with today's restarts left: ink with a cream number while any are left, a
+hollow cream badge at 0, and brass with the time left while a replay timer runs, read every
+half second so the minutes turn. It is not drawn where restarts are free for another reason
+(a finished or protected level, Premium), so it never shows a number that means nothing.
+Coral stays the action's.
+
 The sheet (`ui/restartSheet.ts`) is a cream card in the game's own panels: the coral block
-for the action, bench wood for the refill and Keep playing, brass for Premium. The heart is
-drawn on a chip, the same way the play screen's Watch block draws its +1. It stands above
-the player's rows, so the run stays readable behind it.
+for the action and bench wood for Keep playing. What the action takes is drawn on a chip: the
+restart glyph and a 1, or a video's play mark and +1. It stands above the player's rows, so
+the run stays readable behind it. The refill and Premium offers the out-of-hearts sheet used
+to carry are gone with it: a restart never costs a heart now, so there is no heart to sell.
 
 **The run keeps running behind the sheet.** Opening it pauses nothing, ends nothing and
 spends nothing. A tap off the card is still the player's beat. A tap on the card's face does
@@ -39,15 +78,21 @@ nothing.
 **The sheet follows the run, and never acts on a stale reading.** Every half second, and
 the moment the scored response begins, `liveSheet` is re-read:
 
-- a free sheet becomes the paid one when the response begins;
-- an empty sheet becomes the paid one when a heart regenerates (the ad is never offered
-  while a heart is there);
-- either becomes the free one, which never mentions a heart, if Premium arrives;
+- a free sheet becomes the daily one when the response begins;
+- an empty sheet left open past midnight becomes the daily one (the ad is never offered
+  while a restart is there), and so does the timer picker over it;
+- the picker stays open while the empty sheet is what the run would raise (`liveSheet`'s
+  `shown`), since it is that sheet's own second page;
+- any of them becomes the free one, which never mentions a cost, if a timer or Premium
+  arrives;
 - the sheet closes when the result is recorded.
 
 After any change the sheet ignores taps for `RESTART_SHEET_ARM_SEC` (0.45 s), so a thumb
 already on its way cannot land on a button it did not read. Confirm also re-checks before it
 acts: if the run no longer matches what the sheet says, the sheet changes and asks again.
+**The daily restart is written before the restart runs** (`useDailyRestart`), so a restart
+that went ahead has always been paid for, and a sheet whose last restart was used elsewhere
+asks again instead of restarting free.
 
 ## Attempt ids: Resume vs Restart
 
@@ -57,8 +102,8 @@ infers it from whether a result exists.
 | Mode | Used by | Attempt |
 | --- | --- | --- |
 | `resume` | Resume, Retry after a failed audio start, the first start, the empty screen's Today/Watch/Refill/Premium | Continues the unfinished attempt; a finished one is never resumed |
-| `free_restart` | The free sheet, and every `immediate` restart | The same attempt from task 1 |
-| `new_attempt` | The paid sheet, the empty sheet after a heart is found, Try again and the replay block after a result | Ends the attempt in hand, and a new id spends at the next downbeat |
+| `free_restart` | Every restart from the puck: the free sheet, `immediate`, a daily restart and a rewarded one | The same attempt from task 1, on the heart it began with; the pass is unscored again |
+| `new_attempt` | Try again and the replay block after a result | Ends the attempt in hand, and a new id spends at the next downbeat |
 
 **A new attempt is ended once, before anything can fail.** `releaseAttempt`
 (`abandonAttempt`) runs synchronously, before the audio unlocks. The heart the old attempt
@@ -100,75 +145,67 @@ tap means the response has begun. These never set it:
 - a finer grid's introduction (`intro`);
 - the DEV rehearsal.
 
-Only a new attempt clears it. Resume keeps it, because the attempt it continues has already
-been played.
+A new attempt or a restart clears it: the pass starts again unscored, so a restart before it
+scores again is free. Resume keeps it, because the attempt it continues has already been
+played.
 
 ## The rewarded restart
 
-Watch ad & Restart reuses the same rewarded video and the same one-heart grant as the play
-screen's Watch and the map's: `watchForHeart` → `monetization().showRewarded()` →
-`redeemHeart(claimId)`. All three placements now go through `watchForHeart`. There is no
-restart token and no new product.
+Watch ad & Restart shows the same rewarded video every placement shows
+(`monetization().showRewarded()`), through `watchForRestart`. The reward is one restart, used
+at once: nothing is banked, so there is no grant to dedupe and nothing left over if the run
+moved on while the ad played. It does not touch the day's count or a heart.
 
-The sequence is: reward confirmed → one heart granted → old attempt ended → new attempt
-begins and spends that heart → the level restarts. The player never presses Restart again.
-The balance ends where it started, with a fresh attempt.
-
-| Case | Hearts | Attempt | Restart |
+| Case | Today's restarts | Hearts | Restart |
 | --- | --- | --- | --- |
-| Reward confirmed, same run | +1, then −1 | new | yes |
+| Reward confirmed, same run | unchanged | unchanged | yes, the same attempt from task 1 |
 | Ad unavailable, closed early, failed or threw | unchanged | unchanged | no; the sheet says why (`rewardedFeedback`) |
-| Reward confirmed, but the run finished, paused or was replaced meanwhile | +1, kept | unchanged | no |
-| Reward confirmed, scene gone | +1, kept | already abandoned by the scene's shutdown | no |
-| Reward confirmed, audio fails on restart | +1, kept | old ended, none held | no; Retry spends the heart |
+| Reward confirmed, but the run finished, paused or was replaced meanwhile | unchanged | unchanged | no, and nothing is kept |
+| Reward confirmed, scene gone | unchanged | unchanged | no |
 
 The checks that guard this:
 
 - the commerce lock, so only one watch is out at a time;
-- a fresh `restart:N` claim id, which `claimHeart` grants once whatever the SDK fires;
 - a `RestartTicket` (attempt id and start request, checked by `ticketStillApplies`), so a
   reward that returns after a pause, a result or another start restarts nothing.
 
-Refill and Premium from the empty sheet use the same purchase and the same `redeemFill` as
-the play screen's offers. On success they restart: a refill spends one of its five hearts,
-Premium spends none.
+The play screen's Watch and the map's still grant a heart through `watchForHeart` and
+`redeemHeart`, with a fresh claim id; the restart sheet no longer uses that path.
 
 ## Analytics
 
 All on the gameplay bus, through `playAnalytics`. Each carries `level`, `area`,
-`placement` (`restart`), `hearts` (held when it happened) and `premium` (0/1). Nothing about
-the device or the player.
+`placement` (`restart`), `restarts_left` (today's, after this one on a confirm), `premium`
+(0/1) and `timer` (0/1, a replay timer running). Nothing about the device or the player.
 
 | Event | Fires | Adds |
 | --- | --- | --- |
-| `restart_requested` | The puck reached the restart flow | `sheet`: `none` (free level, Premium) \| `free` \| `paid` \| `empty` |
-| `restart_confirmed` | A restart is going ahead. Once per restart | `cost`: `free` \| `heart` \| `rewarded` \| `refill` \| `premium` |
+| `restart_requested` | The puck reached the restart flow | `sheet`: `none` (free level, a timer, Premium) \| `free` \| `daily` \| `empty` \| `timers` |
+| `restart_confirmed` | A restart is going ahead. Once per restart | `cost`: `free` \| `daily` \| `rewarded` \| `timer` |
 | `restart_cancelled` | A sheet closed without restarting | `sheet`, `reason`: `keep_playing` \| `run_ended` \| `paused` \| `left` |
-| `rewarded_restart_failed` | The empty sheet's Watch did not end in a restart | `reason`: `unavailable` \| `cancelled` \| `failed` \| `no_heart` \| `run_ended` |
+| `rewarded_restart_failed` | The empty sheet's Watch did not end in a restart | `reason`: `unavailable` \| `cancelled` \| `failed` \| `run_ended` |
 
-`rewarded_offer_shown` gains the placement `restart`, once per showing of the empty sheet.
+`rewarded_offer_shown` carries the placement `restart`, once per showing of the empty sheet.
 The service's own `rewarded_started`, `rewarded_completed` and `rewarded_failed` fire as
-they always have. The funnel is distinguished as follows:
+they always have. **The values changed with daily restarts**: `sheet` `paid` became `daily`,
+`cost` lost `heart`, `refill` and `premium` and gained `daily`, the `hearts` parameter became
+`restarts_left`, and `no_heart` left `rewarded_restart_failed`. A report across the change
+should split on the release.
 
-- **Free restart:** `restart_confirmed.cost = free`.
-- **Paid-heart restart:** `cost = heart`.
-- **Rewarded restart completed:** `cost = rewarded`.
-- **Rewarded restart failed or cancelled:** `rewarded_restart_failed`.
-
-The placement is `restart` rather than `mid_level_restart` because gameplay strings stay
-within twelve characters (`tests/playAnalytics.test.ts`).
-
-A paid restart ends the analytics run (`level_abandoned`) and the new attempt starts its own
-(`level_started`). A free restart continues the run, and `restarts` counts it, as before.
+Every restart from the puck continues the analytics run, and `restarts` on the result counts
+it. Only Try again after a result ends the run (`level_abandoned` is not sent for it; the
+result already closed it) and starts another.
 
 ## Files
 
 | File | What it holds |
 | --- | --- |
-| `game/restart.ts` | `restartKind`, `liveSheet`, `attemptForStart`, `releaseAttempt`, `scoredResponseBegins`, `watchForHeart`, `ticketStillApplies`, and Resume's `resumeTask`, `resumeLeadBeats`, `pauseTask`, `ceilingFor`; pure |
-| `ui/restartSheet.ts` | The sheet, its copy, its pure layout, hit test and tap guard |
-| `scenes/PlayScene.ts` | `requestRestart`, the sheet's lifecycle, `watchToRestart`, `buyToRestart`, `startRound(mode)` |
-| `tests/restart.test.ts` | Heart accounting, the rewarded restart, when a run has begun, the handover, the sheet, analytics |
+| `game/dailyRestarts.ts` | `RESTARTS.daily`, today's count, `spendRestart`, `useDailyRestart`; validated storage, `tiny-tempo.restarts.v1`, device-local |
+| `game/replayTimer.ts` | `REPLAY_TIMERS`, `extendTimer`, `claimTimer`/`redeemTimer` (idempotent per claim id), `timerLeftMs`, `formatTimerLeft`, `shortTimerLeft`; validated storage, `tiny-tempo.replayTimer.v1`, device-local |
+| `game/restart.ts` | `restartKind`, `liveSheet`, `attemptForStart`, `releaseAttempt`, `scoredResponseBegins`, `watchForRestart`, `watchForHeart`, `ticketStillApplies`, and Resume's `resumeTask`, `resumeLeadBeats`, `pauseTask`, `ceilingFor`; pure |
+| `ui/restartSheet.ts` | The sheet, its copy (`dailyNote`), its pure layout, hit test and tap guard |
+| `scenes/PlayScene.ts` | `requestRestart`, the sheet's lifecycle, `watchToRestart`, the puck's badge (`drawRestartCount`), `startRound(mode)` |
+| `tests/restart.test.ts`, `tests/dailyRestarts.test.ts`, `tests/replayTimer.test.ts` | Heart and restart accounting, the rewarded restart, when a run has begun, the handover, the sheet and its picker, analytics, the allowance, the timer |
 
 ## Resume continues; an interruption cannot improve a task
 
@@ -205,7 +242,8 @@ between tasks — so a single press there abandoned a paid attempt. `levelRunnin
   behind the ad decides whether the run has moved on by the time the player returns. Either
   way the outcome is valid: the ticket check, and the result recorded if the run finished.
   But nobody has watched it happen on a handset.
-- **The Play Billing sheet over a running level.** Same question.
+- **The Play Billing sheet over a running level.** Same question, and now the one a
+  replay timer bought from the picker goes through.
 - **Backgrounding with the sheet open.** `interrupt` closes the sheet; checked by reading the
   code, not on a device.
 - **The stall guard.** In the headless harness (software GL at 11 fps), the controller's own

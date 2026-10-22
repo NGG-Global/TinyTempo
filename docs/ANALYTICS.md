@@ -10,7 +10,11 @@ why gameplay was added to this bus rather than given one of its own.
 
 Ten commerce events were already fired at every offer, purchase and watch —
 `health_empty`, `rewarded_offer_shown`, `purchase_completed` and the rest — and every
-one of them was discarded. `monetization/analytics.ts` was a typed bus with a default
+one of them was discarded. (An eleventh, `replay_timer_granted`, joined them with the
+replay timers: `product` and `minutes_left`, the whole timer after the purchase added its
+span, since purchases stack. The `product` on every purchase event is now one of the four
+`replay_timer_*` ids or `heart_refill_full`; `tinytempo_premium` only ever appears on an
+old event, since nothing offers it.) `monetization/analytics.ts` was a typed bus with a default
 sink that logs in DEV and does nothing in a production build, so the game would have
 shipped a monetization funnel that nobody could see.
 
@@ -305,12 +309,12 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `concept_intro_completed` | The introduction hands over to the level. Once per showing | `concept`, `level`, `tries` (1 or 2), `accuracy` (the better try, never counted toward the level), `passed` |
 | `scrapbook_opened` | The Scrapbook opens (`docs/SCRAPBOOK.md`) | `source` (`menu` \| `map`), `owned`, `total` |
 | `collectible_unlocked` | A finished level earns its keepsake: three stars where it had fewer. Once per keepsake per session; never for keepsakes a save already owned | `vignette` (28 act ids), `collectible` (keepsake id), `level`, `first` (the device's first, with the longer note), `owned` |
-| `area_finale_started` | An area finale's attempt begins (`docs/FINALES.md`), beside its `level_started`. Once per attempt: Resume and a free restart continue it; a paid restart is a new attempt | `level`, `area`, `treatment` (`grass` \| `pavement` \| `sand` \| `snow` \| `dusk` \| `garden` \| `swamp` \| `village` \| `castle` \| `default`), `mode`, `retry_count`, `heart_cost` |
+| `area_finale_started` | An area finale's attempt begins (`docs/FINALES.md`), beside its `level_started`. Once per attempt: Resume and every restart from the puck continue it; Try again is a new attempt | `level`, `area`, `treatment` (`grass` \| `pavement` \| `sand` \| `snow` \| `dusk` \| `garden` \| `swamp` \| `village` \| `castle` \| `default`), `mode`, `retry_count`, `heart_cost` |
 | `level_mastered` | A level's **first** IN THE POCKET run: every scored task flawless, on a level the save did not already hold at 100 (`docs/MASTERY.md`), beside its `level_completed`. Never on a flawless replay of a mastered level, never on map render | `level`, `area`, `vignette`, `mode`, `task_count`, `accuracy`, `stars` |
-| `restart_requested` | The restart puck reached the restart flow mid-level (`docs/RESTART.md`) | `level`, `area`, `placement` (`restart`), `hearts`, `premium`, `sheet` (`none` \| `free` \| `paid` \| `empty`) |
-| `restart_confirmed` | A restart is going ahead. Once per restart, however it was paid for | `level`, `area`, `placement`, `hearts` (held before the new attempt spends), `premium`, `cost` (`free` \| `heart` \| `rewarded` \| `refill` \| `premium`) |
-| `restart_cancelled` | A restart sheet closed without restarting | `level`, `area`, `placement`, `hearts`, `premium`, `sheet`, `reason` (`keep_playing` \| `run_ended` \| `paused` \| `left`) |
-| `rewarded_restart_failed` | The out-of-hearts sheet's Watch did not end in a restart. `run_ended`: the heart was granted and kept, the run had moved on | `level`, `area`, `placement`, `reason` (`unavailable` \| `cancelled` \| `failed` \| `no_heart` \| `run_ended`) |
+| `restart_requested` | The restart puck reached the restart flow mid-level (`docs/RESTART.md`) | `level`, `area`, `placement` (`restart`), `restarts_left`, `premium`, `timer` (a replay timer running), `sheet` (`none` \| `free` \| `daily` \| `empty` \| `timers`) |
+| `restart_confirmed` | A restart is going ahead. Once per restart, however it was paid for | `level`, `area`, `placement`, `restarts_left` (today's, after this one), `premium`, `timer`, `cost` (`free` \| `daily` \| `rewarded` \| `timer`, the last a timer bought on the sheet) |
+| `restart_cancelled` | A restart sheet closed without restarting | `level`, `area`, `placement`, `restarts_left`, `premium`, `timer`, `sheet`, `reason` (`keep_playing` \| `run_ended` \| `paused` \| `left`) |
+| `rewarded_restart_failed` | The no-restarts sheet's Watch did not end in a restart. `run_ended`: the run had moved on, and nothing is kept | `level`, `area`, `placement`, `reason` (`unavailable` \| `cancelled` \| `failed` \| `run_ended`) |
 | `area_finale_completed` | The finale cleared, beside its `level_completed`, from the same single close | `level`, `area`, `treatment`, `mode`, `stars`, `accuracy` |
 | `area_finale_failed` | The finale scored under its clear bar, beside its `level_failed` | `level`, `area`, `treatment`, `mode`, `accuracy` |
 | `objective_progress` | A daily objective moved without finishing (`docs/OBJECTIVES.md`). Once per objective per finished level — a level of twenty Perfects is one event, never twenty | `objective` (pool id), `slot` (1–3), `progress`, `target` |
@@ -319,6 +323,12 @@ The **level parameters** (`LevelParams`) ride on every level event:
 | `leaderboard_score_submitted` | Play Games accepted a Daily Tempo best (`docs/LEADERBOARDS.md`). Only a score that beat the day's best is ever sent | `leaderboard` (`daily_tempo`), `accuracy` (rounded %), `new_best` (Play Games' own daily-best flag), `retry` (a kept best sent later) |
 | `leaderboard_submit_failed` | A submission Play Games did not accept. The best is kept and retried. Never sent for a signed-out player, a browser or an unconfigured build — nothing was attempted | `leaderboard`, `reason` (`offline` \| `timeout` \| `failed` \| `invalid` \| `unavailable`), `retry` |
 | `leaderboard_opened` | The leaderboard button was tapped, whatever came of it | `leaderboard`, `result` (`shown` \| `signed_out` \| `failed` \| `invalid` \| `unavailable` \| `unconfigured`), `sign_in` (the tap had to offer sign-in first) |
+| `reminder_offer_shown` | The daily reminder's one-time offer opened on the map (`docs/REMINDERS.md`) | `stamps` |
+| `reminder_offer_closed` | The offer closed | `choice` (`remind` \| `not_now` \| `back`) |
+| `reminder_permission` | The player asked for the reminder, and what Android answered | `source` (`offer` \| `settings`), `result` (`granted` \| `denied`) |
+| `reminder_disabled` | The reminder switched off in Settings | `source` (`settings`) |
+| `calibration_measured` | A Tap offset run finished (`docs/UI_REFINEMENTS.md`) | `route`, `outcome` (`measured` \| `few_taps` \| `uneven`), `offset_ms` (proposed; 0 on a failure), `spread_ms`, `reported_ms` (the platform's own lag), `check` (a run against an offset kept this visit) |
+| `calibration_kept` | A measured offset was kept for its route | `route`, `offset_ms`, `change_ms`, `check` |
 | `practice_started` | Reserved: no practice mode exists yet | `level` |
 | `practice_completed` | Reserved | `level`, `accuracy`, `duration_ms` |
 
@@ -343,9 +353,9 @@ the lowest-accuracy task of that pass, earliest on a tie.
   second `level_started`. A free restart, and a Resume before any task finished, go round
   again from task 1 and `restarts` counts them; a Resume after a finished task carries on
   from the task it stopped in (`continuing`), keeps the tasks already reported and is not a
-  restart. A paid restart, after the scored
-  response began, is a new attempt: the old run is `level_abandoned` and the new one is
-  `level_started` (`docs/RESTART.md`). A finished or abandoned id is never reopened.
+  restart. Every restart from the puck — free, a daily restart or a rewarded one — is the same
+  attempt from task 1 and counts in `restarts`; only Try again after a result is a new attempt
+  (`docs/RESTART.md`). A finished or abandoned id is never reopened.
 - **`level_completed` / `level_failed` fire from `recordOutcome`,** the one step every
   finished run passes exactly once — including the run whose coda a notification
   interrupts, which is why it is not the summary. The ledger closes the run as well, so a

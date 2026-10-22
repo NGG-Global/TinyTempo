@@ -16,7 +16,7 @@ import {
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, rewardedFeedback, STORE_COPY, track } from '@/monetization';
-import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, type Progress } from '@/game/progress';
+import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
 import { areaIndexOf, canPlayLevel, firstClosedArea, firstLevelOfArea, levelStars, starsRequired, totalStars, type EarnedStars, type StarGate } from '@/game/stars';
@@ -40,7 +40,7 @@ import {
 import { buntingPoints } from '@/ui/finalePose';
 import { drawGear } from '@/ui/gear';
 import { drawBack, drawChecklist, drawChevron, drawFinaleFlag, drawHeart, drawInfinity, drawPadlock, drawPlay, drawSpeaker } from '@/ui/icons';
-import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
+import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, storedStamps, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
 import { EndlessCard } from '@/ui/endlessCard';
 import { ENDLESS } from '@/config/endless';
@@ -54,6 +54,10 @@ import { arrive, settle, spring, squash } from '@/ui/spring';
 import { STAR_FLIGHT, flightDone, flightPath, starFlightAge, starFlightPose, starsLanded, tallyRing, trailAlpha } from '@/ui/starFlight';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
 import { RouteNotice } from '@/ui/routeNotice';
+import { ScreenHint } from '@/ui/screenHint';
+import type { HintClose } from '@/game/screenHints';
+import { loadReminderSettings, offerWanted } from '@/reminders/reminder';
+import { remindersAvailable, turnRemindersOn } from '@/reminders/sync';
 import { barPose, pulseAt, type Pulse } from '@/ui/musicPulse';
 import { AMBIENCE_BY_AREA, MapAmbience, type AmbienceBand } from '@/ui/mapAmbience';
 import { BakedLayer } from '@/ui/bakedLayer';
@@ -61,7 +65,6 @@ import { drawGroundMotif, drawProp } from '@/ui/mapScenery';
 import type { DrawingBounds } from '@/ui/graphicsBounds';
 import { resizedScroll, scrollStep, STRIP_RASTER, stripBounds, stripInView } from '@/ui/navigation';
 import { SceneCurtain } from '@/ui/SceneCurtain';
-import { Sheen } from '@/ui/sheen';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap } from '@/vignettes/Vignette';
 
@@ -258,7 +261,6 @@ export class MapScene extends BaseScene {
   private restPlate!: Phaser.GameObjects.Graphics;
   private restSurface!: Phaser.GameObjects.TileSprite;
   private restControls!: Phaser.GameObjects.Graphics;
-  private restSheen!: Sheen;
   /**
    * The sheet's words, made the first time it opens (`ensureRestText`): seventeen texts,
    * each a raster and an upload, that most visits to the map never show.
@@ -270,7 +272,6 @@ export class MapScene extends BaseScene {
   private restWatchRect = new Phaser.Geom.Rectangle();
   private restRefillRect = new Phaser.Geom.Rectangle();
   private restDailyRect = new Phaser.Geom.Rectangle();
-  private restPremiumRect = new Phaser.Geom.Rectangle();
   private restBackRect = new Phaser.Geom.Rectangle();
   private restTipRect = new Phaser.Geom.Rectangle();
   /** The first-time row on the sheet, for this visit to the map. Decided once, on entry. */
@@ -283,7 +284,7 @@ export class MapScene extends BaseScene {
   private restAt = -Infinity;
   private restPressDirty = false;
   private restPressedAt = -Infinity;
-  private restPressed: 'watch' | 'refill' | 'daily' | 'premium' | 'back' | 'tip' | null = null;
+  private restPressed: 'watch' | 'refill' | 'daily' | 'back' | 'tip' | null = null;
   private restBusy = false;
   /** A store or ad message under the sheet's controls; empty when there is nothing to say. */
   private restNote = '';
@@ -378,6 +379,12 @@ export class MapScene extends BaseScene {
   private endlessLabel!: PuckLabel;
   /** "Bluetooth audio detected": the one place an uncalibrated route is suggested, before a run. */
   private routeNotice!: RouteNotice;
+  /**
+   * The daily reminder's one-time offer (`docs/REMINDERS.md`), on a native build only, and
+   * whether it is still due this visit: read once at build, opened when the map is quiet.
+   */
+  private reminderOffer: ScreenHint | null = null;
+  private reminderOfferDue = false;
   private stopWatchingRoute: (() => void) | null = null;
   private muted = false;
   /**
@@ -558,8 +565,6 @@ export class MapScene extends BaseScene {
     this.restPlate = this.add.graphics().setScrollFactor(0).setDepth(20);
     this.restSurface = surface(this, MaterialKey.parchment, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.puck, 0.28).setScrollFactor(0).setDepth(20);
     this.restControls = this.add.graphics().setScrollFactor(0).setDepth(21);
-    this.restSheen = new Sheen(this, 22);
-    this.restSheen.node.setScrollFactor(0);
     this.restTitle = null;
     this.restWait = null;
     this.restTexts = {};
@@ -579,6 +584,31 @@ export class MapScene extends BaseScene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
     this.events.once(Phaser.Scenes.Events.DESTROY, this.shutdown, this);
     ensureShellMusic(this);
+    // Last, after every camera: the offer draws with a camera of its own (`ui/screenHint.ts`).
+    const available = remindersAvailable();
+    this.reminderOfferDue = offerWanted({
+      available, stamps: storedStamps(Date.now()).stamps, offered: seenScreenHint('reminder'), enabled: loadReminderSettings().enabled,
+    });
+    this.reminderOffer = this.reminderOfferDue ? new ScreenHint(this, 'reminder', how => this.reminderOfferClosed(how)) : null;
+  }
+
+  /**
+   * The offer opens once the map has settled — the curtain up, the stars landed, no gate
+   * opening, no sheet or card open — so it never lands on top of something the player is
+   * watching, and it is the first thing after a day's stamp rather than in the middle of it.
+   */
+  private offerReminderWhenQuiet(now: number): void {
+    if (!this.reminderOfferDue || this.reminderOffer === null) return;
+    if (this.curtain.active || !this.flightSettled || this.ceremony !== null || this.restShown
+      || this.objectivesCard.open || this.endlessCard.open) return;
+    this.reminderOfferDue = false;
+    if (this.reminderOffer.showIfNew(now)) track('reminder_offer_shown', { stamps: storedStamps(Date.now()).stamps });
+  }
+
+  /** Remind me asks Android, from that tap; Not now and back leave it to Settings. Either way the offer is done. */
+  private reminderOfferClosed(how: HintClose): void {
+    track('reminder_offer_closed', { choice: how === 'action' ? 'remind' : how === 'secondary' ? 'not_now' : 'back' });
+    if (how === 'action') void turnRemindersOn('offer');
   }
 
   /**
@@ -599,10 +629,7 @@ export class MapScene extends BaseScene {
       watchPlus: this.restText(display(this, '+1', { size: 38, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
       refill: this.restText(display(this, STORE_COPY.refillShort, { size: 36, colour: PALETTE.ink }), 0, 0.5),
       refillPrice: this.restText(label(this, '', { size: 28, colour: PALETTE.ink, align: 'right' }), 1, 0.5),
-      premium: this.restText(display(this, STORE_COPY.premiumHeadline, { size: 42, colour: SHELL.cream, outline: shade(BRASS, -0.62) }), 0, 0.5),
       // Top-anchored, since it wraps beside the price chip: the second line grows down.
-      premiumTerms: this.restText(body(this, `${STORE_COPY.premiumTitle} · ${STORE_COPY.premiumShort.toLowerCase()}`, { size: 21, colour: shade(BRASS, -0.62) }), 0, 0),
-      premiumPrice: this.restText(label(this, '', { size: 26, colour: SHELL.cream, align: 'center' }), 0.5, 0.5),
       back: this.restText(display(this, 'Back to the map', { size: 36, colour: PALETTE.ink, align: 'center' }), 0.5, 0.5),
       note: this.restText(body(this, '', { size: 25, colour: PALETTE.coral, align: 'center' }), 0.5, 0.5),
       tipTitle: this.restText(display(this, HEALTH_COPY.firstEmptyTitle, { size: 32, colour: PALETTE.ink }), 0, 0.5),
@@ -650,6 +677,7 @@ export class MapScene extends BaseScene {
     this.drawDock(s, 0);
     this.drawRest(s, 0);
     this.routeNotice.layout(safe.centerX, this.footerTop, safe.width - 32 * s, s, this.controlSize);
+    this.reminderOffer?.layout(this.viewport, s);
     this.refreshRouteNotice();
     this.pressDirty = this.puckDirty = this.restPressDirty = true;
     this.cameras.main.setBounds(0, 0, full.width, this.worldHeight);
@@ -1906,19 +1934,16 @@ export class MapScene extends BaseScene {
     const shown = this.restShown;
     const hasDaily = shown && this.restDailyOpen;
     const hasTip = shown && this.restTipOpen;
-    const entitled = monetization().premium();
     this.restScrim.setVisible(shown);
     this.restPlate.setVisible(shown);
     this.restSurface.setVisible(shown);
     this.restControls.setVisible(shown);
     this.restTitle?.setVisible(shown);
     this.restWait?.setVisible(shown);
-    this.restSheen.setVisible(shown && !entitled);
     for (const [name, text] of Object.entries(this.restTexts)) {
       const daily = name.startsWith('daily');
-      const premium = name.startsWith('premium');
       const tip = name.startsWith('tip');
-      text.setVisible(shown && (daily ? hasDaily : premium ? !entitled : tip ? hasTip && (name !== 'tipGo' || this.restTipLevel !== null) : name !== 'note' || this.restNote !== ''));
+      text.setVisible(shown && (daily ? hasDaily : tip ? hasTip && (name !== 'tipGo' || this.restTipLevel !== null) : name !== 'note' || this.restNote !== ''));
     }
     if (!shown || !this.restTitle || !this.restWait) {
       this.restScrim.clear();
@@ -1937,13 +1962,11 @@ export class MapScene extends BaseScene {
     const dailyH = hasDaily ? Math.max(124 * s, control) : 0;
     const watchH = Math.max(152 * s, control);
     const refillH = Math.max(118 * s, control);
-    const premiumH = entitled ? 0 : Math.max(142 * s, control);
     const backH = Math.max(104 * s, control);
     const noteH = this.restNote === '' ? 0 : 44 * s;
     const gap = 22 * s;
     const head = 250 * s;
-    const rest = head + (hasDaily ? dailyH + gap : 0) + watchH + gap + refillH
-      + (entitled ? 0 : gap + premiumH) + gap + backH + noteH + 30 * s;
+    const rest = head + (hasDaily ? dailyH + gap : 0) + watchH + gap + refillH + gap + backH + noteH + 30 * s;
     // The first-time row is the one part of the sheet that can give ground: on a short
     // screen with every other row present it keeps its title and its control and drops
     // the sentence, rather than pushing the way out off the bottom.
@@ -2066,32 +2089,6 @@ export class MapScene extends BaseScene {
     this.restTexts.refillPrice!.setPosition(refill.right - 28 * s, refill.centerY + refillSink);
     y += refillH + gap;
 
-    if (!entitled) {
-      this.restPremiumRect.setTo(left + 26 * s, y, width - 52 * s, premiumH);
-      const premium = this.restPremiumRect;
-      const premiumPress = this.restPressed === 'premium' ? press : 0;
-      drawPanel(c, premium, s, { fill: BRASS, depth: 12, press: premiumPress, hero: true, frame: SHELL.cream });
-      const premiumSink = 12 * s * premiumPress * 0.8;
-      this.restSheen.place(premium, 32 * s, 5);
-      const markR = 34 * s, markX = premium.x + 26 * s + markR;
-      drawDisc(c, markX, premium.centerY + premiumSink, markR, s, { fill: shade(BRASS, 0.3), depth: 5 });
-      drawInfinity(c, markX, premium.centerY + premiumSink, markR * 0.56, shade(BRASS, -0.62));
-      const price = this.restTexts.premiumPrice!;
-      const pw = price.width + 32 * s, ph = 52 * s;
-      const copyX = markX + markR + 24 * s;
-      // The copy stops where the price chip starts, so the longest locale cannot run under it.
-      resize(this.restTexts.premiumTerms!, 21 * s, shade(BRASS, -0.62), STYLE.current, false);
-      wrapWidth(this.restTexts.premiumTerms!, premium.right - 40 * s - pw - copyX);
-      this.restTexts.premium!.setPosition(copyX, premium.centerY - 20 * s + premiumSink);
-      this.restTexts.premiumTerms!.setPosition(copyX, premium.centerY + 13 * s + premiumSink);
-      c.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + 3 * s + premiumSink, pw, ph, 14 * s);
-      c.fillStyle(PALETTE.coral, 1).fillRoundedRect(premium.right - 24 * s - pw, premium.centerY - ph / 2 + premiumSink, pw, ph, 14 * s);
-      price.setPosition(premium.right - 24 * s - pw / 2, premium.centerY + premiumSink);
-      y += premiumH + gap;
-    } else {
-      this.restPremiumRect.setTo(0, 0, 0, 0);
-    }
-
     this.restBackRect.setTo(left + 26 * s, y, width - 52 * s, backH);
     const backPress = this.restPressed === 'back' ? press : 0;
     drawPanel(c, this.restBackRect, s, { fill: SHELL.cream, depth: 10, press: backPress, radius: 26 });
@@ -2136,7 +2133,6 @@ export class MapScene extends BaseScene {
       track('health_empty', { level });
       track('rewarded_offer_shown', { placement: 'map' });
       track('purchase_offer_shown', { product: PRODUCT.heartRefill });
-      track('purchase_offer_shown', { product: PRODUCT.premium });
     }
   }
 
@@ -2217,32 +2213,6 @@ export class MapScene extends BaseScene {
     }
   }
 
-  /**
-   * Premium from the sheet. It ends the wait rather than paying this one off, so the
-   * sheet closes on success and the header's heart count becomes the infinity mark.
-   */
-  private async buyPremium(): Promise<void> {
-    if (this.restBusy || this.curtain.active || monetization().premium()) return;
-    this.restBusy = true;
-    this.restPressed = 'premium';
-    this.restPressedAt = performance.now() / 1000;
-    this.restPressDirty = true;
-    track('purchase_offer_shown', { product: PRODUCT.premium });
-    try {
-      const result = await monetization().purchase(PRODUCT.premium);
-      if (this.disposed) return;
-      if (!result.ok) {
-        this.restNote = purchaseFeedback(result.reason);
-        this.drawRest(this.uiScale, 0);
-        return;
-      }
-      this.hideRest();
-      this.layout();
-    } finally {
-      this.restBusy = false;
-    }
-  }
-
   private claimToday(): void {
     if (this.restBusy || this.curtain.active) return;
     this.restBusy = true;
@@ -2288,9 +2258,7 @@ export class MapScene extends BaseScene {
     const copy = wait === null ? HEALTH_COPY.restNote : `Next heart in ${wait} · early levels stay open`;
     if (this.restWait && this.restWait.text !== copy) this.restWait.setText(copy);
     const refill = monetization().productPrice(PRODUCT.heartRefill);
-    const premium = monetization().productPrice(PRODUCT.premium);
     this.restTexts.refillPrice?.setText(refill ?? 'Buy');
-    this.restTexts.premiumPrice?.setText(premium ?? 'Buy');
   }
 
   private scrollTo(level: number): void {
@@ -2353,6 +2321,8 @@ export class MapScene extends BaseScene {
   }
 
   public override update(_time: number, delta: number): void {
+    this.offerReminderWhenQuiet(performance.now() / 1000);
+    this.reminderOffer?.update(performance.now() / 1000, this.reducedMotion);
     this.objectivesCard.update(performance.now() / 1000, this.reducedMotion);
     this.endlessCard.update(performance.now() / 1000, this.reducedMotion);
     if (!this.drag && Math.abs(this.velocity) > 1) {
@@ -2446,7 +2416,6 @@ export class MapScene extends BaseScene {
       this.restTitle?.setAlpha(alpha);
       this.restWait?.setAlpha(alpha);
       for (const text of Object.values(this.restTexts)) text.setAlpha(alpha);
-      this.restSheen.update(now, !monetization().premium());
     }
     // Last, once this frame's drawing is settled: at most one raster.
     this.bakeNext();
@@ -2660,7 +2629,7 @@ export class MapScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.reminderOffer?.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.drag = { id: pointer.id, scrollable: !this.restShown && !this.objectivesCard.open && pointer.y > this.hudHeight && pointer.y < this.footerTop, lastY: pointer.y, lastAt: performance.now(), startX: pointer.x, startY: pointer.y, moved: false };
     this.velocity = 0;
     this.touchAt = performance.now() / 1000;
@@ -2696,6 +2665,8 @@ export class MapScene extends BaseScene {
   }
   private handleTap(x: number, y: number): void {
     if (this.curtain.active) return;
+    // The offer takes every tap while it is open: nothing under it fires.
+    if (this.reminderOffer?.tap(x, y, performance.now() / 1000)) return;
     // An open card takes every tap: its Close, or anywhere off it, puts it away.
     if (this.objectivesCard.tap(x, y)) { this.puckDirty = true; return; }
     const endlessTap = this.endlessCard.tap(x, y);
@@ -2756,10 +2727,6 @@ export class MapScene extends BaseScene {
       }
       if (this.restTipOpen && this.restTipRect.contains(x, y)) {
         this.replayFromRest();
-        return;
-      }
-      if (!monetization().premium() && this.restPremiumRect.contains(x, y)) {
-        void this.buyPremium();
         return;
       }
       if (this.restBackRect.contains(x, y) || !this.restRect.contains(x, y)) this.hideRest();
@@ -2863,6 +2830,7 @@ export class MapScene extends BaseScene {
    */
   public handleBack(): boolean {
     if (this.disposed || this.curtain.active) return true;
+    if (this.reminderOffer?.back()) return true;
     if (this.objectivesCard.open) { this.objectivesCard.hide(); this.puckDirty = true; return true; }
     if (this.endlessCard.open) { this.endlessCard.hide(); this.puckDirty = true; return true; }
     if (this.restShown) { if (!this.restBusy) this.hideRest(); return true; }
@@ -2888,7 +2856,6 @@ export class MapScene extends BaseScene {
     window.removeEventListener('focus', this.showAmbience);
     window.removeEventListener('touchcancel', this.cancelDrag);
     window.removeEventListener('pointercancel', this.cancelDrag);
-    this.restSheen.destroy();
     this.cancelDrag();
   }
 }

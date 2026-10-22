@@ -15,9 +15,9 @@ import { windowsFor } from '../src/rhythm/judge';
 vi.mock('phaser', () => ({ default: {} }));
 
 const GRIDS: readonly Grid[] = ['triplet', 'sixteenth'];
-const NONE: SeenConcepts = { offbeat: false, longPhrase: false, triplet: false, sixteenth: false };
+const NONE: SeenConcepts = { offbeat: false, lastOffbeat: false, longPhrase: false, triplet: false, sixteenth: false };
 /** The tier concepts already met, so a test about the grids sees only the grids. */
-const GRIDS_ONLY: SeenConcepts = { ...NONE, offbeat: true, longPhrase: true };
+const GRIDS_ONLY: SeenConcepts = { ...NONE, offbeat: true, lastOffbeat: true, longPhrase: true };
 const FRESH: Progress = { unlocked: 1, best: {} };
 /** A save that has cleared every level below `level`. */
 const clearedTo = (level: number): Progress => ({
@@ -63,7 +63,8 @@ describe('where each new kind of rhythm first appears', () => {
     }
     for (const grid of GRIDS) expect(firstLevelWithGrid(grid)!).toBeGreaterThanOrEqual(firstEligibleLevel(grid));
     // Today's road, recorded so a change to the curve that moves any of them is noticed.
-    expect(CONCEPTS.map(c => firstLevelWith(c))).toEqual([6, 18, 43, 59]);
+    // The last-beat offbeat is the one placed by hand: on `PROGRESSION.lastOffbeat.from`.
+    expect(CONCEPTS.map(c => firstLevelWith(c))).toEqual([6, PROGRESSION.lastOffbeat.from, 18, 43, 59]);
   });
 
   it('knows what each task asks for: an offbeat is a tier phrase with a tap between beats', () => {
@@ -72,6 +73,10 @@ describe('where each new kind of rhythm first appears', () => {
     const twoBar = levelSpec(18).tasks[1]!;
     expect(twoBar.pattern.lengthBeats).toBe(8);
     expect(taskCarries(twoBar, 'longPhrase')).toBe(true);
+    // The last-beat offbeat is an offbeat too: met once the offbeat itself has been.
+    const ending = levelSpec(PROGRESSION.lastOffbeat.from).tasks[1]!;
+    expect(CONCEPTS.filter(c => taskCarries(ending, c))).toEqual(['offbeat', 'lastOffbeat']);
+    expect(CONCEPTS.filter(c => taskCarries(levelSpec(6).tasks[1]!, c))).toEqual(['offbeat']);
     const triplet = levelSpec(43).tasks.find(t => t.grid === 'triplet')!;
     expect(CONCEPTS.filter(c => taskCarries(triplet, c))).toEqual(['triplet']);
   });
@@ -80,7 +85,8 @@ describe('where each new kind of rhythm first appears', () => {
 describe('which level introduces what', () => {
   it('introduces the offbeat and the long phrase on the level that first asks for them, to a new player', () => {
     expect(introConcept(levelSpec(firstLevelWith('offbeat')!), NONE, clearedTo(6))).toBe('offbeat');
-    expect(introConcept(levelSpec(firstLevelWith('longPhrase')!), { ...NONE, offbeat: true }, clearedTo(18))).toBe('longPhrase');
+    expect(introConcept(levelSpec(firstLevelWith('lastOffbeat')!), { ...NONE, offbeat: true }, clearedTo(11))).toBe('lastOffbeat');
+    expect(introConcept(levelSpec(firstLevelWith('longPhrase')!), { ...NONE, offbeat: true, lastOffbeat: true }, clearedTo(18))).toBe('longPhrase');
     for (let level = 1; level < 6; level++) expect(introConcept(levelSpec(level), NONE, clearedTo(level))).toBeNull();
   });
 
@@ -90,10 +96,13 @@ describe('which level introduces what', () => {
     const veteran = clearedTo(30);
     for (let level = 1; level <= 40; level++) {
       const concept = introConcept(levelSpec(level), NONE, veteran);
-      expect(concept === 'offbeat' || concept === 'longPhrase', `level ${level}`).toBe(false);
+      expect(concept === 'offbeat' || concept === 'lastOffbeat' || concept === 'longPhrase', `level ${level}`).toBe(false);
     }
     // Past the offbeat's level but short of the long phrase's: the long phrase still comes.
     expect(introConcept(levelSpec(18), NONE, clearedTo(18))).toBe('longPhrase');
+    // Past the offbeat's level but not the last-beat offbeat's: that one still comes.
+    expect(introConcept(levelSpec(11), NONE, clearedTo(11))).toBe('lastOffbeat');
+    expect(introConcept(levelSpec(11), NONE, clearedTo(12))).toBeNull();
   });
 
   it('introduces each grid on the first level that uses it, to a new player', () => {
@@ -133,7 +142,7 @@ describe('which level introduces what', () => {
       const seen = { ...NONE, [concept]: true };
       for (let level = 1; level <= 300; level++) expect(introConcept(levelSpec(level), seen, FRESH)).not.toBe(concept);
     }
-    const all = { offbeat: true, longPhrase: true, triplet: true, sixteenth: true };
+    const all = { offbeat: true, lastOffbeat: true, longPhrase: true, triplet: true, sixteenth: true };
     for (let level = 1; level <= 300; level++) expect(introConcept(levelSpec(level), all, FRESH)).toBeNull();
   });
 
@@ -154,7 +163,7 @@ describe('the introduction flags', () => {
     for (const concept of CONCEPTS) expect(markConceptSeen(concept, storage)).toBe(true);
     expect(seenConcepts(storage).triplet).toBe(true);
     // Read back from what is actually stored, as a fresh boot would.
-    expect(seenConcepts(memory(storage.data))).toEqual({ offbeat: true, longPhrase: true, triplet: true, sixteenth: true });
+    expect(seenConcepts(memory(storage.data))).toEqual({ offbeat: true, lastOffbeat: true, longPhrase: true, triplet: true, sixteenth: true });
   });
 
   it('read an old save as never introduced, and keep every flag it already had', () => {
@@ -215,6 +224,10 @@ describe('the introduction itself', () => {
     // The offbeat: one "and", after beat three.
     expect(INTRO_PATTERNS.offbeat.lengthBeats).toBe(RHYTHM.beatsPerBar);
     expect([...INTRO_PATTERNS.offbeat.hits]).toEqual([0, 1, 2, 2.5, 3]);
+    // The last-beat offbeat: three quarters, and the "and" of four instead of four.
+    expect(INTRO_PATTERNS.lastOffbeat.lengthBeats).toBe(RHYTHM.beatsPerBar);
+    expect([...INTRO_PATTERNS.lastOffbeat.hits]).toEqual([0, 1, 2, 3.5]);
+    expect(INTRO_PATTERNS.offbeat.hits.includes(INTRO_PATTERNS.offbeat.lengthBeats - 0.5)).toBe(false);
     // The long phrase: nothing off the beat at all; only the length is new.
     expect(INTRO_PATTERNS.longPhrase.lengthBeats).toBe(2 * RHYTHM.beatsPerBar);
     expect([...INTRO_PATTERNS.longPhrase.hits]).toEqual([0, 1, 2, 4, 5, 6]);
@@ -247,6 +260,7 @@ describe('the introduction itself', () => {
 
   it('says two short lines, and "Once more" on the retry', () => {
     expect(introCopy('offbeat', false)).toEqual({ title: 'New rhythm', caption: 'Between the beats' });
+    expect(introCopy('lastOffbeat', false)).toEqual({ title: 'New rhythm', caption: 'Ends after beat 4' });
     expect(introCopy('longPhrase', false)).toEqual({ title: 'New rhythm', caption: 'Two bars to remember' });
     expect(introCopy('triplet', false)).toEqual({ title: 'New rhythm', caption: '3 inside the beat' });
     expect(introCopy('sixteenth', false)).toEqual({ title: 'New rhythm', caption: '4 inside the beat' });

@@ -24,8 +24,10 @@ beside "Mute".
 - **Hearts** — status, not an offer: the five hearts, the count, and a bar the
   next heart is filling (`heartProgress` in `game/health.ts`).
 - **Workshop store** — the one brass object on the screen, because it is the one
-  thing for sale. The heart refill row under it disappears at five hearts or with
-  premium held, rather than sitting there as a control that cannot act.
+  thing for sale: the four replay timers, a row each (`docs/RESTART.md`), with *Timer
+  running* on the card's corner while one runs, and Restore for the legacy Premium. The
+  heart refill row under it disappears at five hearts or with premium held, rather than
+  sitting there as a control that cannot act.
 - **Progress** — the level, and the one control with no undo, which arms before
   it fires.
 - **Credits** — last, after Help: the original score's composer, whose chip opens
@@ -81,6 +83,31 @@ and on the Settings row writes zero without another measurement, which is the on
 way back to an uncalibrated clock short of measuring the inverse. Music is silent
 here so the metronome is the only beat, and the four beads pulse on the heard clock
 rather than `currentTime`, or they would lead the clicks by the device's output lag.
+
+**The player sees where every tap lands** (`ui/calibrationLane.ts`, pure poses and one
+draw). A lane under the count has the beat at its centre and the run's acceptance window
+(±400 ms at 60 BPM) at its edges, with faint marks every 100 ms; each landed tap drops a tick
+at its residual — early left, late right — the newest taller and brighter for a moment, so
+early, late and uneven are visible as they happen rather than only in the verdict. A tap that
+fell past the window flashes the edge it fell past (`CalibrationRun.place`: `early` / `late`;
+a `repeat` on a sampled beat and a count-in tap do nothing). The lane stays under the result,
+so a failure has something to point at. It shows the window and the beat, never the game's
+Perfect band: this screen measures and does not grade.
+
+**The result names its reason** (`game/calibrationCopy.ts`, `resultCopy`): *Taps within ±9 ms
+· was +120 ms* over the new number; *Only 5 of 8 taps landed / Tap on every beat*; *Taps uneven
+· ±62 ms / Try a steadier beat*. The two failures are different advice, which is why
+`CalibrationRun.verdict` tells them apart instead of one "unclear".
+
+**Keep stays on the screen.** The next run is a check against the kept offset — free, because
+every run is a residual against the offset in force — and the hero button reads *Check*. A
+check whose taps land within `CALIBRATION.spotOnMs` (15 ms) reads *Spot on* instead of
+offering a number a hair different. Before this, Keep left for Settings, and a player who
+wanted to be sure had to come back through it. The back puck is the way out.
+
+Two service events: `calibration_measured` (route, outcome, the proposed offset, the spread,
+what the platform reports, whether it was a check) and `calibration_kept` (route, offset, the
+change). Neither carries anything about the player.
 
 ## Star reveal
 
@@ -145,7 +172,7 @@ comes back, and the ways out ranked free first.
 
 **The map sheet** (`MapScene.drawRest`) dims the road, shows the five hearts with
 the next one filling, and then: the free daily heart when it is available, the one
-coral rewarded watch, the refill, premium, and a control that closes the sheet.
+coral rewarded watch, the refill, and a control that closes the sheet.
 The old sheet stacked three near-identical grey buttons and let a tap on the
 backdrop be the way out.
 
@@ -169,9 +196,9 @@ quieter standing line returns. On a short screen with every other row present th
 row keeps its title and chip and drops the sentence rather than pushing the way out off
 the bottom.
 
-Premium is offered in both places now, and a successful purchase drops straight
-back into the level the player was stopped on — entitlement lifts the heart cost
-entirely, so there is nothing left to wait for. `monetization/copy.ts` holds the
+Premium was offered in both places, and was withdrawn when the replay timers arrived:
+it was sold as unlimited hearts and no ads, and nothing sells that now, though an
+account that bought it keeps it. `monetization/copy.ts` holds the
 store's words in one place, because the same offer is made on three screens and an
 offer worded three ways reads as three products.
 

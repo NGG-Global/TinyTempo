@@ -14,6 +14,7 @@ const facts = (over: Partial<SupportFacts> = {}): SupportFacts => ({
   audio: 'output clock · device reports 42 ms · offset 0 ms',
   premium: false,
   hearts: '5/5',
+  replayTimer: 'none',
   crashReports: true,
   usageData: false,
   cloud: 'signed out',
@@ -30,6 +31,7 @@ describe('the block a player sends', () => {
       'Audio: output clock · device reports 42 ms · offset 0 ms',
       'Premium: no',
       'Hearts: 5/5',
+      'Replay timer: none',
       'Reporting: crash reports on, usage data off',
       'Save code: 04BG1-NQZ0S-E4WS0',
     ]) {

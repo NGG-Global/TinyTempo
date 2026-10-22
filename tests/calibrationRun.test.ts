@@ -41,3 +41,30 @@ describe('calibration sampling', () => {
     expect(new CalibrationRun(30, 40).result()).toBeNull();
   });
 });
+
+describe('what a run says about itself', () => {
+  it('names where a tap went, and counts only the ones that landed', () => {
+    const run = new CalibrationRun(10, 0);
+    const beat = (n: number) => 10 + (CALIBRATION.leadBeats + n) * run.period;
+    expect(run.place(10 + 2 * run.period)).toBe('outside');
+    expect(run.place(beat(0) + 0.02)).toBe('landed');
+    expect(run.place(beat(0) + 0.03)).toBe('repeat');
+    expect(run.place(beat(1) - 0.45)).toBe('early');
+    expect(run.place(beat(2) + 0.45)).toBe('late');
+    expect(run.place(NaN)).toBe('outside');
+    expect(run.count).toBe(1);
+    expect([...run.residualsMs].map(Math.round)).toEqual([20]);
+  });
+
+  it('tells too few taps from uneven taps, and measures the rest with their spread', () => {
+    expect(measure([30, 30, 30]).verdict()).toEqual({ kind: 'few', landed: 3 });
+    const uneven = measure([-190, 160, -150, 200, -120, 180, -170, 220]).verdict();
+    expect(uneven.kind).toBe('uneven');
+    if (uneven.kind === 'uneven') expect(uneven.spreadMs).toBeGreaterThan(CALIBRATION.maxJitterMs);
+    const steady = measure([90, 91, 92, 93, 92, 90, 95, 300], 10).verdict();
+    expect(steady).toMatchObject({ kind: 'measured', offsetMs: 102 });
+    if (steady.kind === 'measured') { expect(steady.residualMs).toBeCloseTo(92, 6); expect(steady.spreadMs).toBeLessThan(5); }
+    expect(measure(Array(8).fill(0)).spreadMs).toBe(0);
+    expect(new CalibrationRun(1, 0).spreadMs).toBe(0);
+  });
+});

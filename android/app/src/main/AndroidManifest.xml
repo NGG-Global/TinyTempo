@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- android:appCategory="game" is what keeps the portrait lock on a tablet. An app
          targeting API 36 has screenOrientation ignored on any display of sw600dp or more,
@@ -81,4 +82,11 @@
     <!-- navigator.vibrate() for the Haptics switch in Settings. Normal permission: granted
          at install with no runtime prompt, and silently ignored where the hardware is absent. -->
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- The daily reminder (@capacitor/local-notifications, docs/REMINDERS.md). The plugin
+         declares POST_NOTIFICATIONS, which Android 13+ asks for at runtime and the game asks
+         for only from the player's own tap, and SCHEDULE_EXACT_ALARM, which an evening nudge
+         does not need: every reminder is scheduled inexact, and an app that holds the exact
+         permission is sent to the system's "Alarms & reminders" screen by the plugin and
+         questioned by Play. Removed here from the merged manifest. -->
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" tools:node="remove" />
 </manifest>

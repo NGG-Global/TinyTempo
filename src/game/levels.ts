@@ -1,6 +1,6 @@
 import { PROGRESSION } from '../config/progression';
 import { RHYTHM } from '../config/rhythm';
-import { parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
+import { endsOffBeat, parsePattern, parseSubdivided, tightestGap, type Pattern } from '../rhythm/patterns';
 import { DEBUT_LEVELS, VIGNETTES } from '../vignettes/registry';
 import { levelAt, placementAt } from '../vignettes/rotation';
 
@@ -150,6 +150,8 @@ export const SUBDIVIDED_TIERS: Readonly<Record<Grid, readonly (readonly Pattern[
 const SUBDIVISION_SEED = 0x51ed;
 /** A third, for the finale's reprise, so composing it moves no draw of either stage. */
 const REPRISE_SEED = 0xf1a1e;
+/** A fourth, for holding the last-beat offbeat back and placing its debut, so neither moves another draw. */
+const LAST_OFFBEAT_SEED = 0x0ffb;
 
 export function difficulty(level: number): number {
   if (!Number.isInteger(level) || level < 1) throw new Error('Levels start at 1.');
@@ -353,7 +355,34 @@ export function tierTasks(level: number): readonly LevelTask[] {
       : i === breather ? P.breatherBars * RHYTHM.beatsPerBar : 0;
     tasks.push({ pattern, tier, leadBeats, grid: null, bpm: Math.round(P.baseBpm + (peakBpm - P.baseBpm) * progress) });
   }
-  return tasks;
+  return holdLastOffbeat(level, tasks);
+}
+
+/**
+ * Below `PROGRESSION.lastOffbeat.from`, no phrase may end on the "and" of its last beat.
+ *
+ * A repair after the draw rather than a narrower pool: a smaller pool would move the index
+ * every later draw lands on, and with it phrases that never ended off the beat. Here only a
+ * phrase that does is replaced, by one of its own tier that does not and that neither
+ * neighbour plays, from a stream of its own. Tier 0 has no offbeats, so a tier that cannot
+ * offer one steps down until one can.
+ */
+function holdLastOffbeat(level: number, tasks: readonly LevelTask[]): readonly LevelTask[] {
+  if (level >= PROGRESSION.lastOffbeat.from || !tasks.some(task => endsOffBeat(task.pattern))) return tasks;
+  const random = seeded(level + LAST_OFFBEAT_SEED);
+  const out = [...tasks];
+  for (let i = 0; i < out.length; i++) {
+    const task = out[i]!;
+    if (task.grid !== null || !endsOffBeat(task.pattern)) continue;
+    const neighbours = [out[i - 1]?.pattern, out[i + 1]?.pattern];
+    for (let tier = task.tier; tier >= 0; tier--) {
+      const pool = tierPool(tier, level).filter(pattern => !endsOffBeat(pattern) && !neighbours.includes(pattern));
+      if (pool.length === 0) continue;
+      out[i] = { ...task, tier, pattern: pool[Math.floor(random() * pool.length)]! };
+      break;
+    }
+  }
+  return out;
 }
 
 /** Whole beats before a level's first demonstration: one bar, or a finale's opening. */
@@ -451,6 +480,35 @@ function placeDebut(level: number, tasks: readonly LevelTask[]): readonly LevelT
 }
 
 /**
+ * The last-beat offbeat's debut: on `PROGRESSION.lastOffbeat.from`, the level's second task
+ * ends on the "and" of 4, as every new rhythm is met (`DEBUT_SLOT`). Where the level already
+ * has such a phrase it trades into that slot as `placeDebut` trades; where it has none, the
+ * first task on a tier with offbeats takes one of its tier's phrases that end that way, from
+ * the hold's own stream, and trades in. Tasks, tempi, lead-ins and the tiers the level plays
+ * keep their counts. Never on a finale, which plays only what its area already has.
+ */
+function placeLastOffbeat(level: number, tasks: readonly LevelTask[]): readonly LevelTask[] {
+  if (level !== PROGRESSION.lastOffbeat.from || isAreaFinale(level) || tasks.length <= DEBUT_SLOT) return tasks;
+  const carries = (task: LevelTask): boolean => task.grid === null && endsOffBeat(task.pattern);
+  const out = [...tasks];
+  let at = out.findIndex(carries);
+  if (at < 0) {
+    at = out.findIndex((task, i) => i >= DEBUT_SLOT && task.grid === null && tierPool(task.tier, level).some(endsOffBeat));
+    if (at < 0) return tasks;
+    const ending = tierPool(out[at]!.tier, level).filter(endsOffBeat);
+    out[at] = { ...out[at]!, pattern: ending[Math.floor(seeded(level + LAST_OFFBEAT_SEED)() * ending.length)]! };
+  }
+  if (at !== DEBUT_SLOT) {
+    const into = (slot: LevelTask, from: LevelTask): LevelTask => ({ ...slot, pattern: from.pattern, tier: from.tier });
+    const slot = out[DEBUT_SLOT]!, carrier = out[at]!;
+    out[DEBUT_SLOT] = into(slot, carrier);
+    out[at] = into(carrier, slot);
+  }
+  for (let i = 1; i < out.length; i++) if (out[i]!.pattern === out[i - 1]!.pattern) return tasks;
+  return out;
+}
+
+/**
  * What the area has played before its finale: every distinct pattern its earlier levels
  * use, each with the tier or grid it was used on. The vocabulary a reprise may draw from.
  */
@@ -542,7 +600,7 @@ export function levelSpec(level: number): LevelSpec {
   const spec = Object.freeze({
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
-    tasks: Object.freeze(placeDebut(level, composedTasks(level))),
+    tasks: Object.freeze(placeLastOffbeat(level, placeDebut(level, composedTasks(level)))),
     peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
     starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
   });

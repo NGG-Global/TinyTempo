@@ -21,11 +21,14 @@ import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHe
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { supportMailto } from '@/game/supportReport';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
+import { formatTimerLeft, isTimerProduct, loadReplayTimer, REPLAY_TIMERS, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
 import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
-import { drawBack, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawVibrate } from '@/ui/icons';
+import { drawBack, drawChecklist, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawTimer, drawVibrate } from '@/ui/icons';
+import { loadReminderSettings, type ReminderState } from '@/reminders/reminder';
+import { currentReminderState, remindersAvailable, turnRemindersOff, turnRemindersOn } from '@/reminders/sync';
 import { faces } from '@/ui/light';
 import { scrollStep } from '@/ui/navigation';
 import { BRASS, drawPanel } from '@/ui/panel';
@@ -36,7 +39,7 @@ import { arrive } from '@/ui/spring';
 import { drawSlider, sliderValue, SLIDER } from '@/ui/slider';
 import { drawSwitch, SWITCH } from '@/ui/switch';
 import { body, display, label, resize, wrapWidth } from '@/ui/type';
-import { formatOffset } from './CalibrateScene';
+import { formatOffset } from '@/game/calibrationCopy';
 
 /** Design-unit metrics. Sections are labelled bands of rows, not a flat list of cards. */
 const SETTINGS = {
@@ -52,7 +55,7 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'haptics' | 'tune' | 'offsetReset' | 'unlock' | 'restore' | 'refill'
+type Action = 'back' | 'haptics' | 'reminder' | 'tune' | 'offsetReset' | 'restore' | 'refill' | TimerProductId
   | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'lesson' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
@@ -106,6 +109,7 @@ export class SettingsScene extends BaseScene {
   private rows: Record<string, Phaser.Geom.Rectangle> = {};
   private storeRadius = 0;
   private sheenAt = Number.NaN;
+  private storePollAt = 0;
   private curtain!: SceneCurtain;
   private hint!: ScreenHint;
   private uiScale = 1;
@@ -133,9 +137,16 @@ export class SettingsScene extends BaseScene {
   private masterMuted = false;
   private hapticsOn = true;
   private analyticsOn = false;
+  /**
+   * The daily reminder's row, on a native build only (`docs/REMINDERS.md`): whether it is
+   * shown, and what Android says — `blocked` is on, but refused notifications.
+   */
+  private reminderRow = false;
+  private reminder: ReminderState = 'off';
+  private reminderBusy = false;
   /** 0-1 positions, so a flipped switch slides rather than jumping. */
-  private switchAt = { haptics: 1, analytics: 1 };
-  private switchedAt = { haptics: -Infinity, analytics: -Infinity };
+  private switchAt = { haptics: 1, analytics: 1, reminder: 0 };
+  private switchedAt = { haptics: -Infinity, analytics: -Infinity, reminder: -Infinity };
   private lastSfxTick = 0;
   private disposed = false;
   private stopWatchingRoute: (() => void) | null = null;
@@ -161,8 +172,13 @@ export class SettingsScene extends BaseScene {
     this.masterMuted = settings.muted;
     this.hapticsOn = settings.haptics;
     this.analyticsOn = settings.analytics;
-    this.switchAt = { haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0 };
-    this.switchedAt = { haptics: -Infinity, analytics: -Infinity };
+    this.reminderRow = remindersAvailable();
+    this.reminder = loadReminderSettings().enabled ? 'on' : 'off';
+    this.reminderBusy = false;
+    this.switchAt = { haptics: this.hapticsOn ? 1 : 0, analytics: this.analyticsOn ? 1 : 0, reminder: this.reminder === 'off' ? 0 : 1 };
+    this.switchedAt = { haptics: -Infinity, analytics: -Infinity, reminder: -Infinity };
+    // What Android says arrives a moment later; until then the switch shows the stored choice.
+    if (this.reminderRow) void currentReminderState().then(state => { if (!this.disposed) { this.reminder = state; this.refreshCopy(); this.pressDirty = true; } });
     this.lastSfxTick = 0;
     this.enteredAt = performance.now() / 1000;
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.16 }, glowAlpha: 0.6 });
@@ -232,6 +248,8 @@ export class SettingsScene extends BaseScene {
       mutedNote: this.banded(label(this, 'Muted', { size: 21, colour: PALETTE.coral })).setOrigin(1, 0.5),
       haptics: rowTitle('Haptics'),
       hapticsNote: rowNote('Not on this device'),
+      reminder: rowTitle('Daily reminder'),
+      reminderNote: rowNote(''),
       offset: rowTitle('Tap offset'),
       offsetNote: rowNote('· Measured on this device'),
       offsetValue: this.banded(display(this, '', { size: 48, colour: ink })).setOrigin(1, 0.5),
@@ -239,13 +257,12 @@ export class SettingsScene extends BaseScene {
       offsetReset: chip('Reset'),
       heartCount: this.banded(display(this, '', { size: 42, colour: ink })).setOrigin(1, 0.5),
       heartWait: rowNote(''),
-      premium: this.banded(display(this, STORE_COPY.premiumTitle, { size: 48, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
+      store: this.banded(display(this, STORE_COPY.timersTitle, { size: 48, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
       // Top-anchored: the terms wrap on a narrow handset, and a second line has to grow
       // down into the card rather than up into the title.
-      premiumTerms: this.banded(body(this, STORE_COPY.premiumTerms, { size: 22, colour: shade(BRASS, -0.62) })).setOrigin(0, 0),
-      premiumBadge: chip('Best value', cream),
-      unlock: this.banded(display(this, 'Unlock', { size: 38, colour: cream })).setOrigin(1, 0.5),
-      unlockPrice: this.banded(label(this, '', { size: 27, colour: cream })).setOrigin(0, 0.5),
+      storeTerms: this.banded(body(this, STORE_COPY.timersTerms, { size: 22, colour: shade(BRASS, -0.62) })).setOrigin(0, 0),
+      /** The badge on the card's corner: what the timer holds while one runs. */
+      storeBadge: chip('', cream),
       restore: chip('Restore'),
       refill: rowTitle(STORE_COPY.refillTitle),
       refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
@@ -291,6 +308,11 @@ export class SettingsScene extends BaseScene {
       // inside a centred box came out ragged against the card's own centre line.
       notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
+    // The four timers' rows: a length each, and its price on a chip.
+    REPLAY_TIMERS.forEach((option, i) => {
+      this.texts[`timer${i}`] = this.banded(body(this, option.label, { size: 30, colour: ink })).setOrigin(0, 0.5);
+      this.texts[`timerPrice${i}`] = chip('', cream);
+    });
     this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
     this.texts.version = body(this, `· v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
@@ -415,7 +437,8 @@ export class SettingsScene extends BaseScene {
     eyebrow(0);
     resize(this.texts.mutedNote!, 21 * s, PALETTE.coral, STYLE.current, false);
     this.texts.mutedNote!.setPosition(left + width - 28 * s, this.eyebrows[0]!.y).setVisible(this.masterMuted);
-    const audio = plate(row * 3);
+    // A fourth row on a build that can notify: the daily reminder's switch.
+    const audio = plate(row * (this.reminderRow ? 4 : 3));
     const level = (index: number): Phaser.Geom.Rectangle => {
       const top = audio.y + row * index;
       const trackH = SLIDER.height * s;
@@ -445,6 +468,15 @@ export class SettingsScene extends BaseScene {
     this.texts.haptics!.setPosition(left + 96 * s, audio.y + row * 2.5 - (buzzes ? 0 : 15 * s));
     this.texts.hapticsNote!.setPosition(left + 96 * s, audio.y + row * 2.5 + 19 * s);
     this.hits.push({ name: 'haptics', rect: new Phaser.Geom.Rectangle(left, audio.y + row * 2, width, row), pinned: false });
+    this.texts.reminder!.setVisible(this.reminderRow);
+    this.texts.reminderNote!.setVisible(this.reminderRow);
+    if (this.reminderRow) this.rows.reminder = switchRect(audio, audio.y + row * 3, row);
+    else delete this.rows.reminder;
+    if (this.reminderRow) {
+      this.texts.reminder!.setPosition(left + 96 * s, audio.y + row * 3.5 - 15 * s);
+      this.texts.reminderNote!.setPosition(left + 96 * s, audio.y + row * 3.5 + 19 * s);
+      this.hits.push({ name: 'reminder', rect: new Phaser.Geom.Rectangle(left, audio.y + row * 3, width, row), pinned: false });
+    }
 
     // TIMING — the measured offset, the screen that measures it, and a way back to zero.
     // A kept measurement adds to the offset already in force, so without Reset a bad
@@ -490,31 +522,50 @@ export class SettingsScene extends BaseScene {
     this.texts.heartCount!.setPosition(hearts.right - 28 * s, hearts.y + 46 * s);
     this.texts.heartWait!.setOrigin(1, 0.5).setPosition(hearts.right - 28 * s, hearts.bottom - 40 * s);
 
-    // WORKSHOP STORE — brass, because it is the one thing on the screen that is for sale.
+    // WORKSHOP STORE — brass, because it is the one thing on the screen that is for sale:
+    // the four replay timers, a row each. An account holding the legacy Premium has nothing
+    // to buy here — its restarts are already free — so it sees its entitlement and Restore.
     eyebrow(3);
-    const store = new Phaser.Geom.Rectangle(left, y, width, 288 * s);
+    const entitled = monetization().premium();
+    const optionH = Math.max(76 * s, control);
+    const optionGap = 10 * s;
+    const optionsH = entitled ? 0 : REPLAY_TIMERS.length * optionH + (REPLAY_TIMERS.length - 1) * optionGap;
+    const restoreH = Math.max(entitled ? 100 * s : 64 * s, control);
+    const storeH = 164 * s + optionsH + (entitled ? 0 : 16 * s) + restoreH + 26 * s;
+    const store = new Phaser.Geom.Rectangle(left, y, width, storeH);
     this.rows.store = store;
     drawPanel(g, store, s, { fill: BRASS, depth: 14, radius: 32, hero: true, frame: SHELL.cream });
     this.storeRadius = 32 * s;
     const medal = { x: store.x + 28 * s + 50 * s, y: store.y + 92 * s, r: 50 * s };
     this.rows.medal = new Phaser.Geom.Rectangle(medal.x - medal.r, medal.y - medal.r, medal.r * 2, medal.r * 2);
-    resize(this.texts.premium!, 44 * s, SHELL.cream);
-    this.texts.premium!.setPosition(medal.x + medal.r + 24 * s, medal.y - 20 * s);
-    resize(this.texts.premiumTerms!, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
-    wrapWidth(this.texts.premiumTerms!, width - (medal.x + medal.r + 24 * s - store.x) - 28 * s);
-    this.texts.premiumTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 14 * s);
-    this.texts.premiumBadge!.setPosition(store.right - 104 * s, store.y + 4 * s);
-    const buyH = Math.max(100 * s, control);
-    const buyY = store.bottom - 26 * s - buyH;
-    const restoreW = Math.max(166 * s, control);
-    const entitled = monetization().premium();
-    const unlockRect = new Phaser.Geom.Rectangle(store.x + 26 * s, buyY, width - 52 * s - (entitled ? 0 : restoreW + 20 * s), buyH);
-    const restoreRect = new Phaser.Geom.Rectangle(store.right - 26 * s - restoreW, buyY, restoreW, buyH);
-    this.rows.unlock = unlockRect;
+    resize(this.texts.store!, 44 * s, SHELL.cream);
+    this.texts.store!.setPosition(medal.x + medal.r + 24 * s, medal.y - 20 * s);
+    resize(this.texts.storeTerms!, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
+    wrapWidth(this.texts.storeTerms!, width - (medal.x + medal.r + 24 * s - store.x) - 28 * s);
+    this.texts.storeTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 14 * s);
+    this.texts.storeBadge!.setPosition(store.right - 104 * s, store.y + 4 * s);
+    let optionY = store.y + 164 * s;
+    for (let i = 0; i < REPLAY_TIMERS.length; i++) {
+      const option = REPLAY_TIMERS[i]!;
+      if (entitled) { delete this.rows[`timer${i}`]; delete this.rows[`timerPrice${i}`]; continue; }
+      const rowRect = new Phaser.Geom.Rectangle(store.x + 26 * s, optionY, width - 52 * s, optionH);
+      this.rows[`timer${i}`] = rowRect;
+      this.texts[`timer${i}`]!.setPosition(rowRect.x + 72 * s, rowRect.centerY);
+      const priceW = Math.max(140 * s, control);
+      const priceRect = new Phaser.Geom.Rectangle(rowRect.right - 16 * s - priceW, rowRect.centerY - Math.min(control, rowRect.height - 12 * s) / 2, priceW, Math.min(control, rowRect.height - 12 * s));
+      this.rows[`timerPrice${i}`] = priceRect;
+      this.texts[`timerPrice${i}`]!.setPosition(priceRect.centerX, priceRect.centerY);
+      this.hits.push({ name: option.product, rect: rowRect, pinned: false });
+      optionY += optionH + optionGap;
+    }
+    const restoreY = store.bottom - 26 * s - restoreH;
+    // Restore is for the legacy Premium, so it takes the whole row only where that is what
+    // the card is about; under the timers it is a small chip at the right, since nothing a
+    // timer sells comes back through it.
+    const restoreW = entitled ? width - 52 * s : Math.max(166 * s, control);
+    const restoreRect = new Phaser.Geom.Rectangle(store.right - 26 * s - restoreW, restoreY, restoreW, restoreH);
     this.rows.restore = restoreRect;
-    if (!entitled) this.hits.push({ name: 'unlock', rect: unlockRect, pinned: false });
-    this.hits.push({ name: 'restore', rect: entitled ? new Phaser.Geom.Rectangle(store.x + 26 * s, buyY, width - 52 * s, buyH) : restoreRect, pinned: false });
-    if (entitled) this.rows.restore = new Phaser.Geom.Rectangle(store.x + 26 * s, buyY, width - 52 * s, buyH);
+    this.hits.push({ name: 'restore', rect: restoreRect, pinned: false });
     y += store.height + 18 * s;
 
     // Nothing to refill at five hearts, or with premium held: the row leaves rather than
@@ -692,6 +743,11 @@ export class SettingsScene extends BaseScene {
       const row = SETTINGS.rowHeight * s;
       g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row - 1.5 * s, audio.width - 48 * s, 3 * s);
       g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row * 2 - 1.5 * s, audio.width - 48 * s, 3 * s);
+      if (this.rows.reminder) {
+        g.fillStyle(shade(SHELL.puck, -0.14), 1).fillRect(audio.x + 24 * s, audio.y + row * 3 - 1.5 * s, audio.width - 48 * s, 3 * s);
+        drawChecklist(g, audio.x + 56 * s, audio.y + row * 3.5, 17 * s, PALETTE.ink, this.reminder === 'off' ? 0 : 3, PALETTE.coral);
+        drawSwitch(g, this.rows.reminder, s, this.switchAt.reminder, false);
+      }
       drawNote(g, audio.x + 56 * s, audio.y + row / 2, 22 * s, PALETTE.ink);
       drawSpeaker(g, audio.x + 56 * s, audio.y + row * 1.5, 22 * s, PALETTE.ink, this.sfx === 0);
       const canBuzz = hapticsSupported();
@@ -751,20 +807,34 @@ export class SettingsScene extends BaseScene {
       g.fillStyle(m.lit, 1).fillCircle(medal.centerX, medal.centerY, medal.width / 2);
       g.fillStyle(m.rim, 0.45).fillEllipse(medal.centerX - medal.width * 0.12, medal.centerY - medal.width * 0.26, medal.width * 0.34, medal.width * 0.15);
       g.lineStyle(STYLE.current.outline * s * 0.5, shade(BRASS, -0.55), 1).strokeCircle(medal.centerX, medal.centerY, medal.width / 2);
-      drawInfinity(g, medal.centerX, medal.centerY, medal.width * 0.34, shade(BRASS, -0.62));
-      const badge = this.texts.premiumBadge!;
-      const bw = badge.width + 34 * s, bh = 40 * s;
-      g.fillStyle(shade(PALETTE.coral, -0.4), 1).fillRoundedRect(badge.x - bw / 2, store.y - 6 * s, bw, bh + 6 * s, 10 * s);
-      g.fillStyle(PALETTE.coral, 1).fillRoundedRect(badge.x - bw / 2, store.y - 8 * s, bw, bh, 10 * s);
-      badge.setY(store.y + bh / 2 - 8 * s).setVisible(!entitled);
+      if (entitled) drawInfinity(g, medal.centerX, medal.centerY, medal.width * 0.34, shade(BRASS, -0.62));
+      else drawTimer(g, medal.centerX, medal.centerY, medal.width * 0.3, shade(BRASS, -0.62));
+      // The corner badge says a timer is running, and for how long; nothing otherwise.
+      const badge = this.texts.storeBadge!;
+      const running = badge.text !== '';
+      if (running) {
+        // Anchored from its own width to the card's right edge: the words change with the
+        // timer, and a fixed centre put the longer ones off the card.
+        const bw = Math.min(badge.width + 34 * s, store.width - 52 * s), bh = 40 * s;
+        badge.setScale(badge.width + 34 * s > bw ? (bw - 34 * s) / badge.width : 1);
+        badge.setPosition(store.right - 26 * s - bw / 2, store.y + bh / 2 - 8 * s);
+        g.fillStyle(shade(PALETTE.coral, -0.4), 1).fillRoundedRect(badge.x - bw / 2, store.y - 6 * s, bw, bh + 6 * s, 10 * s);
+        g.fillStyle(PALETTE.coral, 1).fillRoundedRect(badge.x - bw / 2, store.y - 8 * s, bw, bh, 10 * s);
+      }
+      badge.setVisible(running && !entitled);
     }
-    if (this.rows.unlock && !entitled) {
-      drawPanel(g, this.rows.unlock, s, { fill: PALETTE.coral, depth: 12, press: sunk('unlock'), hero: true, radius: 22 });
-      const sink = 12 * s * sunk('unlock') * 0.8;
-      const unlock = this.texts.unlock!, price = this.texts.unlockPrice!;
-      const span = unlock.width + 14 * s + price.width;
-      unlock.setPosition(this.rows.unlock.centerX - span / 2 + unlock.width, this.rows.unlock.centerY + sink);
-      price.setPosition(unlock.x + 14 * s, this.rows.unlock.centerY + sink + 3 * s);
+    for (let i = 0; i < REPLAY_TIMERS.length; i++) {
+      const rowRect = this.rows[`timer${i}`], priceRect = this.rows[`timerPrice${i}`];
+      const option = REPLAY_TIMERS[i];
+      if (!rowRect || !priceRect || option === undefined) continue;
+      const press = sunk(option.product);
+      drawPanel(g, rowRect, s, { fill: SHELL.puck, depth: 8, press, radius: 20 });
+      const sink = 8 * s * press * 0.8;
+      drawTimer(g, rowRect.x + 36 * s, rowRect.centerY + sink, 15 * s, PALETTE.ink);
+      this.texts[`timer${i}`]!.setY(rowRect.centerY + sink);
+      g.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(priceRect.x, priceRect.y + 3 * s + sink, priceRect.width, priceRect.height, 14 * s);
+      g.fillStyle(PALETTE.coral, 1).fillRoundedRect(priceRect.x, priceRect.y + sink, priceRect.width, priceRect.height, 14 * s);
+      this.texts[`timerPrice${i}`]!.setY(priceRect.centerY + sink);
     }
     if (this.rows.restore) {
       drawPanel(g, this.rows.restore, s, { fill: SHELL.cream, depth: 10, press: sunk('restore'), radius: 22 });
@@ -864,6 +934,12 @@ export class SettingsScene extends BaseScene {
     this.layers[2]?.invalidate();
   }
 
+  /** The store card's corner badge: what the timer holds while one runs, uppercase like every chip. */
+  private timerBadge(now: number): string {
+    const left = timerLeftMs(loadReplayTimer(undefined, now), now);
+    return left > 0 ? `${STORE_COPY.timerRunning} · ${formatTimerLeft(left)} left`.toUpperCase() : '';
+  }
+
   private refreshCopy(): void {
     const progress = loadProgress();
     const view = viewHealth(loadHealth());
@@ -875,16 +951,21 @@ export class SettingsScene extends BaseScene {
     this.texts.offsetValue!.setText(measured === null ? 'Not calibrated' : formatOffset(measured));
     this.texts.offsetNote!.setText(route === 'unknown' ? '· Measured on this device' : `· ${ROUTE_LABELS[route]}`);
     this.texts.hapticsNote!.setVisible(!canBuzz);
+    this.texts.reminderNote!.setText(this.reminder === 'blocked' ? 'Turned off in Android settings' : "6 pm, if today's objectives are open");
+    resize(this.texts.reminderNote!, 21 * this.uiScale, this.reminder === 'blocked' ? shade(PALETTE.coral, -0.25) : PALETTE.muted, STYLE.current, false);
     this.texts.heartCount!.setText(entitled ? '∞' : `${view.hearts}/${view.maxHearts}`);
     this.texts.heartCount!.setVisible(!entitled);
     this.texts.heartWait!.setText(entitled ? STORE_COPY.premiumOwned
       : view.nextHeartInMs === null ? 'Hearts are full'
       : `Next in ${formatCountdown(view.nextHeartInMs)}`);
-    const premiumPrice = monetization().productPrice(PRODUCT.premium);
-    this.texts.premium!.setText(entitled ? 'Unlocked' : STORE_COPY.premiumTitle);
-    this.texts.premiumTerms!.setText(entitled ? STORE_COPY.premiumShort : STORE_COPY.premiumTerms);
-    this.texts.unlockPrice!.setText(premiumPrice ?? '');
-    for (const key of ['unlock', 'unlockPrice']) this.texts[key]!.setVisible(!entitled);
+    this.texts.store!.setText(entitled ? 'Unlocked' : STORE_COPY.timersTitle);
+    this.texts.storeTerms!.setText(entitled ? STORE_COPY.premiumShort : STORE_COPY.timersTerms);
+    this.texts.storeBadge!.setText(this.timerBadge(Date.now()));
+    REPLAY_TIMERS.forEach((option, i) => {
+      // `label` uppercases on creation only; a price set later matches the other chips itself.
+      this.texts[`timerPrice${i}`]!.setText((monetization().productPrice(option.product) ?? 'Buy').toUpperCase());
+      for (const key of [`timer${i}`, `timerPrice${i}`]) this.texts[key]!.setVisible(!entitled);
+    });
     const refillPrice = monetization().productPrice(PRODUCT.heartRefill);
     this.texts.refillPrice!.setText(refillPrice ?? 'Buy');
     const offered = this.refillOffered();
@@ -915,8 +996,8 @@ export class SettingsScene extends BaseScene {
       if (!this.pressDirty) this.pressed = null;
     }
     // The switches slide rather than cut, and the slide is the only thing that redraws.
-    const switchOn = { haptics: this.hapticsOn, analytics: this.analyticsOn };
-    for (const key of ['haptics', 'analytics'] as const) {
+    const switchOn = { haptics: this.hapticsOn, analytics: this.analyticsOn, reminder: this.reminder !== 'off' };
+    for (const key of ['haptics', 'analytics', 'reminder'] as const) {
       const target = switchOn[key] ? 1 : 0;
       if (Math.abs(this.switchAt[key] - target) < 0.002) { this.switchAt[key] = target; continue; }
       const age = now - this.switchedAt[key];
@@ -926,6 +1007,12 @@ export class SettingsScene extends BaseScene {
     }
     this.placeSheen();
     this.sheen.update(now, !monetization().premium() && this.storeInView());
+    // A running timer's minutes turn while the screen is open: one storage read a second.
+    if (now - this.storePollAt >= 1) {
+      this.storePollAt = now;
+      const badge = this.timerBadge(Date.now());
+      if (badge !== this.texts.storeBadge!.text) { this.texts.storeBadge!.setText(badge); this.pressDirty = true; }
+    }
     bakeOne(this.layers);
     const age = now - this.enteredAt;
     if (age < 1.1) {
@@ -1071,7 +1158,8 @@ export class SettingsScene extends BaseScene {
     this.pressDirty = true;
     vibrate('tap');
     if (name !== 'reset') this.resetArmed = false;
-    if (name !== 'unlock' && name !== 'restore' && name !== 'refill') this.notice = '';
+    if (name !== 'restore' && name !== 'refill' && !isTimerProduct(name)) this.notice = '';
+    if (isTimerProduct(name)) { void this.buy(name); return; }
     switch (name) {
       case 'back':
       case 'done': this.leave(); return;
@@ -1089,11 +1177,11 @@ export class SettingsScene extends BaseScene {
         this.leaveBehindCurtain(() => this.curtain.cover(() => this.scene.start(SceneKey.Support, { from: this.from })));
         return;
       case 'haptics': this.toggleHaptics(); return;
+      case 'reminder': void this.toggleReminder(); return;
       case 'analytics': this.toggleAnalytics(); return;
       case 'adPrivacy': void this.openAdPrivacy(); return;
       case 'leaderboard': void this.openLeaderboard(); return;
       case 'achievements': void this.openAchievements(); return;
-      case 'unlock': void this.buy(PRODUCT.premium); return;
       case 'refill': void this.buy(PRODUCT.heartRefill); return;
       case 'restore': void this.restore(); return;
       case 'reset': this.resetTapped(); return;
@@ -1163,6 +1251,31 @@ export class SettingsScene extends BaseScene {
     saveSettings({ ...loadSettings(), haptics: this.hapticsOn });
     if (this.hapticsOn) vibrate('stamp');
     this.refreshCopy();
+  }
+
+  /**
+   * On asks Android, from this tap and only here or on the map's offer; a refusal leaves the
+   * switch on and says where to fix it, rather than a switch that will not stay on. Off
+   * cancels every scheduled reminder at once.
+   */
+  private async toggleReminder(): Promise<void> {
+    if (this.reminderBusy) return;
+    this.reminderBusy = true;
+    const turningOn = this.reminder === 'off';
+    this.reminder = turningOn ? 'on' : 'off';
+    this.switchedAt.reminder = performance.now() / 1000;
+    this.refreshCopy();
+    try {
+      if (turningOn) {
+        const state = await turnRemindersOn('settings');
+        if (!this.disposed) this.reminder = state;
+      } else {
+        await turnRemindersOff();
+      }
+    } finally {
+      this.reminderBusy = false;
+      if (!this.disposed) { this.refreshCopy(); this.pressDirty = true; }
+    }
   }
 
   /**

@@ -108,7 +108,7 @@ simply asked for three taps inside a beat. Now the first level that uses each gr
 introduces it, once, in the level itself (`game/conceptIntro.ts`, wired in
 `PlayScene.beginIntro`).
 
-**Four introductions, not two.** The same mechanism now also introduces the two jumps the
+**More introductions than the two grids.** The same mechanism now also introduces the two jumps the
 tiers make — the **offbeat**, the first tap between two beats (level 6), and the **long
 phrase**, two bars to hold instead of one (level 18) — which arrived unannounced exactly as
 the grids once did. They are `Concept`s beside `triplet` and `sixteenth` (`CONCEPTS`,
@@ -124,6 +124,17 @@ Their flags (`offbeat`, `longPhrase`) are device-local: they join the teach obje
 the cloud save's lessons, and leave with a player whose progress is shelved. On a debut
 level the new rhythm is also met as the second task (`docs/DIFFICULTY.md`), so the lesson is
 applied straight away, near the base tempo.
+
+**A fifth: the last-beat offbeat (level 11).** Its phrase ends on the "and" of 4, half a beat
+before the next phrase begins. User testing found it the most confusing offbeat, so the road
+holds it back until level 11 (`PROGRESSION.lastOffbeat`, `docs/DIFFICULTY.md`) and
+introduces it there as `lastOffbeat`. `taskCarries` reads it as a tier phrase that ends off
+the beat (`endsOffBeat`). Such a phrase also carries the plain offbeat, which comes first in
+`CONCEPTS` and was met on level 6. The teaching phrase is `X - X - X - - X` on half beats:
+three quarter notes, then the "and" of four in place of four, so the only new thing is where
+the phrase ends. The caption is *Ends after beat 4*. It follows the offbeat's rules: it is
+never shown to a save that has cleared level 11, and its `lastOffbeat` flag is device-local,
+outside the cloud save.
 
 **Where.** `firstEligibleLevel(grid)` reads the curve's own threshold (level 42 for
 triplets, 59 for sixteenths today); `firstLevelWithGrid(grid)` is the first level whose

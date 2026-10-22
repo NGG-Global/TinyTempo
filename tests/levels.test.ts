@@ -1,10 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
 import {
-  AREAS, PATTERN_TIERS, PLATEAU_PATTERNS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
+  AREAS, PATTERN_TIERS, PLATEAU_PATTERNS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, choreographedShape, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
   difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats, tierPool,
-  mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec,
+  mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec, type LevelTask,
 } from '../src/game/levels';
+import { endsOffBeat } from '../src/rhythm/patterns';
 import { PROGRESSION } from '../src/config/progression';
 import { RHYTHM } from '../src/config/rhythm';
 import { RoundController, type RoundEvents } from '../src/game/RoundController';
@@ -122,7 +123,9 @@ describe('level progression', () => {
   });
   it('matches the recorded road, task for task, so any change to it is a deliberate one', () => {
     // The choreography reassigned the road once, on purpose, and the area finales moved
-    // their own rows (10, 20, … 120) and no others; this pins what both produced.
+    // their own rows (10, 20, … 120) and no others; this pins what both produced. Holding the
+    // last-beat offbeat back to level 11 moved 6, 7 and 9 (the one task each that ended on
+    // the "and" of 4), 10 (whose reprise draws on them) and 11 (its debut), and no others.
     // Regenerate only for a deliberate change to the curve, and say which levels moved.
     const road = JSON.parse(readFileSync(new URL('./fixtures/levels-choreography.json', import.meta.url), 'utf8')) as Record<string, string[]>;
     for (let level = 1; level <= 120; level++) {
@@ -450,10 +453,12 @@ describe('debut levels', () => {
     for (let level = 1; level <= 300; level++) {
       const spec = levelSpec(level), composed = composedTasks(level);
       const moved = spec.tasks.map((task, i) => task.pattern !== composed[i]!.pattern ? i : -1).filter(i => i >= 0);
-      if (debutsOn(level).length === 0) { expect(moved, `level ${level}`).toEqual([]); continue; }
+      const lastOffbeat = level === PROGRESSION.lastOffbeat.from;
+      if (debutsOn(level).length === 0 && !lastOffbeat) { expect(moved, `level ${level}`).toEqual([]); continue; }
       expect(moved.length === 0 || (moved.length === 2 && moved[0] === DEBUT_SLOT), `level ${level}`).toBe(true);
       expect(spec.tasks.map(t => [t.bpm, t.leadBeats])).toEqual(composed.map(t => [t.bpm, t.leadBeats]));
-      expect(new Set(spec.tasks.map(t => t.pattern))).toEqual(new Set(composed.map(t => t.pattern)));
+      // The last-beat offbeat's level may also give one task a phrase of its tier that ends off the beat.
+      if (!lastOffbeat) expect(new Set(spec.tasks.map(t => t.pattern))).toEqual(new Set(composed.map(t => t.pattern)));
       expect(Math.max(...spec.tasks.map(t => t.tier))).toBe(Math.max(...composed.map(t => t.tier)));
       for (let i = 1; i < spec.tasks.length; i++) expect(spec.tasks[i]!.pattern).not.toBe(spec.tasks[i - 1]!.pattern);
     }
@@ -464,7 +469,8 @@ describe('debut levels', () => {
       const tasks = levelSpec(level).tasks;
       for (let i = 1; i < tasks.length; i++) {
         expect(tasks[i]!.bpm, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.bpm);
-        if (debutsOn(level).length === 0) expect(tasks[i]!.tier, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.tier);
+        const debut = debutsOn(level).length > 0 || level === PROGRESSION.lastOffbeat.from;
+        if (!debut) expect(tasks[i]!.tier, `level ${level}`).toBeGreaterThanOrEqual(tasks[i - 1]!.tier);
       }
     }
   });
@@ -567,5 +573,44 @@ describe('the finer grids', () => {
         if (task.grid === null) expect(windows.perfectMs).toBe(RHYTHM.perfectMs);
       }
     }
+  });
+});
+
+describe('the last-beat offbeat', () => {
+  const FROM = PROGRESSION.lastOffbeat.from;
+  const ending = (task: LevelTask) => task.grid === null && endsOffBeat(task.pattern);
+
+  it('knows a phrase that ends on the "and" of its last beat', () => {
+    const ids = (tier: number) => PATTERN_TIERS[tier]!.filter(endsOffBeat).map(p => p.id);
+    expect(ids(0)).toEqual([]);
+    expect(ids(1)).toEqual(['t1-0']);
+    expect(ids(2)).toEqual(['t2-2', 't2-3']);
+    // Every tier that has offbeats keeps phrases that do not end on one, so the hold always has a choice.
+    for (let tier = 1; tier < PATTERN_TIERS.length; tier++) expect(PATTERN_TIERS[tier]!.some(p => !endsOffBeat(p)), `tier ${tier}`).toBe(true);
+  });
+
+  it('is held back from every level before it, finales included', () => {
+    expect(FROM).toBe(11);
+    for (let level = 1; level < FROM; level++) {
+      expect(levelSpec(level).tasks.some(ending), `level ${level}`).toBe(false);
+      expect(tierTasks(level).some(ending), `level ${level}`).toBe(false);
+    }
+  });
+
+  it('debuts as the second task of its level, near the base tempo, with nothing else moved', () => {
+    const spec = levelSpec(FROM), composed = composedTasks(FROM);
+    expect(spec.finale).toBe(false);
+    expect(debutsOn(FROM)).toEqual([]);
+    expect(spec.tasks.findIndex(ending)).toBe(DEBUT_SLOT);
+    expect(spec.tasks.filter(ending)).toHaveLength(1);
+    expect(spec.tasks.map(t => [t.bpm, t.leadBeats])).toEqual(composed.map(t => [t.bpm, t.leadBeats]));
+    expect(spec.tasks.map(t => t.tier).sort()).toEqual(composed.map(t => t.tier).sort());
+    expect(spec.peakBpm).toBe(dimensionsOf(choreographedShape(FROM)).peakBpm);
+  });
+
+  it('then plays as the tiers draw it, from the level after', () => {
+    // Nothing places it past its debut ('trades two phrases and nothing else' holds every
+    // later level to its composed tasks); the tiers bring it back on their own at once.
+    expect([FROM + 1, FROM + 2].every(level => levelSpec(level).tasks.some(ending))).toBe(true);
   });
 });

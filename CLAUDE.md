@@ -41,14 +41,19 @@ with task 2, each slot keeping its tempo and lead-in, so it is met fresh near th
 rather than last at the level's peak; debuts are found by scanning `composedTasks`, never
 written down, and tasks, peak tempo and top tier never move (levels 6, 9, 18, 28, 43, 59, 72
 today). **Each new kind of rhythm is introduced once, in the level that first asks for it**
-(`game/conceptIntro.ts`): the offbeat (level 6), the long phrase (18), triplets (43) and
-sixteenths (59) — one unscored task in front of the level's first, at 0.75× on the act, block
+(`game/conceptIntro.ts`): the offbeat (level 6), the last-beat offbeat (11), the long phrase
+(18), triplets (43) and sixteenths (59) — one unscored task in front of the level's first, at 0.75× on the act, block
 and judge the level uses — "New rhythm / Between the beats", one example, one answer, one
 retry below 50% — on ordinary windows, never wider. `introConcept` triggers on a level that
 asks for an unseen concept; a save from before the feature meets a grid on the next such
-level, never at launch, but never meets the offbeat or the long phrase once it has cleared
-the level where they first appear. The teach flags live beside `seenDemonstration`;
-`offbeat`/`longPhrase` are device-local, outside the cloud save. See `docs/SUBDIVISIONS.md`. Subdivided phrases
+level, never at launch, but never meets the offbeat, the last-beat offbeat or the long phrase
+once it has cleared the level where they first appear. The teach flags live beside
+`seenDemonstration`; `offbeat`/`lastOffbeat`/`longPhrase` are device-local, outside the cloud
+save. **A phrase ending on the "and" of 4 waits for level 11** (`PROGRESSION.lastOffbeat`,
+`endsOffBeat`): user testing found it the most confusing offbeat, so below 11
+`holdLastOffbeat` replaces it in `tierTasks` from its own stream, so no other task moves, and
+on 11 `placeLastOffbeat` makes it the second task. That moved fixture rows 6, 7, 9, 10 and 11
+and no others. See `docs/DIFFICULTY.md`. See `docs/SUBDIVISIONS.md`. Subdivided phrases
 are parsed by `parseSubdivided`, which divides by the step count: twelve triplet steps
 multiplied out land a hair over four beats and round the phrase up to two bars. The judge's
 `windowsFor` narrows Perfect where two targets sit closer than 122 ms; Good is left to the
@@ -620,7 +625,12 @@ subtraction judged every tap late by the device's whole output lag, which on Blu
 a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
-when it is large enough to be the reason a player is failing levels.
+when it is large enough to be the reason a player is failing levels. **The calibration screen
+shows where every tap lands** (`ui/calibrationLane.ts`): a lane with the beat at its centre
+drops a tick at each tap's residual, a tap outside the window flashes the edge it fell past,
+the result names its reason — the spread and the offset before, too few taps, too uneven
+(`CalibrationRun.verdict`, `game/calibrationCopy.ts`) — and **Keep stays on the screen**, the
+next run a *Check* against the kept offset that reads *Spot on* within `CALIBRATION.spotOnMs`.
 **The Tap offset is per audio route** (`game/routeCalibration.ts`, `audio/audioRoute.ts`,
 `docs/AUDIO_ROUTES.md`): `speaker`, `wired`, `bluetooth` and `unknown`, each with its own
 value in `Settings.calibration` (settings version 2), because one phone differs by a fifth of
@@ -847,25 +857,54 @@ completed day — no currency, no streak to lose, nothing to buy. Every stored f
 validated; a damaged set is redrawn from its seed and never costs stamps. A puck with three
 tick boxes opens `ui/objectivesCard.ts` on the Menu and the Map. See `docs/OBJECTIVES.md`.
 
-**One heart is one real attempt at an unfinished frontier level** (`game/restart.ts`,
-`ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
+**A daily reminder, for a player who asks for one** (`reminders/`, `docs/REMINDERS.md`): one
+local notification at 6 pm while the day's objectives are open, at most three scheduled ahead
+of the last time the game was open, never once the day is stamped. Native only. Off until
+turned on: the map offers it once, after the first day's stamp, as the screen hint with a second
+button (`SCREEN_HINTS.reminder`, *Remind me* / *Not now*), and Settings → Sound & feel has the
+switch, which reads *Turned off in Android settings* when Android refuses. **Android's prompt
+comes only from that tap** (`turnRemindersOn`): `syncReminders` checks the permission and never
+schedules without it, because the plugin's `schedule()` would ask by itself. Every reminder is
+`isExactNotification: false` and the manifest removes `SCHEDULE_EXACT_ALARM`, because the
+plugin's default opens the system's *Alarms & reminders* screen. Rescheduled at boot, on every
+background and return, and when a level stamps the day; nothing repeats on its own. The setting
+(`tiny-tempo.reminders.v1`) and the offer's flag (`hintReminder`) are device-local.
+
+**A heart pays for an attempt; a restart pays with a restart** (`game/restart.ts`,
+`game/dailyRestarts.ts`, `ui/restartSheet.ts`, `docs/RESTART.md`). Resume after an interruption continues the attempt
 that paid, **from the task it stopped in** (`resumeTask`): finished tasks are kept, and the
 cut-short task replays from a fresh count-in **held to a ceiling** (`scoreCeiling`,
 `capRound`, `pauseTask`) — the most the interrupted pass could still have made — so an
 interruption can cost a task but never improve it. Groove is kept with the pass, so mastery
-stays the same fact as a best of 100. The restart puck is free before the attempt's first scored response
+stays the same fact as a best of 100. The restart puck is free before the pass's first scored response
 (`scoredResponseBegun`: the controller's `respond` or a judged tap, never the first-run pass,
-an introduction or the rehearsal) and ends the attempt after it. On the frontier it asks
-first, on a sheet over the still-running level: *No heart will be used*, *Restarting uses 1
-heart*, or at zero hearts *Out of hearts* with Watch ad & Restart, the refill, Premium and
-Keep playing. A finished, protected or Premium level restarts at once and free. Opening a
-sheet spends and ends nothing, and the sheet re-reads the run and re-arms before it acts.
+an introduction or the rehearsal). **After it, on an unfinished frontier level past 10 without
+Premium, a restart uses one of the day's two restarts** (`RESTARTS.daily`, reset at the local
+midnight, `tiny-tempo.restarts.v1`, device-local) instead of the heart it used to cost, and
+goes back to task 1 on the same attempt and heart (`free_restart`), so nothing is charged
+twice. It asks first, on a sheet over the still-running level: *No restart will be used*,
+*Uses 1 of today's 2 restarts*, or with none left *No restarts left* with Watch ad & Restart
+(`watchForRestart`: one restart, used at once, banked never), a **Replay timer** block that
+opens a picker of four, and Keep playing. The puck wears a badge with today's count where
+restarts count. A finished or protected level restarts at once and free, unlimited, and so
+does any level **while a replay timer runs** (`game/replayTimer.ts`, `docs/BILLING.md`): four
+Play consumables — `replay_timer_30m`, `_1h`, `_2h`, `_1d` — each adding its span to one
+device-local expiry (`tiny-tempo.replayTimer.v1`, from the end of a running timer, from now
+otherwise, claim ids persisted so a replayed purchase adds once, an expiry over a week ahead
+read as damage), sold from that picker, which buys and restarts, and from Settings → Workshop
+store; the puck's badge turns brass and reads what is left. Hearts are untouched by a timer.
+**Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
+prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
+hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
+non-consumable cannot be taken back. Opening a sheet spends and ends nothing, the sheet
+re-reads the run and re-arms before it acts (`liveSheet` keeps the picker open while the
+empty sheet is what the run would raise), and the daily restart is written
+(`useDailyRestart`) before the restart runs.
 **`startRound(mode)` names what happens to the attempt** — `resume`, `free_restart`,
 `new_attempt` (`attemptForStart`), never inferred from whether a result exists — and a new
-attempt is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
-id spends exactly one heart and a failed start leaves the heart with the player. The ad is the
-same rewarded path every placement takes (`watchForHeart`, `redeemHeart`, a fresh claim id),
-and it restarts only if its `RestartTicket` still holds. **Try again says what it costs and
+attempt (Try again, the replay block) is released (`releaseAttempt`) before the audio unlocks, so `beginAttempt` on the new
+id spends exactly one heart and a failed start leaves the heart with the player. A restart's
+ad restarts only if its `RestartTicket` still holds. **Try again says what it costs and
 does not take a stray tap**: the block carries the sheet's ♥ 1 chip when `tryAgainCost` says a
 heart goes, and a result ignores taps for `RESULT_ARM_SEC` after it appears (`resultArmed`),
 because a player still tapping the rhythm landed on it and paid for an attempt unread.
@@ -1129,7 +1168,10 @@ src/
     mastery.ts         Which levels a save holds IN THE POCKET, first or repeat; derived from best, pure
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
-    restart.ts         The restart puck: free, paid or out of hearts; start modes, the handover, the rewarded heart; pure
+    calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
+    restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
+    dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
+    replayTimer.ts     Replay timers: the four consumables, one stacking expiry, idempotent grants, what is left; device-local
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
@@ -1204,7 +1246,8 @@ src/
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
-    restartSheet.ts    The restart puck's sheet over a running level: its copy, layout, hit test and tap guard
+    calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
+    restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
     resultLayout.ts    The plaque's tray, seats and chips, and the stack under it; pure
@@ -1216,6 +1259,10 @@ src/
     playUpdate.ts      Flexible vs immediate, when to restart; no native import
     native.ts          The PlayUpdate plugin wrap, unloaded in the browser
     boot.ts            Native-only check on boot and resume
+  reminders/
+    reminder.ts        The daily reminder's rules: when, what it says, the setting, the offer; pure
+    native.ts          The local-notifications plugin: permission, schedule, cancel; inexact, never asking by itself
+    sync.ts            Native-only wiring: boot, background and return, the stamp, and the player's switch
   review/
     appReview.ts       The review milestone, the wait, when the opportunity is spent; no native import
     reviewRecord.ts    Which milestones this device has tried; never in a save code

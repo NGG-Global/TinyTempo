@@ -349,6 +349,16 @@ function read(storage: Storage | null): ObjectivesState | null {
   return parseObjectives(raw) ?? memory;
 }
 
+/**
+ * The stamps as stored, without drawing a set: every stamp ever earned, and whether today's
+ * is among them. What the daily reminder reads (`reminders/sync.ts`), which must not draw a
+ * day's objectives just to decide whether to send a notification about them.
+ */
+export function storedStamps(now: number, storage: Storage | null = safeStorage()): { readonly stamps: number; readonly todayDone: boolean } {
+  const state = read(storage);
+  return { stamps: state?.stamps ?? 0, todayDone: state?.stampedDays.includes(calendarDay(now)) ?? false };
+}
+
 function write(state: ObjectivesState, storage: Storage | null): boolean {
   memory = state;
   try {

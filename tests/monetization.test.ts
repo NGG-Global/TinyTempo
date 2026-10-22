@@ -178,7 +178,7 @@ describe('successful adapters still report through the facade', () => {
 describe('analytics boundary', () => {
   it('names every prepared commerce event', () => {
     // Gameplay events share the bus (see game/playAnalytics.ts); the commerce funnel is
-    // still exactly these ten, and still first.
+    // still exactly these eleven, and still first.
     expect([...ANALYTICS_EVENTS].slice(0, COMMERCE_EVENTS.length)).toEqual([...COMMERCE_EVENTS]);
     expect([...COMMERCE_EVENTS]).toEqual([
       'health_empty',
@@ -191,6 +191,7 @@ describe('analytics boundary', () => {
       'purchase_completed',
       'purchase_cancelled',
       'purchase_failed',
+      'replay_timer_granted',
     ]);
   });
 
@@ -238,10 +239,13 @@ describe('heart refill copy', () => {
 });
 
 describe('premium', () => {
-  it('names the store product tinytempo_premium', () => {
+  it('names the store products as the Console does, and keeps the legacy one', () => {
     // Owning this Play product is itself the entitlement; there is no second identifier.
+    // Renaming it would orphan every account that bought it.
     expect(PRODUCT.premium).toBe('tinytempo_premium');
     expect(PRODUCT.heartRefill).toBe('heart_refill_full');
+    expect([PRODUCT.timer30m, PRODUCT.timer1h, PRODUCT.timer2h, PRODUCT.timer1d])
+      .toEqual(['replay_timer_30m', 'replay_timer_1h', 'replay_timer_2h', 'replay_timer_1d']);
   });
 
   it('hides rewarded ads once the entitlement is active', async () => {

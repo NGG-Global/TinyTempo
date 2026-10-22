@@ -22,9 +22,12 @@ export interface SupportFacts {
   readonly level: number;
   readonly area: string;
   readonly cleared: number;
+  /** The legacy Premium, for an account that holds it. */
   readonly premium: boolean;
   /** "5/5", or "unlimited" with premium held. */
   readonly hearts: string;
+  /** "none", or what the replay timer still holds: the first thing a "my restarts" report needs. */
+  readonly replayTimer: string;
   /**
    * How the audio clock is tracking the output, and what the device claims its lag is.
    * The first thing to ask about any "it feels delayed" report, and the one thing a
@@ -115,6 +118,7 @@ export function supportReport(facts: SupportFacts): string {
     line('Audio', facts.audio),
     line('Premium', facts.premium ? 'yes' : 'no'),
     line('Hearts', facts.hearts),
+    line('Replay timer', facts.replayTimer),
     line('Reporting', reporting),
     line('Cloud save', facts.cloud),
     // Last, and labelled, because it is the longest line and the one a player may want to

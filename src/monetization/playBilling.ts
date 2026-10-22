@@ -83,7 +83,13 @@ const PREMIUM_CACHE_KEY = 'tiny-tempo.premium.v1';
  * authority is `queryPurchases`, which runs the moment the device has a network.
  */
 const PREMIUM_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
-const CATALOGUE = [PRODUCT.heartRefill, PRODUCT.premium] as const;
+/**
+ * What is priced and sold: the refill and the four replay timers. Premium is not in it —
+ * nothing offers it, so its price is never shown — but `queryPurchases` still lists it for
+ * an account that owns it, and that is where it is honoured.
+ */
+const CATALOGUE = [PRODUCT.heartRefill, PRODUCT.timer30m, PRODUCT.timer1h, PRODUCT.timer2h, PRODUCT.timer1d] as const;
+const TIMER_PRODUCTS: readonly ProductId[] = [PRODUCT.timer30m, PRODUCT.timer1h, PRODUCT.timer2h, PRODUCT.timer1d];
 
 /** Maps a Play response code onto the reason the store copy already knows how to say. */
 export function classifyPurchaseError(code: number): PurchaseReason {
@@ -157,6 +163,11 @@ export interface PlayBillingOptions {
    * `health.ts` persists them, which is what makes a crash before consume harmless.
    */
   readonly fulfilRefill: (claimId: string) => void;
+  /**
+   * Grants a replay timer, the same way: idempotent per claim id, persisted by
+   * `game/replayTimer.ts`, so a replayed purchase adds its minutes once.
+   */
+  readonly fulfilTimer: (product: ProductId, claimId: string) => void;
   readonly cache?: Storage | null;
   /**
    * How long to hold the purchase lock waiting for `PurchasesUpdatedListener`.
@@ -171,11 +182,14 @@ export interface PlayBillingOptions {
 }
 
 /**
- * Direct Google Play Billing: the permanent Premium unlock and the consumable heart refill.
+ * Direct Google Play Billing: the consumable heart refill and replay timers, and the legacy
+ * Premium unlock, which is honoured but no longer sold.
  *
  * Play is the authority for Premium. The cache above only covers the gap before the first
  * answer, and is revoked solely by a *successful* query that does not list the product —
- * a failed query is not evidence that a player who paid did not.
+ * a failed query is not evidence that a player who paid did not. A purchase of it is
+ * refused as unavailable: the product may still exist in the Console, but the game makes
+ * no offer of it, and a player who already owns it is granted it by reconciliation.
  *
  * Fulfilment always runs grant-then-consume, never the reverse. A crash in between leaves
  * the purchase unconsumed, so the next `reconcile` sees it again: the grant is refused by
@@ -230,6 +244,8 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
       const products = await client.queryProducts([...CATALOGUE]);
       catalog.clear();
       for (const item of products) {
+        // Only what was asked for: a price for anything else is a product with no offer.
+        if (!(CATALOGUE as readonly string[]).includes(item.productId)) continue;
         if (item.formattedPrice.length > 0) catalog.set(item.productId, item.formattedPrice);
       }
     } catch { /* prices can wait; a cached Premium still applies */ }
@@ -254,10 +270,11 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
     }
   }
 
-  async function grantRefill(purchase: StorePurchase): Promise<void> {
+  /** Grant, then consume: the order `docs/BILLING.md` explains, for every consumable. */
+  async function grantConsumable(purchase: StorePurchase, grant: (claimId: string) => void): Promise<void> {
     const claimId = claimIdFor(purchase.purchaseToken);
     try {
-      options.fulfilRefill(claimId);
+      grant(claimId);
     } catch {
       // The grant is the part that must not be lost; leaving the purchase unconsumed
       // means Play offers it again on the next reconcile.
@@ -286,8 +303,13 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
         handled.add(premiumId);
       }
       if (purchase.productIds.includes(refillId)) {
-        await grantRefill(purchase);
+        await grantConsumable(purchase, claimId => options.fulfilRefill(claimId));
         handled.add(refillId);
+      }
+      for (const timer of TIMER_PRODUCTS) {
+        if (!purchase.productIds.includes(timer)) continue;
+        await grantConsumable(purchase, claimId => options.fulfilTimer(timer, claimId));
+        handled.add(timer);
       }
     }
     return handled;
@@ -297,21 +319,22 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
    * Asks Play what is owned and reconciles. Premium is revoked here and nowhere else,
    * and only when the query itself succeeded.
    */
-  async function reconcile(): Promise<void> {
+  async function reconcile(): Promise<{ readonly owned: readonly StorePurchase[]; readonly handled: Set<string> } | null> {
     let owned: readonly StorePurchase[];
     try {
       owned = await client.queryPurchases();
     } catch {
       // Offline, or the query dropped. Not an answer, so nothing is revoked and the
       // store stays available — the next reconcile simply asks again.
-      return;
+      return null;
     }
-    await fulfil(owned);
+    const handled = await fulfil(owned);
     const ownsPremium = owned.some(purchase => isPaid(purchase) && purchase.productIds.includes(premiumId));
     if (!ownsPremium && premiumActive) {
       premiumActive = false;
       writePremiumCache(cache, false);
     }
+    return { owned, handled };
   }
 
   function settle(result: PurchaseResult): void {
@@ -355,13 +378,17 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
     return match ? claimIdFor(match.purchaseToken) : product;
   }
 
-  /** Play refuses a product the account already holds; ask it what it holds and settle from that. */
+  /**
+   * Play refuses a product the account already holds: a consumable bought but not yet
+   * consumed, after a crash between the two. Ask what is held and settle from that — the
+   * reconcile grants and consumes it, so the player has what they tapped for.
+   */
   async function settleAlreadyOwned(): Promise<void> {
     const current = session;
     if (!current) return;
-    await reconcile();
-    if (current.product === premiumId && premiumActive) {
-      settle({ ok: true, product: premiumId, claimId: premiumId });
+    const result = await reconcile();
+    if (result !== null && result.handled.has(current.product)) {
+      settle({ ok: true, product: current.product, claimId: claimIdOf(current.product, result.owned) });
       return;
     }
     settle({ ok: false, product: current.product, reason: 'failed' });
@@ -375,6 +402,7 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
       await reconcile();
     },
 
+
     available: () => !denied,
 
     premium: () => premiumActive,
@@ -384,7 +412,9 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
     },
 
     async purchase(product: ProductId): Promise<PurchaseResult> {
-      if (product !== refillId && product !== premiumId) return { ok: false, product, reason: 'unavailable' };
+      // Premium is read, never sold: a tap that somehow asks for it gets the store's "not
+      // available", which is the truth of it.
+      if (!(CATALOGUE as readonly string[]).includes(product)) return { ok: false, product, reason: 'unavailable' };
       // One sheet at a time: a second launch while one is open is a developer error to
       // Play, and there is only one listener slot to settle.
       if (purchasing) return { ok: false, product, reason: 'failed' };
@@ -392,7 +422,6 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
       try {
         await boot();
         if (!ready) return { ok: false, product, reason: 'unavailable' };
-        if (product === premiumId && premiumActive) return { ok: true, product, claimId: premiumId };
         if (!catalog.has(product)) return { ok: false, product, reason: 'unavailable' };
 
         return await new Promise<PurchaseResult>(resolve => {
@@ -432,8 +461,9 @@ export function createPlayBilling(client: PlayBillingClient, options: PlayBillin
 
     /**
      * Restore Purchases. Play has no separate restore call — what the account owns is
-     * what `queryPurchases` returns, which is also why a consumed refill can never come
-     * back through here.
+     * what `queryPurchases` returns, which is also why a consumed refill or timer can never
+     * come back through here. What it restores is the legacy Premium, for the accounts
+     * that hold one.
      */
     async restore(): Promise<RestoreResult> {
       try {

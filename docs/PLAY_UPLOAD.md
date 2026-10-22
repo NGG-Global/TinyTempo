@@ -230,8 +230,11 @@ mid-frame. Everything below needs hardware and none of it has been done.
 34. 👤 **Create the Console app entry** and claim `com.tinytempo.app`. **This is
     permanent** — no app can ever change its package name.
 35. 👤 **Create the in-app products with these exact IDs**, or the code will not find them:
-    - `tinytempo_premium` — one-time purchase
     - `heart_refill_full` — consumable
+    - `replay_timer_30m`, `replay_timer_1h`, `replay_timer_2h`, `replay_timer_1d` — consumables
+    - `tinytempo_premium` — the legacy one-time purchase: no longer sold, left active for its owners
+    Every field for each one, with the names and descriptions to enter, is in
+    `docs/PLAY_PRODUCTS.md`.
 36. 👤 **Upload to internal testing first.** It is the fastest track and it is where you
     find that a key is wrong.
 37. 👤⏱ **Run the closed test** if the 12-testers rule applies to you. This is the two

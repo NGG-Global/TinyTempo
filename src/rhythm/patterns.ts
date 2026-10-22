@@ -63,6 +63,16 @@ export function tightestGap(pattern: Pattern): number {
   return gap;
 }
 
+/**
+ * Whether a phrase's last tap is the second eighth of its last beat — the "and" of 4 in a
+ * bar. It ends between the beats, half a beat before the next phrase's downbeat, and user
+ * testing found it the hardest offbeat to read, so the road holds it back
+ * (`PROGRESSION.lastOffbeat`) and introduces it on its own.
+ */
+export function endsOffBeat(pattern: Pattern): boolean {
+  return pattern.hits.includes(pattern.lengthBeats - 0.5);
+}
+
 export function secondsPerBeat(bpm: number): number {
   if (!Number.isFinite(bpm) || bpm <= 0) throw new Error('BPM must be positive and finite.');
   return 60 / bpm;

@@ -109,8 +109,9 @@ colour-vision check, there is no text-size option, and the judged-tap windows in
 `config/rhythm.ts` are not adjustable for players who need a wider one.
 
 **11. Rewarded ads are the only ad surface, in one placement.** That is the
-player-friendly choice and I would not change it, but it means revenue leans
-almost entirely on the $4.99 Premium. Worth knowing before you model anything.
+player-friendly choice and I would not change it, but it means revenue leans on
+the heart refill and the four replay timers; the one-time Premium is no longer sold
+(`docs/BILLING.md`). Worth knowing before you model anything.
 
 **12. ~~The identity is inconsistent~~ — half fixed; the version half remains.**
 The `applicationId` is now `com.tinytempo.app`, renamed from `com.ngg.smallacts`
@@ -299,14 +300,18 @@ these is a blocker — but none has been run on a device.
 ### D. Play Console — products and services
 
 - [ ] Create the Play Console app entry; claim `com.tinytempo.app`.
-- [ ] **Create the two one-time products** with the exact IDs from
+- [ ] **Create the five one-time products on sale** with the exact IDs from
       `src/monetization/types.ts`. Play Console is now the only place they are defined.
-      Both are created under **In-app products**, not Subscriptions: the client queries
+      All are created under **In-app products**, not Subscriptions: the client queries
       `ProductType.INAPP`, and a subscription would not come back.
       | Play product | Play type | How the app treats it |
       | --- | --- | --- |
-      | `tinytempo_premium` | One-time product | **Non-consumable.** Acknowledged, never consumed. Owning it in the Play account *is* the entitlement |
       | `heart_refill_full` | One-time product | **Consumable.** Granted, then consumed, so it can be bought again |
+      | `replay_timer_30m` | One-time product | **Consumable.** Adds 30 minutes to the device's replay timer, then consumed |
+      | `replay_timer_1h` | One-time product | **Consumable.** Adds 1 hour |
+      | `replay_timer_2h` | One-time product | **Consumable.** Adds 2 hours |
+      | `replay_timer_1d` | One-time product | **Consumable.** Adds 1 day |
+      | `tinytempo_premium` | One-time product | **Legacy, non-consumable.** No longer offered by the game. Leave it active for the accounts that own it: Play lists it for them and the game honours it. Deactivating it in the Console would not revoke it — Play keeps a bought one-time product — but **do not delete it** |
 - [ ] **Check each product has an active price and is set to Active.** A product with no
       price returns no offer, and the game leaves a product with no localized price out of
       the catalogue rather than showing a guessed one — the button simply reports the
@@ -408,8 +413,10 @@ the pinned SDK. None of this has run between two real devices.
 
 - [ ] Run the release AAB on a real handset — an APK built from `assembleDebug`
       does not prove the signed bundle works.
-- [ ] **Buy each product end to end with a licence tester account.** Premium,
-      then a refill, then Restore on a fresh install.
+- [ ] **Buy each product end to end with a licence tester account.** A refill, then
+      each replay timer — the second bought while the first runs, to see it add — then
+      Restore on a fresh install, which reports *No purchases to restore* unless the
+      tester account owns the legacy Premium.
 - [ ] **Register the handset as a test device.** Every build except `build:release`
       now serves Google's test ads (`ADMOB.testAds`), CI's APK included, so the bench is
       safe by default. A release build serves live ads to everyone, including you: put
@@ -443,6 +450,10 @@ the pinned SDK. None of this has run between two real devices.
       back when it closes; the level's Watch ad & Restart still restarts the level.
 - [ ] **A failed result ignores taps for 0.7 s**, and **Try again shows ♥ 1** on a level
       that costs a heart (past level 10, unfinished, no Premium) and nothing elsewhere.
+- [ ] **Out of restarts, the sheet offers the ad and a Replay timer**; the picker's four
+      rows show Play's prices; buying one restarts the level at once and the restart puck's
+      badge turns brass and counts the timer down; Settings → Workshop store shows the
+      same four and *Timer running* while one runs.
 - [ ] Internal testing track → closed testing → production. *(verify — Play has
       required a period of closed testing with a minimum tester count for some
       new developer accounts.)*

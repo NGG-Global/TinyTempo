@@ -1,15 +1,45 @@
 # Billing
 
-Two one-time products, bought through Google Play Billing directly. There is no billing
+Six one-time products, bought through Google Play Billing directly. There is no billing
 provider, no dashboard but Play Console, no SDK key, and no server.
 
 | Play product | Play type | What the app does with it |
 | --- | --- | --- |
-| `tinytempo_premium` | One-time product | Non-consumable. Acknowledged, **never** consumed |
 | `heart_refill_full` | One-time product | Consumable. Granted, then consumed, so it can be bought again |
+| `replay_timer_30m` | One-time product | Consumable. Adds 30 minutes to the replay timer, then consumed |
+| `replay_timer_1h` | One-time product | Consumable. Adds 1 hour |
+| `replay_timer_2h` | One-time product | Consumable. Adds 2 hours |
+| `replay_timer_1d` | One-time product | Consumable. Adds 1 day |
+| `tinytempo_premium` | One-time product | **Legacy.** Non-consumable. Acknowledged, **never** consumed, **never sold** now |
 
 The ids live in `src/monetization/types.ts` and are the same strings Play Console uses.
 Nothing else defines them.
+
+## Replay timers, and why Premium was withdrawn
+
+Premium was sold as unlimited hearts and no ads, one payment. It took the only pacing the
+game has away for good, and after daily restarts arrived (`docs/RESTART.md`) the thing a
+player actually runs out of mid-level was restarts, not hearts. The replay timers sell that
+and nothing else: **unlimited restarts for a while** — thirty minutes, an hour, two hours or
+a day — on one timer that purchases **add to**, from the end of a running timer or from now
+(`extendTimer` in `game/replayTimer.ts`). Hearts, the refill, the daily heart and the
+rewarded ad are untouched; a running timer only makes the restart puck free and shows what
+is left on its badge.
+
+The timer is device-local (`tiny-tempo.replayTimer.v1`): its expiry and the claim ids of the
+purchases already added. It is in no save code and no cloud snapshot, because it is paid for
+and the save carries nothing a player owes or owns. The expiry is the wall clock, like the
+daily heart; a clock moved back keeps what the timer already had, and an expiry more than a
+week ahead is read as damage, not a licence (`parseReplayTimer`).
+
+**Premium is honoured, and not offered.** A bought non-consumable cannot be taken back, and
+Play policy and plain fairness both say a player who paid keeps what they paid for. So the
+game never prices it (`CATALOGUE` leaves it out), never shows it, and refuses to sell it
+(`purchase` answers *unavailable*), but `queryPurchases` still lists it for an account that
+owns it, and that account keeps unlimited hearts, no ads and free restarts, on every device
+it signs into, through Restore as before. Leave the product active in the Console: deleting
+it would not revoke the entitlement, and would make the owned purchase look like one for a
+product that does not exist.
 
 ## The shape
 
@@ -48,10 +78,11 @@ moment there is a network.
 
 ## Grant, then consume — in that order
 
-The consumable is fulfilled in one order and it matters:
+Every consumable — the refill and the four timers — is fulfilled in one order and it matters:
 
 1. Play reports the purchase as `PURCHASED`.
-2. Grant the refill, through `health.ts`, keyed by a claim id that is **persisted**.
+2. Grant it, through `health.ts` or `game/replayTimer.ts`, keyed by a claim id that is
+   **persisted**.
 3. Only then consume it.
 
 A crash between 2 and 3 leaves the purchase unconsumed, so Play offers it again on the
@@ -83,8 +114,11 @@ Restore asks that question, grants Premium if it is there, and reports one of th
 results the existing copy in `copy.ts` already knows how to say — restored, nothing to
 restore, or could not ask.
 
-A consumed heart refill is not owned any more and cannot come back through restore. That
-is correct, and it is why the button says "Premium restored" rather than promising hearts.
+A consumed heart refill or replay timer is not owned any more and cannot come back through
+restore. That is correct, and it is why the button says "Premium restored" rather than
+promising hearts or minutes — and why, for the accounts that never bought Premium, it says
+"No purchases to restore". The button stays because the legacy owners need it on a new
+device.
 
 ## The browser, and the line a release cannot cross
 
@@ -109,8 +143,8 @@ one place, `fulfil`, so a server check would go in front of that call and nowher
 ordinary client BillingClient purchase needs none of them, and a service-account JSON in
 an APK would be a credential anyone could extract.
 
-**No subscriptions.** Both products are one-time, and the client only ever queries
-`ProductType.INAPP`.
+**No subscriptions.** A replay timer is a span bought outright, not a plan: every product
+is one-time, and the client only ever queries `ProductType.INAPP`.
 
 ## Two things that will break it quietly
 

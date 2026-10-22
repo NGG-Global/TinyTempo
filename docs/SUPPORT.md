@@ -15,6 +15,7 @@ Progress: level 23 (Sand), 22 cleared
 Audio: estimated clock · device reports 210 ms · offset 0 ms
 Premium: no
 Hearts: 5/5
+Replay timer: none
 Reporting: crash reports on, usage data off
 Save code: 04BG1-NQZ0S-E4WS0-07M00-…
 ```
@@ -28,7 +29,7 @@ day. Every line answers a question a reply would otherwise have to ask:
 | App, Running on | "It is slow" / "it looks wrong" — needs a build and a device to reproduce on |
 | Progress | Where it happened, and which act |
 | Audio | "It feels delayed" — unanswerable without the clock mode, the platform's reported lag and the player's offset, and unanswerable *with* a player's description of them |
-| Premium, Hearts | Every billing complaint |
+| Premium, Hearts, Replay timer | Every billing complaint — Premium is the legacy entitlement, the timer is what a restart complaint turns on |
 | Reporting | Whether there is a crash report to go and look for |
 | Save code | "I lost my progress" — the only thing that can restore it |
 
