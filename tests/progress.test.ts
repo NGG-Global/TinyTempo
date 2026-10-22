@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, mergeProgress, recordResult, saveProgress, seenDemonstration, seenReplayTip } from '../src/game/progress';
+import { clearTeachFlags, guidedLevel, loadProgress, markDemonstrationSeen, markReplayTipSeen, mergeProgress, readTeachFlags, recordResult, resetGeneration, saveProgress, seenDemonstration, seenReplayTip, setResetGeneration } from '../src/game/progress';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 
 vi.mock('phaser', () => ({ default: {} }));
@@ -150,5 +150,29 @@ describe('the first-run teach', () => {
     // ring's absence with it rather than resetting the training wheels.
     const restored = mergeProgress({ unlocked: 1, best: {} }, { unlocked: 3, best: { 1: 71, 2: 66 } });
     expect(guidedLevel(restored)).toBeNull();
+  });
+});
+
+describe('the reset generation', () => {
+  it('starts at zero, stores a whole number, and reads anything else as zero', () => {
+    const storage = memoryStorage();
+    expect(resetGeneration(storage)).toBe(0);
+    expect(resetGeneration(null)).toBe(0);
+    expect(setResetGeneration(2, storage)).toBe(true);
+    expect(resetGeneration(storage)).toBe(2);
+    expect(setResetGeneration(2, null)).toBe(false);
+    for (const raw of ['x', '-1', '1.5', '']) expect(resetGeneration(memoryStorage({ 'tiny-tempo.reset.v1': raw })), raw).toBe(0);
+    expect(resetGeneration(memoryStorage({ 'tiny-tempo.reset.v1': '1e12' }))).toBe(0);
+    setResetGeneration(-3, storage);
+    expect(resetGeneration(storage)).toBe(0);
+  });
+
+  it('clears every teach flag at once', () => {
+    const storage = memoryStorage();
+    markDemonstrationSeen(storage);
+    markReplayTipSeen(storage);
+    expect(clearTeachFlags(storage)).toBe(true);
+    expect(Object.values(readTeachFlags(storage)).every(flag => flag === false)).toBe(true);
+    expect(clearTeachFlags(null)).toBe(false);
   });
 });

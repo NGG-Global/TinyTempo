@@ -103,6 +103,17 @@ export function keptKeepsakes(storage: Storage | null = safeStorage(), progress:
   return kept;
 }
 
+/**
+ * Reset progress: the kept keepsakes were the save's, and the save is gone. The memo is
+ * forgotten with the record, so the next read does not answer from before the reset — and
+ * does not take a new baseline either, since the save it would read is now empty.
+ */
+export function clearKeptKeepsakes(storage: Storage | null = safeStorage()): boolean {
+  if (!storage) return false;
+  memo.delete(storage);
+  try { storage.removeItem(KEY); return true; } catch { return false; }
+}
+
 function safeStorage(): Storage | null {
   try { return typeof localStorage === 'undefined' ? null : localStorage; } catch { return null; }
 }

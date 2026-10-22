@@ -12,12 +12,12 @@ import { BaseScene } from '@/core/BaseScene';
 import { hapticsSupported, setHaptics, vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { areaOf } from '@/game/levels';
-import { clearProgress, loadProgress } from '@/game/progress';
-import { redrawToday } from '@/game/objectives';
+import { loadProgress } from '@/game/progress';
+import { resetProgress } from '@/game/resetProgress';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard } from '@/playgames/dailyTempo';
 import { achievementsOffered, openAchievements } from '@/playgames/achievementSync';
-import { repairCloudBinding } from '@/playgames/cloudSync';
-import { clearHealth, HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
+import { queueCloudSave, repairCloudBinding } from '@/playgames/cloudSync';
+import { HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { supportMailto } from '@/game/supportReport';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
@@ -1349,13 +1349,14 @@ export class SettingsScene extends BaseScene {
   private resetTapped(): void {
     if (!this.resetArmed) { this.resetArmed = true; this.refreshCopy(); return; }
     this.resetArmed = false;
-    const cleared = clearProgress();
-    clearHealth();
-    redrawToday();
+    // The save, the lessons, the gates, the hearts and the day's objectives, as one decision
+    // (`game/resetProgress.ts`), stamped with a reset generation the cloud merge honours.
+    const { cleared } = resetProgress();
     // A cloud binding that cannot be read stops Saved Games until it is replaced, and this
-    // is the one place a player can replace it. A readable binding is left alone: on a
-    // signed-in device the next sync merges the cloud copy back, since the cloud only adds.
+    // is the one place a player can replace it. A readable binding is left alone: the next
+    // sync carries the reset up, since a newer generation wins the merge whole.
     repairCloudBinding();
+    if (cleared) queueCloudSave();
     this.notice = cleared ? '' : 'Couldn’t reset.';
     this.refreshCopy();
     this.layout();

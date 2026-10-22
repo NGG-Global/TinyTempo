@@ -4,7 +4,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
-import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { currentAudio, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, noteLevelLean, syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
@@ -45,7 +45,9 @@ import { objectiveContext, objectiveReport, recordObjectives } from '@/game/obje
 import { syncAchievements } from '@/playgames/achievementSync';
 import { queueCloudSave } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
-import { createFinaleSound } from '@/audio/finaleSounds';
+import { createFinaleSound, prepareFinaleSounds, type FinaleSoundPrep } from '@/audio/finaleSounds';
+import { momentOf } from '@/game/TutorialRun';
+import { noBallLevel, showsBall, teachWords, type TeachPass } from '@/game/teachCopy';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
 import {
@@ -123,8 +125,6 @@ const TASK_MARK = {
 const TEACH = {
   /** Fraction of the level's own tempo the pass plays at. */
   tempo: 0.75,
-  /** The one line said over the pass: what to watch for, and the fact first players miss. */
-  caption: 'Watch once: their row, then yours. No pause.',
   /**
    * Whole bars, at the teaching tempo: one to count in, one demonstrated, one answered,
    * and one to let it land. Whole bars matter because the music's rate goes back to the
@@ -264,6 +264,13 @@ export class PlayScene extends BaseScene {
   /** This level still shows the guiding ring, because the player has not cleared it yet. */
   private guided = false;
   /**
+   * Which words the first levels carry over the act (`game/teachCopy.ts`): the guided
+   * level's, the first level without the ball's, or none. Set where `guided` is.
+   */
+  private teachPass: TeachPass | null = null;
+  /** The ball rides the block on this level's every task, a scaffold through the first few. */
+  private ballShown = false;
+  /**
    * The first-run pass, while it is running. It owns the block and the grid until it
    * hands both to the controller; there is no new phase machine, only a plan and a
    * cursor over the cues and targets it already carries.
@@ -335,6 +342,12 @@ export class PlayScene extends BaseScene {
   private introCaption!: Phaser.GameObjects.Text;
   /** An area finale's pennants, title card and payoff; null on every other level. */
   private finale: FinaleStage | null = null;
+  /**
+   * A finale's roll and fanfare, synthesized a slice a frame from the scene's entry, so
+   * the opening's frame does not build them. Keyed to the context and the beat they were
+   * made for; anything else falls back to building the sound when it is asked for.
+   */
+  private finalePrep: { readonly context: BaseAudioContext; readonly beatSec: number; readonly rollBeats: number; readonly prep: FinaleSoundPrep } | null = null;
   /** This run cleared a finale, so the result carries the "Area complete" payoff. */
   private finaleCleared = false;
   /**
@@ -691,6 +704,17 @@ export class PlayScene extends BaseScene {
     const finale = areaFinale(this.spec.level);
     this.finale = finale ? new FinaleStage(this, finale, this.starFx) : null;
     this.finaleCleared = false;
+    this.finalePrep = null;
+    if (finale) {
+      // The engine is game-wide and unlocked by the menu's PLAY, so it is here under the
+      // curtain on every ordinary entry; without it the opening builds the sounds itself.
+      const context = currentAudio(this)?.context;
+      const first = this.spec.tasks[0];
+      if (context && first) {
+        const beatSec = 60 / first.bpm, rollBeats = Math.min(first.leadBeats, RHYTHM.beatsPerBar);
+        this.finalePrep = { context, beatSec, rollBeats, prep: prepareFinaleSounds(context, beatSec, rollBeats) };
+      }
+    }
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
     if (this.debugMode) this.installReplayPanel();
@@ -729,6 +753,9 @@ export class PlayScene extends BaseScene {
     // Hangs from its top edge under the headline's actual bottom, placed per frame in
     // `update`: the headline is 48 units while a try plays and 88 between tries.
     this.introCaption.setPosition(safe.centerX, this.headlineY + this.headlineSize * 1.08);
+    // Wrapped as a guard: every line is written to fit a handset, and this only keeps a
+    // longer one from running off the frame.
+    wrapWidth(this.introCaption, Math.min(660 * s, safe.width - 32 * s));
     resize(this.introCaption, 30 * s, SHELL.cream);
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
     const gap = Math.max(88 * s, this.controlSize + 4 * s);
@@ -1206,7 +1233,9 @@ export class PlayScene extends BaseScene {
         spec: this.spec, progress: before, attemptId, heartSpent: begun.spent, continuing: continueAt !== null,
       });
       this.heartRefunded = false;
-      this.guided = guidedLevel(loadProgress()) === this.spec.level;
+      this.guided = guidedLevel(before) === this.spec.level;
+      this.teachPass = this.guided ? 'play' : noBallLevel(before) === this.spec.level ? 'noBall' : null;
+      this.ballShown = showsBall(this.spec.level);
       if (continueAt !== null) {
         // The task it stopped in, at that task's tempo from the first downbeat, after a bar to
         // find the pulse again. No teach pass and no introduction: both came before task 1.
@@ -1259,10 +1288,7 @@ export class PlayScene extends BaseScene {
     for (const target of plan.targets) this.audio!.play(target, 'action');
     this.vignette.reset(plan);
     this.vignette.onPhase('prepare', origin);
-    // Said once, under the act's title, for the one pass that is watched rather than
-    // played: what the ball is about to show. The caption clears when the grid is handed
-    // to the controller, so the level's own task carries no words at the top.
-    this.setIntroCaption(TEACH.caption);
+    // The words over the pass follow the ball, moment by moment (`refreshTeachWords`).
     this.drawTaskMarks();
   }
 
@@ -1290,7 +1316,6 @@ export class PlayScene extends BaseScene {
       // Same deadline the task change uses, on the clock the cues are scheduled against.
       if (!canPlaceNextTask(this.audio!.context.currentTime, teach.taskAt)) { this.interrupt(); return; }
       teach.swapped = true;
-      this.setIntroCaption('');
       // Seen, once the whole cycle has played. Marking it at the start would have spent
       // the one showing on a player who backed out during the count-in.
       markDemonstrationSeen();
@@ -1386,12 +1411,15 @@ export class PlayScene extends BaseScene {
     const demo = startAt + this.task.leadBeats * beat;
     this.finale!.showTitle(startAt, demo - FINALE_PAYOFF.cardClearBeats * beat);
     const rollBeats = Math.min(this.task.leadBeats, RHYTHM.beatsPerBar);
-    // The fanfare is about a second of synthesis. The ribbon wants it while the medals
-    // are already moving; building it here, inside the opening lead-in, is the same work
-    // done where a long frame cannot expire a target. The buffer is cached per context,
-    // so the ribbon and a replay both reuse it.
-    createFinaleSound(audio.context, 'fanfare');
-    audio.playStinger(demo - rollBeats * beat, createFinaleSound(audio.context, 'roll', beat, rollBeats), FINALE_PAYOFF.rollGain);
+    // Both sounds have been synthesizing a slice a frame since the scene was built
+    // (`finalePrep`), so taking the roll here is a copy into a buffer, not a tenth of a
+    // second of per-sample work on the frame the title card drops in. The fanfare is cached
+    // per context, so the ribbon and a replay both reuse it.
+    const prep = this.finalePrep;
+    const roll = prep && prep.context === audio.context && prep.beatSec === beat && prep.rollBeats === rollBeats
+      ? prep.prep.roll()
+      : createFinaleSound(audio.context, 'roll', beat, rollBeats);
+    audio.playStinger(demo - rollBeats * beat, roll, FINALE_PAYOFF.rollGain);
     // After an introduction the loop is already at full level, and ducking it would read as
     // a fault rather than a build.
     if (startAt === this.levelOrigin) {
@@ -1669,6 +1697,9 @@ export class PlayScene extends BaseScene {
     // objects the scene just destroyed throws, and that throw is reported as a crash
     // on the way out of a level.
     if (this.disposed) return;
+    // A finale's sounds, a slice a frame until they are made. Before the tick, so the
+    // budget is spent on a frame that is not also placing a task.
+    if (this.finalePrep && !this.finalePrep.prep.done) this.finalePrep.prep.advance();
     // The pump keeps the judge honest through a dropped frame; the frame itself also
     // advances the task, so a phase change or a demonstration beat due this frame is drawn
     // on it rather than up to a timer interval later.
@@ -1974,6 +2005,7 @@ export class PlayScene extends BaseScene {
       // A temporarily idle/null plan during a table slide is still the same attempt.
       this.grooveStage.show(this.summaryShown || phase === 'paused' ? 0 : (this.groovePreview ?? this.groove.level), now);
       this.grooveStage.update(now, null, this.reducedMotion);
+      this.refreshTeachWords(null, now, false, true);
       return;
     }
     const { safe } = this.viewport;
@@ -2020,6 +2052,7 @@ export class PlayScene extends BaseScene {
     const lastBar = isLastRestBar(rest);
     this.restShelf.setAlpha(rest && !lastBar ? 0.7 : 0).setPosition(geo.shelf.centerX, geo.shelfCentreY);
 
+    this.refreshTeachWords(plan, now, teach !== null, rest !== null);
     drawBlock(g, geo, s, {
       centres,
       socketRadius: radius,
@@ -2035,8 +2068,8 @@ export class PlayScene extends BaseScene {
       landed: now - batonLanding(plan),
       flawless: now - this.flawlessAt,
       // The ball shows the pulse crossing from their row into yours where the game still
-      // teaches: the first-run pass, the guided level and a new grid's introduction.
-      pulse: (teach || this.guided || this.intro) && !rest ? pulseBall(plan, now, still) : null,
+      // teaches: the first-run pass, the first few levels (`showsBall`) and a new grid's introduction.
+      pulse: (teach || this.guided || this.ballShown || this.intro) && !rest ? pulseBall(plan, now, still) : null,
       rest: rest && {
         bar: rest.bar, beat: rest.beat, bars: rest.bars,
         pressAge: now - rest.at, barAge,
@@ -2214,6 +2247,20 @@ export class PlayScene extends BaseScene {
       this.fx.burst('confetti', centreX, faceY - 10 * s, [PALETTE.coral, SHELL.cream, SHELL.sun], 22);
       vibrate('hit');
     }
+  }
+
+  /**
+   * The words over the first levels (`game/teachCopy.ts`), from the plan's own moment —
+   * the lesson's reading, so *your turn* is said on the downbeat and never after it — set
+   * every frame and rasterised only when they change. The first-run pass is watched, the
+   * guided level's tasks are played, and the first level without the ball says so on its
+   * first task only. An introduction's caption is its own and is left alone.
+   */
+  private refreshTeachWords(plan: RoundPlan | null, now: number, watching: boolean, resting: boolean): void {
+    if (this.teachPass === null || this.intro) return;
+    const pass: TeachPass = watching ? 'watch' : this.teachPass;
+    const silent = resting || plan === null || (pass === 'noBall' && this.taskIndex > 0);
+    this.setIntroCaption(silent ? '' : teachWords(pass, momentOf(plan, now)));
   }
 
   /**
@@ -2455,7 +2502,11 @@ export class PlayScene extends BaseScene {
       this.finale!.showComplete(at);
       // Scheduled at the heard time the ribbon unrolls, which on the context clock is the
       // same number: a sound placed at T is heard when `now()` reads T.
-      if (this.audio) this.audio.playStinger(at, createFinaleSound(this.audio.context, 'fanfare'), FINALE_PAYOFF.fanfareGain);
+      if (this.audio) {
+        const prep = this.finalePrep;
+        const fanfare = prep && prep.context === this.audio.context ? prep.prep.fanfare() : createFinaleSound(this.audio.context, 'fanfare');
+        this.audio.playStinger(at, fanfare, FINALE_PAYOFF.fanfareGain);
+      }
     }
     this.scoreValue.setText(scoreLabel(accuracy));
     this.accuracy.setText('');
@@ -3591,5 +3642,6 @@ export class PlayScene extends BaseScene {
     // The engine and its music belong to the game (see sharedAudio); only this scene's voices stop.
     this.audio?.cancel();
     this.audio = null;
+    this.finalePrep = null;
   }
 }
