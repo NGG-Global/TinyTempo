@@ -120,6 +120,46 @@ promising hearts or minutes — and why, for the accounts that never bought Prem
 "No purchases to restore". The button stays because the legacy owners need it on a new
 device.
 
+## Where the store is, and where the timer is shown
+
+A store in a mobile game is reached from the hub in one tap, never from a pop-up, and never
+raised by the game on its own: a sale the player did not ask to see is what reviews call
+unobtrusive when it is absent and pushy when it is not. So the catalogue has one door on
+the road and two more where the need arises, all selling the same five products at Play's
+own prices, with the same words (`STORE_COPY`):
+
+| Surface | Where | What it sells |
+| --- | --- | --- |
+| **The map's store puck and card** (`ui/storeCard.ts`, `game/store.ts`) | A price-tag puck under Objectives and Endless, labelled *Store* until it has been opened once (`puckStore`, device-local) | The refill while there is room for it, the four timers, Restore |
+| Settings → Workshop store | The brass section, as before | The four timers, Restore; the refill under Hearts |
+| The restart sheet's picker (`docs/RESTART.md`) | Only once the day's restarts are spent, mid-level | The four timers, and restarts at once |
+| The out-of-hearts sheet | Only at zero hearts | The refill, beside the daily heart and the ad |
+
+The card follows the objectives and Endless cards: one plate over the dimmed road, Close
+and a tap anywhere off it put it away, Android's back does the same, and a purchase or a
+restore that is still out holds the card and dims its rows under *Waiting for the store…*,
+so nothing is left half-done behind a closed card. A row's price is read from the catalogue
+on every draw and reads *Buy* until Play has answered — never a guessed amount — and in the
+browser, or on a device where Play Billing did not come up, the line under the rows says the
+store is not available rather than letting a dead row look live. A Premium account sees
+*Unlocked* and Restore, since its hearts and restarts are already unlimited. Rows are the
+touch floor tall. Every row shown is reported as `purchase_offer_shown`, and the opening as
+`store_opened` (`docs/ANALYTICS.md`).
+
+**What is left of a replay timer is shown wherever the player might wonder**, read every
+second and moving by the minute, rounded up so it never reads 0 while it runs:
+
+- the map's store puck wears a brass badge with the short form — *29m*, *1h*, *2d* — the same
+  badge the level's restart puck wears, and nothing else ever; the puck never carries a sale
+  or a count;
+- the store card opens on a brass band under its title reading *1 hr 12 min left*, and a
+  timer that ends while the card is open takes the band with it;
+- the level's restart puck badge and Settings' store corner badge read the same figure.
+
+The puck and the card take their facts from one pure function (`storeFacts` on the map,
+`StoreFacts` in `game/store.ts`): the entitlement, the hearts, the timer's expiry and
+whether Play answered. Nothing about the store is stored beyond the label's teach flag.
+
 ## The browser, and the line a release cannot cross
 
 `bootMonetization` is the whole of that line. Off a native platform it returns

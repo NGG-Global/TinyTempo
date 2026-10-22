@@ -202,6 +202,21 @@ export function drawTimer(g: Phaser.GameObjects.Graphics, x: number, y: number, 
   g.fillStyle(colour, alpha).fillCircle(x, y + r * 0.1, line * 0.7);
 }
 
+/**
+ * A price tag hung point-up: the Workshop store's puck. `hole` is the colour behind the
+ * tag, so its eyelet reads as a hole rather than a dot.
+ */
+export function drawPriceTag(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, hole: number, alpha = 1): void {
+  // Laid out point-left, then turned a quarter-turn counter-clockwise, so the point is upper-left.
+  const turn = Math.PI / 4;
+  const c = Math.cos(turn), sn = Math.sin(turn);
+  const at = (lx: number, ly: number) => new Phaser.Math.Vector2(x + lx * c - ly * sn, y + lx * sn + ly * c);
+  const w = r * 1.9, h = r * 1.1, shoulder = -w / 2 + h * 0.55;
+  g.fillStyle(colour, alpha).fillPoints([at(-w / 2, 0), at(shoulder, -h / 2), at(w / 2, -h / 2), at(w / 2, h / 2), at(shoulder, h / 2)], true);
+  const eye = at(shoulder - h * 0.02, 0);
+  g.fillStyle(hole, alpha).fillCircle(eye.x, eye.y, r * 0.17);
+}
+
 /** A phone buzzing: the handset plus a motion mark either side. The Haptics switch. */
 export function drawVibrate(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
   const w = r * 0.62, h = r * 1.3;

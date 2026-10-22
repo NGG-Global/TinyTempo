@@ -113,8 +113,9 @@ describe('first-visit hints', () => {
     markPuckSeen('objectives', storage);
     expect(seenPuck('objectives', storage)).toBe(true);
     expect(seenPuck('endless', storage)).toBe(false);
+    expect(seenPuck('store', storage)).toBe(false);
     expect(readTeachFlags(storage)).toMatchObject({ seen: true, puckObjectives: true });
-    for (const flag of ['puckObjectives', 'puckEndless'] as const) expect(CLOUD_TEACH as readonly string[]).not.toContain(flag);
+    for (const flag of ['puckObjectives', 'puckEndless', 'puckStore'] as const) expect(CLOUD_TEACH as readonly string[]).not.toContain(flag);
     // Each label goes when its puck opens, on whichever screen it was opened from.
     const menu = src('src/scenes/MenuScene.ts'), map = src('src/scenes/MapScene.ts');
     expect(menu).toContain("new PuckLabel(this, 'Scrapbook'");
@@ -122,6 +123,8 @@ describe('first-visit hints', () => {
     expect(menu).toContain("markPuckSeen('objectives')");
     expect(map).toContain("markPuckSeen('objectives')");
     expect(map).toContain("markPuckSeen('endless')");
+    expect(map).toContain("markPuckSeen('store')");
+    expect(map).toContain("new PuckLabel(this, 'Store'");
     expect(map).toContain('Opens after level ${ENDLESS.unlockLevel}');
   });
 });
