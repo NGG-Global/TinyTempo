@@ -16,8 +16,10 @@ import {
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, rewardedFeedback, STORE_COPY, track, type SoldProductId } from '@/monetization';
-import { loadReplayTimer, redeemHeldTimer } from '@/game/replayTimer';
-import { storePuckBadge, storeRows, type StoreFacts } from '@/game/store';
+import { redeemHeldTimer } from '@/game/replayTimer';
+import { readStoreFacts } from '@/game/storeFacts';
+import { startHeldTimerSynced } from '@/playgames/cloudSync';
+import { startRefusalCopy, storePuckBadge, storeRows, type StoreFacts } from '@/game/store';
 import { StoreCard } from '@/ui/storeCard';
 import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
@@ -553,7 +555,7 @@ export class MapScene extends BaseScene {
     // The store: its card over the road, a label until it has been opened, and the badge
     // the puck wears while a replay timer runs. Assigned on every entry, like the cards.
     this.storeLabel = new PuckLabel(this, 'Store', 12).fixed();
-    this.storeCard = new StoreCard(this, 30, product => monetization().productPrice(product));
+    this.storeCard = new StoreCard(this, 30, { price: product => monetization().productPrice(product), facts: () => this.storeFacts() });
     this.storeBadge = label(this, '', { size: 17, colour: shade(BRASS, -0.62), align: 'center' }).setOrigin(0.5).setScrollFactor(0).setDepth(11).setVisible(false);
     this.storeBadgeShown = '';
     this.storePollAt = 0;
@@ -2735,7 +2737,8 @@ export class MapScene extends BaseScene {
     if (storeTap !== null) {
       this.puckDirty = true;
       if (storeTap === 'restore') void this.restoreFromStore();
-      else if (typeof storeTap === 'object') void this.buyFromStore(storeTap.buy);
+      else if (typeof storeTap === 'object' && 'buy' in storeTap) void this.buyFromStore(storeTap.buy);
+      else if (typeof storeTap === 'object' && 'start' in storeTap) this.startFromStore(storeTap.start);
       return;
     }
     const near = (at: { x: number; y: number }) => Math.abs(x - at.x) < this.controlSize / 2 && Math.abs(y - at.y) < this.controlSize / 2;
@@ -2846,16 +2849,19 @@ export class MapScene extends BaseScene {
     this.scrollY += Math.max(-240, Math.min(240, dy)) * this.viewport.unitScale;
     this.clampScroll();
   }
-  /** What the store has to go on now: the entitlement, the hearts, the timer and whether Play answered. */
+  /** What the store has to go on now: the entitlement, the hearts, the timer, the shelf and whether Play answered. */
   private storeFacts(): StoreFacts {
-    const now = Date.now();
-    return {
-      premium: monetization().premium(),
-      hearts: viewHealth(this.health, now).hearts,
-      timerExpiresAt: loadReplayTimer(undefined, now)?.expiresAt ?? 0,
-      available: monetization().purchasesAvailable(),
-      now,
-    };
+    return readStoreFacts(this.health);
+  }
+
+  /** Start a held timer from the card: it runs from now, the badge and the card say so, and the tombstone goes up. */
+  private startFromStore(id: string): void {
+    const outcome = startHeldTimerSynced(id);
+    if (!outcome.started) this.storeCard.say(startRefusalCopy(outcome.reason));
+    else vibrate('stamp');
+    this.puckDirty = true;
+    this.drawSign(this.uiScale, 0, 0);
+    this.storeCard.refresh();
   }
 
   /** The store card, from its puck: every row it shows is an offer, reported as the picker's are. */
@@ -2867,7 +2873,7 @@ export class MapScene extends BaseScene {
     const facts = this.storeFacts();
     track('store_opened', { source: 'map', timer: facts.timerExpiresAt > facts.now ? 1 : 0, hearts: facts.hearts, premium: facts.premium ? 1 : 0 });
     for (const row of storeRows(facts)) track('purchase_offer_shown', { product: row.product });
-    this.storeCard.show(facts, performance.now() / 1000);
+    this.storeCard.show(performance.now() / 1000);
   }
 
   /**
@@ -2895,7 +2901,7 @@ export class MapScene extends BaseScene {
       vibrate('stamp');
       this.puckDirty = true;
       this.drawSign(this.uiScale, 0, 0);
-      this.storeCard.refresh(this.storeFacts());
+      this.storeCard.refresh();
     } finally {
       this.storeBusy = false;
     }
@@ -2912,7 +2918,7 @@ export class MapScene extends BaseScene {
       this.storeCard.setBusy(null);
       this.puckDirty = true;
       this.drawSign(this.uiScale, 0, 0);
-      this.storeCard.refresh(this.storeFacts());
+      this.storeCard.refresh();
       this.storeCard.say(restoreFeedback(result));
     } finally {
       this.storeBusy = false;

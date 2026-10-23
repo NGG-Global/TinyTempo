@@ -65,6 +65,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Replay timers for sale, Premium honoured but withdrawn', text: 'replay_timer_30m', source: 'src/monetization/types.ts' },
   { feature: 'The Workshop store on the map, with the timer left', text: 'Restore purchases', source: 'src/monetization/copy.ts' },
   { feature: 'US-state opt-outs passed to Unity Ads', text: 'UnityAdsPrivacy', source: 'src/monetization/native.ts' },
+  { feature: 'Timer shelf: bought timers are held and started by the player', text: 'Your timers', source: 'src/monetization/copy.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

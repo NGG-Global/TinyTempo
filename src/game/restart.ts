@@ -1,3 +1,4 @@
+import type { ShelfItemView } from './replayTimer';
 import {
   abandonAttempt, attemptCostsHeart, type GrantHeartResult, type Health,
 } from './health';
@@ -46,6 +47,8 @@ export interface RestartFacts {
   readonly scoredResponseBegun: boolean;
   /** Today's restarts still unused (`restartsLeft`). */
   readonly restartsLeft: number;
+  /** The held replay timers the empty sheet can start (`shelfView`), unexpired. */
+  readonly shelf: readonly ShelfItemView[];
 }
 
 export function restartKind(facts: RestartFacts): RestartKind {
