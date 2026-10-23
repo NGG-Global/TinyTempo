@@ -15,14 +15,18 @@ the first scored tap, any finished level, levels 1–10 — so practice and star
 never limited.
 
 **A replay timer makes every restart free while it runs** (`game/replayTimer.ts`,
-`docs/BILLING.md`): four Play consumables — 30 minutes, 1 hour, 2 hours, 1 day — each adding
-its span to one device-local timer, from the end of a running one or from now. The puck
-restarts at once, nothing is asked, today's two are not touched, and the puck's badge turns
-brass and reads what is left ("29m", "1h", "23h"), as the map's store puck does, with the full
-figure on the store card (`docs/BILLING.md`). The timers are sold on the empty sheet,
-under Watch ad & Restart, as a brass **Replay timer** block that opens a picker of the four
-with Play's prices; a tap on a row buys it and restarts the level. Settings → Workshop store
-sells the same four. **Premium is unlimited and no longer sold**: it was sold as unlimited
+`docs/BILLING.md`): four Play consumables — 30 minutes, 1 hour, 2 hours, 1 day — each **held
+on the player's shelf** until they start it, when its span is added to one device-local
+timer, from the end of a running one or from now. The puck restarts at once, nothing is
+asked, today's two are not touched, and the puck's badge turns brass and reads what is left
+("29m", "1h", "23h"), as the map's store puck does, with the full figure on the store card.
+On the empty sheet the shelf comes first: a row per held timer — a won one from the Daily
+Tempo (`docs/DAILY_TEMPO.md`), a bought one — each with **Start & restart**, then "Or", then
+Watch ad & Restart with its length beside it and a brass **Replay timer** block that opens a
+picker of the four with Play's prices; the picker is four length chips over one **Buy &
+restart**, so a pick is never a purchase, and the purchase both holds and starts the timer,
+the one place a bought timer starts without a second tap. Settings' store row and the map's
+puck open the same store card. **Premium is unlimited and no longer sold**: it was sold as unlimited
 hearts and no ads, a bought one-time product cannot be taken back, and capping it would take
 something from people who paid, so an account that owns it keeps its free restarts.
 
@@ -44,17 +48,22 @@ taking hearts for them.
 | `immediate` | A finished level, a protected level (1–10), a running replay timer, the legacy Premium, or no attempt yet | Restarts at once, free, on the same attempt. No sheet. |
 | `confirm_free` | A frontier attempt before its first scored response | **Restart from the beginning? / No restart will be used.** Restart · Keep playing |
 | `confirm_restart` | A frontier attempt after its first scored response, with a restart left today | **Restart level? / Uses 1 of today's 2 restarts.** (or *Uses your last restart for today.*) Restart (restart chip, **1**) · Keep playing |
-| `out_of_restarts` | The same, with none left today | **No restarts left / Watch an ad to restart now. 2 more tomorrow.** Watch ad & Restart (video chip, **+1**) · **Replay timer** (brass, *Unlimited restarts for a while*, from the cheapest price) · Keep playing |
+| `out_of_restarts` | The same, with none left today | **No restarts left / Watch an ad to restart now. 2 more tomorrow.** *From your shelf*: a row per held timer with **Start & restart** · *Or* · Watch ad & Restart (*30 seconds*) · **Replay timer** (brass, *Unlimited restarts for a while*, from the cheapest price) · Keep playing |
 
-The Replay timer block opens the sheet's second page, the `timers` picker: **Unlimited
-restarts / Restart as often as you like while it runs.**, four cream rows — *30 minutes*,
-*1 hour*, *2 hours*, *1 day* — each with its Play price on a coral chip, and **Back**. A row
-buys that timer (`buyTimerToRestart`): the sheet reads *Waiting for the store…* meanwhile,
-a cancelled or failed purchase says why under the note and leaves the sheet up, and a paid
-one restarts the level at once on the same attempt (`restart_confirmed` with cost `timer`),
-if the run that asked is still the run (`ticketStillApplies`); the timer is the player's
-either way. The picker is `restart_requested`'s sheet `timers` and `purchase_offer_shown`
-once per product per opening.
+A shelf row starts that held timer and restarts the level at once (`startHeldToRestart`:
+`restart_confirmed` with cost `timer`); a start the record refuses — a week already stacked,
+a won timer past its hour — says why and restarts nothing, since nothing paid for it. The
+Replay timer block opens the sheet's second page, the `timers` picker: **Unlimited restarts /
+Restart as often as you like while it runs. Start it whenever you choose.**, four length chips
+in a row — *30 min*, *1 hr*, *2 hr*, *1 day*, each with its Play price under it, the picked one
+in ink, the hour by default — one brass **Buy & restart · 2 hours · $2.99**, and **Back**. A
+chip only picks; Buy & restart buys the length picked (`buyTimerToRestart`): the sheet reads
+*Waiting for the store…* meanwhile, a cancelled or failed purchase says why under the note and
+leaves the sheet up, and a paid one holds the timer, starts it and restarts the level on the
+same attempt, if the run that asked is still the run (`ticketStillApplies`); the timer is the
+player's either way, and a start the record cannot take leaves it held with *Your timer is on
+the shelf*. The picker is `restart_requested`'s sheet `timers` and `purchase_offer_shown` once
+per product per opening.
 
 With no attempt yet (the first start still loading, or the empty-hearts screen), the puck
 is a start, gated like any other.
@@ -202,9 +211,10 @@ result already closed it) and starts another.
 | File | What it holds |
 | --- | --- |
 | `game/dailyRestarts.ts` | `RESTARTS.daily`, today's count, `spendRestart`, `useDailyRestart`; validated storage, `tiny-tempo.restarts.v1`, device-local |
-| `game/replayTimer.ts` | `REPLAY_TIMERS`, `extendTimer`, `claimTimer`/`redeemTimer` (idempotent per claim id), `timerLeftMs`, `formatTimerLeft`, `shortTimerLeft`; validated storage, `tiny-tempo.replayTimer.v1`, device-local |
+| `game/replayTimer.ts` | `REPLAY_TIMERS`, the shelf (`HeldTimer`, `holdTimer`/`redeemHeldTimer` idempotent per claim id, `startHeldTimer`/`startHeldTimerNow`, `upgradeWonTimer`, `mergeShelf`, `pruneShelf`, `shelfView`), `extendTimer`, `timerLeftMs`, `formatTimerLeft`, `shortTimerLeft`; validated storage, record version 2, `tiny-tempo.replayTimer.v1` — expiry and claims device-local, the shelf in the cloud save |
+| `game/dailyRestarts.ts` (bonus) | The Daily Tempo's bonus restart: `grantBonusRestart`, counted by `restartsLeft` while its day key is today's, spent after the base two |
 | `game/restart.ts` | `restartKind`, `liveSheet`, `attemptForStart`, `releaseAttempt`, `scoredResponseBegins`, `watchForRestart`, `watchForHeart`, `ticketStillApplies`, and Resume's `resumeTask`, `resumeLeadBeats`, `pauseTask`, `ceilingFor`; pure |
-| `ui/restartSheet.ts` | The sheet, its copy (`dailyNote`), its pure layout, hit test and tap guard |
+| `ui/restartSheet.ts` | The sheet, its copy (`dailyNote`, `shelfRowCopy`), its pure layout (shelf rows, the picker's chips and Buy), hit test and tap guard |
 | `scenes/PlayScene.ts` | `requestRestart`, the sheet's lifecycle, `watchToRestart`, the puck's badge (`drawRestartCount`), `startRound(mode)` |
 | `tests/restart.test.ts`, `tests/dailyRestarts.test.ts`, `tests/replayTimer.test.ts` | Heart and restart accounting, the rewarded restart, when a run has begun, the handover, the sheet and its picker, analytics, the allowance, the timer |
 

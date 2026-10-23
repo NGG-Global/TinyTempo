@@ -34,7 +34,8 @@ canonical JSON (fixed key order, levels ascending), a few hundred bytes for a ty
   "progress": { "unlocked": 13, "best": { "1": 100, "2": 88, "3": 91 } },
   "tutorial": "complete",
   "teach": { "seen": true, "triplet": true, "sixteenth": false, "scrapbook": false },
-  "reset": 0
+  "reset": 0,
+  "held": [{ "id": "won:2026-10-23", "minutes": 40, "source": "won", "startBy": 1792785490442 }]
 }
 ```
 
@@ -45,6 +46,7 @@ canonical JSON (fixed key order, levels ascending), a few hundred bytes for a ty
 | `tutorial` | `small-acts.tutorial.v1` | `complete` > `skipped` > `none` |
 | `teach.seen`, `.triplet`, `.sixteenth`, `.scrapbook` | `small-acts.teach.v1` | logical OR |
 | `reset` | `tiny-tempo.reset.v1` | the higher generation wins **whole**; equal generations merge as above |
+| `held` | `tiny-tempo.replayTimer.v1` (the shelf only) | union by id; a started item (`startedAt`, a tombstone) beats a held copy; two held won copies take the longer and the later window. **Merged on both branches of a generation change**: a reset throws away the road, never a bought timer |
 
 Levels above `CLOUD_SAVE.maxLevel` (20 000) are not carried, which bounds the payload far
 under Play's 3 MB; the frontier is bounded as `progress.ts` bounds it. Stars, keepsakes and
@@ -60,16 +62,24 @@ knowing it, exactly as a save code does.
 | Rewarded-ad and refill claims | `tiny-tempo.fills.v1` | a consumable ledger; replaying it re-grants |
 | Daily heart | `tiny-tempo.daily-heart.v1` | per-device, per-day |
 | Premium cache | `tiny-tempo.premium.v1` | a cache; Play Billing is the truth |
-| Replay timer and its claims | `tiny-tempo.replayTimer.v1` | paid for on this device; a consumable ledger, like the fills |
+| Replay timer's expiry and claims | `tiny-tempo.replayTimer.v1` | paid for on this device; a consumable ledger, like the fills. **The shelf in the same record is the exception** (`held`, above): a timer bought or won on one phone and gone on the other is what cloud saves exist to answer, so held items travel and a start on one device removes the held copy on the other |
+| Daily Tempo's day record, bonus restart, spare heart | `tiny-tempo.daily.v1`, `tiny-tempo.restarts.v1`, `tiny-tempo.health.v1` | the day's rewards are paid to a device; restoring them would pay twice |
 | Calibration offset, volumes, mute, haptics | `tiny-tempo.settings.v1` | **device** preferences — a Bluetooth offset on one phone is wrong on another |
 | Analytics and advertising consent | `tiny-tempo.settings.v1`, UMP | belongs to the device and its jurisdiction |
 | Daily objectives and stamps | `tiny-tempo.objectives.v1` | the device's own calendar |
 | `teach.replayTip` | `small-acts.teach.v1` | about the hearts, which stay with the device |
 | Active attempt, run state | memory | nothing to restore |
 
-`encodeCloudSave` writes exactly the four fields above and the test asserts the serialized
-text against the names and values of everything in this table. The native side never sees
-the text: it carries base64 bytes and decides nothing.
+`encodeCloudSave` writes exactly the fields in the first table and the test asserts the
+serialized text against the names and values of everything in this one — `expires` and
+`claims` among the words it must never contain, which is why the shelf's vocabulary is
+`source: 'won' | 'bought'` and ids `play:…`/`won:<day>`. The native side never sees the
+text: it carries base64 bytes and decides nothing. **The schema stays at version 1 with
+`held` optional**: `decodeCloudSave` treats a newer version as unsupported and the sync stops,
+so a version 2 would have frozen progress sync on every device still on the previous
+release; a payload without `held` reads as an empty shelf and a write with none leaves the
+device's shelf alone. One hole is accepted: an older client's write between a newer client's
+upload and a reinstall drops the shelf, since the older client does not carry the field.
 
 ## When loads and writes happen
 

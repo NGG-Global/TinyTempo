@@ -28,7 +28,18 @@ rest wait, so they are not found twice.
   how far a life has been earned back. Most of it is bound to rules v1.
 - **No level preview on the map.** A tap on a stop starts the level; nothing shows the act,
   tempo, tier, best or clear bar first, and the clear bar is never shown before or during a
-  level — only on the result. Endless shows its bar live.
+  level — only on the result. Endless shows its bar live, and the **Daily Tempo shows its
+  thresholds before a run (the ladder) and during it (the star meter)**; a level still does
+  not.
+- **Daily Tempo version 1** (`docs/DAILY_TEMPO.md`) keeps to the eighth-note tiers: no
+  triplets or sixteenths, no plateau vocabulary, no last-offbeat hold, one pointer. Each is a
+  chart-version question, and a new version is a new leaderboard season.
+- **The store card is not drawn over a running level.** The restart sheet keeps its own
+  shelf rows and picker, as the mock has it; the card's own camera makes a later move cheap.
+  The shelf shows at most three held tokens; the rest wait their turn, and holding is never
+  refused.
+- **Two "today"s.** The daily objectives count a Daily Tempo run on the player's local day
+  while the chart, its rewards and the bonus restart turn on the Daily Tempo day (UTC−7).
 - **Rewarded ads are offered unasked.** No screen reads `rewardedAvailable()`, so on a
   device without ads the primary *Watch ad* action can only fail; the failure shows a line
   of feedback, so the player is not stuck.
@@ -37,8 +48,10 @@ rest wait, so they are not found twice.
 - **Settings** have no in-game reduced-motion switch, no way to keep the pulse ball on, no
   metronome volume (it rides the music bus), no text size. Every word is rasterised in the
   canvas, so the OS font size and TalkBack have no effect.
-- **What is device-local.** The Endless record, the objectives' stamps, the gate-tap record
-  and the hints' flags travel in no save code and no cloud save. Reset keeps the stamps.
+- **What is device-local.** The Endless record, the objectives' stamps, the gate-tap record,
+  the hints' flags, the Daily Tempo's day record, the bonus restart and the spare heart travel
+  in no save code and no cloud save; the timer shelf does travel in the cloud save. Reset
+  keeps the stamps and the day record.
 - **`tests/fixtures/levels-choreography.json` pins levels 1–120** while debuts run to 171
   and keepsakes to 207.
 - **The window's subject size** sits above the band and **the curl's height** at its top:
@@ -49,5 +62,8 @@ rest wait, so they are not found twice.
 - Acts 26–36 have not been seen on a handset, per their own docs: barber, popcorn and
   toothbrush, the prospector, the ice cream, the frog and the glasses, the camera.
 - The staging audit's sizes for acts 33–36 (`docs/STAGING.md`).
+- A Daily Tempo run played by hand on a handset, its leaderboard on a native build, and the
+  timer shelf reaching a second signed-in device through Saved Games
+  (`docs/DAILY_TEMPO.md`, `docs/CLOUD_SAVE.md`).
 - Real multitouch, Android audio latency on each route, and OS reduced-motion behaviour
   (`docs/VISUAL_POLISH.md`, "Remaining device QA").

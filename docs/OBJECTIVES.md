@@ -10,6 +10,7 @@ no shop and nothing to buy or watch. Finishing all three stamps the day on a car
 | `src/ui/objectivesCard.ts` | The card: the three, the week's stamps, when the next set comes. |
 | `src/ui/icons.ts` | `drawChecklist`: the puck's glyph, ticked as the day goes. |
 | `src/scenes/PlayScene.ts` | Counts Perfect hits and flawless tasks for the pass, and reports the level once. |
+| `src/scenes/DailyScene.ts` | Reports a finished Daily Tempo run once, through `dailyObjectiveReport`: a run and never a level. |
 | `src/scenes/MenuScene.ts`, `src/scenes/MapScene.ts` | The puck that opens the card. |
 
 ## The pool
@@ -25,7 +26,7 @@ Titles may be reworded. "Early" means the frontier is level 10 or below.
 | `finale` | play | 1 | Clear an area finale | 1 | A reachable level is an area finale |
 | `triplets` | play | 1 | Clear a level with triplets | 1 | A reachable level uses triplets |
 | `sixteenths` | play | 1 | Clear a level with sixteenths | 1 | A reachable level uses sixteenths |
-| `daily-tempo` | play | 2 | Finish today's Daily Tempo | 1 | A Daily Tempo exists — **never today** (`DAILY_TEMPO_AVAILABLE` is false) |
+| `daily-tempo` | play | 2 | Finish today's Daily Tempo | 1 | Always (`DAILY_TEMPO_AVAILABLE`, now true; `docs/DAILY_TEMPO.md`) |
 | `perfects` | skill | 3 | Land N Perfect hits | 15 early, else 30 | Always |
 | `flawless` | skill | 2 | Answer a task all Perfect | 1 | Always |
 | `three-star` | skill | 2 | Finish any level with three stars | 1 | Always |
@@ -54,8 +55,10 @@ refill on their own every 20 minutes, so reaching it today never needs an ad or 
    same three (`tests/objectives.test.ts` checks this over a year of dates).
 5. **Nothing inaccessible**: finer grids are never asked for before a level that uses them
    is reachable, a new level never while a star gate holds the frontier, the Daily Tempo
-   never while it does not exist. The same test checks every draw of 365 days against six
-   kinds of save.
+   never in a build that turns it off. The same test checks every draw of 365 days against
+   six kinds of save. A Daily Tempo run reports as `dailyObjectiveReport`: level 0, nothing
+   cleared or starred, so only the Daily objective and the skill counts move on it; it counts
+   on the player's local day while the chart turns on UTC−7 (`docs/LEADERBOARDS.md`).
 
 ## Progress
 

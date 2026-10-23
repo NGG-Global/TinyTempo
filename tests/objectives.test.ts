@@ -165,11 +165,11 @@ describe('what can be drawn', () => {
     expect(drawnFor(road(10, 3)).has('new-level')).toBe(true);
   });
 
-  it('never draws the Daily Tempo while it does not exist, and may once it does', () => {
-    expect(DAILY_TEMPO_AVAILABLE).toBe(false);
-    expect(objectiveContext(road(20, 2)).dailyTempo).toBe(false);
-    expect(drawnFor(road(20, 2)).has('daily-tempo')).toBe(false);
+  it('draws the Daily Tempo now that it exists, and never in a build that turns it off', () => {
+    expect(DAILY_TEMPO_AVAILABLE).toBe(true);
+    expect(objectiveContext(road(20, 2)).dailyTempo).toBe(true);
     expect(drawnFor(road(20, 2), true).has('daily-tempo')).toBe(true);
+    expect(drawnFor(road(20, 2), false).has('daily-tempo')).toBe(false);
   });
 
   it('only ever draws what the save can reach, on every day of a year, for every kind of save', () => {

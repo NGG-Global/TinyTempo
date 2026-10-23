@@ -39,7 +39,7 @@ code and accepts one back, which covers cleared data, a lost device and a suppor
 email. Restoring merges, so it can only ever add. Backup rules are file-level and
 every key shares one LevelDB store — progress, settings, the tutorial, the teach
 flags, hearts, the refill ledger, the daily heart, the premium cache, daily
-objectives, and the Daily Tempo best (unused while that mode is off) — so the
+objectives, the Daily Tempo best and the day's rewards record — so the
 premium cache could not be excluded. It is bounded instead, and a restored backup
 can no longer grant Premium forever. See `docs/SAVES.md`. What is left needs
 hardware: take and restore a real backup.
@@ -50,8 +50,8 @@ stars, gates, the tutorial, finales, the Scrapbook, objectives) reach Google
 Analytics for Firebase through `@capacitor-firebase/analytics`, behind the same
 split crash reporting uses: `analytics/eventShape.ts` holds Firebase's limits as
 pure functions, and `analytics/firebase.ts` is the only file that knows the
-vendor. Play Games leaderboard events are on the same bus and are not sent while
-`DAILY_TEMPO_AVAILABLE` is false. Worth being precise about what the commerce
+vendor. Play Games leaderboard events are on the same bus, sent from the Daily
+Tempo's result (`docs/DAILY_TEMPO.md`). Worth being precise about what the commerce
 events bought: Play Console already reported purchases and AdMob already reported
 impressions, so what was invisible was the **top** of the funnel — offers shown,
 and the players who declined. Settings → Privacy carries a **Share usage data**
@@ -87,9 +87,9 @@ authored RTL. Hebrew is an obvious first candidate given where this is written.
 **7. ~~No Play Games Services.~~ Sign-in, achievements and Saved Games are in; two-device behaviour needs hardware.**
 Play Games Services v2 authenticates on Android and is never required to play.
 Five achievements unlock from clearing levels 10–50 and are derived from the
-save, so an old save is owed them on the first signed-in launch. One leaderboard
-id exists for a Daily Tempo that does not: `DAILY_TEMPO_AVAILABLE` is false, so
-nothing is submitted and no button shows. Saved Games carries earned progression
+save, so an old save is owed them on the first signed-in launch. The Daily Tempo
+leaderboard is fed by the mode's result and opened from its card; it has not been
+watched on a native build yet. Saved Games carries earned progression
 and one-time lessons in one snapshot per player, merges rather than replaces,
 resolves Play's conflicts with the same merge, and keeps two Play Games accounts
 on one device apart (`docs/CLOUD_SAVE.md`). The player id crosses the bridge and
@@ -387,7 +387,7 @@ the pinned SDK. None of this has run between two real devices.
       stars, gates, tutorial, finales, Scrapbook, objectives) plus the device, app
       and app-instance information Firebase collects itself — declare these under
       App activity and Diagnostics, and note the Settings switch as the user
-      control. Leaderboard events are not sent while Daily Tempo is off. **Play
+      control. Leaderboard events are sent from the Daily Tempo's result. **Play
       Games** receives the player id and display name when the player is signed
       in, achievement unlocks, and **the saved game**: unlocked levels, best accuracy
       per level and one-time lesson flags, stored in the player's Play Games account

@@ -6,10 +6,10 @@ provider, no dashboard but Play Console, no SDK key, and no server.
 | Play product | Play type | What the app does with it |
 | --- | --- | --- |
 | `heart_refill_full` | One-time product | Consumable. Granted, then consumed, so it can be bought again |
-| `replay_timer_30m` | One-time product | Consumable. Adds 30 minutes to the replay timer, then consumed |
-| `replay_timer_1h` | One-time product | Consumable. Adds 1 hour |
-| `replay_timer_2h` | One-time product | Consumable. Adds 2 hours |
-| `replay_timer_1d` | One-time product | Consumable. Adds 1 day |
+| `replay_timer_30m` | One-time product | Consumable. A 30-minute timer **held on the shelf** until the player starts it, then consumed |
+| `replay_timer_1h` | One-time product | Consumable. A 1-hour timer, held the same way |
+| `replay_timer_2h` | One-time product | Consumable. A 2-hour timer, held the same way |
+| `replay_timer_1d` | One-time product | Consumable. A 1-day timer, held the same way |
 | `tinytempo_premium` | One-time product | **Legacy.** Non-consumable. Acknowledged, **never** consumed, **never sold** now |
 
 The ids live in `src/monetization/types.ts` and are the same strings Play Console uses.
@@ -21,16 +21,32 @@ Premium was sold as unlimited hearts and no ads, one payment. It took the only p
 game has away for good, and after daily restarts arrived (`docs/RESTART.md`) the thing a
 player actually runs out of mid-level was restarts, not hearts. The replay timers sell that
 and nothing else: **unlimited restarts for a while** — thirty minutes, an hour, two hours or
-a day — on one timer that purchases **add to**, from the end of a running timer or from now
-(`extendTimer` in `game/replayTimer.ts`). Hearts, the refill, the daily heart and the
-rewarded ad are untouched; a running timer only makes the restart puck free and shows what
-is left on its badge.
+a day. **A bought timer is held, not started** (`game/replayTimer.ts`, record version 2):
+the purchase lands on the player's **shelf** as a held item (`HeldTimer`: id, minutes,
+`source: 'bought'`), and runs only when the player taps Start — on the store card, the Daily
+card or the "No restarts left" sheet, where Start & restart is the one place a start restarts
+a level at once. Starting **adds** the item's span to the one running expiry, from the end of a
+running timer or from now (`startHeldTimer` → `extendTimer`), and a start the record cannot
+take (a week already stacked) is refused with its reason rather than clamped. A bought item
+keeps until it is started; a **won** one (`source: 'won'`, from the Daily Tempo,
+`docs/DAILY_TEMPO.md`) has to be started within an hour (`WON_START_WINDOW_MS`) or it leaves
+the shelf. The purchase buys the length picked on the picker and nothing restarts on its own:
+the one exception is the restart sheet's **Buy & restart**, where the player asked for a
+restart and the held item is started on the spot. Hearts, the refill, the daily heart and the
+rewarded ad are untouched; a running timer only makes the restart puck free and shows what is
+left on its badge.
 
-The timer is device-local (`tiny-tempo.replayTimer.v1`): its expiry and the claim ids of the
-purchases already added. It is in no save code and no cloud snapshot, because it is paid for
-and the save carries nothing a player owes or owns. The expiry is the wall clock, like the
+The expiry and the claim ids are device-local (`tiny-tempo.replayTimer.v1`): paid for here,
+a consumable ledger. **The shelf is the exception, and travels in the cloud save**
+(`CloudSaveV1.held`, `docs/CLOUD_SAVE.md`), because a timer bought or won on one phone and
+found gone on the other is the complaint cloud saves exist to answer. A started item stays on
+the shelf as a **tombstone** (`startedAt`) so the add-only merge can carry the start to the
+other device; tombstones are pruned after thirty days, the shelf is bounded at `SHELF_MAX`,
+and holding is never refused — a purchase must land. The expiry is the wall clock, like the
 daily heart; a clock moved back keeps what the timer already had, and an expiry more than a
-week ahead is read as damage, not a licence (`parseReplayTimer`).
+week ahead is read as damage to **that field alone** — claims and shelf kept
+(`parseReplayTimer`), where it used to discard the record and let a replayed purchase fill
+twice.
 
 **Premium is honoured, and not offered.** A bought non-consumable cannot be taken back, and
 Play policy and plain fairness both say a player who paid keeps what they paid for. So the
@@ -130,21 +146,28 @@ own prices, with the same words (`STORE_COPY`):
 
 | Surface | Where | What it sells |
 | --- | --- | --- |
-| **The map's store puck and card** (`ui/storeCard.ts`, `game/store.ts`) | A price-tag puck under Objectives and Endless, labelled *Store* until it has been opened once (`puckStore`, device-local) | The refill while there is room for it, the four timers, Restore |
-| Settings → Workshop store | The brass section, as before | The four timers, Restore; the refill under Hearts |
-| The restart sheet's picker (`docs/RESTART.md`) | Only once the day's restarts are spent, mid-level | The four timers, and restarts at once |
+| **The store card** (`ui/storeCard.ts`, `game/store.ts`, `game/storeFacts.ts`) | From the map's price-tag puck under Objectives and Endless, labelled *Store* until it has been opened once (`puckStore`, device-local), and from Settings' one store row | **The shelf first** (*Your timers*: held tokens with Start, a running token, a ghost slot where a purchase lands), then the one product with a four-length picker and one brass Buy, then the refill or *Hearts are full*, Restore |
+| Settings → Workshop store | One brass row — the medallion, *Timers and heart refill*, a chip saying what is running and held, Open | Nothing itself: Open raises the same card over Settings |
+| The restart sheet (`docs/RESTART.md`) | Only once the day's restarts are spent, mid-level | The shelf's held timers with Start & restart, then the ad, then the picker with **Buy & restart** |
 | The out-of-hearts sheet | Only at zero hearts | The refill, beside the daily heart and the ad |
 
-The card follows the objectives and Endless cards: one plate over the dimmed road, Close
+The card follows the objectives and Endless cards: one plate over the dimmed screen, Close
 and a tap anywhere off it put it away, Android's back does the same, and a purchase or a
-restore that is still out holds the card and dims its rows under *Waiting for the store…*,
-so nothing is left half-done behind a closed card. A row's price is read from the catalogue
-on every draw and reads *Buy* until Play has answered — never a guessed amount — and in the
-browser, or on a device where Play Billing did not come up, the line under the rows says the
-store is not available rather than letting a dead row look live. A Premium account sees
-*Unlocked* and Restore, since its hearts and restarts are already unlimited. Rows are the
-touch floor tall. Every row shown is reported as `purchase_offer_shown`, and the opening as
-`store_opened` (`docs/ANALYTICS.md`).
+restore that is still out holds the card and dims its controls under *Waiting for the
+store…*, so nothing is left half-done behind a closed card. **It draws with a camera of its
+own** (as the screen hints do), which is what lets the same card open over Settings' band
+camera as over the map. The Buy button's price is read from the catalogue on every draw and
+reads *Buy 1 hour* until Play has answered — never a guessed amount — and in the browser, or
+on a device where Play Billing did not come up, the line under the sections says the store is
+not available rather than letting a dead control look live. A Premium account sees its
+entitlement and Restore, since its hearts and restarts are already unlimited. **Brass is for
+sale and coral is the one action colour**, so the card carries no coral. Every offer is
+reported as `purchase_offer_shown` and the opening as `store_opened` with its `source`
+(`map` or `settings`, `docs/ANALYTICS.md`). The token's four states are one drawing
+(`ui/timerToken.ts`): a won timer wears an ink ring emptying over its hour and a sun badge, a
+bought one a brass rim and a price tag and no ring, a running one the butter face with a brass
+ring counting down, an expired one a dashed grey outline — **a ring means something is
+running out**.
 
 **What is left of a replay timer is shown wherever the player might wonder**, read every
 second and moving by the minute, rounded up so it never reads 0 while it runs:
@@ -152,13 +175,15 @@ second and moving by the minute, rounded up so it never reads 0 while it runs:
 - the map's store puck wears a brass badge with the short form — *29m*, *1h*, *2d* — the same
   badge the level's restart puck wears, and nothing else ever; the puck never carries a sale
   or a count;
-- the store card opens on a brass band under its title reading *1 hr 12 min left*, and a
-  timer that ends while the card is open takes the band with it;
-- the level's restart puck badge and Settings' store corner badge read the same figure.
+- the store card's shelf shows the running timer as a running token reading *1 hr 12 min
+  left*, and a timer that ends while the card is open takes the token with it;
+- the level's restart puck badge reads the same figure, and Settings' store row's chip says
+  what is running and what is held (*1 RUNNING · 1 ON YOUR SHELF*, *NOTHING HELD*).
 
-The puck and the card take their facts from one pure function (`storeFacts` on the map,
-`StoreFacts` in `game/store.ts`): the entitlement, the hearts, the timer's expiry and
-whether Play answered. Nothing about the store is stored beyond the label's teach flag.
+Every surface takes its facts from one function (`readStoreFacts` in `game/storeFacts.ts`
+→ `StoreFacts` in `game/store.ts`): the entitlement, the hearts, the timer's expiry, the
+shelf and whether Play answered. Nothing about the store is stored beyond the label's teach
+flag.
 
 ## The browser, and the line a release cannot cross
 

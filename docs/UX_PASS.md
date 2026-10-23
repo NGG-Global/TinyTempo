@@ -42,7 +42,11 @@ show the rows that only appear short of three stars.
   moves to Settings → Help, which opens the lesson with `source: 'settings'`; Android's back
   returns there, and the lesson now stops the title theme itself.
 - A player who skipped the lesson keeps the block, because they have not had the lesson.
-- With Endless open, its block takes the row alone.
+- The row holds at most two blocks (`ui/menuRow.ts`): **Daily Tempo first** whenever it is
+  shipped, then Endless once level 100 is cleared, else How to play. With all three wanted,
+  How to play leaves the row for Settings → Help, which carries the lesson in every build.
+  The Daily block shows today's stars on a chip and a coral dot until the day has had a run;
+  it opens the Daily card with the theme carried on, since the card's Play is the gesture.
 - First-visit labels sit on the icon-only pucks (`ui/puckLabel.ts`), each until it has been
   opened:
   - *Scrapbook*, until its screen hint has been closed (`docs/SCREEN_HINTS.md`).

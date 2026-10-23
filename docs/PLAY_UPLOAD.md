@@ -208,7 +208,7 @@ mid-frame. Everything below needs hardware and none of it has been done.
     - Firebase Analytics — commerce events and gameplay events (levels, stars, gates,
       tutorial, finales, Scrapbook, objectives), plus device, app and app-instance
       information, with the Settings switch named as the user control. Leaderboard
-      events are not sent while Daily Tempo is off
+      events are sent from the Daily Tempo's result
     - Play Games — player id and display name when signed in, achievement unlocks, and
       the saved game: unlocked levels, best accuracy per level and one-time lesson flags,
       stored in the player's Play Games account (`docs/CLOUD_SAVE.md`). Not hearts,
@@ -256,8 +256,8 @@ So you do not spend time re-doing it:
 - Analytics, wired to Firebase behind a consent switch, covering commerce and gameplay,
   with every shipped event checked against Firebase's own limits. DebugView has not been
   watched on a device (step 19).
-- Play Games Services v2: optional sign-in, five achievements derived from the save, a
-  Daily Tempo leaderboard that stays dark while that mode is off, and Saved Games — one
+- Play Games Services v2: optional sign-in, five achievements derived from the save, the
+  Daily Tempo leaderboard fed by the mode's result, and Saved Games — one
   snapshot per player, merged never replaced, with account isolation on a shared device
   (`docs/CLOUD_SAVE.md`). Code complete and tested; **not yet exercised between two real
   devices**, and Saved Games must be on and published in the Console (see that doc).

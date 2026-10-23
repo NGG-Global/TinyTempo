@@ -66,6 +66,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'The Workshop store on the map, with the timer left', text: 'Restore purchases', source: 'src/monetization/copy.ts' },
   { feature: 'US-state opt-outs passed to Unity Ads', text: 'UnityAdsPrivacy', source: 'src/monetization/native.ts' },
   { feature: 'Timer shelf: bought timers are held and started by the player', text: 'Your timers', source: 'src/monetization/copy.ts' },
+  { feature: 'Daily Tempo', text: 'Free to play. No heart needed.', source: 'src/scenes/DailyScene.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

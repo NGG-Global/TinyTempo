@@ -28,8 +28,8 @@ falls back to a default that is not what these rules say.
 
 **The rules are file-level, and localStorage is one file.** Every key the game writes
 lives inside one opaque LevelDB store: progress, settings, the tutorial, the teach flags,
-hearts, the refill ledger, the daily heart, the premium cache, the replay timer, daily objectives, and the
-Daily Tempo best (nothing writes it while that mode is off). "Back up progress but not
+hearts, the refill ledger, the daily heart, the premium cache, the replay timer and its shelf, daily
+objectives, the daily restarts, the Daily Tempo best and the day's rewards record (`tiny-tempo.daily.v1`). "Back up progress but not
 the premium cache" cannot be expressed. Everything goes or nothing does.
 
 That is why the premium cache is bounded rather than excluded. `readPremiumCache` now
@@ -177,8 +177,9 @@ and a **reset generation** stamped on the device and carried in the cloud save s
 Games does not merge the old road back (`docs/CLOUD_SAVE.md`). It used to clear the save and
 the hearts alone, which left the gates open, the lessons seen and — on a signed-in device —
 the whole road back on the next sync. Settings, calibration, purchases, replay timers,
-consent, the review record, the daily restarts and Endless's device record are left as they
-are. A save code written before a reset still restores in full: the code is the player's,
+consent, the review record, the daily restarts, Endless's device record and the Daily
+Tempo's day record (`tiny-tempo.daily.v1`: a reset must not pay the day's rewards again) are
+left as they are. A save code written before a reset still restores in full: the code is the player's,
 and restoring one is a choice the way resetting is.
 
 ## Still to do

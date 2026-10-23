@@ -1,12 +1,10 @@
 /**
- * Whether the Daily Tempo mode exists in this build. It does not yet.
- *
- * Everything built for it ahead of the mode itself — the daily objective in
- * `game/objectives.ts`, the leaderboard in `playgames/dailyTempo.ts` and its button in
- * Settings — reads this one flag, so none of it can surface to a player before there is a
- * Daily Tempo to play. Flip it in the change that ships the mode.
+ * Whether the Daily Tempo mode is shipped in this build (`scenes/DailyScene.ts`,
+ * `docs/DAILY_TEMPO.md`). Everything built for it — the title screen's block, the daily
+ * objective in `game/objectives.ts`, the leaderboard in `playgames/dailyTempo.ts` and its
+ * button in Settings — reads this one flag, so turning it off hides the whole mode at once.
  */
-export const DAILY_TEMPO_AVAILABLE = false;
+export const DAILY_TEMPO_AVAILABLE = true;
 
 /**
  * How hard the day's chart is, as the card names it: three bands, each a step on the one

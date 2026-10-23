@@ -481,18 +481,53 @@ the Firebase app id. `PlayGamesSdk.initialize` runs in `TinyTempoApplication`, w
 that and nothing else. The player id is identifying: it crosses the bridge because a snapshot
 would be keyed on it, and reaches no log, crash report or analytics event.
 
-**One leaderboard, for a Daily Tempo that does not exist yet.** `LEADERBOARDS.dailyTempo`
-(`config/leaderboards.ts`) holds the Console id, but `DAILY_TEMPO_AVAILABLE`
-(`config/dailyTempo.ts`) is false, so nothing is submitted and no button shows. **A
-leaderboard id is copied, never retyped**: I/l, O/0 and o/0 pass every format check and fail
-on every call, so `check-android-config.mjs` decodes the id and warns unless it names project
-`863268283344` — the first id supplied failed exactly that way. The score is `round(accuracy × 1000)`
-from `leaderboardScore` alone, never re-derived. Play Games keeps daily, weekly and all-time
-views of one leaderboard by itself and resets the daily one at UTC−7, so `dailyTempoDay`
-reads that clock, not the local date. Only a score that beats the day's best is sent; a
-failed one is kept and retried; nothing here prompts except the leaderboard button, and
-nothing ever blocks a result. Scenes call `playgames/dailyTempo.ts` only. See
-`docs/LEADERBOARDS.md`.
+**Daily Tempo is a chart, not a level** (`config/dailyTempo.ts`, `game/dailyChart.ts`,
+`scenes/DailyScene.ts`, `docs/DAILY_TEMPO.md`): one act and one level-shaped run of tasks,
+drawn fresh each day and the same for everyone, stars like a level's, free to play — no heart,
+no attempt, no ad. `DAILY_TEMPO_AVAILABLE` is true; off, it hides the title screen's block,
+the daily objective and the leaderboard button at once. **The chart is a pure function of
+`(seed, version, day)`**: one seeded stream read in a fixed order — the step of an area, the
+act, the look, each task's phrase — so a later draw never moves an earlier one. The step
+gives the role (`PROGRESSION.choreography`), the role the band (`BAND_FOR_ROLE`: two light,
+six steady, two tough of the ten), and the band is a point on the one curve
+(`DAILY_CHART.bands`: 4/6/8 tasks at `d` 0.35/0.5/0.7, capped at 132/142/150 BPM) whose
+value sets tempo, tier and thresholds exactly as a level's — `starThresholds(d)`, extracted
+from `levelSpec` unchanged, so a chart's stars are a level's stars, and `starsFor` takes
+anything with `starAccuracy`. The phrases come from `PATTERN_TIERS` by `tierTasks`'s loop;
+**version 1 keeps to the eighth-note tiers** (no grids, no plateau vocabulary, no last-offbeat
+hold), and `tests/fixtures/daily-chart-v1.json` pins eight days. **Any change to
+`DAILY_CHART` is a new version**, and `actCount` is pinned at 36 so an appended act joins the
+pool only when it moves. **The day is `dailyTempoDay`'s** (`game/dayKey.ts`, UTC−7, Play
+Games' daily clock): the chart, the rewards paid for it, the best kept for it and the board
+turn over together; the daily heart, the base restarts and the objectives stay on the local
+day, so an objective near midnight can credit a run to the neighbouring day, and that is the
+decision. `DailyScene` is a sibling of PlayScene and EndlessScene with three phases: the card
+(the act's keepsake tile, the reward ladder with the band's chip, the explainer or the won
+timer's row with Start, Play — `ui/dailyCard.ts` closes gaps, then shrinks the picture, then
+scales), the run (a level's loop task by task, breather included, the next task on the
+downbeat the coda lands on, under a **star meter** that moves once per finished task and never
+per tap — `ui/starMeter.ts`), and the result (the plaque's tray with medals and chips, the
+ladder with this run's tiers PAID, earlier ones EARLIER and the rest dashed —
+`ui/rewardLadder.ts`, shared by card and result — the won timer's toast with Start, Continue;
+`ui/dailyPlaque.ts` scales to `PLATE.minScale` before Continue gives ground). **An
+interrupted run is not a run** (Endless's rule): ended once, nothing scored, paid or sent;
+the pause puck's sheet goes on over a running run. A finished run is scored and paid once
+(`recordDaily`): `applyDailyRewards`, the objectives through `dailyObjectiveReport` (level 0,
+nothing cleared or starred, so only the Daily objective and the skill counts move), the
+leaderboard with the run's **start** time. **Stars pay once a day** (`game/dailyRewards.ts`,
+`tiny-tempo.daily.v1`, left alone by Reset): tier 1 and 3 a heart — into the bar, or a **spare
+sixth heart** (`HEALTH.spareMax`, spent first, never a refund's destination) when the bar is
+full — tier 2 a bonus restart for the Daily Tempo day (`grantBonusRestart`, counted after the
+base two), and every tier one won timer (`won:<day>`) whose length is the band's value for the
+stars (15–90 min, `DAILY_REWARDS`), lengthened and its hour reset by a better run, the
+difference granted anew after a start. The title screen's row (`ui/menuRow.ts`) holds at most
+two blocks: Daily first, then Endless or How to play, which leaves for Settings → Help when
+all three are wanted. `DAILY_EVENTS` are the five analytics events. **The leaderboard id is
+copied, never retyped**: I/l, O/0 and o/0 pass every format check and fail on every call, so
+`check-android-config.mjs` decodes the id and warns unless it names project `863268283344`.
+The score is `round(accuracy × 1000)` from `leaderboardScore` alone; only a score that beats
+the day's best is sent, a failed one is kept and retried, and nothing ever blocks a result.
+Scenes call `playgames/dailyTempo.ts` only. See `docs/LEADERBOARDS.md`.
 
 **Achievements are derived from the save and re-sent, never remembered.** The first five
 (`config/achievements.ts`) are earned by *clearing* levels 10–50, the area finales;
@@ -903,26 +938,39 @@ midnight, `tiny-tempo.restarts.v1`, device-local) instead of the heart it used t
 goes back to task 1 on the same attempt and heart (`free_restart`), so nothing is charged
 twice. It asks first, on a sheet over the still-running level: *No restart will be used*,
 *Uses 1 of today's 2 restarts*, or with none left *No restarts left* with Watch ad & Restart
-(`watchForRestart`: one restart, used at once, banked never), a **Replay timer** block that
-opens a picker of four, and Keep playing. The puck wears a badge with today's count where
-restarts count. A finished or protected level restarts at once and free, unlimited, and so
-does any level **while a replay timer runs** (`game/replayTimer.ts`, `docs/BILLING.md`): four
-Play consumables — `replay_timer_30m`, `_1h`, `_2h`, `_1d` — each adding its span to one
-device-local expiry (`tiny-tempo.replayTimer.v1`, from the end of a running timer, from now
-otherwise, claim ids persisted so a replayed purchase adds once, an expiry over a week ahead
-read as damage), sold from that picker, which buys and restarts, and from Settings → Workshop
-store; the puck's badge turns brass and reads what is left. Hearts are untouched by a timer.
-**The store's one door on the road is a puck** (`game/store.ts`, `ui/storeCard.ts`,
-`docs/BILLING.md`): a price tag under Objectives and Endless, labelled *Store* until opened
-(`puckStore`, device-local), opening a card over the dimmed road with the refill while there
-is room for it, the four timers at Play's prices (*Buy* until the catalogue answers, never a
-guess), Restore and Close — the objectives card's shape, Android's back included, held while a
-purchase is out. Nothing raises it but the tap. **What is left of a timer is shown wherever
-the player might wonder**: the puck wears the restart puck's brass badge (*29m*, *1h*, *2d*),
-polled once a second and redrawn only when the minute moves, and the card opens on a brass
-band reading *1 hr 12 min left*; both read `StoreFacts` from one place (`storeFacts`), so
-the badge, the card and Settings never disagree. A Premium account sees *Unlocked*, no rows and
-no badge.
+(`watchForRestart`: one restart, used at once, banked never), the shelf's held timers first
+with **Start & restart**, a **Replay timer** block that opens a picker of four, and Keep
+playing. The puck wears a badge with today's count where restarts count. A finished or
+protected level restarts at once and free, unlimited, and so does any level **while a replay
+timer runs** (`game/replayTimer.ts`, `docs/BILLING.md`): four Play consumables —
+`replay_timer_30m`, `_1h`, `_2h`, `_1d` — **held on the player's shelf** (`HeldTimer`,
+record version 2) until the player taps Start, which adds the item's span to one
+device-local expiry (from the end of a running timer, from now otherwise; a start the record
+cannot take is refused with its reason, never clamped), claim ids persisted so a replayed
+purchase holds once, an expiry over a week ahead read as damage to that field alone. A bought
+item keeps; a **won** one (the Daily Tempo's) starts within an hour or leaves the shelf. The
+picker is four length chips over one **Buy & restart**, the one place a purchase starts
+without a second tap; a started item stays as a **tombstone** so the cloud's add-only merge
+can carry the start, and **the shelf is in the cloud save** (`CloudSaveV1.held`, schema still
+v1 with the field optional, merged on both branches of a generation change) while the expiry
+and claims stay device-local. The puck's badge turns brass and reads what is left. Hearts are
+untouched by a timer. **The store is one card from every door** (`game/store.ts`,
+`game/storeFacts.ts`, `ui/storeCard.ts`, `ui/timerToken.ts`, `docs/BILLING.md`): the map's
+price-tag puck under Objectives and Endless, labelled *Store* until opened (`puckStore`,
+device-local), and Settings' one brass row (*Timers and heart refill*, a chip saying what is
+running and held, Open) both raise it — it draws with a camera of its own, so it sits over
+Settings' band camera as over the road. It opens on the shelf (*Your timers*: held tokens with
+Start, a running token, a ghost slot), then the one product with its picker and one brass Buy
+(*Buy 1 hour · $1.49*, *Buy 1 hour* until the catalogue answers, never a guess), then the
+refill or *Hearts are full*, feedback, Restore and Close — the objectives card's shape,
+Android's back included, held while a purchase is out. **Brass is for sale and coral the one
+action**, so the card carries no coral; a token's ring means something is running out. Nothing
+raises it but the tap. **What is left of a timer is shown wherever the player might wonder**:
+the puck wears the restart puck's brass badge (*29m*, *1h*, *2d*), polled once a second and
+redrawn only when the minute moves, the shelf's running token reads *1 hr 12 min left*, and
+Settings' chip reads *1 RUNNING · 1 ON YOUR SHELF*; every surface reads `StoreFacts` from one
+place (`readStoreFacts`), so none can disagree. A Premium account sees its entitlement, no
+rows and no badge.
 **Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
 prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
 hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
@@ -947,7 +995,10 @@ passing and the whole first session spent by level 10; and not failure only, whi
 bar of 40–67% through level 30 would almost never charge the better half of players and stop
 pacing them at all. The middle star is the real test of a level and a threshold the player
 already sees. Levels 1–10, the first finale included, never cost one, so nothing about hearts
-has coloured a session by the time the first star gate and the review offer arrive. A two-star
+has coloured a session by the time the first star gate and the review offer arrive. **A
+reward heart at a full bar is a spare sixth** (`Health.spare`, `HEALTH.spareMax` 1,
+`grantRewardHeart`): spent before the bar by the next attempt, never a refund's destination,
+drawn as a brass heart after the five on every hearts row. A two-star
 keep puts the refund plate, the next-star strip and the replay block on one result, the
 tallest stack `planResult` lays out, which `tests/resultLayout.test.ts` covers.
 
@@ -1152,7 +1203,7 @@ src/
     game.ts            Phaser game config (every non-default value is justified)
     music.ts           Measured musical model of the shipped tracks, and the title theme
     progression.ts     The one difficulty curve and its knobs
-    dailyTempo.ts      Whether the Daily Tempo mode exists; everything built for it reads this
+    dailyTempo.ts      Whether Daily Tempo is shipped; the chart's bands and tuning (`DAILY_CHART`), and what its stars pay (`DAILY_REWARDS`)
     leaderboards.ts    Play Games leaderboard ids and the daily reset clock
     endless.ts         Endless Mode's ruleset: versioned; any change is a new leaderboard
     achievements.ts    Play Games achievements: key, the level that earns it, Console id
@@ -1201,10 +1252,14 @@ src/
     calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
-    replayTimer.ts     Replay timers: the four consumables, one stacking expiry, idempotent grants, what is left; device-local
+    replayTimer.ts     Replay timers: the four consumables, the shelf of held timers (won and bought), one stacking expiry, idempotent holds, what is left; expiry device-local, the shelf in the cloud save
+    storeFacts.ts      The one read every store surface makes: entitlement, hearts, the running timer, the shelf, whether Play answered
     store.ts           The Workshop store as the map offers it: the rows for sale, the head, the stack, the puck's badge; pure
     routeCalibration.ts  Tap offset per audio route: routes, storage shape, migration, the note's rule; pure
     objectives.ts      Daily objectives: the pool, the day's draw, progress, stamps; one key
+    dayKey.ts          The Daily Tempo day (UTC−7), the time to the next, the weekday, the day seed; one function every daily thing shares
+    dailyChart.ts      The day's chart: one act, a level-shaped run of tasks, a pure function of (seed, version, day); pinned by fixture
+    dailyRewards.ts    What a Daily Tempo run's stars pay, once a day: hearts, the bonus restart, the won timer; one key
     musicSelection.ts  Which gameplay track a level plays: chapters of twenty-five, stored nowhere
     musicLayers.ts     How many stems a level has earned: strong adds one, rough takes one; pure
     taskVerdict.ts     A task's ending and its mix step, read against the bar it is held to; pure
@@ -1244,6 +1299,7 @@ src/
     SupportScene.ts    The address, and the details worth sending with it
     ScrapbookScene.ts  The keepsakes, a page per act, found or in silhouette
     EndlessScene.ts    Endless Mode: one loop, one act at a time, coda straight into the next, three lives
+    DailyScene.ts      Daily Tempo: the card, the run (a level's loop under a star meter) and the result, as three phases of one scene
   textures/
     materials.ts       Seeded canvas tiles: paper, wood, metal, cloth, parchment
   ui/
@@ -1270,8 +1326,14 @@ src/
     grooveStage.ts     The warm pool behind the act and the brass rim on the block
     objectivesCard.ts  The daily objectives card, shared by the Menu and the Map
     endlessCard.ts     Endless Mode's door, on the map and the title screen: locked copy, the best, the badges, Start, Leaderboard
+    dailyCard.ts       The Daily Tempo card's layout: tile, ladder, explainer or shelf row, Play; gaps close, then the picture, then the stack; pure
+    dailyPlaque.ts     The Daily Tempo result's layout: the plaque's tray on ropes, the ladder, the toast, Continue; scales to the plaque's floor; pure
+    starMeter.ts       The run's star meter: fill, lit stars, notches and the next threshold, once per finished task; pure
+    rewardLadder.ts    The three reward rows and the state each is drawn in, shared by the card and the result; pure
+    menuRow.ts         Which blocks stand on the title screen's row over Play (Daily, Endless, How to play), and where; pure
     endlessPlaque.ts   The Endless result plaque's layout: rows stacked from measured heights, then the controls; pure
-    storeCard.ts       The Workshop store on the map: the rows with Play's prices, the running timer's band, Restore, Close
+    storeCard.ts       The Workshop store, from the map and Settings, with a camera of its own: the shelf, the picker and one Buy, the refill, Restore, Close
+    timerToken.ts      One stopwatch token, four states (won, bought, running, expired): a ring means something is running out
     screenHint.ts      A screen's first-visit hint card, on a camera of its own over the scene's
     hintLayout.ts      Where that card's rows sit, stacked from measured heights; pure
     puckLabel.ts       The first-visit tag beside an icon-only puck
