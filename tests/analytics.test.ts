@@ -86,6 +86,11 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   endless_abandoned: ['elapsed_sec', 'vignettes', 'reason'],
   endless_score_posted: ['duration_ms', 'new_best', 'retry', 'rules_version'],
   endless_score_failed: ['reason', 'retry'],
+  daily_opened: ['band', 'runs', 'paid', 'source'],
+  daily_started: ['band', 'tasks', 'peak_bpm', 'replay'],
+  daily_finished: ['band', 'stars', 'accuracy', 'paid', 'replay'],
+  daily_reward_paid: ['band', 'tier', 'hearts', 'restart', 'timer_minutes'],
+  daily_abandoned: ['reason', 'tasks_done'],
   endless_board_opened: ['result', 'sign_in'],
 };
 

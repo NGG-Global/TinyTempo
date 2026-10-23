@@ -17,6 +17,31 @@ export type DailyBand = 'light' | 'steady' | 'tough';
 export const DAILY_BANDS: readonly DailyBand[] = Object.freeze(['light', 'steady', 'tough']);
 
 /**
+ * The day's chart: how it is drawn and how hard each band is (`game/dailyChart.ts`).
+ *
+ * **Any change here is a new chart version**: the chart is a pure function of
+ * `(seed, version, day)`, every player's chart for a day has to be the same chart for the
+ * leaderboard to mean anything, and `tests/fixtures/daily-chart-v1.json` pins eight days of
+ * version 1. A band is a point on the one difficulty curve (`PROGRESSION`): its task count,
+ * the curve's value its tempo, tier and thresholds are read at, and a tempo cap. `actCount`
+ * is the registry's length the version was pinned at — an act appended later joins the
+ * pool only when the version moves, so a day's chart never changes under a player who
+ * updated mid-day.
+ */
+export const DAILY_CHART = Object.freeze({
+  version: 1,
+  seed: 'tiny-tempo-daily',
+  actCount: 36,
+  /** Looks per act the draw may land on; an act with fewer wraps (`lap % looks`). */
+  laps: 4,
+  bands: Object.freeze({
+    light: Object.freeze({ tasks: 4, difficulty: 0.35, bpmCap: 132 }),
+    steady: Object.freeze({ tasks: 6, difficulty: 0.5, bpmCap: 142 }),
+    tough: Object.freeze({ tasks: 8, difficulty: 0.7, bpmCap: 150 }),
+  }),
+});
+
+/**
  * What a Daily Tempo run's stars pay, once per day key (`game/dailyRewards.ts`). Each tier
  * pays once: a later, better run pays only the tiers it adds. The timer is one won item a
  * day whose length is the band's value for the stars reached (tuning); the longest stays

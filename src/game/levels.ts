@@ -588,12 +588,10 @@ export function levelSpec(level: number): LevelSpec {
   const cached = levelSpecs.get(level);
   if (cached) return cached;
   const d = difficulty(level);
-  const P = PROGRESSION;
   const shape = choreographedShape(level);
   const { step, row } = areaStep(level);
   // The bar is the curve's, never the choreography's: see `PROGRESSION.choreography`.
-  const clearAccuracy = Math.round(P.clearMin + P.clearRange * d);
-  const gap = (100 - clearAccuracy) / 3;
+  const { clearAccuracy, starAccuracy } = starThresholds(d);
   const { area, name } = areaOf(level);
   const finale = isAreaFinale(level);
   const act = placementAt(DEBUT_LEVELS, level);
@@ -601,8 +599,7 @@ export function levelSpec(level: number): LevelSpec {
     level, difficulty: d, role: row.role, areaStep: step, finale, vignette: VIGNETTES[act.index]!.id,
     lap: act.lap, areaName: name, area,
     tasks: Object.freeze(placeLastOffbeat(level, placeDebut(level, composedTasks(level)))),
-    peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy,
-    starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const,
+    peakBpm: dimensionsOf(shape).peakBpm, clearAccuracy, starAccuracy,
   });
   levelSpecs.set(level, spec);
   return spec;
@@ -619,7 +616,19 @@ export function actLevel(vignette: string, lap: number): number {
   return levelAt(DEBUT_LEVELS, index, lap);
 }
 
-export function starsFor(accuracy: number, spec: LevelSpec): 0 | 1 | 2 | 3 {
+/**
+ * The clear bar and the two stars above it, from the curve's value alone: the bar, then
+ * thirds of the headroom above it. Never choreographed (see `PROGRESSION.choreography`), and
+ * read by the daily chart at its band's value, so a chart's stars are a level's stars.
+ */
+export function starThresholds(d: number): { readonly clearAccuracy: number; readonly starAccuracy: readonly [number, number, number] } {
+  const P = PROGRESSION;
+  const clearAccuracy = Math.round(P.clearMin + P.clearRange * d);
+  const gap = (100 - clearAccuracy) / 3;
+  return { clearAccuracy, starAccuracy: [clearAccuracy, Math.round(clearAccuracy + gap), Math.round(clearAccuracy + 2 * gap)] as const };
+}
+
+export function starsFor(accuracy: number, spec: Pick<LevelSpec, 'starAccuracy'>): 0 | 1 | 2 | 3 {
   return accuracy >= spec.starAccuracy[2] ? 3 : accuracy >= spec.starAccuracy[1] ? 2 : accuracy >= spec.starAccuracy[0] ? 1 : 0;
 }
 

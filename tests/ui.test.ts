@@ -95,6 +95,17 @@ describe('road path helpers', () => {
     // Pitch is continuous across the join at x=100, not restarted per segment.
     expect(spans[2]![0].x).toBeCloseTo(80);
     expect(dashes(line, 0, 10)).toEqual([]);
+    // A rounded box walked as many short arcs: the cursor lands a rounding error short of a
+    // boundary, and the step must still advance, or the walk never ends.
+    const box: { x: number; y: number }[] = [];
+    const corner = (cx: number, cy: number, from: number) => {
+      for (let i = 0; i <= 12; i++) { const a = from + (i / 12) * Math.PI / 2; box.push({ x: cx + Math.cos(a) * 26.17, y: cy + Math.sin(a) * 26.17 }); }
+    };
+    corner(700, 26.17, -Math.PI / 2); corner(700, 115.6, 0); corner(70, 115.6, Math.PI / 2); corner(70, 26.17, Math.PI);
+    box.push(box[0]!);
+    const boxSpans = dashes(box, 13.085, 8.72);
+    expect(boxSpans.length).toBeGreaterThan(20);
+    for (const [a, b] of boxSpans) expect(Math.hypot(b.x - a.x, b.y - a.y)).toBeLessThanOrEqual(13.085 + 1e-6);
     expect(dashes([{ x: 0, y: 0 }], 10, 10)).toEqual([]);
     // A gapless dash covers the line exactly once.
     expect(pathLength(dashes(line, 50, 0).flat())).toBeCloseTo(200);

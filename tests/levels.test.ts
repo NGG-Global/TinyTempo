@@ -4,6 +4,7 @@ import {
   AREAS, PATTERN_TIERS, PLATEAU_PATTERNS, actLevel, SUBDIVIDED_TIERS, areaOf, baselineShape, breatherTask, choreographedShape, composedTasks, DEBUT_SLOT, debutLevels, debutsOn,
   difficulty, dimensionsOf, familyOf, gridFits, isAreaFinale, levelSpec, openingBeats, tierPool,
   mapLastLevel, mapLevelState, meanAccuracy, starsFor, tierTasks, tightestSpacingMs, type Grid, type LevelDimensions, type LevelSpec, type LevelTask,
+ starThresholds,
 } from '../src/game/levels';
 import { endsOffBeat } from '../src/rhythm/patterns';
 import { PROGRESSION } from '../src/config/progression';
@@ -88,6 +89,8 @@ describe('level progression', () => {
       const spec = levelSpec(level);
       expect([...spec.starAccuracy], `level ${level}`).toEqual(before[String(level)]);
       expect(spec.clearAccuracy).toBe(spec.starAccuracy[0]);
+      // The thresholds are the curve's alone, from one function the daily chart reads too.
+      expect(starThresholds(spec.difficulty)).toEqual({ clearAccuracy: spec.clearAccuracy, starAccuracy: spec.starAccuracy });
       expect(spec.starAccuracy[0]).toBeLessThan(spec.starAccuracy[1]);
       expect(spec.starAccuracy[1]).toBeLessThan(spec.starAccuracy[2]);
       expect(spec.clearAccuracy).toBeGreaterThanOrEqual(PROGRESSION.clearMin);

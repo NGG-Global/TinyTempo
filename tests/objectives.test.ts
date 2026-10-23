@@ -6,6 +6,7 @@ import {
   markObjectivesSeen, objectiveContext, objectiveDefinition, objectiveReport, parseObjectives, reachableLevels,
   recordObjectives, redrawToday, resetObjectivesMemory, rollover, selectObjectives, stampWeek, unseenDone,
   type ObjectiveContext, type ObjectiveReport, type ObjectivesState,
+  dailyObjectiveReport,
 } from '../src/game/objectives';
 import { PlayAnalytics } from '../src/game/playAnalytics';
 import type { Progress } from '../src/game/progress';
@@ -202,6 +203,20 @@ describe('progress', () => {
       state = applyReport(state, r).state;
     }
     expect(state.objectives[0]).toMatchObject({ progress: 2, tokens: ['egg', 'bell'] });
+  });
+
+  it('counts a Daily Tempo run as a run, never as a level', () => {
+    const daily = dailyObjectiveReport({ vignette: 'saw' }, { perfect: 11, flawless: 2 });
+    expect(daily).toMatchObject({ level: 0, vignette: 'saw', cleared: false, replay: false, stars: 0, dailyTempo: true, perfect: 11, flawless: 2, grids: [], keepsake: false });
+    // The Daily objective finishes on it, the Perfects count, and nothing a level earns moves.
+    expect(objectiveDefinition('daily-tempo')!.advance(daily)).toBe(1);
+    expect(objectiveDefinition('perfects')!.advance(daily)).toBe(11);
+    expect(objectiveDefinition('flawless')!.advance(daily)).toBe(2);
+    for (const id of ['clear', 'new-level', 'acts', 'finale', 'three-stars', 'improve', 'replay', 'stars', 'keepsake']) {
+      const definition = objectiveDefinition(id);
+      if (definition) expect(definition.advance(daily), id).toBe(0);
+    }
+    expect(dailyObjectiveReport({ vignette: 'saw' }, { perfect: -3, flawless: 1.7 })).toMatchObject({ perfect: 0, flawless: 1 });
   });
 
   it('reads replays, improvements and new stars from the save, not from the run', () => {

@@ -51,7 +51,7 @@ describe('back in a level', () => {
 
 describe('every screen answers back', () => {
   it('has a handler on each scene the player can be on, and the game boots the listener', () => {
-    for (const name of ['Menu', 'Map', 'Play', 'Tutorial', 'Endless', 'Settings', 'Calibrate', 'Transfer', 'Support', 'Scrapbook']) {
+    for (const name of ['Menu', 'Map', 'Play', 'Tutorial', 'Endless', 'Daily', 'Settings', 'Calibrate', 'Transfer', 'Support', 'Scrapbook']) {
       expect(readFileSync(`src/scenes/${name}Scene.ts`, 'utf8'), name).toMatch(/public handleBack\(\): boolean \{/);
     }
     expect(readFileSync('src/main.ts', 'utf8')).toContain('void bootBackButton(game);');

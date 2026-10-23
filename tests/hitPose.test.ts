@@ -145,7 +145,7 @@ describe('the verdict and its early/late tag', () => {
   it('is made once and only shown, never re-rasterised on the frame of a tap', () => {
     const tag = readFileSync('src/ui/verdictTag.ts', 'utf8');
     expect(tag).not.toMatch(/setText\(/);
-    for (const scene of ['src/scenes/PlayScene.ts', 'src/scenes/EndlessScene.ts']) {
+    for (const scene of ['src/scenes/PlayScene.ts', 'src/scenes/EndlessScene.ts', 'src/scenes/DailyScene.ts']) {
       const source = readFileSync(scene, 'utf8');
       expect(source).toContain('this.verdictTag.set(tapTiming(result));');
       expect(source).toMatch(/this\.verdictTag = new VerdictTag\(/);
