@@ -33,7 +33,7 @@ function frontier(level: number): Progress {
   for (let l = 1; l < level; l++) best[l] = levelSpec(l).starAccuracy[1]!;
   return { unlocked: level, best };
 }
-const health = (hearts: number): Health => ({ hearts, refillStartedAt: hearts >= HEALTH.max ? null : NOW, spentAttempt: null });
+const health = (hearts: number): Health => ({ hearts, refillStartedAt: hearts >= HEALTH.max ? null : NOW, spentAttempt: null, spare: 0 });
 
 /**
  * The ledger side of one level visit, step for step as `PlayScene.startRound` takes it:
@@ -203,7 +203,7 @@ describe('heart accounting', () => {
   it('keeps a cleared level free and unlimited, with no sheet', () => {
     const progress = frontier(PAID + 2);
     const visit = new Visit(health(0), progress, PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
@@ -215,7 +215,7 @@ describe('heart accounting', () => {
   it('keeps the protected opening levels free and unlimited', () => {
     for (let level = 1; level <= HEALTH.protectedThrough; level++) {
       const visit = new Visit(health(0), frontier(level), level);
-      visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+      visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
       expect(visit.start('resume')).toBe(true);
       visit.respond();
       expect(restartKind(visit.facts())).toBe('immediate');
@@ -226,12 +226,12 @@ describe('heart accounting', () => {
 
   it('keeps Premium unlimited: no restarts used and no ad, since Premium has none', () => {
     const visit = new Visit(health(0), frontier(PAID), PAID, true);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
     expect(visit.restart()).toBe(true);
-    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily, bonus: null });
     // A sheet left open when Premium arrives turns into the one that says nothing is used.
     expect(liveSheet(visit.facts())).toBe('free');
     expect(RESTART_COPY.free.note).toBe('No restart will be used.');
@@ -239,14 +239,14 @@ describe('heart accounting', () => {
 
   it('makes every restart free while a replay timer runs: no restart used, no ad, and the heart kept', () => {
     const visit = new Visit(health(2), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('out_of_restarts');
     visit.timer = true;
     expect(restartKind(visit.facts())).toBe('immediate');
     expect(visit.restart()).toBe(true);
-    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily, bonus: null });
     expect(visit.health.hearts).toBe(1);
     // The empty sheet, and the picker over it, close into the free one the moment the timer lands.
     expect(liveSheet(visit.facts())).toBe('free');
@@ -259,7 +259,7 @@ describe('heart accounting', () => {
 
   it('keeps the timer picker open while the empty sheet is what the run would raise', () => {
     const visit = new Visit(health(2), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     visit.start('resume');
     visit.respond();
     expect(liveSheet(visit.facts(), 'timers')).toBe('timers');
@@ -304,7 +304,7 @@ describe('the rewarded restart, with none left today', () => {
 
   function spentRun(): Visit {
     const visit = new Visit(health(5), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     visit.start('resume');
     visit.respond();
     return visit;
@@ -450,7 +450,7 @@ describe('the attempt handover', () => {
   });
 
   it('releases an ended attempt once, however often it is asked', () => {
-    const held: Health = { hearts: 2, refillStartedAt: NOW, spentAttempt: 'a' };
+    const held: Health = { hearts: 2, refillStartedAt: NOW, spentAttempt: 'a', spare: 0 };
     const once = releaseAttempt(held, { keep: null, abandon: 'a' }, NOW);
     expect(once).toMatchObject({ hearts: 2, spentAttempt: null });
     expect(releaseAttempt(once, { keep: null, abandon: 'a' }, NOW)).toEqual(once);

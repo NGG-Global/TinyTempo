@@ -781,6 +781,7 @@ export class SettingsScene extends BaseScene {
         radius: 24 * s, gap: 58 * s,
         filled: unlimited ? HEALTH.max : view.hearts,
         part: unlimited ? 0 : heartProgress(view),
+        spare: unlimited ? 0 : view.spare,
         full: PALETTE.coral, empty: shade(SHELL.puck, -0.12), emptyOutline: shade(SHELL.puck, -0.45),
       });
       // Measured against the line beside it, because "Hearts are full" and "Next in 8:24"

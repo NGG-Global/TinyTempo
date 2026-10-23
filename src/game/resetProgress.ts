@@ -19,9 +19,11 @@ import { setTutorialState } from './TutorialRun';
  * merge reads before it adds (`playgames/cloudSave.ts`), so the reset is the side that wins.
  *
  * What stays: settings and calibration (the device's, not the save's), purchases, the
- * refill ledger and replay timers (paid for), consent, the review record, the daily
- * restarts, the objectives' stamps (history, not the road's), and Endless's device record,
- * which is a leaderboard's and not the road's. The day's objectives are drawn again.
+ * refill ledger, the replay-timer shelf (paid for, or won), consent, the review record, the
+ * daily restarts, the objectives' stamps (history, not the road's), the Daily Tempo day's
+ * reward record (`tiny-tempo.daily.v1`, so a reset cannot pay the day out twice), and
+ * Endless's device record, which is a leaderboard's and not the road's. The day's
+ * objectives are drawn again.
  */
 export interface ResetOutcome {
   /** Whether the save was removed and the generation stamped. False means storage refused. */

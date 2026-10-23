@@ -2035,7 +2035,7 @@ export class MapScene extends BaseScene {
     const c = this.restControls.clear();
     drawHeartRow(c, {
       centreX: this.restRect.centerX, y: top + 62 * s, count: HEALTH.max, radius: 26 * s, gap: 66 * s,
-      filled: view.hearts, part: heartProgress(view),
+      filled: view.hearts, part: heartProgress(view), spare: view.spare,
       full: PALETTE.coral, empty: shade(SHELL.puck, -0.12), emptyOutline: shade(SHELL.puck, -0.45),
     });
     resize(restTitle, 68 * s, PALETTE.ink);

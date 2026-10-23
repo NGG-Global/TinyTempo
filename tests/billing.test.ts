@@ -140,7 +140,7 @@ function billingUnder(options: FakeOptions = {}, refill = refillRecorder()): {
 }
 
 function emptyHealth(): Health {
-  return { hearts: 0, refillStartedAt: 1_700_000_000_000, spentAttempt: null };
+  return { hearts: 0, refillStartedAt: 1_700_000_000_000, spentAttempt: null, spare: 0 };
 }
 
 describe('classifyPurchaseError', () => {

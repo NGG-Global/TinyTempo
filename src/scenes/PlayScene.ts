@@ -870,7 +870,7 @@ export class PlayScene extends BaseScene {
     drawHeartRow(g, {
       centreX: this.viewport.safe.centerX, y: this.viewport.safe.top + 247 * s,
       count: view.maxHearts, radius: 23 * s, gap: 60 * s,
-      filled: view.hearts, part: heartProgress(view),
+      filled: view.hearts, part: heartProgress(view), spare: view.spare,
       full: PALETTE.coral, empty: SHELL.cream, emptyAlpha: 0.18, emptyOutline: SHELL.cream,
     });
   }
