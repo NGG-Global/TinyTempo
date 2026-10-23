@@ -1,4 +1,5 @@
 import { DAILY_TEMPO_AVAILABLE } from '../config/dailyTempo';
+import { daySeed } from './dayKey';
 import { calendarDay, isCleared } from './health';
 import { levelSpec, type Grid } from './levels';
 import type { Progress } from './progress';
@@ -47,7 +48,7 @@ export interface ObjectiveReport {
   readonly grids: readonly Grid[];
   readonly finale: boolean;
   readonly keepsake: boolean;
-  /** Reserved for a Daily Tempo run, which does not exist yet. */
+  /** A finished Daily Tempo run (`dailyObjectiveReport`); absent on a level's report. */
   readonly dailyTempo?: boolean;
 }
 
@@ -221,12 +222,8 @@ export const OBJECTIVES_PER_DAY = 3;
 /** The slots, in the order the card shows them. Each draws from its own family first. */
 const SLOTS: readonly ObjectiveFamily[] = ['play', 'skill', 'mastery'];
 
-/** A stable 32-bit seed from the calendar date: FNV-1a over its characters. */
-export function daySeed(day: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < day.length; i++) hash = Math.imul(hash ^ day.charCodeAt(i), 0x01000193) >>> 0;
-  return hash;
-}
+/** A stable 32-bit seed from the calendar date: `game/dayKey.ts`'s FNV-1a, re-exported so the draws' seeds never move. */
+export { daySeed };
 
 function generator(seed: number): () => number {
   let state = seed >>> 0;
@@ -509,6 +506,23 @@ export function objectiveReport(input: {
     perfect: Math.max(0, Math.floor(input.perfect)),
     flawless: Math.max(0, Math.floor(input.flawless)),
     grids, finale: spec.finale, keepsake: input.keepsake,
+  };
+}
+
+/**
+ * The report a finished Daily Tempo run makes. It is not a level, and says so: `level` is 0,
+ * which no level objective can match, and it clears, stars and replays nothing on the road,
+ * so "Clear a level" and "Three-star a level" never move on it. What it carries is what the
+ * day's objectives can count from a run — its Perfects and its flawless tasks, which move
+ * "Land 30 Perfect hits" as a level's do — and the one fact that is its own, which finishes
+ * "Finish today's Daily Tempo". It plays no finer grid in version 1 and earns no keepsake.
+ */
+export function dailyObjectiveReport(chart: { readonly vignette: string }, run: { readonly perfect: number; readonly flawless: number }): ObjectiveReport {
+  return {
+    level: 0, vignette: chart.vignette, cleared: false, replay: false,
+    stars: 0, starsBefore: 0, starsAfter: 0,
+    perfect: Math.max(0, Math.floor(run.perfect)), flawless: Math.max(0, Math.floor(run.flawless)),
+    grids: [], finale: false, keepsake: false, dailyTempo: true,
   };
 }
 

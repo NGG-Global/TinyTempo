@@ -17,8 +17,8 @@ import type { JudgeState } from '../src/rhythm/judge';
 import { capRound, scoreCeiling, scoreRound } from '../src/game/scoring';
 import type { AnalyticsEvent } from '../src/monetization/analytics';
 import type { RewardedResult } from '../src/monetization/types';
-import { dailyNote, fromPrice, guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout, sheetNote } from '../src/ui/restartSheet';
-import { REPLAY_TIMERS } from '../src/game/replayTimer';
+import { dailyNote, fromPrice, guardedSheetTap, RESTART_COPY, RESTART_SHEET_ARM_SEC, restartSheetHit, restartSheetLayout, sheetNote, shelfRowCopy } from '../src/ui/restartSheet';
+import { REPLAY_TIMERS, type ShelfItemView } from '../src/game/replayTimer';
 import { PRODUCT } from '../src/monetization/types';
 
 vi.mock('phaser', () => ({ default: { Geom: { Rectangle: class {} } } }));
@@ -33,7 +33,7 @@ function frontier(level: number): Progress {
   for (let l = 1; l < level; l++) best[l] = levelSpec(l).starAccuracy[1]!;
   return { unlocked: level, best };
 }
-const health = (hearts: number): Health => ({ hearts, refillStartedAt: hearts >= HEALTH.max ? null : NOW, spentAttempt: null });
+const health = (hearts: number): Health => ({ hearts, refillStartedAt: hearts >= HEALTH.max ? null : NOW, spentAttempt: null, spare: 0 });
 
 /**
  * The ledger side of one level visit, step for step as `PlayScene.startRound` takes it:
@@ -52,6 +52,8 @@ class Visit {
 
   /** A replay timer running on the device, as `replayTimerActive` would read it. */
   public timer = false;
+  /** The held timers the empty sheet can start, as `shelfView` would list them. */
+  public shelf: ShelfItemView[] = [];
 
   public constructor(public health: Health, public readonly progress: Progress, public readonly level: number, public premium = false) {}
 
@@ -59,7 +61,7 @@ class Visit {
     return {
       level: this.level, progress: this.progress, health: this.health, now, premium: this.premium, timerActive: this.timer,
       attemptId: this.attemptId, outcomeRecorded: this.outcome, scoredResponseBegun: this.begun,
-      restartsLeft: restartsLeft(this.restarts, now),
+      shelf: this.shelf, restartsLeft: restartsLeft(this.restarts, now),
     };
   }
 
@@ -203,7 +205,7 @@ describe('heart accounting', () => {
   it('keeps a cleared level free and unlimited, with no sheet', () => {
     const progress = frontier(PAID + 2);
     const visit = new Visit(health(0), progress, PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
@@ -215,7 +217,7 @@ describe('heart accounting', () => {
   it('keeps the protected opening levels free and unlimited', () => {
     for (let level = 1; level <= HEALTH.protectedThrough; level++) {
       const visit = new Visit(health(0), frontier(level), level);
-      visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+      visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
       expect(visit.start('resume')).toBe(true);
       visit.respond();
       expect(restartKind(visit.facts())).toBe('immediate');
@@ -226,12 +228,12 @@ describe('heart accounting', () => {
 
   it('keeps Premium unlimited: no restarts used and no ad, since Premium has none', () => {
     const visit = new Visit(health(0), frontier(PAID), PAID, true);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('immediate');
     expect(visit.restart()).toBe(true);
-    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily, bonus: null });
     // A sheet left open when Premium arrives turns into the one that says nothing is used.
     expect(liveSheet(visit.facts())).toBe('free');
     expect(RESTART_COPY.free.note).toBe('No restart will be used.');
@@ -239,14 +241,14 @@ describe('heart accounting', () => {
 
   it('makes every restart free while a replay timer runs: no restart used, no ad, and the heart kept', () => {
     const visit = new Visit(health(2), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     expect(visit.start('resume')).toBe(true);
     visit.respond();
     expect(restartKind(visit.facts())).toBe('out_of_restarts');
     visit.timer = true;
     expect(restartKind(visit.facts())).toBe('immediate');
     expect(visit.restart()).toBe(true);
-    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily });
+    expect(visit.restarts).toEqual({ day: calendarDay(NOW), used: RESTARTS.daily, bonus: null });
     expect(visit.health.hearts).toBe(1);
     // The empty sheet, and the picker over it, close into the free one the moment the timer lands.
     expect(liveSheet(visit.facts())).toBe('free');
@@ -259,7 +261,7 @@ describe('heart accounting', () => {
 
   it('keeps the timer picker open while the empty sheet is what the run would raise', () => {
     const visit = new Visit(health(2), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     visit.start('resume');
     visit.respond();
     expect(liveSheet(visit.facts(), 'timers')).toBe('timers');
@@ -304,7 +306,7 @@ describe('the rewarded restart, with none left today', () => {
 
   function spentRun(): Visit {
     const visit = new Visit(health(5), frontier(PAID), PAID);
-    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily };
+    visit.restarts = { day: calendarDay(NOW), used: RESTARTS.daily, bonus: null };
     visit.start('resume');
     visit.respond();
     return visit;
@@ -368,6 +370,15 @@ describe('the rewarded restart, with none left today', () => {
     expect(confirm.indexOf("if (liveSheet(facts) !== shown)")).toBeLessThan(confirm.indexOf('useDailyRestart('));
     expect(confirm.indexOf('useDailyRestart(')).toBeLessThan(confirm.indexOf("void this.startRound('free_restart');\n      return;\n    }\n    void this.watchToRestart"));
     expect(scene).not.toContain('buyToRestart');
+    // A shelf row is answered before the sheets' own actions, a pick only redraws the picker,
+    // and the picker's one action buys the length picked.
+    expect(confirm.indexOf("'pick' in choice)) { this.restartSheet.pick(choice.pick); return; }")).toBeLessThan(confirm.indexOf("if (shown === 'free')"));
+    expect(confirm.indexOf('this.startHeldToRestart(choice.start, facts)')).toBeLessThan(confirm.indexOf("if (shown === 'free')"));
+    expect(confirm).toContain("if (shown === 'timers') { void this.buyTimerToRestart(this.restartSheet.picked); return; }");
+    const start = scene.slice(scene.indexOf('  private startHeldToRestart('), scene.indexOf('  private async buyTimerToRestart('));
+    expect(start).toContain('startHeldTimerSynced(id)');
+    expect(start.indexOf('this.restartSheet.hide();')).toBeLessThan(start.indexOf("void this.startRound('free_restart')"));
+    expect(start).not.toMatch(/purchase\(|useDailyRestart|redeemHeart/);
   });
 
   it('checks the ticket the scene holds against the run that came back', () => {
@@ -450,7 +461,7 @@ describe('the attempt handover', () => {
   });
 
   it('releases an ended attempt once, however often it is asked', () => {
-    const held: Health = { hearts: 2, refillStartedAt: NOW, spentAttempt: 'a' };
+    const held: Health = { hearts: 2, refillStartedAt: NOW, spentAttempt: 'a', spare: 0 };
     const once = releaseAttempt(held, { keep: null, abandon: 'a' }, NOW);
     expect(once).toMatchObject({ hearts: 2, spentAttempt: null });
     expect(releaseAttempt(once, { keep: null, abandon: 'a' }, NOW)).toEqual(once);
@@ -485,25 +496,33 @@ describe('the sheet', () => {
     }
   });
 
-  it('adds the timer block to the empty sheet and trades the action for four rows on the picker', () => {
+  it('adds the timer block to the empty sheet and puts four length chips over one Buy & restart on the picker', () => {
     const empty = restartSheetLayout(frame, 'empty');
     expect(empty.timer.height).toBeGreaterThanOrEqual(88);
     expect(empty.confirm.y + empty.confirm.height).toBeLessThanOrEqual(empty.timer.y);
     expect(empty.timer.y + empty.timer.height).toBeLessThanOrEqual(empty.keep.y);
     expect(empty.options).toEqual([]);
+    expect(empty.shelfRows).toEqual([]);
+    expect(empty.dividerY).toBeNull();
     expect(restartSheetHit(empty, empty.timer.x + 10, empty.timer.y + 10)).toBe('timers');
     const picker = restartSheetLayout(frame, 'timers');
-    expect(picker.confirm.width).toBe(0);
+    // The picker keeps one action: it buys the length picked and restarts, so a pick is never a purchase.
+    expect(picker.confirm.width).toBeGreaterThan(0);
+    expect(picker.confirm.height).toBeGreaterThanOrEqual(88);
     expect(picker.timer.width).toBe(0);
     expect(picker.options).toHaveLength(REPLAY_TIMERS.length);
-    picker.options.forEach((row, i) => {
-      expect(row.height).toBeGreaterThanOrEqual(88);
-      expect(row.x).toBeGreaterThanOrEqual(picker.card.x);
-      if (i > 0) expect(picker.options[i - 1]!.y + picker.options[i - 1]!.height).toBeLessThanOrEqual(row.y);
-      expect(restartSheetHit(picker, row.x + row.width / 2, row.y + row.height / 2)).toEqual({ buy: REPLAY_TIMERS[i]!.product });
+    picker.options.forEach((chip, i) => {
+      expect(chip.height).toBeGreaterThanOrEqual(88);
+      expect(chip.x).toBeGreaterThanOrEqual(picker.card.x);
+      expect(chip.x + chip.width).toBeLessThanOrEqual(picker.card.x + picker.card.width + 1e-6);
+      if (i > 0) expect(picker.options[i - 1]!.x + picker.options[i - 1]!.width).toBeLessThanOrEqual(chip.x);
+      expect(chip.y + chip.height).toBeLessThanOrEqual(picker.confirm.y);
+      expect(restartSheetHit(picker, chip.x + chip.width / 2, chip.y + chip.height / 2)).toEqual({ pick: REPLAY_TIMERS[i]!.product });
     });
-    expect(picker.options[3]!.y + picker.options[3]!.height).toBeLessThanOrEqual(picker.keep.y);
+    expect(restartSheetHit(picker, picker.confirm.x + picker.confirm.width / 2, picker.confirm.y + picker.confirm.height / 2)).toBe('confirm');
+    expect(picker.confirm.y + picker.confirm.height).toBeLessThanOrEqual(picker.keep.y);
     expect(picker.card.y + picker.card.height).toBeCloseTo(frame.bottom);
+    expect(RESTART_COPY.timers.confirm).toBe('Buy & restart');
     // The free and daily sheets are as they were: no timer, no rows.
     for (const kind of ['free', 'daily'] as const) {
       const plain = restartSheetLayout(frame, kind);
@@ -516,6 +535,42 @@ describe('the sheet', () => {
     expect(fromPrice(product => (product === PRODUCT.timer30m ? '€0.99' : '€9.99'))).toBe('from €0.99');
     expect(RESTART_COPY.timers.title).toBe('Unlimited restarts');
     expect(sheetNote('timers', 0)).toBe(RESTART_COPY.timers.note);
+  });
+
+  it('puts the shelf first on the empty sheet: a row per held timer, each a Start, then "Or" over the other ways', () => {
+    const held = (id: string, source: 'won' | 'bought', startWithin: string | null): ShelfItemView => ({
+      id, minutes: 40, source, state: 'held', compact: '40m', label: '40 min', startWithin, window: source === 'won' ? 0.6 : 1,
+    });
+    const items = [held('won:2026-10-23', 'won', 'Start within 36 min'), held('play:abc', 'bought', null)];
+    for (const count of [0, 1, 2]) {
+      const sheet = restartSheetLayout(frame, 'empty', items.slice(0, count));
+      expect(sheet.shelfRows).toHaveLength(count);
+      sheet.shelfRows.forEach((row, i) => {
+        expect(row.id).toBe(items[i]!.id);
+        expect(row.rect.height).toBeGreaterThanOrEqual(88);
+        expect(row.rect.x).toBeGreaterThanOrEqual(sheet.card.x);
+        expect(row.rect.y).toBeGreaterThanOrEqual(sheet.card.y);
+        if (i > 0) expect(sheet.shelfRows[i - 1]!.rect.y + sheet.shelfRows[i - 1]!.rect.height).toBeLessThanOrEqual(row.rect.y);
+        // A tap on the row starts that timer; the ad and the picker sit under the divider.
+        expect(restartSheetHit(sheet, row.rect.x + row.rect.width / 2, row.rect.y + row.rect.height / 2)).toEqual({ start: row.id });
+        expect(row.rect.y + row.rect.height).toBeLessThanOrEqual(sheet.dividerY!);
+      });
+      if (count > 0) {
+        expect(sheet.eyebrowY).not.toBeNull();
+        expect(sheet.dividerY).toBeLessThanOrEqual(sheet.confirm.y);
+      } else {
+        expect(sheet.eyebrowY).toBeNull();
+        expect(sheet.dividerY).toBeNull();
+      }
+      expect(sheet.card.y + sheet.card.height).toBeCloseTo(frame.bottom);
+    }
+    // The shelf belongs to the empty sheet alone; a shelf handed to another sheet draws no rows.
+    for (const kind of ['free', 'daily', 'timers'] as const) expect(restartSheetLayout(frame, kind, items).shelfRows).toEqual([]);
+    // Each row says where the timer came from, and a won one how long it has to be started.
+    expect(shelfRowCopy(items[0]!)).toEqual({ title: '40 min timer', note: 'Won today · start within 36 min' });
+    expect(shelfRowCopy(items[1]!)).toEqual({ title: '40 min timer', note: RESTART_COPY.boughtKeeps });
+    expect(RESTART_COPY.startRestart).toBe('Start & restart');
+    expect(RESTART_COPY.fromShelf).toBe('From your shelf');
   });
 
   it('routes a tap to its control, the card face to nothing, and off the card back to the level', () => {

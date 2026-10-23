@@ -136,8 +136,9 @@ describe('configuration', () => {
     project |= BigInt(bytes[i]!) << shift;
     expect(project).toBe(863268283344n);
     expect([bytes[i + 1], bytes[i + 2]]).toEqual([0x10, 0x02]);
-    // Configured is not shipped: the mode is still off, so no button and no submission.
-    expect(DAILY_TEMPO_AVAILABLE).toBe(false);
+    // The mode is shipped; the button and the submission still wait on a native build, so
+    // under node, where the browser stub stands in for Play Games, nothing is offered.
+    expect(DAILY_TEMPO_AVAILABLE).toBe(true);
     const { dailyTempoLeaderboardOffered } = await import('../src/playgames/dailyTempo');
     expect(dailyTempoLeaderboardOffered()).toBe(false);
   });

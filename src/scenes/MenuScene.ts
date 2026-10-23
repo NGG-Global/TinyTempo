@@ -3,6 +3,7 @@ import { setMusicBed } from '@/audio/musicBed';
 import { currentAudio, hushMusic, outputSilent, sharedAudio, shellTrack, stopTheme, toggleMute } from '@/audio/sharedAudio';
 import { createImpactBuffers } from '@/audio/hammerSounds';
 import { samples } from '@/audio/samples';
+import { DAILY_TEMPO_AVAILABLE } from '@/config/dailyTempo';
 import { ENDLESS } from '@/config/endless';
 import { MUSIC, THEME } from '@/config/music';
 import { SceneKey } from '@/config/scenes';
@@ -13,6 +14,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { tutorialComplete, tutorialSeen } from '@/game/TutorialRun';
+import { todaysRewards } from '@/game/dailyRewards';
 import { endlessUnlocked } from '@/game/endless';
 import { endlessRecord, loadEndlessProgress, markEndlessUnlockSeen, saveEndlessProgress } from '@/game/endlessProgress';
 import { track } from '@/monetization/analytics';
@@ -24,11 +26,12 @@ import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { shade } from '@/ui/colour';
 import { CHROME, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { drawGear } from '@/ui/gear';
-import { drawBook, drawChecklist, drawInfinity, drawPlay, drawSpeaker } from '@/ui/icons';
+import { drawBook, drawChecklist, drawInfinity, drawPlay, drawSpeaker, drawSun } from '@/ui/icons';
 import { EndlessCard } from '@/ui/endlessCard';
 import { doneCount, loadObjectives, markObjectivesSeen, objectiveContext, unseenDone, type ObjectivesState } from '@/game/objectives';
 import { ObjectivesCard } from '@/ui/objectivesCard';
-import { STAR_PRIZE } from '@/ui/star';
+import { menuRow } from '@/ui/menuRow';
+import { drawStar, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { faces } from '@/ui/light';
 import { drawPanel, placeSurface, surface } from '@/ui/panel';
 import { PuckLabel } from '@/ui/puckLabel';
@@ -41,10 +44,10 @@ import { HammerNailVignette } from '@/vignettes/HammerNailVignette';
 const MENU = {
   sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
   /**
-   * The row over Play. One block, How to play, until Endless Mode opens; then two side by
-   * side, the row widened only as far as keeps it clear of the objectives puck on its left.
+   * The row over Play holds at most two blocks (`ui/menuRow.ts`): Daily Tempo first, then
+   * Endless once it opens or How to play until the lesson is passed; the row is widened for
+   * two only as far as keeps it clear of the objectives puck on its left.
    */
-  row: { single: 400, split: 480, gap: 20, label: 32, splitLabel: 30 },
   /** One bead a beat, a bar across the sign: the theme's own 4/4. */
   dots: 4,
 } as const;
@@ -90,6 +93,18 @@ export class MenuScene extends BaseScene {
   /** Read on entry: the mode is shipped and the save has cleared its level. */
   private endlessOpen = false;
   /**
+   * Daily Tempo's block, first on the row whenever the mode is shipped: the thing that is
+   * new every day, with today's stars on a chip and a coral dot until the day has had a run.
+   * It opens the Daily card, whose Play is the audio gesture, so the theme carries on.
+   */
+  private dailyButton!: Phaser.GameObjects.Graphics;
+  private dailySurface!: Phaser.GameObjects.TileSprite;
+  private dailyLabel!: Phaser.GameObjects.Text;
+  private dailyRect = new Phaser.Geom.Rectangle();
+  private dailyOpen = false;
+  private dailyStars: 0 | 1 | 2 | 3 = 0;
+  private dailyDot = false;
+  /**
    * How to play keeps its block until the lesson has been passed; after that it lives in
    * Settings → Help and the row is Endless's or nobody's, so nothing competes with Play.
    * A skip keeps it here: that player has not had the lesson and may still want it.
@@ -131,7 +146,7 @@ export class MenuScene extends BaseScene {
   private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
   private pressedAt = -Infinity;
   private pressDirty = false;
-  private puckPressed: 'mute' | 'setup' | 'book' | 'objectives' | 'endless' | null = null;
+  private puckPressed: 'mute' | 'setup' | 'book' | 'objectives' | 'endless' | 'daily' | null = null;
   private puckPressedAt = -Infinity;
   private puckDirty = false;
   private muted = false;
@@ -159,6 +174,11 @@ export class MenuScene extends BaseScene {
     this.objectives = loadObjectives(Date.now(), objectiveContext(loadProgress()));
     this.endlessOpen = ENDLESS.available && endlessUnlocked(loadProgress());
     this.lessonOnMenu = !(this.registry.get('tutorial-complete') === true || tutorialComplete());
+    // Today's record, read on every entry: the chart turns over on the Daily Tempo day.
+    this.dailyOpen = DAILY_TEMPO_AVAILABLE;
+    const today = todaysRewards();
+    this.dailyStars = today?.bestStars ?? 0;
+    this.dailyDot = this.dailyOpen && (today?.runs ?? 0) === 0;
     this.bookLabel = new PuckLabel(this, 'Scrapbook', 20);
     this.objectivesLabel = new PuckLabel(this, 'Objectives', 20);
     this.endlessDot = this.endlessOpen && !loadEndlessProgress().seenUnlock;
@@ -185,8 +205,11 @@ export class MenuScene extends BaseScene {
     this.endlessButton = this.add.graphics().setVisible(this.endlessOpen);
     this.endlessSurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7).setVisible(this.endlessOpen);
     this.endlessLabel = display(this, 'Endless', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(this.endlessOpen);
+    this.dailyButton = this.add.graphics().setVisible(this.dailyOpen);
+    this.dailySurface = surface(this, MaterialKey.wood, new Phaser.Geom.Rectangle(0, 0, 10, 10), 1, SHELL.wood, 0.7).setVisible(this.dailyOpen);
+    this.dailyLabel = display(this, 'Daily Tempo', { size: 30, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setVisible(this.dailyOpen);
     this.pucks = this.add.graphics();
-    this.layers = [this.button, this.tutorialButton, this.pucks, this.endlessButton].map(graphics => new BakedLayer(this, graphics));
+    this.layers = [this.button, this.tutorialButton, this.pucks, this.endlessButton, this.dailyButton].map(graphics => new BakedLayer(this, graphics));
     this.primed = false;
     this.objectivesCard = new ObjectivesCard(this);
     this.endlessCard = new EndlessCard(this, 30);
@@ -242,32 +265,30 @@ export class MenuScene extends BaseScene {
     this.drawButton(0, s);
     resize(this.playLabel, 40 * s, SHELL.cream);
     const rowY = this.buttonRect.y - this.controlSize - 24 * s;
-    const row = MENU.row;
-    if (this.endlessOpen && this.lessonOnMenu) {
-      const half = (row.split - row.gap) / 2 * s;
-      this.tutorialRect.setTo(safe.centerX - row.split / 2 * s, rowY, half, this.controlSize);
-      this.endlessRect.setTo(safe.centerX + row.gap / 2 * s, rowY, half, this.controlSize);
-    } else if (this.endlessOpen) {
-      this.tutorialRect.setTo(0, 0, 0, 0);
-      this.endlessRect.setTo(safe.centerX - row.single / 2 * s, rowY, row.single * s, this.controlSize);
-    } else if (!this.lessonOnMenu) {
-      this.tutorialRect.setTo(0, 0, 0, 0);
-      this.endlessRect.setTo(0, 0, 0, 0);
-    } else {
-      this.tutorialRect.setTo(safe.centerX - row.single / 2 * s, rowY, row.single * s, this.controlSize);
-      this.endlessRect.setTo(0, 0, 0, 0);
-    }
+    const row = menuRow({ daily: this.dailyOpen, endless: this.endlessOpen, lesson: this.lessonOnMenu }, safe.centerX, rowY, this.controlSize, s);
+    const setRect = (rect: Phaser.Geom.Rectangle, frame: { x: number; y: number; width: number; height: number } | null) =>
+      rect.setTo(frame?.x ?? 0, frame?.y ?? 0, frame?.width ?? 0, frame?.height ?? 0);
+    setRect(this.tutorialRect, row.lesson);
+    setRect(this.endlessRect, row.endless);
+    setRect(this.dailyRect, row.daily);
+    const lessonShown = row.lesson !== null;
     this.tutorialButton.clear();
-    if (this.lessonOnMenu) drawPanel(this.tutorialButton, this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
+    if (lessonShown) drawPanel(this.tutorialButton, this.tutorialRect, s, { fill: SHELL.wood, depth: 8 });
     this.layers[1]!.invalidate();
-    this.tutorialSurface.setVisible(this.lessonOnMenu);
-    this.tutorialLabel.setVisible(this.lessonOnMenu);
+    this.tutorialSurface.setVisible(lessonShown);
+    this.tutorialLabel.setVisible(lessonShown);
     placeSurface(this.tutorialSurface, this.tutorialRect, s);
     this.tutorialLabel.setPosition(this.tutorialRect.centerX, this.tutorialRect.centerY);
-    resize(this.tutorialLabel, (this.endlessOpen ? row.splitLabel : row.label) * s, SHELL.cream);
+    resize(this.tutorialLabel, row.labelSize * s, SHELL.cream);
     if (this.endlessOpen) {
       placeSurface(this.endlessSurface, this.endlessRect, s);
-      resize(this.endlessLabel, (this.lessonOnMenu ? row.splitLabel : row.label) * s, SHELL.cream);
+      resize(this.endlessLabel, row.labelSize * s, SHELL.cream);
+    }
+    if (this.dailyOpen) {
+      placeSurface(this.dailySurface, this.dailyRect, s);
+      // The word shortens beside a second block, as the mock has it: "Daily" and its stars.
+      this.dailyLabel.setText(row.blocks.length === 2 ? 'Daily' : 'Daily Tempo');
+      resize(this.dailyLabel, row.labelSize * s, SHELL.cream);
     }
     // The objectives puck keeps the row's line whether or not the row has a block on it.
     this.objectivesAt = { x: safe.left + 56 * s, y: rowY + this.controlSize / 2 };
@@ -289,14 +310,15 @@ export class MenuScene extends BaseScene {
   private placeLabels(s: number): void {
     const r = CHROME.puckRadius * s;
     this.bookLabel.place(this.bookAt.x, this.bookAt.y, r, 'below', s, !seenScreenHint('scrapbook'));
-    const rowTaken = this.lessonOnMenu || this.endlessOpen;
+    const rowTaken = this.lessonOnMenu || this.endlessOpen || this.dailyOpen;
     this.objectivesLabel.place(this.objectivesAt.x, this.objectivesAt.y, r, rowTaken ? 'above' : 'right', s, !seenPuck('objectives'));
   }
 
   private drawPucks(s: number, press: number): void {
     const g = this.pucks.clear();
-    const sinkOf = (key: 'mute' | 'setup' | 'book' | 'objectives' | 'endless') => (this.puckPressed === key ? press : 0);
+    const sinkOf = (key: 'mute' | 'setup' | 'book' | 'objectives' | 'endless' | 'daily') => (this.puckPressed === key ? press : 0);
     this.drawEndless(s, sinkOf('endless'));
+    this.drawDaily(s, sinkOf('daily'));
     drawPuck(g, this.muteAt.x, this.muteAt.y, s, sinkOf('mute'));
     drawPuck(g, this.setupAt.x, this.setupAt.y, s, sinkOf('setup'));
     drawPuck(g, this.bookAt.x, this.bookAt.y, s, sinkOf('book'));
@@ -320,6 +342,40 @@ export class MenuScene extends BaseScene {
     }
     drawGear(g, this.setupAt.x, this.setupAt.y + puckSink(s, sinkOf('setup')), r * 0.52, PALETTE.ink, 1);
     this.layers[2]?.invalidate();
+  }
+
+  /**
+   * The sun, the word and a chip of today's stars centred together on the block, with a
+   * coral dot on its corner until the day has had a run.
+   */
+  private drawDaily(s: number, press: number): void {
+    if (!this.dailyOpen) return;
+    const g = this.dailyButton.clear();
+    const r = this.dailyRect;
+    drawPanel(g, r, s, { fill: SHELL.wood, depth: 8, press });
+    const sink = 8 * s * press * 0.8;
+    placeSurface(this.dailySurface, r, s, sink);
+    const glyph = 16 * s, gap = 10 * s;
+    const chipW = 92 * s, chipH = 34 * s;
+    const span = glyph * 2 + gap + this.dailyLabel.displayWidth + gap + chipW;
+    const left = r.centerX - span / 2;
+    drawSun(g, left + glyph, r.centerY + sink, glyph * 0.8, SHELL.cream);
+    this.dailyLabel.setPosition(left + glyph * 2 + gap + this.dailyLabel.displayWidth / 2, r.centerY + sink);
+    // Today's stars on a cream chip: brass where earned, hollow seats where not.
+    const cx = left + span - chipW / 2, cy = r.centerY + sink;
+    g.fillStyle(shade(SHELL.cream, -0.1), 1).fillRoundedRect(cx - chipW / 2, cy - chipH / 2 + 2 * s, chipW, chipH, chipH / 2);
+    g.fillStyle(SHELL.cream, 1).fillRoundedRect(cx - chipW / 2, cy - chipH / 2, chipW, chipH, chipH / 2);
+    for (let i = 0; i < 3; i++) {
+      const sx = cx + (i - 1) * 24 * s;
+      if (i < this.dailyStars) drawStar(g, sx, cy, 9 * s, STAR_PRIZE);
+      else drawStarSeat(g, sx, cy, 9 * s, shade(SHELL.cream, -0.08), shade(SHELL.cream, -0.4));
+    }
+    if (this.dailyDot) {
+      const dx = r.right - 10 * s, dy = r.y + 10 * s + sink;
+      g.fillStyle(PALETTE.coral, 1).fillCircle(dx, dy, 9 * s);
+      g.lineStyle(3 * s, SHELL.cream, 1).strokeCircle(dx, dy, 9 * s);
+    }
+    this.layers[4]?.invalidate();
   }
 
   /** The infinity and the word centred together on the block, with the unseen dot on its corner. */
@@ -442,6 +498,14 @@ export class MenuScene extends BaseScene {
     if (endlessTap !== null) {
       if (endlessTap === 'start') void this.startEndless();
       else if (endlessTap === 'leaderboard') void this.openEndlessBoard();
+      return;
+    }
+    if (this.dailyOpen && Phaser.Geom.Rectangle.Contains(this.dailyRect, tap.x, tap.y)) {
+      this.puckPressed = 'daily';
+      this.puckPressedAt = performance.now() / 1000;
+      this.puckDirty = true;
+      vibrate('tap');
+      this.openDaily();
       return;
     }
     if (this.endlessOpen && Phaser.Geom.Rectangle.Contains(this.endlessRect, tap.x, tap.y)) {
@@ -646,6 +710,16 @@ export class MenuScene extends BaseScene {
       unlocked, cleared: Math.max(0, progress.unlocked - 1), record: endlessRecord(stored),
       leaderboard: endlessLeaderboardOffered(), justUnlocked,
     }, performance.now() / 1000);
+  }
+
+  /**
+   * The Daily Tempo card. Its Play is the audio gesture, so nothing is unlocked here, and
+   * the title theme carries on into the card as it does into Settings (`ensureScreenMusic`).
+   */
+  private openDaily(): void {
+    if (this.busy || this.curtain.active) return;
+    this.keepTheme = true;
+    this.curtain.cover(() => this.scene.start(SceneKey.Daily, { from: SceneKey.Menu }));
   }
 
   /**

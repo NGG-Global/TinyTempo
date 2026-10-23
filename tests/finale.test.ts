@@ -26,7 +26,7 @@ function road(through: number, stars: 1 | 2 | 3): Progress {
   for (let level = 1; level <= through; level++) best[level] = levelSpec(level).starAccuracy[stars - 1]!;
   return { unlocked: through + 1, best };
 }
-const FULL: Health = { hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null };
+const FULL: Health = { hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null, spare: 0 };
 
 describe('which levels are finales', () => {
   it('is the last level of every area, read from the area size alone', () => {

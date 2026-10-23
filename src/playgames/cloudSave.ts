@@ -1,6 +1,7 @@
 import { clearGateRecord } from '../game/areaGates';
 import { loadProgress, mergeProgress, readTeachFlags, resetGeneration, saveProgress, setResetGeneration, setTeachFlags, type Progress, type TeachFlag } from '../game/progress';
 import { completeTutorial, setTutorialState, skipTutorial, tutorialState } from '../game/TutorialRun';
+import { loadReplayTimer, mergeShelf, NO_TIMER, parseHeldTimer, pruneShelf, saveReplayTimer, SHELF_MAX, type HeldTimer } from '../game/replayTimer';
 import {
   SNAPSHOT_FAILED, type PlayGames, type SnapshotConflict, type SnapshotFailure, type SnapshotPayload, type SnapshotReason,
 } from './playGames';
@@ -19,6 +20,16 @@ import {
  * merged with this device's own, and the merge is the resolution. A timestamp decides
  * nothing. Nothing in a snapshot can take a level away, grant a heart, or restore a
  * purchase, because none of those is in it (`CloudSaveV1`).
+ *
+ * **With one owned exception: the replay-timer shelf** (`held`). A bought timer waits on the
+ * shelf until the player starts it, and a consumed Play purchase that lives only on one
+ * device would be lost with a reinstall or a new phone — so the held items travel, as the
+ * one thing a player owns that the cloud carries. They merge by union on their id, a
+ * started copy beating a held one (`game/replayTimer.ts`'s tombstones), across reset
+ * generations too: a reset throws away the road, never a paid timer. The running expiry
+ * and the claim ledger stay with the device. The field sits on schema version 1 because a
+ * version this client reads as newer stops the sync whole; an older client ignores the
+ * field and writes without it, and the next sync from a newer one puts it back.
  *
  * **Except what the player threw away.** Settings → Reset progress is the one deliberate
  * loss, and a merge that only adds brought the old progression straight back on the next
@@ -86,13 +97,15 @@ export interface CloudSaveV1 {
   readonly teach: Readonly<Record<CloudTeach, boolean>>;
   /** How many times this progression has been reset. The higher generation wins a merge whole. */
   readonly reset: number;
+  /** The replay-timer shelf: held timers and the tombstones of started ones (`game/replayTimer.ts`). */
+  readonly held: readonly HeldTimer[];
 }
 
 const NO_TEACH: Readonly<Record<CloudTeach, boolean>> = Object.freeze({ seen: false, triplet: false, sixteenth: false, scrapbook: false });
 const EMPTY_PROGRESS: Progress = Object.freeze({ unlocked: 1, best: Object.freeze({}) });
 
 export function emptyCloudSave(): CloudSaveV1 {
-  return { version: 1, progress: EMPTY_PROGRESS, tutorial: 'none', teach: NO_TEACH, reset: 0 };
+  return { version: 1, progress: EMPTY_PROGRESS, tutorial: 'none', teach: NO_TEACH, reset: 0, held: [] };
 }
 
 const clampAccuracy = (value: number): number => Math.max(0, Math.min(100, value));
@@ -100,6 +113,24 @@ const clampAccuracy = (value: number): number => Math.max(0, Math.min(100, value
 /** A generation as the cloud carries it: a whole number from 0, bounded; anything else is 0, the generation every save started on. */
 function boundReset(value: unknown): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 ? Math.min(CLOUD_SAVE.maxReset, value) : 0;
+}
+
+/** The shelf as the cloud carries it: valid items only, one per id, sorted, bounded, fixed key order. */
+function boundHeld(raw: unknown): HeldTimer[] {
+  if (!Array.isArray(raw)) return [];
+  const items: HeldTimer[] = [];
+  for (const entry of raw) {
+    const item = parseHeldTimer(entry);
+    if (item) items.push(item);
+  }
+  return mergeShelf(items, []).map(canonicalHeld);
+}
+
+function canonicalHeld(item: HeldTimer): HeldTimer {
+  const held: { -readonly [K in keyof HeldTimer]: HeldTimer[K] } = { id: item.id, minutes: item.minutes, source: item.source };
+  if (item.startBy !== undefined) held.startBy = item.startBy;
+  if (item.startedAt !== undefined) held.startedAt = item.startedAt;
+  return held;
 }
 
 /** A progress bounded the way the cloud carries it: valid levels only, the frontier never below the clears. */
@@ -136,6 +167,7 @@ export function encodeCloudSave(save: CloudSaveV1): string {
     tutorial: TUTORIAL_RANK[save.tutorial] === undefined ? 'none' : save.tutorial,
     teach,
     reset: boundReset(save.reset),
+    held: boundHeld(save.held).slice(0, SHELF_MAX),
   });
 }
 
@@ -158,7 +190,7 @@ export function decodeCloudSave(text: string | null): CloudDecode {
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { return { kind: 'malformed' }; }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { kind: 'malformed' };
-  const record = parsed as { version?: unknown; progress?: unknown; tutorial?: unknown; teach?: unknown; reset?: unknown };
+  const record = parsed as { version?: unknown; progress?: unknown; tutorial?: unknown; teach?: unknown; reset?: unknown; held?: unknown };
   const version = record.version;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return { kind: 'malformed' };
   if (version > CLOUD_SAVE.version) return { kind: 'unsupported', version };
@@ -177,6 +209,8 @@ export function decodeCloudSave(text: string | null): CloudDecode {
       teach,
       // A payload from before resets travelled has none, and reads as the first generation.
       reset: boundReset(record.reset),
+      // A payload from before the shelf travelled has none; a bad item is dropped, not the shelf.
+      held: boundHeld(record.held),
     },
   };
 }
@@ -189,8 +223,10 @@ export function decodeCloudSave(text: string | null): CloudDecode {
 export function mergeCloudSaves(a: CloudSaveV1, b: CloudSaveV1): CloudSaveV1 {
   const resetA = boundReset(a.reset), resetB = boundReset(b.reset);
   if (resetA !== resetB) {
+    // The older generation is the road a reset threw away. Its shelf is not: a paid timer
+    // survives a reset, so the two shelves still merge.
     const newer = resetA > resetB ? a : b;
-    return { ...newer, version: 1, reset: Math.max(resetA, resetB) };
+    return { ...newer, version: 1, reset: Math.max(resetA, resetB), held: mergeShelf(a.held, b.held) };
   }
   const teach = {} as Record<CloudTeach, boolean>;
   for (const flag of CLOUD_TEACH) teach[flag] = a.teach[flag] === true || b.teach[flag] === true;
@@ -200,6 +236,7 @@ export function mergeCloudSaves(a: CloudSaveV1, b: CloudSaveV1): CloudSaveV1 {
     tutorial: TUTORIAL_RANK[a.tutorial] >= TUTORIAL_RANK[b.tutorial] ? a.tutorial : b.tutorial,
     teach,
     reset: resetA,
+    held: mergeShelf(a.held, b.held),
   };
 }
 
@@ -338,8 +375,13 @@ export interface CloudStore {
  * it exactly, the one level that may have been cleared meanwhile included in the loss.
  * `replace` is the one exact write, for the device changing hands, and it leaves
  * `replayTip` alone — that flag is about the hearts, which stay with the device.
+ *
+ * The shelf rides along: `read` offers the device's held timers, pruned; `write` unions the
+ * arriving shelf into the device's record and touches nothing else of it — the running
+ * expiry and the claim ledger are the device's; `replace` puts the arriving player's shelf
+ * in place of the previous owner's, whose own is inside their shelved save.
  */
-export function localCloudSave(storage: Storage | null): CloudLocal {
+export function localCloudSave(storage: Storage | null, now: () => number = Date.now): CloudLocal {
   const teachOf = (flags: Readonly<Record<string, boolean>>): Readonly<Record<CloudTeach, boolean>> => {
     const teach = {} as Record<CloudTeach, boolean>;
     for (const flag of CLOUD_TEACH) teach[flag] = flags[flag] === true;
@@ -358,12 +400,22 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
     // The gate record described the progression being replaced; the next read takes a
     // baseline from the one arriving (`loadGates`), as a first launch would.
     clearGateRecord(storage);
+    writeShelf(save.held, false);
     return stored && tutorial && teach && setResetGeneration(boundReset(save.reset), storage);
+  };
+  const writeShelf = (held: readonly HeldTimer[], merge: boolean): boolean => {
+    const at = now();
+    const record = loadReplayTimer(storage, at) ?? NO_TIMER;
+    const shelf = merge ? mergeShelf(record.shelf, held) : mergeShelf(held, []);
+    const next = pruneShelf({ ...record, shelf }, at);
+    if (next.shelf.length === record.shelf.length && next.shelf.every((item, i) => item === record.shelf[i])) return true;
+    return saveReplayTimer(next, storage);
   };
   return {
     read: () => ({
       version: 1, progress: loadProgress(storage), tutorial: tutorialState(storage), teach: teachOf(readTeachFlags(storage)),
       reset: resetGeneration(storage),
+      held: pruneShelf(loadReplayTimer(storage, now()) ?? NO_TIMER, now()).shelf,
     }),
     write(save) {
       if (boundReset(save.reset) > resetGeneration(storage)) return exact(save);
@@ -373,6 +425,7 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
       const seen: Partial<Record<CloudTeach, boolean>> = {};
       for (const flag of CLOUD_TEACH) if (save.teach[flag]) seen[flag] = true;
       if (Object.keys(seen).length > 0) setTeachFlags(seen, storage);
+      writeShelf(save.held, true);
       return stored;
     },
     replace: exact,

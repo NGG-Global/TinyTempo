@@ -42,6 +42,7 @@ describe('Reset progress', () => {
     expect(keptKeepsakes(storage, () => road(40)).size).toBeGreaterThan(0);
     storage.setItem('tiny-tempo.health.v1', '{"hearts":2,"regenAt":123}');
     storage.setItem('tiny-tempo.fills.v1', '["GPA.1234-5678"]');
+    storage.setItem('tiny-tempo.daily.v1', '{"version":1,"day":"2026-10-23","band":"steady","best":80,"bestStars":2,"runs":1,"paid":2,"timerMinutes":40}');
     loadObjectives(1_000, objectiveContext(road(40)), storage);
 
     const outcome = resetProgress(storage);
@@ -56,7 +57,9 @@ describe('Reset progress', () => {
     // The refill ledger is a record of purchases already honoured, and stays: a replayed
     // purchase after the reset still fills nothing.
     expect(storage.getItem('tiny-tempo.fills.v1')).toBe('["GPA.1234-5678"]');
-    expect(claimFill({ hearts: 0, refillStartedAt: 1, spentAttempt: null }, 'GPA.1234-5678', 1_000, storage).granted).toBe(false);
+    expect(claimFill({ hearts: 0, refillStartedAt: 1, spentAttempt: null, spare: 0 }, 'GPA.1234-5678', 1_000, storage).granted).toBe(false);
+    // The Daily Tempo day's reward record stays, so a reset cannot pay the day out twice.
+    expect(storage.getItem('tiny-tempo.daily.v1')).toContain('"paid":2');
     expect(loadGates(loadProgress(storage), storage)).toEqual({ opened: 0 });
     // The keepsakes kept from the old schedule went with the save that held them.
     expect(keptKeepsakes(storage, () => loadProgress(storage)).size).toBe(0);

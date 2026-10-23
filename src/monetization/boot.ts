@@ -2,7 +2,8 @@ import { Capacitor } from '@capacitor/core';
 
 import { reportError } from '@/core/errors';
 import { redeemFill } from '@/game/health';
-import { redeemTimer } from '@/game/replayTimer';
+import { redeemHeldTimer, timerLeftMs } from '@/game/replayTimer';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { track } from './analytics';
 import { createAdMobAds } from './admob';
 import { createPlayBilling } from './playBilling';
@@ -44,11 +45,16 @@ export async function bootMonetization(): Promise<void> {
         // between granting and consuming safe to replay.
         fulfilRefill: claimId => { redeemFill(claimId); },
         // The same shape: `game/replayTimer.ts` persists the claim ids, so a replayed
-        // purchase adds its minutes once. Reported with what the timer now holds, since a
-        // purchase can stack on one still running.
+        // purchase holds once. Holding rather than starting is what lets the player choose
+        // when a paid timer runs; the one place a purchase starts at once is the restart
+        // sheet's Buy & restart, which starts the held item itself. Reported with what the
+        // running timer holds, since a start can stack on one still running.
         fulfilTimer: (product, claimId) => {
-          const grant = redeemTimer(product, claimId);
-          if (grant.granted) track('replay_timer_granted', { product, minutes_left: Math.ceil(Math.max(0, grant.timer.expiresAt - Date.now()) / 60_000) });
+          const grant = redeemHeldTimer(product, claimId);
+          if (!grant.held) return;
+          track('replay_timer_granted', { product, minutes_left: Math.ceil(timerLeftMs(grant.timer, Date.now()) / 60_000), held: 1 });
+          // The shelf is the one owned thing the cloud carries: a bought timer must survive a reinstall.
+          queueCloudSave();
         },
       });
       billing = adapter;

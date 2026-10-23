@@ -24,6 +24,12 @@ export const HEALTH = {
    * a threshold the player already sees.
    */
   keepAtStars: 2,
+  /**
+   * A reward heart won at full health waits as a **spare**, drawn as a sixth heart in prize
+   * brass and spent before the bar. One, never a bank: the Daily Tempo pays at most two
+   * hearts a day and the first of them is the one most often won on a full bar.
+   */
+  spareMax: 1,
 } as const;
 
 /** Shown when the bar is empty: replays stay free, the frontier still costs a heart. */
@@ -53,11 +59,15 @@ export interface Health {
   readonly refillStartedAt: number | null;
   /** Attempt currently holding a spent heart, if any. Used so spend/refund are idempotent. */
   readonly spentAttempt: string | null;
+  /** Reward hearts held above the bar, 0 to `HEALTH.spareMax`; spent first. */
+  readonly spare: number;
 }
 
 export interface HealthView {
   readonly hearts: number;
   readonly maxHearts: number;
+  /** Spare hearts above the bar, drawn as a sixth heart in brass. */
+  readonly spare: number;
   /** Milliseconds until the next heart, or null when already at max. */
   readonly nextHeartInMs: number | null;
 }
@@ -93,19 +103,26 @@ const DAILY_KEY = 'tiny-tempo.daily-heart.v1';
 const claimedDays = new Set<string>();
 /** Written but not required on read, so a future migration has something to branch on. */
 const VERSION = 1;
-const FULL: Health = Object.freeze({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null });
+const FULL: Health = Object.freeze({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null, spare: 0 });
 
 function freeze(health: Health): Health {
   return Object.freeze({
     hearts: health.hearts,
     refillStartedAt: health.refillStartedAt,
     spentAttempt: health.spentAttempt,
+    spare: clampSpare(health.spare),
   });
 }
 
 function clampHearts(value: unknown): number | null {
   if (typeof value !== 'number' || !Number.isInteger(value)) return null;
   return Math.max(0, Math.min(HEALTH.max, value));
+}
+
+/** A spare count is 0 or 1; anything else stored reads as none. */
+function clampSpare(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isInteger(value)) return 0;
+  return Math.max(0, Math.min(HEALTH.spareMax, value));
 }
 
 /**
@@ -128,17 +145,19 @@ export function reconcile(health: Health, now: number): Health {
     hearts,
     refillStartedAt: hearts >= HEALTH.max ? null : started + gained * HEALTH.regenMs,
     spentAttempt: health.spentAttempt,
+    spare: health.spare,
   });
 }
 
 export function viewHealth(health: Health, now: number = Date.now()): HealthView {
   const live = reconcile(health, now);
   if (live.hearts >= HEALTH.max || live.refillStartedAt === null) {
-    return { hearts: Math.min(HEALTH.max, live.hearts), maxHearts: HEALTH.max, nextHeartInMs: null };
+    return { hearts: Math.min(HEALTH.max, live.hearts), maxHearts: HEALTH.max, spare: clampSpare(live.spare), nextHeartInMs: null };
   }
   return {
     hearts: live.hearts,
     maxHearts: HEALTH.max,
+    spare: clampSpare(live.spare),
     nextHeartInMs: Math.max(0, live.refillStartedAt + HEALTH.regenMs - now),
   };
 }
@@ -164,11 +183,12 @@ export function formatCountdown(ms: number): string {
 export function healthHud(
   view: HealthView,
   options: { readonly premium?: boolean } = {},
-): { readonly count: string; readonly wait: string | null } {
-  if (options.premium === true) return { count: '∞', wait: null };
+): { readonly count: string; readonly wait: string | null; readonly spare: string | null } {
+  if (options.premium === true) return { count: '∞', wait: null, spare: null };
   return {
     count: `${view.hearts}/${view.maxHearts}`,
     wait: view.nextHeartInMs === null ? null : formatCountdown(view.nextHeartInMs),
+    spare: view.spare > 0 ? `+${view.spare}` : null,
   };
 }
 
@@ -228,7 +248,7 @@ export function canBeginAttempt(
   const live = reconcile(health, now);
   // Resume / restart of a try that already spent: the heart is this attempt's, even at 0.
   if (attemptId !== null && live.spentAttempt === attemptId) return true;
-  return live.hearts > 0;
+  return live.hearts > 0 || live.spare > 0;
 }
 
 /** Local `YYYY-MM-DD`, so a daily heart resets at the player's midnight, not UTC. */
@@ -261,6 +281,8 @@ export function beginAttempt(
   const live = reconcile(health, now);
   if (premium || !attemptCostsHeart(progress, level)) return { ok: true, spent: false, health: live };
   if (live.spentAttempt === attemptId) return { ok: true, spent: true, health: live };
+  // A spare goes first: it sits above the bar, so spending it leaves the bar and its clock alone.
+  if (live.spare > 0) return { ok: true, spent: true, health: freeze({ ...live, spare: live.spare - 1, spentAttempt: attemptId }) };
   if (live.hearts <= 0) return { ok: false, spent: false, health: live };
   return {
     ok: true,
@@ -270,6 +292,7 @@ export function beginAttempt(
       // Start the clock only when leaving full health; an existing refill keeps its stamp.
       refillStartedAt: live.refillStartedAt ?? now,
       spentAttempt: attemptId,
+      spare: live.spare,
     }),
   };
 }
@@ -284,6 +307,7 @@ export function finishAttempt(
   const live = reconcile(health, now);
   if (live.spentAttempt !== attemptId) return { refunded: false, health: live };
   if (stars >= HEALTH.keepAtStars) {
+    // The refund goes to the bar and never above it: a spare is a reward, not a refund.
     const hearts = Math.min(HEALTH.max, live.hearts + 1);
     return {
       refunded: true,
@@ -291,6 +315,7 @@ export function finishAttempt(
         hearts,
         refillStartedAt: hearts >= HEALTH.max ? null : (live.refillStartedAt ?? now),
         spentAttempt: null,
+        spare: live.spare,
       }),
     };
   }
@@ -318,8 +343,21 @@ export function grantHeart(health: Health, now: number = Date.now()): GrantHeart
       hearts,
       refillStartedAt: hearts >= HEALTH.max ? null : (live.refillStartedAt ?? now),
       spentAttempt: live.spentAttempt,
+      spare: live.spare,
     }),
   };
+}
+
+/**
+ * A heart won by a Daily Tempo star: onto the bar while it has room, otherwise held as the
+ * one spare above it, and refused only when both are full. No claim id here — the reward
+ * record's paid tiers are the ledger (`game/dailyRewards.ts`), so one fact has one keeper.
+ */
+export function grantRewardHeart(health: Health, now: number = Date.now()): GrantHeartResult {
+  const live = reconcile(health, now);
+  if (live.hearts < HEALTH.max) return grantHeart(live, now);
+  if (live.spare >= HEALTH.spareMax) return { granted: false, health: live };
+  return { granted: true, health: freeze({ ...live, spare: live.spare + 1 }) };
 }
 
 /**
@@ -380,6 +418,7 @@ export function fillHearts(health: Health, now: number = Date.now()): GrantHeart
       hearts: HEALTH.max,
       refillStartedAt: null,
       spentAttempt: live.spentAttempt,
+      spare: live.spare,
     }),
   };
 }
@@ -418,8 +457,8 @@ export function loadHealth(storage: Storage | null = safeStorage(), now: number 
     if (!raw) return FULL;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== 'object' || parsed === null) return FULL;
-    const { hearts, refillStartedAt, spentAttempt } = parsed as {
-      hearts?: unknown; refillStartedAt?: unknown; spentAttempt?: unknown;
+    const { hearts, refillStartedAt, spentAttempt, spare } = parsed as {
+      hearts?: unknown; refillStartedAt?: unknown; spentAttempt?: unknown; spare?: unknown;
     };
     const cleanHearts = clampHearts(hearts);
     if (cleanHearts === null) return FULL;
@@ -430,6 +469,7 @@ export function loadHealth(storage: Storage | null = safeStorage(), now: number 
       hearts: cleanHearts,
       refillStartedAt: cleanHearts >= HEALTH.max ? null : started,
       spentAttempt: attempt,
+      spare: clampSpare(spare),
     }), now);
   } catch {
     return FULL;

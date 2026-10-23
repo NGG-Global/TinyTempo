@@ -36,14 +36,15 @@ import {
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
-import { loadReplayTimer, redeemTimer, replayTimerActive, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { loadReplayTimer, redeemHeldTimer, replayTimerActive, shelfView, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { startRefusalCopy } from '@/game/store';
 import { syncReminders } from '@/reminders/sync';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
-import { queueCloudSave } from '@/playgames/cloudSync';
+import { queueCloudSave, startHeldTimerSynced } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound, prepareFinaleSounds, type FinaleSoundPrep } from '@/audio/finaleSounds';
 import { momentOf } from '@/game/TutorialRun';
@@ -870,7 +871,7 @@ export class PlayScene extends BaseScene {
     drawHeartRow(g, {
       centreX: this.viewport.safe.centerX, y: this.viewport.safe.top + 247 * s,
       count: view.maxHearts, radius: 23 * s, gap: 60 * s,
-      filled: view.hearts, part: heartProgress(view),
+      filled: view.hearts, part: heartProgress(view), spare: view.spare,
       full: PALETTE.coral, empty: SHELL.cream, emptyAlpha: 0.18, emptyOutline: SHELL.cream,
     });
   }
@@ -3300,6 +3301,8 @@ export class PlayScene extends BaseScene {
       premium: monetization().premium(), timerActive: replayTimerActive(now), attemptId: this.attemptId,
       outcomeRecorded: this.outcome !== null, scoredResponseBegun: this.scoredResponseBegun,
       restartsLeft: restartsLeft(loadDailyRestarts(), now),
+      // Only what can be started: an item past its window is the shelf's to show, not the sheet's.
+      shelf: shelfView(loadReplayTimer(undefined, now), now).items.filter(item => item.state !== 'expired'),
     };
   }
 
@@ -3334,12 +3337,12 @@ export class PlayScene extends BaseScene {
     }
     const sheet = sheetFor(kind)!;
     playAnalytics.restartRequested(this.spec.level, sheet, this.restartFlags(facts));
-    this.openRestartSheet(sheet, facts.restartsLeft);
+    this.openRestartSheet(sheet, facts);
   }
 
-  private openRestartSheet(kind: RestartSheetKind, left: number): void {
+  private openRestartSheet(kind: RestartSheetKind, facts: RestartFacts): void {
     const previous = this.restartSheet.kind;
-    this.restartSheet.show(kind, performance.now() / 1000, left);
+    this.restartSheet.show(kind, performance.now() / 1000, facts.restartsLeft, facts.shelf);
     // The ad is reported when the empty sheet is what the player is looking at, once per
     // showing of it, never for the daily sheet: an ad is never offered beside a restart.
     // The timers are reported once per opening of their picker, one offer per product.
@@ -3359,7 +3362,7 @@ export class PlayScene extends BaseScene {
     const facts = this.restartFacts();
     const next = liveSheet(facts, this.restartSheet.kind);
     if (next === null) { this.closeRestartSheet('run_ended'); return; }
-    this.openRestartSheet(next, facts.restartsLeft);
+    this.openRestartSheet(next, facts);
   }
 
   /** Close without restarting. Reported once; a sheet waiting on an ad is reported by that path instead. */
@@ -3379,7 +3382,7 @@ export class PlayScene extends BaseScene {
     const shown = this.restartSheet.kind;
     if (choice === 'keep') {
       // The picker's Back is a page turn, not a decision: the empty sheet is still the answer.
-      if (shown === 'timers') { this.openRestartSheet('empty', this.restartFacts().restartsLeft); return; }
+      if (shown === 'timers') { this.openRestartSheet('empty', this.restartFacts()); return; }
       this.closeRestartSheet('keep_playing');
       return;
     }
@@ -3387,8 +3390,12 @@ export class PlayScene extends BaseScene {
     // begun, the day turned, a timer arrived — the sheet changes and asks again.
     const facts = this.restartFacts();
     if (liveSheet(facts, shown) !== shown) { this.refreshRestartSheet(); return; }
-    if (choice === 'timers') { this.openRestartSheet('timers', facts.restartsLeft); return; }
-    if (typeof choice === 'object') { void this.buyTimerToRestart(choice.buy); return; }
+    if (choice === 'timers') { this.openRestartSheet('timers', facts); return; }
+    // A length picked on the picker is a choice, not a purchase: Buy & restart is the purchase.
+    if (typeof choice === 'object' && 'pick' in choice) { this.restartSheet.pick(choice.pick); return; }
+    // A timer already on the shelf: started and the level restarts, nothing bought.
+    if (typeof choice === 'object') { this.startHeldToRestart(choice.start, facts); return; }
+    if (shown === 'timers') { void this.buyTimerToRestart(this.restartSheet.picked); return; }
     if (shown === 'free') {
       this.restartSheet.hide();
       playAnalytics.restartConfirmed(this.spec.level, 'free', this.restartFlags(facts));
@@ -3409,12 +3416,35 @@ export class PlayScene extends BaseScene {
   }
 
   /**
-   * A row of the picker: buy the timer and restart. The grant is the billing adapter's
-   * (`fulfilTimer`, idempotent per claim id), so the purchase has already added its minutes
-   * by the time the result arrives; `redeemTimer` here is a no-op that reads the same claim,
-   * kept so a result that reaches the scene before the adapter's fulfilment still restarts
-   * on a timer. The restart itself is the same free reset every other restart is, and only
-   * on the run that asked for it (`ticketStillApplies`): a store sheet can outlive a level.
+   * A shelf row on the empty sheet: start the held timer and restart. Starting is the
+   * player's choice, made here, so the restart is free from this moment; a start the record
+   * refuses (a week already stacked, an item gone past its hour) says why and restarts
+   * nothing, since nothing paid for it.
+   */
+  private startHeldToRestart(id: string, facts: RestartFacts): void {
+    const outcome = startHeldTimerSynced(id);
+    if (!outcome.started) {
+      this.restartSheet.say(startRefusalCopy(outcome.reason));
+      this.refreshRestartSheet();
+      return;
+    }
+    vibrate('stamp');
+    this.puckDirty = true;
+    this.restartSheet.hide();
+    playAnalytics.restartConfirmed(this.spec.level, 'timer', { ...this.restartFlags(facts), timer: true });
+    void this.startRound('free_restart');
+  }
+
+  /**
+   * The picker's Buy & restart: buy the length picked and restart. The hold is the billing adapter's
+   * (`fulfilTimer`, idempotent per claim id), so the purchase is already on the shelf by the
+   * time the result arrives; `redeemHeldTimer` here is a no-op that reads the same claim,
+   * kept so a result that reaches the scene before the adapter's fulfilment still finds the
+   * item. **This is the one place a purchase starts at once**: the player asked to restart,
+   * so the held item is started and the level restarts, and they never tap twice. A start
+   * the record cannot take (a week already stacked) keeps the item held and says so. The
+   * restart itself is the same free reset every other restart is, and only on the run that
+   * asked for it (`ticketStillApplies`): a store sheet can outlive a level.
    */
   private async buyTimerToRestart(product: TimerProductId): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
@@ -3424,11 +3454,17 @@ export class PlayScene extends BaseScene {
     this.restartSheet.setBusy(RESTART_COPY.buying);
     try {
       const result = await monetization().purchase(product);
-      if (result.ok) redeemTimer(product, result.claimId);
+      if (result.ok) redeemHeldTimer(product, result.claimId);
+      const started = result.ok ? startHeldTimerSynced(result.claimId) : null;
       if (this.disposed) return;
       this.restartSheet.setBusy(null);
       if (!result.ok) {
         this.restartSheet.say(purchaseFeedback(result.reason));
+        return;
+      }
+      if (started && !started.started && started.reason !== 'started') {
+        // Held, not started: the timer is the player's on the shelf, and nothing restarts.
+        this.restartSheet.say(STORE_COPY.timerHeldInstead);
         return;
       }
       vibrate('stamp');

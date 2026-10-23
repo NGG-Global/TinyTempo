@@ -206,6 +206,24 @@ export function drawTimer(g: Phaser.GameObjects.Graphics, x: number, y: number, 
  * A price tag hung point-up: the Workshop store's puck. `hole` is the colour behind the
  * tag, so its eyelet reads as a hole rather than a dot.
  */
+/** A sun: the Daily Tempo's mark, on the home block, the mode tag and a won timer's badge. A disc and eight short rays. */
+/** Two rounded bars: the run's pause, which opens the leave sheet while the run goes on under it. */
+export function drawPause(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  const w = r * 0.42, h = r * 1.3, gap = r * 0.22;
+  g.fillStyle(colour, alpha);
+  g.fillRoundedRect(x - gap / 2 - w, y - h / 2, w, h, w * 0.4);
+  g.fillRoundedRect(x + gap / 2, y - h / 2, w, h, w * 0.4);
+}
+
+export function drawSun(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, alpha = 1): void {
+  g.fillStyle(colour, alpha).fillCircle(x, y, r * 0.52);
+  g.lineStyle(Math.max(1.5, r * 0.18), colour, alpha);
+  for (let i = 0; i < 8; i++) {
+    const a = i / 8 * Math.PI * 2;
+    g.lineBetween(x + Math.cos(a) * r * 0.7, y + Math.sin(a) * r * 0.7, x + Math.cos(a) * r, y + Math.sin(a) * r);
+  }
+}
+
 export function drawPriceTag(g: Phaser.GameObjects.Graphics, x: number, y: number, r: number, colour: number, hole: number, alpha = 1): void {
   // Laid out point-left, then turned a quarter-turn counter-clockwise, so the point is upper-left.
   const turn = Math.PI / 4;

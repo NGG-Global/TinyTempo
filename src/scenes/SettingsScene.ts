@@ -17,16 +17,20 @@ import { resetProgress } from '@/game/resetProgress';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard } from '@/playgames/dailyTempo';
 import { achievementsOffered, openAchievements } from '@/playgames/achievementSync';
 import { queueCloudSave, repairCloudBinding } from '@/playgames/cloudSync';
-import { HEALTH, heartProgress, formatCountdown, loadHealth, viewHealth } from '@/game/health';
+import { HEALTH, heartProgress, formatCountdown, loadHealth, redeemFill, viewHealth } from '@/game/health';
 import { clampVolume, loadSettings, saveSettings, type VolumeBus } from '@/game/settings';
 import { supportMailto } from '@/game/supportReport';
-import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type ProductId } from '@/monetization';
-import { formatTimerLeft, isTimerProduct, loadReplayTimer, REPLAY_TIMERS, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, STORE_COPY, track, type SoldProductId } from '@/monetization';
+import { redeemHeldTimer } from '@/game/replayTimer';
+import { startRefusalCopy, storeRows, storeStatusChip } from '@/game/store';
+import { readStoreFacts } from '@/game/storeFacts';
+import { startHeldTimerSynced } from '@/playgames/cloudSync';
+import { StoreCard } from '@/ui/storeCard';
 import { BakedLayer, bakeOne } from '@/ui/bakedLayer';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawHeartRow, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
-import { drawBack, drawChecklist, drawChevron, drawHeart, drawInfinity, drawNote, drawSpeaker, drawTimer, drawVibrate } from '@/ui/icons';
+import { drawBack, drawChecklist, drawChevron, drawInfinity, drawNote, drawSpeaker, drawTimer, drawVibrate } from '@/ui/icons';
 import { loadReminderSettings, type ReminderState } from '@/reminders/reminder';
 import { currentReminderState, remindersAvailable, turnRemindersOff, turnRemindersOn } from '@/reminders/sync';
 import { faces } from '@/ui/light';
@@ -55,7 +59,7 @@ const SETTINGS = {
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
-type Action = 'back' | 'haptics' | 'reminder' | 'tune' | 'offsetReset' | 'restore' | 'refill' | TimerProductId
+type Action = 'back' | 'haptics' | 'reminder' | 'tune' | 'offsetReset' | 'store'
   | 'transfer' | 'leaderboard' | 'achievements' | 'reset' | 'analytics' | 'adPrivacy' | 'lesson' | 'help' | 'feedback' | 'credit' | 'privacy' | 'terms' | 'done';
 
 interface Hit { readonly name: Action; readonly rect: Phaser.Geom.Rectangle; readonly pinned: boolean }
@@ -72,8 +76,10 @@ const LEGAL = {
  * offering a button labelled with the opposite of that sentence — "Sound on" beside
  * "Mute". The refinement groups the rows under labelled sections. Music and effects are
  * levels, haptics stays a switch, the hearts are the ones the player actually has,
- * gives the store its own brass object rather than a fifth grey card, and moves the
- * sixteen-second latency measurement onto its own screen.
+ * gives the store its own brass object rather than a fifth grey card — one row, since
+ * the store itself is the shared card (`ui/storeCard.ts`) that opens over this screen as
+ * it opens over the map, so Settings never carries a second copy of what is for sale —
+ * and moves the sixteen-second latency measurement onto its own screen.
  *
  * The sections scroll between a pinned title and a pinned Done, because the store and
  * the hearts status together are taller than a handset. The scrolling band is a masked
@@ -110,6 +116,8 @@ export class SettingsScene extends BaseScene {
   private storeRadius = 0;
   private sheenAt = Number.NaN;
   private storePollAt = 0;
+  /** The Workshop store, the same card the map opens, over this screen with a camera of its own. */
+  private storeCard!: StoreCard;
   private curtain!: SceneCurtain;
   private hint!: ScreenHint;
   private uiScale = 1;
@@ -216,6 +224,8 @@ export class SettingsScene extends BaseScene {
     window.addEventListener('blur', this.cancelDrag);
     window.addEventListener('pointercancel', this.cancelDrag);
     this.curtain = new SceneCurtain(this);
+    // The store draws with a camera of its own over the sections' camera, and the hint over both.
+    this.storeCard = new StoreCard(this, 30, { price: product => monetization().productPrice(product), facts: () => readStoreFacts(loadHealth()) });
     // Last, after the sections' camera: the hint draws with a camera of its own over every other.
     this.hint = new ScreenHint(this, 'settings');
     this.events.once(Phaser.Scenes.Events.CREATE, () => this.curtain.reveal(() => this.hint.showIfNew(performance.now() / 1000)));
@@ -257,16 +267,10 @@ export class SettingsScene extends BaseScene {
       offsetReset: chip('Reset'),
       heartCount: this.banded(display(this, '', { size: 42, colour: ink })).setOrigin(1, 0.5),
       heartWait: rowNote(''),
-      store: this.banded(display(this, STORE_COPY.timersTitle, { size: 48, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
-      // Top-anchored: the terms wrap on a narrow handset, and a second line has to grow
-      // down into the card rather than up into the title.
-      storeTerms: this.banded(body(this, STORE_COPY.timersTerms, { size: 22, colour: shade(BRASS, -0.62) })).setOrigin(0, 0),
-      /** The badge on the card's corner: what the timer holds while one runs. */
-      storeBadge: chip('', cream),
-      restore: chip('Restore'),
-      refill: rowTitle(STORE_COPY.refillTitle),
-      refillNote: rowNote(`· ${STORE_COPY.refillTerms.toLowerCase()}`),
-      refillPrice: chip(''),
+      store: this.banded(display(this, STORE_COPY.settingsStore, { size: 40, colour: cream, outline: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
+      /** The chip under the title: what is running and what is on the shelf, read every second. */
+      storeStatus: this.banded(label(this, '', { size: 20, colour: shade(BRASS, -0.62) })).setOrigin(0, 0.5),
+      storeOpen: chip(STORE_COPY.settingsOpen),
       // The lesson, here once it has been passed: the title screen gives its row back to Play.
       lesson: rowTitle('How to play'),
       lessonNote: rowNote('Take the short lesson again'),
@@ -308,19 +312,9 @@ export class SettingsScene extends BaseScene {
       // inside a centred box came out ragged against the card's own centre line.
       notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
-    // The four timers' rows: a length each, and its price on a chip.
-    REPLAY_TIMERS.forEach((option, i) => {
-      this.texts[`timer${i}`] = this.banded(body(this, option.label, { size: 30, colour: ink })).setOrigin(0, 0.5);
-      this.texts[`timerPrice${i}`] = chip('', cream);
-    });
     this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
     this.texts.version = body(this, `· v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
-  }
-
-  /** A refill is an offer only while there is room for the hearts it would restore. */
-  private refillOffered(): boolean {
-    return !monetization().premium() && viewHealth(loadHealth()).hearts < HEALTH.max;
   }
 
   /**
@@ -394,6 +388,7 @@ export class SettingsScene extends BaseScene {
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
     this.pressDirty = true;
+    this.storeCard.layout(safe, this.viewport.full, s);
     this.hint.layout(this.viewport, s);
     // The first layout is under the curtain: rasterise now rather than on the reveal's frames.
     if (!this.primed) {
@@ -522,71 +517,35 @@ export class SettingsScene extends BaseScene {
     this.texts.heartCount!.setPosition(hearts.right - 28 * s, hearts.y + 46 * s);
     this.texts.heartWait!.setOrigin(1, 0.5).setPosition(hearts.right - 28 * s, hearts.bottom - 40 * s);
 
-    // WORKSHOP STORE — brass, because it is the one thing on the screen that is for sale:
-    // the four replay timers, a row each. An account holding the legacy Premium has nothing
-    // to buy here — its restarts are already free — so it sees its entitlement and Restore.
+    // WORKSHOP STORE — brass, because it is the one thing on the screen that is for sale,
+    // and one row: the medallion, what the store sells, a chip saying what the player holds,
+    // and Open, which raises the same card the map's puck does. The timers and the refill
+    // are sold there and nowhere else, so Settings cannot drift from the map on what is for
+    // sale. An account holding the legacy Premium sees its entitlement; Open still shows the
+    // card, since Restore lives on it.
     eyebrow(3);
     const entitled = monetization().premium();
-    const optionH = Math.max(76 * s, control);
-    const optionGap = 10 * s;
-    const optionsH = entitled ? 0 : REPLAY_TIMERS.length * optionH + (REPLAY_TIMERS.length - 1) * optionGap;
-    const restoreH = Math.max(entitled ? 100 * s : 64 * s, control);
-    const storeH = 164 * s + optionsH + (entitled ? 0 : 16 * s) + restoreH + 26 * s;
+    const storeH = Math.max(150 * s, control + 48 * s);
     const store = new Phaser.Geom.Rectangle(left, y, width, storeH);
     this.rows.store = store;
     drawPanel(g, store, s, { fill: BRASS, depth: 14, radius: 32, hero: true, frame: SHELL.cream });
     this.storeRadius = 32 * s;
-    const medal = { x: store.x + 28 * s + 50 * s, y: store.y + 92 * s, r: 50 * s };
+    const medal = { x: store.x + 28 * s + 44 * s, y: store.centerY, r: 44 * s };
     this.rows.medal = new Phaser.Geom.Rectangle(medal.x - medal.r, medal.y - medal.r, medal.r * 2, medal.r * 2);
-    resize(this.texts.store!, 44 * s, SHELL.cream);
-    this.texts.store!.setPosition(medal.x + medal.r + 24 * s, medal.y - 20 * s);
-    resize(this.texts.storeTerms!, 22 * s, shade(BRASS, -0.62), STYLE.current, false);
-    wrapWidth(this.texts.storeTerms!, width - (medal.x + medal.r + 24 * s - store.x) - 28 * s);
-    this.texts.storeTerms!.setPosition(medal.x + medal.r + 24 * s, medal.y + 14 * s);
-    this.texts.storeBadge!.setPosition(store.right - 104 * s, store.y + 4 * s);
-    let optionY = store.y + 164 * s;
-    for (let i = 0; i < REPLAY_TIMERS.length; i++) {
-      const option = REPLAY_TIMERS[i]!;
-      if (entitled) { delete this.rows[`timer${i}`]; delete this.rows[`timerPrice${i}`]; continue; }
-      const rowRect = new Phaser.Geom.Rectangle(store.x + 26 * s, optionY, width - 52 * s, optionH);
-      this.rows[`timer${i}`] = rowRect;
-      this.texts[`timer${i}`]!.setPosition(rowRect.x + 72 * s, rowRect.centerY);
-      const priceW = Math.max(140 * s, control);
-      const priceRect = new Phaser.Geom.Rectangle(rowRect.right - 16 * s - priceW, rowRect.centerY - Math.min(control, rowRect.height - 12 * s) / 2, priceW, Math.min(control, rowRect.height - 12 * s));
-      this.rows[`timerPrice${i}`] = priceRect;
-      this.texts[`timerPrice${i}`]!.setPosition(priceRect.centerX, priceRect.centerY);
-      this.hits.push({ name: option.product, rect: rowRect, pinned: false });
-      optionY += optionH + optionGap;
-    }
-    const restoreY = store.bottom - 26 * s - restoreH;
-    // Restore is for the legacy Premium, so it takes the whole row only where that is what
-    // the card is about; under the timers it is a small chip at the right, since nothing a
-    // timer sells comes back through it.
-    const restoreW = entitled ? width - 52 * s : Math.max(166 * s, control);
-    const restoreRect = new Phaser.Geom.Rectangle(store.right - 26 * s - restoreW, restoreY, restoreW, restoreH);
-    this.rows.restore = restoreRect;
-    this.hits.push({ name: 'restore', rect: restoreRect, pinned: false });
-    y += store.height + 18 * s;
-
-    // Nothing to refill at five hearts, or with premium held: the row leaves rather than
-    // sitting there as a control that cannot do anything.
-    if (this.refillOffered()) {
-      const refill = new Phaser.Geom.Rectangle(left, y, width, row);
-      this.rows.refill = refill;
-      drawPanel(g, refill, s, card);
-      this.texts.refill!.setPosition(left + 92 * s, refill.centerY);
-      this.texts.refillNote!.setPosition(left + 92 * s + this.texts.refill!.width + 10 * s, refill.centerY);
-      const priceW = Math.max(150 * s, control);
-      const priceRect = new Phaser.Geom.Rectangle(refill.right - 26 * s - priceW, refill.centerY - control / 2, priceW, control);
-      this.rows.refillPrice = priceRect;
-      this.texts.refillPrice!.setPosition(priceRect.centerX, priceRect.centerY);
-      this.hits.push({ name: 'refill', rect: priceRect, pinned: false });
-      y += row + SETTINGS.sectionGap * s;
-    } else {
-      delete this.rows.refill;
-      delete this.rows.refillPrice;
-      y += SETTINGS.sectionGap * s;
-    }
+    const openW = Math.max(132 * s, control), openH = Math.min(control, storeH - 36 * s);
+    const openRect = new Phaser.Geom.Rectangle(store.right - 26 * s - openW, store.centerY - openH / 2, openW, openH);
+    this.rows.storeOpen = openRect;
+    this.hits.push({ name: 'store', rect: store, pinned: false });
+    const copyX = medal.x + medal.r + 22 * s;
+    const copyRoom = openRect.x - 16 * s - copyX;
+    resize(this.texts.store!, 36 * s, SHELL.cream);
+    this.texts.store!.setPosition(copyX, entitled ? store.centerY - 16 * s : store.centerY - 18 * s);
+    this.texts.store!.setScale(this.texts.store!.width > copyRoom ? copyRoom / this.texts.store!.width : 1);
+    resize(this.texts.storeStatus!, 20 * s, shade(BRASS, -0.62), STYLE.current, false);
+    this.texts.storeStatus!.setPosition(copyX, store.centerY + 22 * s);
+    this.texts.storeStatus!.setScale(this.texts.storeStatus!.width > copyRoom ? copyRoom / this.texts.storeStatus!.width : 1);
+    this.texts.storeOpen!.setPosition(openRect.centerX, openRect.centerY);
+    y += store.height + SETTINGS.sectionGap * s;
 
     // PROGRESS — the way out, then the way to destroy it. The save code goes first because
     // a player who reads this far and taps the wrong one should land on the recoverable one.
@@ -781,6 +740,7 @@ export class SettingsScene extends BaseScene {
         radius: 24 * s, gap: 58 * s,
         filled: unlimited ? HEALTH.max : view.hearts,
         part: unlimited ? 0 : heartProgress(view),
+        spare: unlimited ? 0 : view.spare,
         full: PALETTE.coral, empty: shade(SHELL.puck, -0.12), emptyOutline: shade(SHELL.puck, -0.45),
       });
       // Measured against the line beside it, because "Hearts are full" and "Next in 8:24"
@@ -799,7 +759,7 @@ export class SettingsScene extends BaseScene {
         g.fillStyle(f.rim, 0.5).fillRoundedRect(bar.x + bar.height * 0.4, bar.y + 4 * s, grown - bar.height * 0.8, 5 * s, 3 * s);
       }
     }
-    // Store: the medallion, the badge plate, and the two controls.
+    // Store: the medallion and the Open chip.
     const store = this.rows.store, medal = this.rows.medal;
     if (store && medal) {
       const m = faces(shade(BRASS, 0.3));
@@ -809,42 +769,13 @@ export class SettingsScene extends BaseScene {
       g.lineStyle(STYLE.current.outline * s * 0.5, shade(BRASS, -0.55), 1).strokeCircle(medal.centerX, medal.centerY, medal.width / 2);
       if (entitled) drawInfinity(g, medal.centerX, medal.centerY, medal.width * 0.34, shade(BRASS, -0.62));
       else drawTimer(g, medal.centerX, medal.centerY, medal.width * 0.3, shade(BRASS, -0.62));
-      // The corner badge says a timer is running, and for how long; nothing otherwise.
-      const badge = this.texts.storeBadge!;
-      const running = badge.text !== '';
-      if (running) {
-        // Anchored from its own width to the card's right edge: the words change with the
-        // timer, and a fixed centre put the longer ones off the card.
-        const bw = Math.min(badge.width + 34 * s, store.width - 52 * s), bh = 40 * s;
-        badge.setScale(badge.width + 34 * s > bw ? (bw - 34 * s) / badge.width : 1);
-        badge.setPosition(store.right - 26 * s - bw / 2, store.y + bh / 2 - 8 * s);
-        g.fillStyle(shade(PALETTE.coral, -0.4), 1).fillRoundedRect(badge.x - bw / 2, store.y - 6 * s, bw, bh + 6 * s, 10 * s);
-        g.fillStyle(PALETTE.coral, 1).fillRoundedRect(badge.x - bw / 2, store.y - 8 * s, bw, bh, 10 * s);
-      }
-      badge.setVisible(running && !entitled);
     }
-    for (let i = 0; i < REPLAY_TIMERS.length; i++) {
-      const rowRect = this.rows[`timer${i}`], priceRect = this.rows[`timerPrice${i}`];
-      const option = REPLAY_TIMERS[i];
-      if (!rowRect || !priceRect || option === undefined) continue;
-      const press = sunk(option.product);
-      drawPanel(g, rowRect, s, { fill: SHELL.puck, depth: 8, press, radius: 20 });
-      const sink = 8 * s * press * 0.8;
-      drawTimer(g, rowRect.x + 36 * s, rowRect.centerY + sink, 15 * s, PALETTE.ink);
-      this.texts[`timer${i}`]!.setY(rowRect.centerY + sink);
-      g.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(priceRect.x, priceRect.y + 3 * s + sink, priceRect.width, priceRect.height, 14 * s);
-      g.fillStyle(PALETTE.coral, 1).fillRoundedRect(priceRect.x, priceRect.y + sink, priceRect.width, priceRect.height, 14 * s);
-      this.texts[`timerPrice${i}`]!.setY(priceRect.centerY + sink);
-    }
-    if (this.rows.restore) {
-      drawPanel(g, this.rows.restore, s, { fill: SHELL.cream, depth: 10, press: sunk('restore'), radius: 22 });
-      this.texts.restore!.setPosition(this.rows.restore.centerX, this.rows.restore.centerY + 10 * s * sunk('restore') * 0.8);
-    }
-    // Refill.
-    if (this.rows.refill && this.rows.refillPrice) {
-      drawHeart(g, this.rows.refill.x + 56 * s, this.rows.refill.centerY, 22 * s, PALETTE.coral);
-      drawPanel(g, this.rows.refillPrice, s, { fill: SHELL.cream, depth: 8, press: sunk('refill'), radius: 18 });
-      this.texts.refillPrice!.setY(this.rows.refillPrice.centerY + 8 * s * sunk('refill') * 0.8);
+    if (this.rows.storeOpen) {
+      const press = sunk('store');
+      drawPanel(g, this.rows.storeOpen, s, { fill: SHELL.cream, depth: 10, press, radius: 22 });
+      const sink = 10 * s * press * 0.8;
+      drawChevron(g, this.rows.storeOpen.right - 28 * s, this.rows.storeOpen.centerY + sink, 13 * s, PALETTE.ink);
+      this.texts.storeOpen!.setPosition(this.rows.storeOpen.centerX - 12 * s, this.rows.storeOpen.centerY + sink);
     }
     // Progress: the save code, the scored line, then reset.
     if (this.rows.transfer && this.rows.transferRow) {
@@ -934,10 +865,9 @@ export class SettingsScene extends BaseScene {
     this.layers[2]?.invalidate();
   }
 
-  /** The store card's corner badge: what the timer holds while one runs, uppercase like every chip. */
-  private timerBadge(now: number): string {
-    const left = timerLeftMs(loadReplayTimer(undefined, now), now);
-    return left > 0 ? `${STORE_COPY.timerRunning} · ${formatTimerLeft(left)} left`.toUpperCase() : '';
+  /** The store row's chip: what is running and what is held, from the same facts the card reads. */
+  private storeChip(now: number): string {
+    return storeStatusChip(readStoreFacts(loadHealth(), now));
   }
 
   private refreshCopy(): void {
@@ -958,18 +888,9 @@ export class SettingsScene extends BaseScene {
     this.texts.heartWait!.setText(entitled ? STORE_COPY.premiumOwned
       : view.nextHeartInMs === null ? 'Hearts are full'
       : `Next in ${formatCountdown(view.nextHeartInMs)}`);
-    this.texts.store!.setText(entitled ? 'Unlocked' : STORE_COPY.timersTitle);
-    this.texts.storeTerms!.setText(entitled ? STORE_COPY.premiumShort : STORE_COPY.timersTerms);
-    this.texts.storeBadge!.setText(this.timerBadge(Date.now()));
-    REPLAY_TIMERS.forEach((option, i) => {
-      // `label` uppercases on creation only; a price set later matches the other chips itself.
-      this.texts[`timerPrice${i}`]!.setText((monetization().productPrice(option.product) ?? 'Buy').toUpperCase());
-      for (const key of [`timer${i}`, `timerPrice${i}`]) this.texts[key]!.setVisible(!entitled);
-    });
-    const refillPrice = monetization().productPrice(PRODUCT.heartRefill);
-    this.texts.refillPrice!.setText(refillPrice ?? 'Buy');
-    const offered = this.refillOffered();
-    for (const key of ['refill', 'refillNote', 'refillPrice']) this.texts[key]!.setVisible(offered);
+    this.texts.store!.setText(entitled ? STORE_COPY.premiumUnlocked : STORE_COPY.settingsStore);
+    // `label` uppercases on creation only; the chip's words change, so they match it themselves.
+    this.texts.storeStatus!.setText(entitled ? STORE_COPY.premiumShort.toUpperCase() : this.storeChip(Date.now()));
     const adPrivacy = this.adPrivacyOffered();
     for (const key of ['adPrivacy', 'adPrivacyNote', 'adPrivacyGo']) this.texts[key]!.setVisible(adPrivacy);
     const leaderboard = this.leaderboardOffered();
@@ -1008,11 +929,12 @@ export class SettingsScene extends BaseScene {
     this.placeSheen();
     this.sheen.update(now, !monetization().premium() && this.storeInView());
     // A running timer's minutes turn while the screen is open: one storage read a second.
-    if (now - this.storePollAt >= 1) {
+    if (now - this.storePollAt >= 1 && !monetization().premium()) {
       this.storePollAt = now;
-      const badge = this.timerBadge(Date.now());
-      if (badge !== this.texts.storeBadge!.text) { this.texts.storeBadge!.setText(badge); this.pressDirty = true; }
+      const chip = this.storeChip(Date.now());
+      if (chip !== this.texts.storeStatus!.text) { this.texts.storeStatus!.setText(chip); this.pressDirty = true; }
     }
+    this.storeCard.update(now, this.reducedMotion, Date.now());
     bakeOne(this.layers);
     const age = now - this.enteredAt;
     if (age < 1.1) {
@@ -1073,7 +995,7 @@ export class SettingsScene extends BaseScene {
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
-    if (this.curtain.active || this.drag || this.hint.open || (!pointer.wasTouch && pointer.button !== 0)) return;
+    if (this.curtain.active || this.drag || this.hint.open || this.storeCard.open || (!pointer.wasTouch && pointer.button !== 0)) return;
     this.velocity = 0;
     // A level takes the gesture. The thumb drifts vertically on a horizontal drag, and
     // that drift must not scroll the section out from under the knob.
@@ -1120,6 +1042,8 @@ export class SettingsScene extends BaseScene {
   private pointerUp(pointer: Phaser.Input.Pointer): void {
     // While the hint is open every release is its, and nothing under it scrolls or fires.
     if (this.hint.open) { this.drag = null; this.hint.tap(pointer.x, pointer.y, performance.now() / 1000); return; }
+    // And while the store is open, every release is the card's.
+    if (this.storeCard.open) { this.drag = null; this.storeTap(pointer.x, pointer.y); return; }
     const drag = this.drag;
     if (!drag || drag.id !== pointer.id) return;
     this.drag = null;
@@ -1136,7 +1060,7 @@ export class SettingsScene extends BaseScene {
   private readonly cancelDrag = (): void => { this.drag = null; };
 
   private wheel(_pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number): void {
-    if (this.scrollMax <= 0 || this.hint.open) return;
+    if (this.scrollMax <= 0 || this.hint.open || this.storeCard.open) return;
     this.velocity = 0;
     this.setScroll(this.scrollY + dy);
   }
@@ -1158,8 +1082,7 @@ export class SettingsScene extends BaseScene {
     this.pressDirty = true;
     vibrate('tap');
     if (name !== 'reset') this.resetArmed = false;
-    if (name !== 'restore' && name !== 'refill' && !isTimerProduct(name)) this.notice = '';
-    if (isTimerProduct(name)) { void this.buy(name); return; }
+    this.notice = '';
     switch (name) {
       case 'back':
       case 'done': this.leave(); return;
@@ -1182,8 +1105,7 @@ export class SettingsScene extends BaseScene {
       case 'adPrivacy': void this.openAdPrivacy(); return;
       case 'leaderboard': void this.openLeaderboard(); return;
       case 'achievements': void this.openAchievements(); return;
-      case 'refill': void this.buy(PRODUCT.heartRefill); return;
-      case 'restore': void this.restore(); return;
+      case 'store': this.openStore(); return;
       case 'reset': this.resetTapped(); return;
       case 'feedback': sendFeedback(); return;
       case 'credit': openPage(CREDITS.score.url); return;
@@ -1362,31 +1284,81 @@ export class SettingsScene extends BaseScene {
     this.layout();
   }
 
-  private async buy(product: ProductId): Promise<void> {
+  /** The store card over Settings: every row it shows is an offer, reported as the map's are. */
+  private openStore(): void {
+    const facts = readStoreFacts(loadHealth());
+    track('store_opened', { source: 'settings', timer: facts.timerExpiresAt > facts.now ? 1 : 0, hearts: facts.hearts, premium: facts.premium ? 1 : 0 });
+    for (const row of storeRows(facts)) track('purchase_offer_shown', { product: row.product });
+    this.storeCard.show(performance.now() / 1000);
+  }
+
+  private storeTap(x: number, y: number): void {
+    const tap = this.storeCard.tap(x, y);
+    if (tap === null) return;
+    vibrate('tap');
+    if (tap === 'restore') void this.restoreFromStore();
+    else if (typeof tap === 'object' && 'buy' in tap) void this.buyFromStore(tap.buy);
+    else if (typeof tap === 'object' && 'start' in tap) this.startFromStore(tap.start);
+    else if (tap === 'close') this.afterStore();
+  }
+
+  /** The row's chip and the hearts plate read what the card changed. */
+  private afterStore(): void {
+    this.refreshCopy();
+    this.pressDirty = true;
+  }
+
+  /** Start a held timer from the card: it runs from now, the chip and the card say so. */
+  private startFromStore(id: string): void {
+    const outcome = startHeldTimerSynced(id);
+    if (!outcome.started) this.storeCard.say(startRefusalCopy(outcome.reason));
+    else vibrate('stamp');
+    this.storeCard.refresh();
+    this.afterStore();
+  }
+
+  /**
+   * A purchase from the card. The grant is the billing adapter's (`fulfilRefill`,
+   * `fulfilTimer`, idempotent per claim id), so the purchase has already been added by the
+   * time the result arrives; the re-read here puts it on the hearts plate before the card
+   * redraws. Opening the card sells nothing by itself.
+   */
+  private async buyFromStore(product: SoldProductId): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
     this.commerceBusy = true;
-    track('purchase_offer_shown', { product });
+    this.storeCard.setBusy(STORE_COPY.storeWaiting);
     try {
       const result = await monetization().purchase(product);
-      if (this.disposed || this.curtain.active) return;
-      this.notice = result.ok ? '' : purchaseFeedback(result.reason);
-      if (result.ok) vibrate('stamp');
-      this.refreshCopy();
-      this.layout();
+      if (result.ok) {
+        if (product === PRODUCT.heartRefill) redeemFill(result.claimId);
+        else redeemHeldTimer(product, result.claimId);
+      }
+      if (this.disposed) return;
+      this.storeCard.setBusy(null);
+      if (!result.ok) {
+        this.storeCard.say(purchaseFeedback(result.reason));
+        return;
+      }
+      vibrate('stamp');
+      this.storeCard.refresh();
+      this.afterStore();
     } finally {
       this.commerceBusy = false;
     }
   }
 
-  private async restore(): Promise<void> {
+  /** Restore asks Play what the account owns: the legacy Premium comes back, a consumable never does. */
+  private async restoreFromStore(): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
     this.commerceBusy = true;
+    this.storeCard.setBusy(STORE_COPY.storeWaiting);
     try {
       const result = await monetization().restorePurchases();
-      if (this.disposed || this.curtain.active) return;
-      this.notice = restoreFeedback(result);
-      this.refreshCopy();
-      this.layout();
+      if (this.disposed) return;
+      this.storeCard.setBusy(null);
+      this.storeCard.refresh();
+      this.storeCard.say(restoreFeedback(result));
+      this.afterStore();
     } finally {
       this.commerceBusy = false;
     }
@@ -1395,6 +1367,7 @@ export class SettingsScene extends BaseScene {
   /** Android's back is this screen's own back puck (`core/backButton.ts`). */
   public handleBack(): boolean {
     if (this.hint.back()) return true;
+    if (this.storeCard.open) { if (!this.commerceBusy) { this.storeCard.hide(); this.afterStore(); } return true; }
     this.leave();
     return true;
   }

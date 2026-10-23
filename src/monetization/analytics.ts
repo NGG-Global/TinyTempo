@@ -9,6 +9,7 @@
  * each decided once. See `docs/ANALYTICS.md` for the schema.
  */
 
+import type { DailyBand as DailyBandName } from '../config/dailyTempo';
 import type { Concept } from '../game/conceptIntro';
 import type { LevelRole } from '../game/levels';
 import type { AudioRoute } from '../game/routeCalibration';
@@ -103,7 +104,21 @@ export const ENDLESS_EVENTS = [
   'endless_board_opened',
 ] as const;
 
-export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS, ...SERVICE_EVENTS, ...ENDLESS_EVENTS] as const;
+/**
+ * Daily Tempo (`game/dailyChart.ts`, `scenes/DailyScene.ts`, `game/dailyRewards.ts`): the
+ * day's chart played, what it paid, and a run that ended unranked. The band and the stars
+ * are closed sets; the accuracy is a whole percent; no day key travels, since the chart
+ * is the same for everyone on a day and the event already carries its own time.
+ */
+export const DAILY_EVENTS = [
+  'daily_opened',
+  'daily_started',
+  'daily_finished',
+  'daily_reward_paid',
+  'daily_abandoned',
+] as const;
+
+export const ANALYTICS_EVENTS = [...COMMERCE_EVENTS, ...GAMEPLAY_EVENTS, ...SERVICE_EVENTS, ...ENDLESS_EVENTS, ...DAILY_EVENTS] as const;
 
 export type AnalyticsEvent = typeof ANALYTICS_EVENTS[number];
 export type GameplayEvent = typeof GAMEPLAY_EVENTS[number];
@@ -205,10 +220,10 @@ export interface AnalyticsPayloads {
   readonly purchase_completed: { readonly product: string };
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
-  /** A replay timer's minutes were added, once per purchase; `minutes_left` is the whole timer after it, since purchases stack. */
-  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number };
+  /** A replay timer was paid for, once per purchase: `held` says it landed on the shelf (1) or started at once from the restart sheet (0); `minutes_left` is the running timer after it. */
+  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number; readonly held: Flag };
   /** The Workshop store's card opened from the map: whether a timer was running, the hearts held, and the legacy Premium. */
-  readonly store_opened: { readonly source: 'map'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
+  readonly store_opened: { readonly source: 'map' | 'settings'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';
@@ -503,6 +518,15 @@ export interface AnalyticsPayloads {
   readonly endless_score_posted: { readonly duration_ms: number; readonly new_best: Flag; readonly retry: Flag; readonly rules_version: number };
   readonly endless_score_failed: { readonly reason: 'offline' | 'timeout' | 'failed' | 'invalid' | 'unavailable'; readonly retry: Flag };
   readonly endless_board_opened: { readonly result: 'shown' | 'signed_out' | 'failed' | 'invalid' | 'unavailable' | 'unconfigured'; readonly sign_in: Flag };
+  /** The Daily Tempo card was opened: today's band, how many runs the day has had, and the tiers paid. */
+  readonly daily_opened: { readonly band: DailyBandName; readonly runs: number; readonly paid: number; readonly source: 'menu' | 'map' };
+  readonly daily_started: { readonly band: DailyBandName; readonly tasks: number; readonly peak_bpm: number; readonly replay: Flag };
+  /** A run finished and was scored. `paid` is the day's paid tier after it. */
+  readonly daily_finished: { readonly band: DailyBandName; readonly stars: number; readonly accuracy: number; readonly paid: number; readonly replay: Flag };
+  /** A tier paid out, once per tier per day: what it gave. */
+  readonly daily_reward_paid: { readonly band: DailyBandName; readonly tier: number; readonly hearts: number; readonly restart: Flag; readonly timer_minutes: number };
+  /** A run that ended without a score, and why; `tasks_done` is how many had finished. */
+  readonly daily_abandoned: { readonly reason: 'user' | 'timing' | 'background' | 'orientation' | 'audio'; readonly tasks_done: number };
 }
 
 /** The ten roles an Endless step can play (`config/endless.ts`), as a closed set for the dashboard. */

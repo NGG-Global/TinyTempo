@@ -24,10 +24,11 @@ beside "Mute".
 - **Hearts** — status, not an offer: the five hearts, the count, and a bar the
   next heart is filling (`heartProgress` in `game/health.ts`).
 - **Workshop store** — the one brass object on the screen, because it is the one
-  thing for sale: the four replay timers, a row each (`docs/RESTART.md`), with *Timer
-  running* on the card's corner while one runs, and Restore for the legacy Premium. The
-  heart refill row under it disappears at five hearts or with premium held, rather than
-  sitting there as a control that cannot act.
+  thing for sale, and **one row**: the medallion, *Timers and heart refill*, a chip saying
+  what is running and what is on the shelf, and Open, which raises the same store card the
+  map's puck does over Settings (`ui/storeCard.ts`, with a camera of its own over the band
+  camera; `docs/BILLING.md`). Settings sells nothing itself, so it cannot drift from the
+  map on what is for sale.
 - **Progress** — the level, and the one control with no undo, which arms before
   it fires.
 - **Credits** — last, after Help: the original score's composer, whose chip opens

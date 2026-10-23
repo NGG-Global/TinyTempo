@@ -11,12 +11,14 @@ why gameplay was added to this bus rather than given one of its own.
 Ten commerce events were already fired at every offer, purchase and watch —
 `health_empty`, `rewarded_offer_shown`, `purchase_completed` and the rest — and every
 one of them was discarded. (An eleventh, `replay_timer_granted`, joined them with the
-replay timers: `product` and `minutes_left`, the whole timer after the purchase added its
-span, since purchases stack. The `product` on every purchase event is now one of the four
-`replay_timer_*` ids or `heart_refill_full`; `tinytempo_premium` only ever appears on an
-old event, since nothing offers it. A twelfth, `store_opened`, fires when the map's store card
-opens — `source`, whether a `timer` was running, the `hearts` held and `premium` — and every
-row the card shows fires `purchase_offer_shown`, as the restart sheet's picker does.)
+replay timers: `product`, `minutes_left` — the running timer after the grant — and `held`,
+1 since a bought timer now lands on the shelf rather than starting. The `product` on every
+purchase event is now one of the four `replay_timer_*` ids or `heart_refill_full`;
+`tinytempo_premium` only ever appears on an old event, since nothing offers it. A twelfth,
+`store_opened`, fires when the store card opens — `source` (`map` or `settings`), whether a
+`timer` was running, the `hearts` held and `premium` — and every offer the card makes fires
+`purchase_offer_shown`, as the restart sheet's picker does. The Daily Tempo's five events
+are `DAILY_EVENTS`, listed in `docs/DAILY_TEMPO.md`.)
 `monetization/analytics.ts` was a typed bus with a default
 sink that logs in DEV and does nothing in a production build, so the game would have
 shipped a monetization funnel that nobody could see.
