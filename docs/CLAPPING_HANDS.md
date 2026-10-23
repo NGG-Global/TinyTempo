@@ -65,7 +65,7 @@ a seeded jitter and swelling rather than starting at full — the difference bet
 room applauding and a drum roll. See `docs/SOUND.md` for the takes, and why the beat
 ships as WAV while the three endings are encoded to MP3.
 
-The applause runs four seconds, which is longer than the hold it plays in: at 150 BPM
+The applause runs 4.2 s (4.7 s on the middle ending), longer than the hold it plays in: at 150 BPM
 a task's coda has 2.8 seconds before the next task's downbeat. `AudioEngine.playFinish`
 takes the instant the room has to be clear by and fades the coda out under it, so
 applause never lands on the beats the player has to copy next. After the last task

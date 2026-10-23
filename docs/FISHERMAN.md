@@ -12,11 +12,13 @@ their acts, and the fisherman's own first level is 18. The DJ scratch
 
 The act reuses `HouseholdVignette` for the lifecycle: reset, pause, demonstration
 deduplication, layout and re-anchoring, teardown. It is one `draw(now, ending)`
-over a single Graphics. `finish` is overridden to take the round's accuracy, as the
-scissors act does, and `fishingOutcome` in `fishingMotion.ts` grades it into the
-three endings; the registry entry carries a `partial` copy block for the middle
-one. `PlayScene.playFinish` is binary, so the small fish shares the rough voice,
-which is written as a plop and drips rather than a pratfall so it fits both.
+over a single Graphics. `finish` takes the scene's verdict (`game/taskVerdict.ts`,
+read against the level's own bar, never the act's) and `actEnding` in
+`vignettes/motion.ts` maps it onto the three endings; the registry entry carries a
+`partial` copy block for the middle one. The small fish has a coda of its own in
+`audio/fishingSounds.ts` — a smaller plop than the big one's splash, then the reel's
+ratchet winding it in and a soft twang as it is let go — where it used to share the
+rough voice.
 
 ## The pull
 

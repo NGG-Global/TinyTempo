@@ -96,8 +96,9 @@ to protect or restore it, because there is nothing to lose.
 ## The UI
 
 A puck with a clipboard glyph whose three boxes tick as objectives are finished — on the
-title screen beside *How to play*, and on the map under the sign's left end. A coral dot
-appears when something was finished since the card was last opened. The card is the only
+title screen beside *How to play*, and on the map under the sign's left end, each tagged
+*Objectives* until the card has been opened once (`ui/puckLabel.ts`, one `seenPuck` flag for
+both). A coral dot appears when something was finished since the card was last opened. The card is the only
 place progress bars appear; the road carries none.
 
 ## Analytics

@@ -117,7 +117,10 @@ Nothing hit by hit.
 `Vignette.onGroove?(level, now)` is optional and called only on a change. An act that
 implements it adds a reaction of its own — the DJ booth's lights, the doorbell's porch
 light, the snare's shell — on top of the generic treatment, and must consume nothing of
-its subject and move no cue. No act implements it yet, and none needs to.
+its subject and move no cue. Six acts do: the hammer and the window directly, and the
+doorbell, the DJ scratch, the snare and the popcorn through `HouseholdVignette`'s
+`lightMaterial`, which hands a `GrooveReaction` (`ui/grooveReaction.ts`) the level. The
+other thirty keep the generic treatment alone.
 
 ## Manual QA on Android
 

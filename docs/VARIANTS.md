@@ -21,41 +21,50 @@ but within the set the lap selected.
 
 | Act | Lap 0 | Lap 1 | Lap 2 | Lap 3 | Lap 4 | Data |
 | --- | --- | --- | --- | --- | --- | --- |
-| Bug & shoe (level 3, 28, 56…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | Plum again | Ladybird again | `src/vignettes/bugLooks.ts` |
-| Bicep curl (level 6, 31, 59…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | The coach again | The sprinter again | `src/vignettes/curlLooks.ts` |
-| Scissors & paper (level 9, 34, 62, 90…) | Star, heart, angel | Butterfly, fir tree, tulip | Crown, bell, mushroom | Gingerbread man, maple leaf, rocket | Star set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
-| Light switch (level 12, 37, 65, 93…) | Sage salon | Morning kitchen | Green study | Rose bedroom | Salon again | `src/vignettes/lightLooks.ts` |
-| Doorbell (level 13, 38, 66, 94…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | Teal again | `src/vignettes/doorLooks.ts` |
-| Slushy (level 24, 49, 77, 105, 131…) | Berry | Blue raspberry | Lime | Orange | Grape | `src/vignettes/slushyLooks.ts` |
-| Apple (level 25, 50, 78, 106…) | Red apple | Pear | Peach | Strawberry-iced donut | Apple again | `src/vignettes/appleLooks.ts` |
-| Paintbrush (107, 136, 165, 194…) | Sunset | Sailboat | Tabby | Flower | Sunset again | `src/vignettes/canvasLooks.ts` |
+| Bug & shoe (level 3, 15, 29…) | Plum bug, slate sneaker, coral tab | Ladybird, navy sneaker, mustard tab | Green beetle, burgundy sneaker, sky tab | Plum again | Ladybird again | `src/vignettes/bugLooks.ts` |
+| Bicep curl (level 6, 18, 34…) | The coach: quiff, moustache, teal singlet, bolt | The sprinter: bun, plum singlet, star | The veteran: bald, grey beard, amber singlet, stripes | The coach again | The sprinter again | `src/vignettes/curlLooks.ts` |
+| Scissors & paper (level 9, 23, 39, 59…) | Star, heart, angel | Butterfly, fir tree, tulip | Crown, bell, mushroom | Gingerbread man, maple leaf, rocket | Star set again | `PAPER_SHAPE_SETS` in `src/vignettes/paperMotion.ts` |
+| Light switch (level 13, 27, 45, 67…) | Sage salon | Morning kitchen | Green study | Rose bedroom | Salon again | `src/vignettes/lightLooks.ts` |
+| Doorbell (level 21, 37, 57, 83…) | Teal four-panel | Crimson six-panel | Ochre cottage | Navy planks | Teal again | `src/vignettes/doorLooks.ts` |
+| Slushy (level 72, 100, 132, 167, 203…) | Berry | Blue raspberry | Lime | Orange | Grape | `src/vignettes/slushyLooks.ts` |
+| Apple (level 81, 110, 143, 179…) | Red apple | Pear | Peach | Strawberry-iced donut | Apple again | `src/vignettes/appleLooks.ts` |
+| Paintbrush (101, 133, 168, 204…) | Sunset | Sailboat | Tabby | Flower | Sunset again | `src/vignettes/canvasLooks.ts` |
+| Blow your nose (111, 144, 180, 216…) | Swoop of hair, teal shirt | Curls, amber shirt | Silver hair, glasses, violet shirt | Bun, glasses, green shirt | Swoop again | `src/vignettes/noseLooks.ts` |
 
-The other twenty-one each have three looks. Lap 3 is lap 0 again. Words stay the act's:
-a golden tomato is still a tomato, a harbour window is still a window.
+The other twenty-seven each have three looks. Lap 3 is lap 0 again. Words stay the act's
+where the look leaves the subject what it was — a golden tomato is still a tomato, a
+harbour window is still a window — and follow it where it does not (the dish, the
+prospector, the ice cream and the camera; see "Words that follow the look").
 
 | Act | Lap 0 | Lap 1 | Lap 2 | Data |
 | --- | --- | --- | --- | --- |
-| Hammer & nail (1, 26, 54…) | Coral handle, dark head, pine bench | Teal handle, brass head, walnut | Mustard handle, blue steel, ash | `hammerLooks.ts` |
-| Window cleaning (2, 27, 55…) | Lilac frame, garden | White frame, harbour | Dark frame, dusk | `windowLooks.ts` |
-| Saw & timber (4, 29, 57…) | Pine | Cherry | Walnut | `sawLooks.ts` |
-| Knife & tomato (5, 30, 58…) | Red | Gold | Purple | `tomatoLooks.ts` |
-| Knife & cucumber (7, 32, 60…) | Garden green | Dark | Pale | `cucumberLooks.ts` |
-| Knife & banana (8, 33, 61…) | Ripe | Green | Spotted | `bananaLooks.ts` |
-| Egg cracking (10, 35, 63…) | Cream | Brown | Blue | `eggLooks.ts` |
-| Bubble wrap (11, 36, 64…) | Mint | Pink | Ice | `bubbleLooks.ts` |
-| Paint roller (14, 39, 67…) | Plaster wall, sun / heart / rocket | Sage wall, tree / flower / boat | Dusk wall, moon / star / lamp | `rollerLooks.ts` |
-| Hotel bell (15, 40, 68…) | Chrome bell, red livery | Brass bell, navy livery | Copper bell, forest livery | `bellLooks.ts` |
-| Balloon pump (16, 41, 69…) | Red, blue, yellow | Coral, mint, cream | Purple, orange, green | `balloonLooks.ts` |
-| Stapler (17, 42, 70…) | Red body | Teal body | Black body | `staplerLooks.ts` |
-| Fisherman (18, 43, 71…) | Yellow mac | Navy mac | Rust mac | `fishermanLooks.ts` |
-| DJ scratch (19, 44, 72…) | Magenta booth | Amber booth | Lime booth | `scratchLooks.ts` |
-| Trombone (20, 45, 73…) | Gold horn | Silver horn | Rose horn | `tromboneLooks.ts` |
-| Clapping hands (21, 46, 74…) | Green sleeves | Plum sleeves | Navy sleeves | `clapLooks.ts` |
-| Snare drum (22, 47, 75…) | Red lacquer | Blue lacquer | Bare maple | `snareLooks.ts` |
-| Bongos (23, 48, 76…) | Terracotta | Walnut | Painted | `bongoLooks.ts` |
-| Barber (51, 79, 133…) | Chestnut mop, navy cape, mint shop | Ginger curls, burgundy cape, blue shop | Jet black, forest cape, cream shop | `barberLooks.ts` |
-| Popcorn (52, 80, 134…) | Buttered, blue glazed bowl | Cinema tub, red and white | Caramel corn, wooden bowl | `popcornLooks.ts` |
-| Toothbrush (53, 81, 135…) | Teal brush, mint paste, chrome mirror | Pink brush, strawberry paste, wooden mirror | Orange brush, blue gel, green mirror | `brushLooks.ts` |
+| Hammer & nail (1, 10, 24…) | Coral handle, dark head, pine bench | Teal handle, brass head, walnut | Mustard handle, blue steel, ash | `hammerLooks.ts` |
+| Window cleaning (2, 14, 28…) | Lilac frame, garden | White frame, harbour | Dark frame, dusk | `windowLooks.ts` |
+| Saw & timber (4, 16, 30…) | Pine | Cherry | Walnut | `sawLooks.ts` |
+| Knife & tomato (5, 17, 33…) | Red | Gold | Purple | `tomatoLooks.ts` |
+| Knife & cucumber (7, 19, 35…) | Garden green | Dark | Pale | `cucumberLooks.ts` |
+| Knife & banana (8, 20, 36…) | Ripe | Green | Spotted | `bananaLooks.ts` |
+| Egg cracking (11, 25, 43…) | Cream | Brown | Blue | `eggLooks.ts` |
+| Bubble wrap (12, 26, 44…) | Mint | Pink | Ice | `bubbleLooks.ts` |
+| Paint roller (22, 38, 58…) | Plaster wall, sun / heart / rocket | Sage wall, tree / flower / boat | Dusk wall, moon / star / lamp | `rollerLooks.ts` |
+| Hotel bell (31, 49, 73…) | Chrome bell, red livery | Brass bell, navy livery | Copper bell, forest livery | `bellLooks.ts` |
+| Balloon pump (32, 50, 74…) | Red, blue, yellow | Coral, mint, cream | Purple, orange, green | `balloonLooks.ts` |
+| Stapler (41, 63, 89…) | Red body | Teal body | Black body | `staplerLooks.ts` |
+| Fisherman (42, 64, 90…) | Yellow mac | Navy mac | Rust mac | `fishermanLooks.ts` |
+| DJ scratch (51, 75, 104…) | Magenta booth | Amber booth | Lime booth | `scratchLooks.ts` |
+| Trombone (52, 76, 105…) | Gold horn | Silver horn | Rose horn | `tromboneLooks.ts` |
+| Clapping hands (61, 87, 117…) | Green sleeves | Plum sleeves | Navy sleeves | `clapLooks.ts` |
+| Snare drum (62, 88, 118…) | Red lacquer | Blue lacquer | Bare maple | `snareLooks.ts` |
+| Bongos (71, 99, 130…) | Terracotta | Walnut | Painted | `bongoLooks.ts` |
+| Barber (82, 112, 145…) | Chestnut mop, navy cape, mint shop | Ginger curls, burgundy cape, blue shop | Jet black, forest cape, cream shop | `barberLooks.ts` |
+| Popcorn (91, 122, 156…) | Buttered, blue glazed bowl | Cinema tub, red and white | Caramel corn, wooden bowl | `popcornLooks.ts` |
+| Toothbrush (92, 123, 157…) | Teal brush, mint paste, chrome mirror | Pink brush, strawberry paste, wooden mirror | Orange brush, blue gel, green mirror | `brushLooks.ts` |
+| Wash the plate (121, 155, 191…) | A plate | A glass | Cutlery | `dishLooks.ts`, with words |
+| Strike gold (131, 166, 202…) | Gold in a canyon | A diamond in a timbered mine, by lantern | An emerald in a green cliff | `prospectorLooks.ts`, with words |
+| Ice cream (141, 177, 213…) | A waffle cone at the parlour | An ice pop on the beach | A lollipop at the sweet shop | `iceCreamLooks.ts`, with words |
+| Frog & lily pad (151, 187, 223…) | A noon pond | A moonlit pond | A lotus pond | `frogLooks.ts` |
+| Raise a glass (161, 197, 233…) | Flutes at an evening party | Pink lemonade on a sunset terrace | Grape juice at a candlelit dinner | `glassesLooks.ts` |
+| Snapshot (171, 207, 243…) | A cat | A birthday cake | A sandcastle | `cameraLooks.ts`, with words |
 
 ## What a look may change
 
@@ -102,12 +111,16 @@ drawing code rather than a new act:
 
 ### Words that follow the look
 
-Every other act's look leaves the copy alone: a ladybird is still a bug, a lime
-slushy is still a slushy. The apple act's looks change what is on the plate, so a
-look there may also carry its own title, intro and verdict. `VignetteDefinition.looks`
-is that list, indexed the same way as the act's own looks (the registry builds it
-from `APPLE_LOOKS`, so the two cannot fall out of step), and `definitionForLap` in
-`Vignette.ts` merges the entry over the definition. PlayScene and the map's dock read
+Most acts' looks leave the copy alone: a ladybird is still a bug, a lime slushy is
+still a slushy, and by decision a frog is a frog and a glass is a glass. Six acts'
+looks change what the subject *is*, so a look there may also carry its own title, intro
+and verdicts, the middle ending's included where the act has one: the apple (a pear, a
+peach, a donut), the paintbrush's paintings, the dish (a glass, cutlery), the
+prospector's gem, the ice cream (an ice pop, a lollipop) and the camera's subject.
+`VignetteDefinition.looks` is that list, indexed the same way as the act's own looks
+(the registry builds it from each `*_LOOKS`, so the two cannot fall out of step), and
+`definitionForLap` in `Vignette.ts` merges the entry over the definition, dropping an
+`undefined` entry so a look can change words but never the number of endings. PlayScene and the map's dock read
 the merged definition, so level 100 is called "Donut" on the map, opens with "Sweet
 tooth." and ends with "Not a crumb." or "Buzz off!". An entry may change words only;
 id, thresholds, hold, sounds and everything else stay the act's own, which
@@ -132,7 +145,7 @@ a wasp down to hover over what is left instead of the worm, on the worm's own
 
 ### The rest of the rotation
 
-Each of the eighteen is the same drawing with a swapped palette, and two of them
+Each of the three-look acts is the same drawing with a swapped palette, and two of them
 swap a feature the palette cannot carry:
 
 - **Window** keeps the wipe, the glove and the sill. The view beyond the pane is
@@ -162,11 +175,11 @@ motion, it is a new act and needs a request.
 The pure modules are unit-tested under node (`tests/bug.test.ts`,
 `tests/curl.test.ts`, `tests/paper.test.ts`, `tests/light.test.ts`,
 `tests/door.test.ts`, `tests/treatLooks.test.ts`, `tests/actLooks.test.ts`).
-In DEV, `?debug&level=28` is the ladybird, `31` the sprinter, `34` the butterfly, `37`
-the kitchen, `38` the crimson door, `49` blue raspberry and `50` the pear. The eighteen
-lap-1 looks are the same offset: 26 the brass hammer, 27 the harbour, then 29, 30, 32,
-33, 35, 36, 39–48. Lap 2 of the first twenty-five is 53 on from lap 0 (54 to 78): the
-new paper sets are levels 62 and 90, the peach 78, the donut 106, and the slushy's later
-flavours 77, 105 and 133. The barber, popcorn and toothbrush show their second looks on
-79, 80 and 81. `actLevel` is the one source for these numbers; the look a level shows is
+In DEV, `?debug&level=15` is the ladybird, `18` the sprinter, `23` the butterfly, `27`
+the kitchen, `37` the crimson door, `100` blue raspberry and `110` the pear. Every act's
+lap-1 level is `actLevel(id, 1)` on the debut schedule (`docs/ACT_SCHEDULE.md`): 10 the
+brass hammer, 14 the harbour, 16 the cherry timber, 17 the golden tomato. The new paper
+sets are levels 39 and 59, the peach 143, the donut 179, and the slushy's later flavours
+132, 167 and 203. The barber, popcorn and toothbrush show their second looks on
+112, 122 and 123. `actLevel` is the one source for these numbers; the look a level shows is
 `lap % looks`, so a growing rotation never changes lap 0.

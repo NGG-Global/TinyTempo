@@ -22,13 +22,17 @@ synthesized fanfare and sagging note in `tromboneSounds.ts` are only the fallbac
 
 The clap goes furthest: all three of its endings were performed, so `sfx/clap-success.mp3`,
 `sfx/clap-partial.mp3` and `sfx/clap-fail.mp3` are a full house, a scattered few and a
-shrug with nobody behind it. It is the only act with a recording for the *middle* ending,
-which is why `VignetteSounds.partial` exists — it is optional, and an act with three
-endings and two voices still plays `rough` in the middle, as scissors & paper and the
-fisherman always have.
+shrug with nobody behind it. It is the only act with a *recording* for the middle ending,
+which is why `VignetteSounds.partial` exists; it is optional, and `AudioEngine.playFinish`
+plays `rough` in the middle for an act without one. Every act with three endings has one
+now: the barber's, scissors & paper's and the fisherman's are synthesized, where the paper
+and the fisherman used to borrow the rough coda.
 
-Its endings are also the only ones longer than the hold they play in: four seconds of
-applause against 2.8 at the fastest tempo. `AudioEngine.playFinish` takes the instant the
+Its endings are also the only ones longer than the hold they play in: 4.2 s of applause
+on a success and 4.7 s on the middle ending, measured, against the 2.8 s between the
+finishing contact and the next task's downbeat at the fastest tempo. (The trombone's two
+recorded endings, at 2.04 s, run a hair past the 2.0 s to the table's slide but end well
+before that downbeat.) `AudioEngine.playFinish` takes the instant the
 coda has to be clear by — the next task's own downbeat — and fades it out under that, so
 applause never lands on the beats the player has to copy next. After the last task there
 is no next task and it rings out under the summary.

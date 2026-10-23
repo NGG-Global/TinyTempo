@@ -171,7 +171,8 @@ In Chromium at 393×851, not only in tests:
 Settings → Progress → Reset, confirmed with a second tap, is the one place progress is
 destroyed, and `game/resetProgress.ts` is the one decision: the save, the teach flags (so
 the first-run pass and every rhythm's introduction play again), the tutorial, the gate
-record, the keepsakes kept from the old act schedule, the hearts and the day's objectives,
+record, the keepsakes kept from the old act schedule, the hearts and the day's objectives
+(the stamps stay: they are history, not the road's),
 and a **reset generation** stamped on the device and carried in the cloud save so Play
 Games does not merge the old road back (`docs/CLOUD_SAVE.md`). It used to clear the save and
 the hearts alone, which left the gates open, the lessons seen and — on a signed-in device —
