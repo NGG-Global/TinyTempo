@@ -1585,7 +1585,14 @@ completed launch means "attempted" and nothing more, and the one stored bit
 `docs/IN_APP_REVIEW.md`. The audio route is the eighth: `AudioRoutePlugin.java` reads
 `AudioManager.getDevices` and `AudioDeviceCallback` and relays a category, never a device name,
 registered beside the others in `MainActivity` and checked by `check-android-config.mjs`. See
-`docs/AUDIO_ROUTES.md`. Beyond those, the game
+`docs/AUDIO_ROUTES.md`. **Unity Ads is a bidder behind AdMob, never an SDK the game drives**
+(`docs/UNITY_MEDIATION.md`): the SDK and Google's adapter are pinned as the pair Google tested
+with Mobile Ads 25.4.0 (`tests/unityMediation.test.ts`), AdMob starts and shows it, and its
+game and placement ids live in the AdMob mapping, not here. The adapter forwards the GDPR
+answer and the age tags; it carries no US-state signal, so `UnityAdsPrivacyPlugin.java`, the
+ninth, writes Unity's `privacy.consent = false` when UMP's GPP string records an opt-out
+(`monetization/usOptOut.ts`) — **only ever false**, because Unity stores the value and prefers
+it over the GDPR one. Beyond those, the game
 depends on exactly four web APIs — Web Audio, pointer events, `navigator.vibrate` for the
 Haptics switch, which `AndroidManifest.xml` covers with the normal `VIBRATE` permission,
 and `navigator.clipboard` for the save code's Copy button. Each was added deliberately

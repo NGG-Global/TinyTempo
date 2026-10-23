@@ -367,6 +367,39 @@ describe('consent before the Mobile Ads SDK', () => {
     expect(ads.available()).toBe(false);
   });
 
+  /** A partner-privacy sync that writes itself into the same call log, answering `result`. */
+  const partner = (calls: string[], result = true) => ({ sync: async () => { calls.push('partnerPrivacy'); return result; } });
+
+  it('passes a US opt-out to mediation partners before the SDK, and with it the adapters, starts', async () => {
+    const { client, calls } = logged({ consent: BLOCKED, form: ALLOWED });
+    await createAdMobAds(client, { region: signal().region, partnerPrivacy: partner(calls) }).boot();
+    expect(calls).toEqual(['requestConsentInfo', 'showConsentForm', 'partnerPrivacy', 'initialize', 'prepareRewardVideoAd']);
+  });
+
+  it('leaves partners alone for a player who refuses, since nothing will be requested', async () => {
+    const { client, calls } = logged({ consent: BLOCKED, form: BLOCKED });
+    await createAdMobAds(client, { region: signal().region, partnerPrivacy: partner(calls) }).boot();
+    expect(calls).not.toContain('partnerPrivacy');
+  });
+
+  it('requests nothing when an opt-out on record could not be passed on', async () => {
+    const { client, calls } = logged();
+    const ads = createAdMobAds(client, { region: signal().region, partnerPrivacy: partner(calls, false) });
+    await ads.boot();
+    expect(calls).not.toContain('initialize');
+    expect(ads.available()).toBe(false);
+    expect(await ads.show()).toEqual({ ok: false, reason: 'unavailable' });
+  });
+
+  it('passes it on again after the privacy options, where a US-state message records it', async () => {
+    const { client, calls } = logged({ consent: { ...ALLOWED, privacyOptionsRequirementStatus: 'REQUIRED' } });
+    const ads = createAdMobAds(client, { region: signal().region, partnerPrivacy: partner(calls) });
+    await ads.boot();
+    calls.length = 0;
+    await ads.showPrivacyOptions();
+    expect(calls).toEqual(['requestConsentInfo', 'partnerPrivacy']);
+  });
+
   it('caps ad content at parental guidance, and serves test ads outside a release build', () => {
     expect(ADMOB.maxAdContentRating).toBe('ParentalGuidance');
     // Tests are not `build:release`, so they see what a debug APK sees.
