@@ -199,6 +199,8 @@ mid-frame. Everything below needs hardware and none of it has been done.
     holds. The live URL does not match until this is published.
 29. 👤 **Data Safety.** Declare what the SDKs collect, not what your code does:
     - AdMob — device and advertising identifiers
+    - Unity Ads, mediated by AdMob — device and advertising identifiers and ad interaction
+      data, under Unity's own policy (`docs/UNITY_MEDIATION.md`)
     - Google Play Billing — the purchase itself. Play is the processor; the app stores no
       purchase history of its own beyond an opaque digest that stops a refill being
       granted twice

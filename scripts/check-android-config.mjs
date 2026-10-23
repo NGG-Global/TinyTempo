@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
  * turns the two Firebase findings into a refusal: a build with analytics switched on and
  * no `google-services.json`, or a `google-services.json` naming another app. Version 0.1.9
  * went to Play exactly that way — analytics on, no Firebase in the bundle, every check
- * green — and the only symptom was a dashboard that stayed empty for a day.
+ * green — and the only symptom was a dashboard that stayed empty for a day. An unregistered
+ * Unity Ads opt-out bridge is refused the same way: it fails as silently, on a privacy choice.
  */
 
 const root = new URL('../', import.meta.url);
@@ -131,6 +132,30 @@ if (publisher !== undefined && !configUnitId.startsWith(`${publisher}/`)) {
   notes.push('The rewarded unit ID in src/config/ads.ts is not from the same publisher as the\n'
     + '    app ID, so it belongs to a different AdMob account. Requests against it will not\n'
     + '    fill, and an ad that never loads looks exactly like an ad nobody asks for.');
+}
+
+/*
+ * Unity Ads bids through AdMob mediation (docs/UNITY_MEDIATION.md). Its SDK and Google's
+ * adapter are a pair tested against one Mobile Ads version, so both come from the pins in
+ * variables.gradle; LevelPlay is a different mediation platform and does not belong beside
+ * AdMob's. And the opt-out bridge must be registered: without it every US-state opt-out stops
+ * at Google, Unity never hears it, and nothing says so — so a release refuses.
+ */
+const declarations = appGradle.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+const unityDeclared = declarations.includes('com.unity3d.ads:unity-ads:$unityAdsVersion');
+const adapterDeclared = declarations.includes('com.google.ads.mediation:unity:$unityMediationAdapterVersion');
+if (unityDeclared !== adapterDeclared) {
+  notes.push('android/app/build.gradle declares only one of the Unity Ads SDK and Google\'s Unity\n'
+    + '    adapter. Mediation needs both, at the versions pinned in android/variables.gradle.');
+}
+if (/\b(com\.unity3d\.mediation|com\.ironsource)/.test(declarations)) {
+  notes.push('android/app/build.gradle declares Unity LevelPlay (com.unity3d.mediation / ironSource).\n'
+    + '    Unity Ads is mediated by AdMob here; a second mediation platform does not belong beside it.');
+}
+if (unityDeclared && !mainActivity.includes('registerPlugin(UnityAdsPrivacyPlugin.class)')) {
+  finding(true, 'MainActivity.java does not register UnityAdsPrivacyPlugin, so a US-state opt-out\n'
+    + '    recorded by the consent message never reaches Unity Ads. Add\n'
+    + '    registerPlugin(UnityAdsPrivacyPlugin.class) before super.onCreate. See docs/UNITY_MEDIATION.md.');
 }
 
 /*
@@ -355,6 +380,6 @@ if (notes.length > 0) {
   console.warn(`\n  ⚠ ${notes.join('\n\n  ⚠ ')}\n`);
 }
 if (refusals.length > 0) {
-  console.error(`\n  ✗ ${refusals.join('\n\n  ✗ ')}\n\n    This is a release build, so it stops here rather than shipping without Firebase.\n`);
+  console.error(`\n  ✗ ${refusals.join('\n\n  ✗ ')}\n\n    This is a release build, so it stops here rather than shipping without it.\n`);
   process.exit(1);
 }

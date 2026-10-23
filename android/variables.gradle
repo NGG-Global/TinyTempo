@@ -28,4 +28,11 @@ ext {
     // plugin's own range; move both deliberately, after reading Google's release notes.
     playServicesAdsVersion = '25.4.0'
     userMessagingPlatformVersion = '4.0.0'
+    // Unity Ads as a bidding source behind AdMob mediation, never on its own: AdMob loads,
+    // shows and initialises it. The pair is the one Google's changelog says adapter 4.20.1.0
+    // was built and tested with, beside Mobile Ads 25.4.0 above; the adapter's POM depends on
+    // exactly that play-services-ads. Move all three together, after reading the changelog
+    // at developers.google.com/admob/android/mediation/unity. See docs/UNITY_MEDIATION.md.
+    unityAdsVersion = '4.20.1'
+    unityMediationAdapterVersion = '4.20.1.0'
 }

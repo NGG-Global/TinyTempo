@@ -284,6 +284,12 @@ these is a blocker — but none has been run on a device.
 - [ ] **Confirm the unit is a rewarded unit** in the AdMob console. An ad unit ID does
       not encode its format, the adapter only ever calls `prepareRewardVideoAd`, and a
       unit of any other format fails to load rather than saying why.
+- [ ] **Unity Ads mediation mapping.** The Unity SDK and Google's adapter are in the build
+      (`docs/UNITY_MEDIATION.md`), but Unity bids only once the rewarded unit's mediation
+      group in AdMob has **Unity Ads (bidding)** with the Unity game id and placement id.
+      Those ids live in AdMob and nowhere in this repository. Add Unity Ads to the GDPR
+      message's ad partners, and decide whether to publish a **US states** message — it is
+      the only source of the US opt-out the game forwards to Unity.
 - [ ] **UMP Privacy & messaging.** Create a GDPR (EEA/UK) message for the Android app
       and enable the privacy options form on it. Settings only shows **Ad privacy**
       while `privacyOptionsRequirementStatus` is `REQUIRED`; without that message the
@@ -319,6 +325,9 @@ these is a blocker — but none has been run on a device.
 - [ ] Link the AdMob app to the Play listing.
 - [ ] Publish `app-ads.txt` at the root of your developer-website domain and
       declare that domain in AdMob. The live site is `tinytempo.games`.
+- [ ] **Add Unity's app-ads.txt lines.** `legal/app-ads.txt` holds Google's line only. Copy
+      Unity's full list from its dashboard and add `OWNERDOMAIN` as
+      `docs/UNITY_MEDIATION.md` describes; never a guessed or placeholder line.
 - [ ] Set up a merchant account for paid distribution.
 - [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
       APK never sees an update; that is Play's rule, not a bug. Ship a higher
@@ -368,7 +377,10 @@ the pinned SDK. None of this has run between two real devices.
 ### F. Play Console — the forms that get apps rejected
 
 - [ ] **Data Safety.** Declare what the SDKs collect, not what your code does:
-      AdMob collects device and advertising identifiers; Google Play processes the
+      AdMob collects device and advertising identifiers; **Unity Ads**, mediated by AdMob,
+      is a second ad SDK in the bundle and collects device and advertising identifiers and
+      ad interaction data under Unity's own policy (*review against Unity's current
+      Data safety guidance*); Google Play processes the
       purchases and the app keeps no purchase history of its own; **Sentry now receives crash
       reports** — declare these under Crash logs and Diagnostics. **Firebase
       Analytics now receives the commerce events and the gameplay events** (levels,
@@ -423,6 +435,10 @@ the pinned SDK. None of this has run between two real devices.
       your phones' hashed ids in `VITE_ADMOB_TEST_DEVICES` (Logcat prints a phone's id the
       first time it requests an ad) or register them in the AdMob console.
 - [ ] Watch a real rewarded ad and confirm the heart lands.
+- [ ] **Unity Ads through Ad Inspector**: single ad source testing with *Unity Ads
+      (Bidding)* on the rewarded unit, with Unity's test mode on for the device; then test
+      mode off in AdMob and Unity before promoting. The full list is in
+      `docs/UNITY_MEDIATION.md`.
 - [ ] Exercise the AdMob consent form in an EEA/UK locale.
 - [ ] Confirm Settings → Privacy shows **Ad privacy** in that locale, that the
       privacy-options form opens from it, and that refusing or withdrawing consent

@@ -10,6 +10,7 @@ import type { PlayBilling } from './playBilling';
 import { createMonetization, installMonetization } from './service';
 import { stubAds, stubBilling } from './stub';
 import type { Billing, RewardedAds } from './types';
+import { createPartnerPrivacy } from './usOptOut';
 
 /**
  * Native-only: AdMob consent/preload and the Play Billing catalogue.
@@ -27,8 +28,12 @@ export async function bootMonetization(): Promise<void> {
     let ads: RewardedAds = stubAds;
     let billing: Billing = stubBilling;
     try {
-      const { nativeAdMobClient } = await import('./native');
-      const adapter = createAdMobAds(nativeAdMobClient());
+      const { nativeAdMobClient, nativePartnerPrivacyClient } = await import('./native');
+      const adapter = createAdMobAds(nativeAdMobClient(), {
+        partnerPrivacy: createPartnerPrivacy(nativePartnerPrivacyClient(), error => {
+          reportError(error, { kind: 'handled', context: { stage: 'ads-partner-privacy' } });
+        }),
+      });
       ads = adapter;
       await adapter.boot();
     } catch { /* ads stay stub */ }

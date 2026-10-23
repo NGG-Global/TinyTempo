@@ -1,6 +1,7 @@
 import { ADMOB } from '@/config/ads';
 import { consentRegion, regionFromStatus, type ConsentRegionSignal } from './consentRegion';
 import type { RewardedAds, RewardedResult } from './types';
+import type { PartnerPrivacy } from './usOptOut';
 
 /** Plugin event names, inlined so tests never import the native package. */
 export const REWARD_EVENTS = {
@@ -68,11 +69,14 @@ export function createAdMobAds(client: AdMobClient, options: {
   readonly dismissGraceMs?: number;
   /** Where UMP's first answer about the player's region goes; analytics reads it. */
   readonly region?: ConsentRegionSignal;
+  /** Passes a US-state opt-out to mediation partners that do not read UMP's record (`usOptOut.ts`). */
+  readonly partnerPrivacy?: PartnerPrivacy;
 } = {}): AdMobAds {
   const adUnitId = options.adUnitId ?? ADMOB.rewardedUnitId;
   const showLimitMs = options.showLimitMs ?? 170_000;
   const dismissGraceMs = options.dismissGraceMs ?? 400;
   const region = options.region ?? consentRegion;
+  const partnerPrivacy = options.partnerPrivacy;
   let bootPromise: Promise<void> | null = null;
   let initialized = false;
   let denied = false;
@@ -118,6 +122,7 @@ export function createAdMobAds(client: AdMobClient, options: {
       if (tracking.status === 'notDetermined') {
         await client.requestTrackingAuthorization();
       }
+      await passOnPartnerPrivacy();
       await allowAdsIfConsented();
     } catch {
       denied = true;
@@ -127,6 +132,16 @@ export function createAdMobAds(client: AdMobClient, options: {
   function rememberConsent(consent: ConsentSnapshot): void {
     privacyOptionsRequired = consent.privacyOptionsRequirementStatus === 'REQUIRED';
     denied = !consent.canRequestAds;
+  }
+
+  /**
+   * Before the SDK starts, because starting it starts the mediation adapters, and again after
+   * the privacy options, where a US-state message records its opt-out. An opt-out that could
+   * not be passed on holds ads back rather than let a partner bid on a player who said no.
+   */
+  async function passOnPartnerPrivacy(): Promise<void> {
+    if (denied || !partnerPrivacy) return;
+    if (!(await partnerPrivacy.sync())) denied = true;
   }
 
   async function allowAdsIfConsented(): Promise<void> {
@@ -143,6 +158,7 @@ export function createAdMobAds(client: AdMobClient, options: {
     try {
       try { await client.showPrivacyOptionsForm(); } catch { /* form missing or already closed */ }
       rememberConsent(await client.requestConsentInfo());
+      await passOnPartnerPrivacy();
       await allowAdsIfConsented();
     } catch {
       /* leave the last known consent standing */

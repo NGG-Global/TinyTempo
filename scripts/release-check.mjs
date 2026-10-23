@@ -64,6 +64,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Words over the first levels, and the ball through level 3', text: 'No ball this time', source: 'src/game/teachCopy.ts' },
   { feature: 'Replay timers for sale, Premium honoured but withdrawn', text: 'replay_timer_30m', source: 'src/monetization/types.ts' },
   { feature: 'The Workshop store on the map, with the timer left', text: 'Restore purchases', source: 'src/monetization/copy.ts' },
+  { feature: 'US-state opt-outs passed to Unity Ads', text: 'UnityAdsPrivacy', source: 'src/monetization/native.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */
