@@ -87,7 +87,7 @@ describe('the Workshop store', () => {
     expect(map).toContain("track('store_opened', { source: 'map'");
     expect(map).toContain("for (const row of storeRows(facts)) track('purchase_offer_shown', { product: row.product })");
     expect(map).toContain('if (product === PRODUCT.heartRefill) this.health = redeemFill(result.claimId).health;');
-    expect(map).toContain('else redeemTimer(product, result.claimId);');
+    expect(map).toContain('else redeemHeldTimer(product, result.claimId);');
     // Back puts the card away, unless a purchase is still out; a drag under it never scrolls the road.
     expect(map).toMatch(/handleBack\(\): boolean \{[\s\S]*?if \(this\.storeCard\.open\) \{ if \(!this\.storeBusy\)/);
     expect(map).toContain('!this.storeCard.open && pointer.y > this.hudHeight');

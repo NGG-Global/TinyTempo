@@ -1,4 +1,5 @@
 import { DAILY_TEMPO_AVAILABLE } from '../config/dailyTempo';
+import { daySeed } from './dayKey';
 import { calendarDay, isCleared } from './health';
 import { levelSpec, type Grid } from './levels';
 import type { Progress } from './progress';
@@ -221,12 +222,8 @@ export const OBJECTIVES_PER_DAY = 3;
 /** The slots, in the order the card shows them. Each draws from its own family first. */
 const SLOTS: readonly ObjectiveFamily[] = ['play', 'skill', 'mastery'];
 
-/** A stable 32-bit seed from the calendar date: FNV-1a over its characters. */
-export function daySeed(day: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < day.length; i++) hash = Math.imul(hash ^ day.charCodeAt(i), 0x01000193) >>> 0;
-  return hash;
-}
+/** A stable 32-bit seed from the calendar date: `game/dayKey.ts`'s FNV-1a, re-exported so the draws' seeds never move. */
+export { daySeed };
 
 function generator(seed: number): () => number {
   let state = seed >>> 0;

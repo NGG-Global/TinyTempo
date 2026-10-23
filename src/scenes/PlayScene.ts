@@ -36,14 +36,14 @@ import {
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
-import { loadReplayTimer, redeemTimer, replayTimerActive, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { loadReplayTimer, redeemHeldTimer, replayTimerActive, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
 import { syncReminders } from '@/reminders/sync';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
-import { queueCloudSave } from '@/playgames/cloudSync';
+import { queueCloudSave, startHeldTimerSynced } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
 import { createFinaleSound, prepareFinaleSounds, type FinaleSoundPrep } from '@/audio/finaleSounds';
 import { momentOf } from '@/game/TutorialRun';
@@ -3409,12 +3409,15 @@ export class PlayScene extends BaseScene {
   }
 
   /**
-   * A row of the picker: buy the timer and restart. The grant is the billing adapter's
-   * (`fulfilTimer`, idempotent per claim id), so the purchase has already added its minutes
-   * by the time the result arrives; `redeemTimer` here is a no-op that reads the same claim,
-   * kept so a result that reaches the scene before the adapter's fulfilment still restarts
-   * on a timer. The restart itself is the same free reset every other restart is, and only
-   * on the run that asked for it (`ticketStillApplies`): a store sheet can outlive a level.
+   * A row of the picker: buy the timer and restart. The hold is the billing adapter's
+   * (`fulfilTimer`, idempotent per claim id), so the purchase is already on the shelf by the
+   * time the result arrives; `redeemHeldTimer` here is a no-op that reads the same claim,
+   * kept so a result that reaches the scene before the adapter's fulfilment still finds the
+   * item. **This is the one place a purchase starts at once**: the player asked to restart,
+   * so the held item is started and the level restarts, and they never tap twice. A start
+   * the record cannot take (a week already stacked) keeps the item held and says so. The
+   * restart itself is the same free reset every other restart is, and only on the run that
+   * asked for it (`ticketStillApplies`): a store sheet can outlive a level.
    */
   private async buyTimerToRestart(product: TimerProductId): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
@@ -3424,11 +3427,17 @@ export class PlayScene extends BaseScene {
     this.restartSheet.setBusy(RESTART_COPY.buying);
     try {
       const result = await monetization().purchase(product);
-      if (result.ok) redeemTimer(product, result.claimId);
+      if (result.ok) redeemHeldTimer(product, result.claimId);
+      const started = result.ok ? startHeldTimerSynced(result.claimId) : null;
       if (this.disposed) return;
       this.restartSheet.setBusy(null);
       if (!result.ok) {
         this.restartSheet.say(purchaseFeedback(result.reason));
+        return;
+      }
+      if (started && !started.started && started.reason !== 'started') {
+        // Held, not started: the timer is the player's on the shelf, and nothing restarts.
+        this.restartSheet.say(STORE_COPY.timerHeldInstead);
         return;
       }
       vibrate('stamp');

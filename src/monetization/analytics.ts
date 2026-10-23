@@ -205,8 +205,8 @@ export interface AnalyticsPayloads {
   readonly purchase_completed: { readonly product: string };
   readonly purchase_cancelled: { readonly product: string };
   readonly purchase_failed: { readonly product: string; readonly reason: 'unavailable' | 'cancelled' | 'failed' | 'pending' };
-  /** A replay timer's minutes were added, once per purchase; `minutes_left` is the whole timer after it, since purchases stack. */
-  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number };
+  /** A replay timer was paid for, once per purchase: `held` says it landed on the shelf (1) or started at once from the restart sheet (0); `minutes_left` is the running timer after it. */
+  readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number; readonly held: Flag };
   /** The Workshop store's card opened from the map: whether a timer was running, the hearts held, and the legacy Premium. */
   readonly store_opened: { readonly source: 'map'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
 

@@ -16,7 +16,7 @@ import {
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, redeemFill, redeemHeart, viewHealth, type Health,
 } from '@/game/health';
 import { monetization, PRODUCT, purchaseFeedback, restoreFeedback, rewardedFeedback, STORE_COPY, track, type SoldProductId } from '@/monetization';
-import { loadReplayTimer, redeemTimer } from '@/game/replayTimer';
+import { loadReplayTimer, redeemHeldTimer } from '@/game/replayTimer';
 import { storePuckBadge, storeRows, type StoreFacts } from '@/game/store';
 import { StoreCard } from '@/ui/storeCard';
 import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
@@ -2884,7 +2884,7 @@ export class MapScene extends BaseScene {
       const result = await monetization().purchase(product);
       if (result.ok) {
         if (product === PRODUCT.heartRefill) this.health = redeemFill(result.claimId).health;
-        else redeemTimer(product, result.claimId);
+        else redeemHeldTimer(product, result.claimId);
       }
       if (this.disposed) return;
       this.storeCard.setBusy(null);

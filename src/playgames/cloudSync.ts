@@ -1,4 +1,5 @@
 import { breadcrumb } from '@/core/errors';
+import { startHeldTimerNow, type StartOutcome } from '../game/replayTimer';
 import type { Progress } from '@/game/progress';
 import { syncAchievements } from './achievementSync';
 import { playGames } from './boot';
@@ -74,6 +75,16 @@ export function queueCloudSave(): void {
   if (!native()) return;
   if (pending !== null) clearTimeout(pending);
   pending = setTimeout(() => { pending = null; void cloudSync().sync(); }, CLOUD_SYNC.debounceMs);
+}
+
+/**
+ * Start a held replay timer and sync the shelf, so the tombstone reaches the player's other
+ * device (`game/replayTimer.ts`). The scenes call this and never `startHeldTimerNow` alone.
+ */
+export function startHeldTimerSynced(id: string, now: number = Date.now()): StartOutcome {
+  const outcome = startHeldTimerNow(id, now);
+  if (outcome.started) queueCloudSave();
+  return outcome;
 }
 
 let watching = false;

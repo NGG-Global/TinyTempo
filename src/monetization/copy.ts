@@ -44,6 +44,8 @@ export const STORE_COPY = {
   /** The map's store card: its eyebrow, what it says while the store is out, and when there is none. */
   storeTitle: 'Workshop store',
   storeWaiting: 'Waiting for the store…',
+  /** A purchase on the restart sheet that could not start at once: it is on the shelf, and the level goes on. */
+  timerHeldInstead: 'Your timer is on the shelf. Start it when a level needs it.',
   storeUnavailable: "The store isn't available on this device.",
   restore: 'Restore purchases',
   /** Replay timers: the one thing for sale beside the refill, on the sheet and in Settings. */
