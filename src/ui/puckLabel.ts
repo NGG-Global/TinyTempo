@@ -32,6 +32,16 @@ export class PuckLabel {
 
   public get visible(): boolean { return this.shown; }
 
+  /**
+   * New words, for a tag whose meaning follows the puck's state ("Opens after level 100",
+   * then "Endless"). Guarded, since the scene places the tag on every redraw and a `setText`
+   * re-rasterises; the next `place` measures the new width.
+   */
+  public setWords(words: string): void {
+    if (words === this.text.text) return;
+    this.text.setText(words);
+  }
+
   /** Where the puck is, its radius, and which side of it the tag hangs: right of it, under it or over it. */
   public place(x: number, y: number, radius: number, side: 'right' | 'below' | 'above', s: number, show: boolean): void {
     this.shown = show;

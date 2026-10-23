@@ -446,14 +446,29 @@ export function saveHealth(health: Health, storage: Storage | null = safeStorage
   }
 }
 
-/** Settings reset. False means nothing was written. */
+/** Everything hearts remember, the refill ledger included: a test's clean slate. False means nothing was written. */
 export function clearHealth(storage: Storage | null = safeStorage()): boolean {
-  claimedIds.clear();
   filledIds.clear();
+  const cleared = clearHearts(storage);
+  try {
+    storage?.removeItem(FILLS_KEY);
+    return cleared;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Settings → Reset progress: the bar and the day's free heart go, and the refill ledger
+ * stays. It records purchases already honoured, so a replayed purchase after a reset would
+ * fill the bar a second time without it — and a paid refill is the player's, like Premium
+ * and a replay timer, which the reset leaves alone too. False means nothing was written.
+ */
+export function clearHearts(storage: Storage | null = safeStorage()): boolean {
+  claimedIds.clear();
   claimedDays.clear();
   try {
     storage?.removeItem(KEY);
-    storage?.removeItem(FILLS_KEY);
     storage?.removeItem(DAILY_KEY);
     return storage !== null;
   } catch {

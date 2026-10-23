@@ -1,5 +1,5 @@
 import { clearGateRecord } from './areaGates';
-import { clearHealth } from './health';
+import { clearHearts } from './health';
 import { clearKeptKeepsakes } from './keepsakeLegacy';
 import { redrawToday } from './objectives';
 import { clearProgress, clearTeachFlags, resetGeneration, setResetGeneration } from './progress';
@@ -18,9 +18,10 @@ import { setTutorialState } from './TutorialRun';
  * and watched their old frontier return. The generation stamped here is what the cloud
  * merge reads before it adds (`playgames/cloudSave.ts`), so the reset is the side that wins.
  *
- * What stays: settings and calibration (the device's, not the save's), purchases and
- * replay timers (paid for), consent, the review record, the daily restarts, and Endless's
- * device record, which is a leaderboard's and not the road's.
+ * What stays: settings and calibration (the device's, not the save's), purchases, the
+ * refill ledger and replay timers (paid for), consent, the review record, the daily
+ * restarts, the objectives' stamps (history, not the road's), and Endless's device record,
+ * which is a leaderboard's and not the road's. The day's objectives are drawn again.
  */
 export interface ResetOutcome {
   /** Whether the save was removed and the generation stamped. False means storage refused. */
@@ -36,7 +37,7 @@ export function resetProgress(storage: Storage | null = safeStorage()): ResetOut
   setTutorialState('none', storage);
   clearGateRecord(storage);
   clearKeptKeepsakes(storage);
-  clearHealth(storage);
+  clearHearts(storage);
   redrawToday(storage);
   return { cleared: cleared && setResetGeneration(generation, storage), generation };
 }

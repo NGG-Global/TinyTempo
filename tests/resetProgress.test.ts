@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { GATE_RECORD_KEY, loadGates, openArea } from '../src/game/areaGates';
+import { claimFill } from '../src/game/health';
 import { keptKeepsakes } from '../src/game/keepsakeLegacy';
 import { loadObjectives, objectiveContext } from '../src/game/objectives';
 import { loadProgress, markDemonstrationSeen, readTeachFlags, resetGeneration, saveProgress, setTeachFlags } from '../src/game/progress';
@@ -40,6 +41,7 @@ describe('Reset progress', () => {
     openArea(3, road(40), storage);
     expect(keptKeepsakes(storage, () => road(40)).size).toBeGreaterThan(0);
     storage.setItem('tiny-tempo.health.v1', '{"hearts":2,"regenAt":123}');
+    storage.setItem('tiny-tempo.fills.v1', '["GPA.1234-5678"]');
     loadObjectives(1_000, objectiveContext(road(40)), storage);
 
     const outcome = resetProgress(storage);
@@ -51,6 +53,10 @@ describe('Reset progress', () => {
     // The gates stand again, over a road with no stars.
     expect(storage.getItem(GATE_RECORD_KEY)).toBeNull();
     expect(storage.getItem('tiny-tempo.health.v1')).toBeNull();
+    // The refill ledger is a record of purchases already honoured, and stays: a replayed
+    // purchase after the reset still fills nothing.
+    expect(storage.getItem('tiny-tempo.fills.v1')).toBe('["GPA.1234-5678"]');
+    expect(claimFill({ hearts: 0, refillStartedAt: 1, spentAttempt: null }, 'GPA.1234-5678', 1_000, storage).granted).toBe(false);
     expect(loadGates(loadProgress(storage), storage)).toEqual({ opened: 0 });
     // The keepsakes kept from the old schedule went with the save that held them.
     expect(keptKeepsakes(storage, () => loadProgress(storage)).size).toBe(0);
