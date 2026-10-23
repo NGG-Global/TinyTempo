@@ -74,7 +74,7 @@ import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount,
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback, FxKey } from '@/ui/feedback';
 import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
-import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
+import { verdictPose, verdictWord, type VerdictGrade } from '@/ui/hitPose';
 import { VerdictTag } from '@/ui/verdictTag';
 import { levelBackAction } from '@/core/backButton';
 import { arrive, settle, squash } from '@/ui/spring';
@@ -1936,7 +1936,7 @@ export class PlayScene extends BaseScene {
    * pile two on top of each other, which the design notes warn against.
    */
   private sayVerdict(result: Judgement, now: number): void {
-    const word = result.kind === 'extra' ? 'Miss' : result.grade;
+    const word = verdictWord(result);
     const colour = this.verdictColour(result);
     this.verdictAt = now;
     this.verdictGrade = word;
@@ -2475,6 +2475,10 @@ export class PlayScene extends BaseScene {
     });
     this.summaryAt = this.now();
     this.summaryWallAt = performance.now() / 1000;
+    // The count is over: nothing follows the last coda, so the metronome bar ends here
+    // rather than clicking on under the plaque until the road takes the loop back. The
+    // stems ring on at the level's mix; the shell's own `setMusicBed` refits them.
+    this.audio?.music.stopMetronome();
     // The longer note is shown once, here; after it, every later card is the short one.
     if (this.keepsake && this.keepsakeFirst) markScrapbookSeen();
     this.keepsakeStruck = false;

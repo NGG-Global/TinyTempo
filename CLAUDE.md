@@ -17,7 +17,8 @@ Crockford base32 string carrying levels, accuracies and settings, never hearts o
 purchases, and whose one calibration field this build writes but no longer restores. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
 `docs/SAVES.md`. **Reset progress is one decision** (`game/resetProgress.ts`): the save, the
 teach flags, the tutorial, the gate record, the kept keepsakes, the hearts and the day's
-objectives go together, and the device stamps a **reset generation** (`tiny-tempo.reset.v1`)
+objectives go together (the objectives' stamps and the refill ledger stay: history and a
+purchase, neither the road's), and the device stamps a **reset generation** (`tiny-tempo.reset.v1`)
 that the cloud save carries — it cleared the save and the hearts alone before, which left the
 gates open, every introduction seen, and on a signed-in device the whole road merged back from
 Play Games after one cleared level.
@@ -254,7 +255,7 @@ colourways (`bugLooks.ts`), the bicep curl three people at the bench
 (`curlLooks.ts`), scissors & paper four sets of three shapes (`PAPER_SHAPE_SETS`),
 the light switch four interiors (`lightLooks.ts`), the doorbell four leaves
 (`doorLooks.ts`), the slushy five flavours (`slushyLooks.ts`), and the apple act an
-apple, a pear, a peach and a donut (`appleLooks.ts`). The other twenty-one each have
+apple, a pear, a peach and a donut (`appleLooks.ts`), and the nose four people (`noseLooks.ts`). The other twenty-seven each have
 three looks in their own `*Looks.ts`, chosen by `lookAt`: the hammer, the window's
 view, the saw's timber, the tomato, cucumber and banana, the egg, the bubble sheet,
 the roller's wall and gallery (`rollerImage`, leaving `paintImage` on the original
@@ -619,7 +620,7 @@ and the menu overlap. **The level owns the bus gain from the moment it is named*
 because under reduced motion the curtain beats `bedFadeSec` and the hush's early return
 leaves the gain where it found it — a level played with its stems and metronome at zero.
 And **a reused level loop takes the shell's mix** on the way back: the shell branch fades
-every stem in (`stemCount`) and `stopMetronome` ends the click, so the road after a level is
+every stem in (`stemCount`) and `stopMetronome` ends the click — the result plaque has already ended it, since nothing follows the last coda — so the road after a level is
 the road before it. Both are pinned in `tests/musicBed.test.ts`. **A wrap width is written
 only when it changes** (`wrapWidth`, `ui/type.ts`): Phaser's `setWordWrapWidth` re-rasterises
 on every call, and `layout()` runs once per frame of an Android URL-bar collapse;
@@ -740,7 +741,8 @@ mastered level is `repeat` — its plate reads IN THE POCKET AGAIN without the r
 buzz or sparks — and `level_mastered` fires on the first only. **The save code writes a
 flawless level as 101 and caps the rest at 99**, because a rounded 99.6 came back as a
 mastered 100; an older code's 100 reads as 99.5. See `docs/MASTERY.md`. `Vignette.onGroove?` is an
-optional hook for an act's own reaction; none implements it. See `docs/GROOVE.md`.
+optional hook for an act's own reaction; six implement it — the hammer and the window directly,
+the doorbell, scratch, snare and popcorn through `HouseholdVignette`'s `lightMaterial`. See `docs/GROOVE.md`.
 **A judged tap begins the response.** `RoundController.tap` sets the phase to `respond`
 itself, before the strike and the judgement, and `phaseAt` never moves a task's phase
 backwards: the first hit of a task used to be held — an early one for its voice and picture
@@ -1449,7 +1451,7 @@ window's two wipes, the bug's shoe, the curl's grunt, the paper's scissors, the
 trombone's two notes and two endings, and the clap with the three rooms that answer it,
 260 KB of WAV and 340 KB of MP3 beside the 2.4 MB track. A percussive take ships as
 delivered; a coda of several seconds is kept in `sfx/masters/` and encoded by
-`npm run sfx:encode`, which is what keeps four seconds of applause from costing 1.6 MB. They are an enhancement over a game that already works, so
+`npm run sfx:encode`, which is what keeps 4.7 seconds of applause from costing 1.6 MB. They are an enhancement over a game that already works, so
 `audio/samples.ts` never rejects and an act whose sample does not arrive keeps the
 synthesized voice it shipped with. See `docs/SOUND.md`.
 
@@ -1609,6 +1611,6 @@ different app and says nothing.
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are
-file-level and all nine storage keys share one LevelDB store, so nothing can be excluded
+file-level and all twenty storage keys share one LevelDB store, so nothing can be excluded
 selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
 a restored backup granting Premium forever.

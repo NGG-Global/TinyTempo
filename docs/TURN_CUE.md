@@ -278,7 +278,9 @@ faint ring and nothing else, so the two still read apart; a Miss gets nothing he
 the bar through the socket already says it. The verdict word is struck too (`verdictPose`):
 a Perfect drops in oversized and stamps down to size, leaning alternate ways by the beat it
 answered, the way the count's numerals land; a Good arrives with its old pop; a Miss arrives
-flat with a shake. Every judged hit pulses the thumb — `HAPTIC.hit` on a Perfect, `tap` on a
+flat with a shake, and so does **Extra**, the word a tap that answered no beat gets
+(`verdictWord`): a beat left untapped and a tap too many are different mistakes, and both
+read "Miss" until the result's timing details counted them apart. Every judged hit pulses the thumb — `HAPTIC.hit` on a Perfect, `tap` on a
 Good — which the haptics setting existed for and nothing in play had used.
 
 The scene passes `struck.age` and `struck.perfect` in `BlockState` and the block draws the

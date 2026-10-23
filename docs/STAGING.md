@@ -1,6 +1,6 @@
 # Staging
 
-How the thirty-two acts sit on screen: what they stand on, how big their subject is, and
+How the thirty-six acts sit on screen: what they stand on, how big their subject is, and
 where their light comes from. Presentation only. No beat, contact, judgement, score or
 level changed, and no act was moved in the registry or the rotation.
 
@@ -9,7 +9,7 @@ level changed, and no act was moved in the registry or the rotation.
 - **The open table: the first nine acts.** Each lays itself out and stands on a surface
   that runs the width of the screen: the hammer's bench, the saw's trestles, the knives'
   boards, the bug's tiles.
-- **The household lifecycle: twenty-three acts.** `HouseholdVignette.layout` places the
+- **The household lifecycle: twenty-seven acts.** `HouseholdVignette.layout` places the
   stage in a band between `safe.top + 320·ui` and `safe.bottom - 410·ui`, and most of
   these acts draw their scene inside a framed card. The card used to float in the upper
   half of the screen over empty paper. The backdrop's pool of light also fell behind it,
@@ -70,7 +70,7 @@ this pass, so there is no room for a shelf and none is drawn.
 
 | Acts | Staging |
 | --- | --- |
-| Light switch, doorbell, roller, bell, balloon, stapler, fisherman, DJ scratch, trombone, clap, snare, bongos, slushy, apple, barber, popcorn, toothbrush, nose, dish, prospector | Their card, on a shelf, lit |
+| Light switch, doorbell, roller, bell, balloon, stapler, fisherman, DJ scratch, trombone, clap, snare, bongos, slushy, apple, barber, popcorn, toothbrush, nose, dish, prospector, ice cream, frog, glasses, camera | Their card, on a shelf, lit. The ice cream drew the dish's 660 × 448 slab and passed no card, so it stood on nothing and took no light; the slab is `SLAB_CARD` now and the four acts that draw it name it. |
 | Paintbrush | **Freestanding** (`framed: false`). It has no card: its wall is the paper's own colour. Its easel's legs used to end on nothing. It now stands on a short shelf under its footprint, with a pool of shadow under its feet. There is no wall shadow, rim or falloff, because there is no card face to light. |
 | Egg | **Opts out.** It has no card. It stands on its own worktop, which runs almost the full stage width, so it is already grounded the way the open-table acts are. |
 | Bubble wrap | **Opts out.** The sheet is the subject, seen from above, and it lies on the surface its own drop shadow implies. A shelf under it would stand the sheet up on edge. |
@@ -91,7 +91,7 @@ stage units, then transformed by the act's own layout. The box includes the outl
 
 - **Width** is a percentage of the frame's width, 720.
 - **Height** is a percentage of 829, the band the household acts are laid out in on that
-  frame. It is used for every act, so all thirty-two are compared on one scale.
+  frame. It is used for every act, so all are compared on one scale.
 - **Size** is √(width × height), a single linear measure. Width alone misleads: the
   cucumber is wide and short, and the athlete is narrow and tall.
 
@@ -141,8 +141,14 @@ Sorted by size, at lap 0. The bug and the bell are shown before and after this p
 | Bubble wrap | the sheet | 68.8 | 49.6 | 58.4 |
 | Hammer & nail | hammer and nail | 55.6 | 63.2 | 59.3 |
 | Window | the window | 77.7 | 75.2 | 76.4 |
+| Ice cream | the treat | — | — | to be measured |
+| Frog | the frog | — | — | to be measured |
+| Glasses | the two glasses | — | — | to be measured |
+| Camera | the camera | — | — | to be measured |
 
-The median does not move with the two changes, since both acts stay below it.
+The median does not move with the two changes, since both acts stay below it. The four
+acts after the audit are unmeasured: their bounds would come from the drawing code the
+same way, but the check against captures of the running game has not been done for them.
 
 ### The band
 

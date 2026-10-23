@@ -146,6 +146,11 @@ export const FINALE_TREATMENTS: Readonly<Record<string, FinaleTreatment>> = Obje
   }),
 });
 
+/**
+ * Looked up by the area's base name, so Grass II wears Grass's treatment and reports its
+ * `id`: the treatment is a closed set of values (`docs/ANALYTICS.md`), and the finale's
+ * `area` number already tells the laps of the road apart.
+ */
 export function finaleTreatment(level: number): FinaleTreatment {
   return FINALE_TREATMENTS[areaOf(level).area.name] ?? DEFAULT_TREATMENT;
 }

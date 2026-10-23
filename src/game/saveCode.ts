@@ -11,7 +11,9 @@ import { clampVolume, type Settings } from './settings';
  * This is that route, and the only one that does not require the game to have accounts.
  *
  * **What travels is what the player earned, never what they owe or own.** Levels, best
- * accuracies, calibration, the mute, the two levels and whether the tutorial is done. Not hearts,
+ * accuracies, the mute, the two levels and whether the tutorial is done — and a calibration
+ * field this build still writes for older ones to read, and no longer restores, since the
+ * Tap offset is per audio route and the device's own (`game/routeCalibration.ts`). Not hearts,
  * not the refill ledger, not the daily-heart ledger, not the premium cache — restoring
  * those is either an exploit or an incoherence, and premium comes back through the store
  * rather than through a string a player can edit.

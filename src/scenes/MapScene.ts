@@ -380,6 +380,7 @@ export class MapScene extends BaseScene {
   /** Whether the mode's unlock dot is still owed, read once per entry and cleared by the card. */
   private endlessUnlockSeen = true;
   private endlessLabel!: PuckLabel;
+  private objectivesLabel!: PuckLabel;
   /**
    * The Workshop store: a puck under Endless's, opening on a card the same catalogue
    * Settings sells — the refill and the four replay timers — with the running timer's time
@@ -540,9 +541,12 @@ export class MapScene extends BaseScene {
     this.dockTitle = display(this, '', { size: 30, colour: PALETTE.ink }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(11);
     // Over the out-of-hearts sheet (19–22): opened from a puck, it is the top thing on screen.
     this.objectivesCard = new ObjectivesCard(this, 30);
-    // A locked mode that does not say how it opens leaves the player guessing: until the card
-    // has been opened once, the puck says it beside itself.
-    this.endlessLabel = new PuckLabel(this, `Opens after level ${ENDLESS.unlockLevel}`, 12).fixed();
+    // Icon-only pucks say what they are until they have been opened (`ui/puckLabel.ts`). The
+    // objectives puck had the flag and no tag here, so the Menu named it and the Map did not.
+    this.objectivesLabel = new PuckLabel(this, 'Objectives', 12).fixed();
+    // A locked mode that does not say how it opens leaves the player guessing, and an open one
+    // that is only an infinity glyph does too: the tag reads the lock (`drawPucks`).
+    this.endlessLabel = new PuckLabel(this, 'Endless', 12).fixed();
     this.endlessCard = new EndlessCard(this, 30);
     this.endlessBusy = false;
     this.endlessUnlockSeen = loadEndlessProgress().seenUnlock;
@@ -1824,8 +1828,9 @@ export class MapScene extends BaseScene {
     this.backAt = { x: this.setupAt.x - gap, y: this.muteAt.y };
     this.objectivesAt = { x: safe.left + 56 * s, y: safe.top + 190 * s };
     this.endlessAt = ENDLESS.available ? { x: this.objectivesAt.x, y: this.objectivesAt.y + gap } : { x: -1000, y: -1000 };
-    this.endlessLabel.place(this.endlessAt.x, this.endlessAt.y, CHROME.puckRadius * s, 'right', s,
-      ENDLESS.available && !endlessUnlocked(this.progress) && !seenPuck('endless'));
+    this.objectivesLabel.place(this.objectivesAt.x, this.objectivesAt.y, CHROME.puckRadius * s, 'right', s, !seenPuck('objectives'));
+    this.endlessLabel.setWords(endlessUnlocked(this.progress) ? 'Endless' : `Opens after level ${ENDLESS.unlockLevel}`);
+    this.endlessLabel.place(this.endlessAt.x, this.endlessAt.y, CHROME.puckRadius * s, 'right', s, ENDLESS.available && !seenPuck('endless'));
     const g = this.pucks.graphics.clear();
     const sinkOf = (key: 'back' | 'setup' | 'mute' | 'objectives' | 'endless' | 'store') => (this.puckPressed === key ? press : 0);
     for (const [key, at] of [['back', this.backAt], ['setup', this.setupAt], ['mute', this.muteAt]] as const) {
@@ -2747,7 +2752,10 @@ export class MapScene extends BaseScene {
     if (near(this.objectivesAt) && !this.restShown) {
       this.pressPuck('objectives');
       this.objectives = markObjectivesSeen(Date.now(), objectiveContext(this.progress));
-      markPuckSeen('objectives');
+      if (!seenPuck('objectives')) {
+        markPuckSeen('objectives');
+        this.objectivesLabel.place(0, 0, 0, 'right', this.uiScale, false);
+      }
       this.objectivesCard.show(this.objectives, Date.now(), performance.now() / 1000);
       return;
     }

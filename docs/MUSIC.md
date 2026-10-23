@@ -236,7 +236,10 @@ click on every beat, the first accented by pitch and level — looped as one mor
 from the same start sample with the same rate automation, so its accent is always the
 loop's downbeat and it can never drift from what it counts. It rides the track's bus
 through its own gain (`MUSIC.metronome.gain`), so the bed's fades and the mute cover it,
-and the track's loudness match scales it. Its levels are set by ear, not measured.
+and the track's loudness match scales it. Its levels are set by ear, not measured. It ends
+when the result plaque opens (`PlayScene.showSummary`, Endless's `showPlaque`): the count is
+over, so it does not click on under the result until the road takes the loop back; the
+stems ring on at the level's mix until the shell's `setMusicBed` refits them.
 
 **The cost is memory and download, and it is the cost the premix was made to avoid.** A
 decoded stereo stem is ~38 MB of float PCM at 44.1 kHz (41.5 at 48), so the six stems hold

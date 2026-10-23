@@ -60,6 +60,9 @@ describe('which levels are finales', () => {
     const lap = AREAS.length * size;
     expect(areaFinale(lap)).toMatchObject({ areaName: 'Art Deco', nextAreaName: 'Grass II', treatment: FINALE_TREATMENTS['Art Deco'] });
     expect(areaFinale(lap + size)).toMatchObject({ areaName: 'Grass II', treatment: FINALE_TREATMENTS.Grass });
+    // A later lap wears the base area's treatment and reports its id; the area number is what tells the laps apart.
+    expect(finaleTreatment(lap + size).id).toBe('grass');
+    expect(areaFinale(lap + size)).toMatchObject({ area: 15, areaName: 'Grass II' });
     for (let level = 1; level <= LAST; level++) if (!isAreaFinale(level)) expect(areaFinale(level)).toBeNull();
   });
 });

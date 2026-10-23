@@ -18,7 +18,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
-import { batonLanding, beatsPlayed, countIn, handover, markFor, numeralStyle, trackGeometry, turnCount, turnCountExit, turnCountPose, type Mark } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, handover, isFlawless, markFor, numeralStyle, trackGeometry, turnCount, turnCountExit, turnCountPose, type Mark } from '@/game/beatTrack';
 import {
   applyAccuracy, createEndlessSequence, elapsedMs, ENDLESS_RULES, formatSurvival, LIVES_START, MILESTONES,
   type EndlessLives, type EndlessRunSummary, type EndlessSequence, type EndlessStep,
@@ -41,7 +41,8 @@ import { MaterialKey } from '@/textures/materials';
 import { CHROME, drawActionDisc, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { mix, shade } from '@/ui/colour';
 import { Feedback, FxKey } from '@/ui/feedback';
-import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
+import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
+import { verdictPose, verdictWord, type VerdictGrade } from '@/ui/hitPose';
 import { VerdictTag } from '@/ui/verdictTag';
 import { drawInfinity, drawMap, drawNote, drawSpeaker } from '@/ui/icons';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
@@ -147,6 +148,16 @@ export class EndlessScene extends BaseScene {
   private struckIndex = -1;
   private struckAt = -Infinity;
   private struckPerfect = false;
+  /**
+   * A step answered Perfect throughout gets the one celebration a task has, as a level's
+   * does (`ui/flourish.ts`): the word over the face, the sweep, the chorus. Only that —
+   * Endless has no groove, so nothing here warms the room or adds an accent.
+   */
+  private flawless!: Phaser.GameObjects.Text;
+  private flawlessHalo!: Phaser.GameObjects.Image;
+  private flawlessAt = -Infinity;
+  private flawlessSwept = 0;
+  private flawlessChorused = false;
   /** The x the block's column offsets are measured from (`columnShift`), for a burst at a socket. */
   private columnX = 0;
   private extraAt = -Infinity;
@@ -241,6 +252,8 @@ export class EndlessScene extends BaseScene {
     this.marks = this.add.graphics().setDepth(8);
     this.verdict = display(this, '', { size: 38, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.verdictTag = new VerdictTag(this, 8, PALETTE.ink);
+    this.flawlessHalo = this.add.image(0, 0, FxKey.glow).setTint(0xffe7a0).setAlpha(0).setDepth(8);
+    this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
     this.sheet = this.add.graphics().setDepth(40).setVisible(false);
     this.sheetTitle = display(this, 'Leave this run?', { size: 40, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
@@ -296,7 +309,9 @@ export class EndlessScene extends BaseScene {
     this.heldJudgements = [];
     this.outcomes = [];
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.punchAt = this.verdictAt = -Infinity;
+    this.struckAt = this.extraAt = this.punchAt = this.verdictAt = this.flawlessAt = -Infinity;
+    this.flawlessSwept = 0;
+    this.flawlessChorused = false;
     this.plaqueShown = false;
     this.plaqueAt = -Infinity;
     this.sheetOpen = false;
@@ -332,6 +347,9 @@ export class EndlessScene extends BaseScene {
     this.verdictY = verdictLine(this.trackY, s);
     this.verdict.setPosition(safe.centerX, this.verdictY);
     resize(this.verdict, 38 * s, this.verdictColour());
+    // The flawless word takes the verdict's line: it is the verdict on the whole step.
+    this.flawless.setPosition(safe.centerX, this.verdictY);
+    resize(this.flawless, 54 * s, PALETTE.coral);
     this.verdictTag.layout(s, this.verdictColour());
     this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
     this.turnCalls.forEach((text, i) => {
@@ -465,7 +483,9 @@ export class EndlessScene extends BaseScene {
     this.outcomes = step.pattern.hits.map(() => 'pending');
     this.heldJudgements = [];
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.verdictAt = -Infinity;
+    this.struckAt = this.extraAt = this.verdictAt = this.flawlessAt = -Infinity;
+    this.flawlessSwept = 0;
+    this.flawlessChorused = false;
     this.goStruck = false;
     this.resultTaken = false;
     this.verdict.setAlpha(0);
@@ -526,7 +546,7 @@ export class EndlessScene extends BaseScene {
   }
 
   private sayVerdict(result: Judgement, now: number): void {
-    const word = result.kind === 'extra' ? 'Miss' : result.grade;
+    const word = verdictWord(result);
     this.verdictAt = now;
     this.verdictGrade = word;
     this.verdictIndex = result.index ?? this.verdictIndex + 1;
@@ -560,6 +580,16 @@ export class EndlessScene extends BaseScene {
     const outcome = applyAccuracy(this.lives, result.accuracy, step.threshold);
     this.lives = outcome.next;
     this.drawLives();
+    // Every target Perfect and nothing extra: the flourish, as a level gives it. An
+    // interrupted run is invalidated rather than capped, so there is no ceiling to check.
+    if (isFlawless(this.outcomes) && result.extras === 0) {
+      this.flawlessAt = now;
+      this.flawlessSwept = 0;
+      this.flawlessChorused = false;
+      this.verdictAt = -Infinity;
+      this.verdict.setAlpha(0);
+      this.verdictTag.clear();
+    }
     const elapsedSec = Math.max(0, Math.floor(now - this.runStartSec));
     track('endless_vignette_finished', { elapsed_sec: elapsedSec, step: step.index, bpm: step.bpm, accuracy: Math.round(result.accuracy), lives: this.lives.lives, role: step.role });
     if (outcome.event === 'lost') { track('endless_life_lost', { elapsed_sec: elapsedSec, lives: this.lives.lives }); vibrate('stamp'); }
@@ -892,6 +922,8 @@ export class EndlessScene extends BaseScene {
     if (!phase || phase === 'idle' || phase === 'paused' || this.plaqueShown) {
       this.roomDim.setAlpha(0);
       this.hideTurnCall();
+      if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
+      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
       return;
     }
     const { safe } = this.viewport;
@@ -916,7 +948,9 @@ export class EndlessScene extends BaseScene {
       struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: this.struckPerfect },
       rattle, still, ghost: null, ink: this.ink, paper,
       landed: now - batonLanding(plan),
+      flawless: now - this.flawlessAt,
     });
+    this.drawFlawless(geo.columnX, centres, geo.faceCentreY, now);
     const pips = countIn(plan, now);
     if (pips !== null) {
       const gap = TRACK.pipGap * s, pipY = geo.shelf.y - 22 * s;
@@ -990,6 +1024,41 @@ export class EndlessScene extends BaseScene {
     this.turnCalled = null;
   }
 
+  /**
+   * The word for a flawless step, over the shelf, and the sparks the sweep throws from each
+   * socket as it passes — PlayScene's, step for step. The band of light and the glints are
+   * the block's; this is the part that reaches for a Text and the emitters.
+   */
+  private drawFlawless(centreX: number, centres: readonly number[], faceY: number, now: number): void {
+    const age = now - this.flawlessAt;
+    const still = this.reducedMotion;
+    const pose = flawlessPose(age, still);
+    if (!pose) {
+      if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
+      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
+      return;
+    }
+    const s = this.uiScale;
+    this.flawless.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
+      .setY(this.verdictY + pose.rise * s);
+    if (pose.glow > 0.01) {
+      const w = this.flawless.width * pose.scale;
+      this.flawlessHalo.setPosition(this.viewport.safe.centerX, this.verdictY + pose.rise * s)
+        .setDisplaySize(w * 2, 170 * s * pose.scale).setAlpha(pose.glow * 0.8);
+    } else if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
+    if (still) return;
+    while (this.flawlessSwept < centres.length && socketGlint(age, this.flawlessSwept, centres.length) >= 0) {
+      const x = centreX + centres[this.flawlessSwept]!;
+      this.fx.burst('sparks', x, faceY, [SHELL.sun, 0xffe7a0, PALETTE.coral], 6);
+      this.flawlessSwept++;
+    }
+    if (!this.flawlessChorused && age >= FLAWLESS.chorusAt) {
+      this.flawlessChorused = true;
+      this.fx.burst('confetti', centreX, faceY - 10 * s, [PALETTE.coral, SHELL.cream, SHELL.sun], 22);
+      vibrate('hit');
+    }
+  }
+
   // ---------------------------------------------------------------- the leave sheet
 
   private showSheet(): void {
@@ -1042,6 +1111,8 @@ export class EndlessScene extends BaseScene {
     if (this.plaqueShown) return;
     this.plaqueShown = true;
     this.plaqueAt = performance.now() / 1000;
+    // The run's grid has stopped; so does the click under it. The stems ring on.
+    this.audio?.music.stopMetronome();
     this.hideSheet();
     this.hideTurnCall();
     this.roomDim.setAlpha(0);

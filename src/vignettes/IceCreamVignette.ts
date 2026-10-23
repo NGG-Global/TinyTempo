@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { cubicContour, traceContour } from '@/ui/illustration';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { SLAB_CARD } from './staging';
 import { HOME_INK, shape, slab } from './householdArt';
 import { celebration } from './treatArt';
 import { iceCreamLook, type IceCreamLook } from './iceCreamLooks';
@@ -48,7 +49,7 @@ export class IceCreamVignette extends HouseholdVignette {
 
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = iceCreamLook(lap);
-    super(scene, shade(look.sky, 0.3), 0xfff1cf);
+    super(scene, shade(look.sky, 0.3), 0xfff1cf, { card: SLAB_CARD });
     this.look = look;
   }
 

@@ -196,10 +196,29 @@ what this pass added.
 | 30 | Blow your nose | — | motion lines | face, tissue |
 | 31 | Wash the plate | — | suds | sponge |
 | 32 | Prospector | — | sparks, cracks | — |
+| 33 | Ice cream | — | lick sweep, treat worn down | tongue, treat |
+| 34 | Frog | rings, droplets | listeners rise from the pond | throat sac balloons |
+| 35 | Glasses | droplets (splinters, confetti in the coda) | room lights, hairline crack | glasses meet |
+| 36 | Camera | — | flash, print pegged to the line | shutter |
 
 The light switch and the DJ scratch are the quietest at the moment of contact. They were
 left alone: a switch throws nothing, and the record's dust on a dark deck would not read.
-They are the next candidates if more is wanted.
+They are the next candidates if more is wanted. Acts 33–36 were added after this audit and
+are in the table from their drawing code, not from a device.
+
+### Two demonstration styles
+
+Every act obeys the rule that a demonstration consumes nothing: the player's progress on a
+subject starts from nothing at the handover and only judged hits move it. But the cast
+shows the demonstration two ways. Eleven acts — bubble wrap, roller, balloon, stapler,
+fisherman, DJ scratch, trombone, slushy, apple, paintbrush, and the clap's crowd — draw the
+example's progress on a copy of the subject (`watching ? demoTimes : hitTimes`) and snap it
+back to the start as the turn changes hands, so the bubbles refill and the apple is whole
+again. The rest, the original nine among them, draw nothing of the example on the subject
+at all, on the reasoning in `HammerNailVignette`: there is no bar between the demonstration
+and the response in which to restore it, so the reset lands inside the demonstration's own
+bar. Neither is wrong, and nothing is consumed either way; they read differently, and which
+the game should settle on is a decision for a device review (`docs/DESIGN_GAPS.md`).
 
 ## Boundaries
 
