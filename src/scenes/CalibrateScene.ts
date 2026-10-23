@@ -8,7 +8,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { vibrate } from '@/core/haptics';
 import { reducedMotion } from '@/core/motionPreference';
 import { CalibrationRun, CALIBRATION, type CalibrationVerdict } from '@/game/CalibrationRun';
-import { formatOffset, resultCopy } from '@/game/calibrationCopy';
+import { formatOffset, instructionCopy, resultCopy } from '@/game/calibrationCopy';
 import { track } from '@/monetization';
 import { ROUTE_LABELS } from '@/game/routeCalibration';
 import { CALIBRATION_TAPS } from '@/game/settings';
@@ -123,6 +123,8 @@ export class CalibrateScene extends BaseScene {
   private disposed = false;
   private request = 0;
   private headlineAt = { x: 0, y: 0 };
+  /** The instruction's wrap width, kept so a phase change re-balances the new words at the same room. */
+  private instructionRoom = 0;
   private get reducedMotion(): boolean { return reducedMotion(); }
 
   public constructor() { super(SceneKey.Calibrate); }
@@ -154,7 +156,7 @@ export class CalibrateScene extends BaseScene {
     this.laneLate = label(this, 'LATE', { size: 18, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(3);
     this.backMark = this.add.graphics().setDepth(3);
     this.headline = display(this, 'Tap offset', { size: 56, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(1);
-    this.instruction = body(this, 'Tap anywhere on every beat. Eight taps and the workshop knows your device.', {
+    this.instruction = body(this, instructionCopy('idle', false), {
       size: 30, colour: PALETTE.muted, align: 'center',
     }).setOrigin(0.5, 0).setDepth(1);
     this.counted = display(this, '', { size: 132, colour: PALETTE.ink }).setOrigin(1, 0.5).setDepth(1);
@@ -240,7 +242,8 @@ export class CalibrateScene extends BaseScene {
     const bandBottom = footerBottom - Math.max(heroH, resultH) - 32 * s;
     const centre = (bandTop + bandBottom) / 2;
     resize(this.instruction, 30 * s, PALETTE.muted, STYLE.current, false);
-    balanceWrap(this.instruction, Math.min(520 * s, width));
+    this.instructionRoom = Math.min(520 * s, width);
+    balanceWrap(this.instruction, this.instructionRoom);
     this.instruction.setPosition(safe.centerX, bandTop);
     this.beadRow = {
       x: safe.centerX - 1.5 * TUNE.beadGap * s, y: centre - TUNE.countHeight * s / 2 - 44 * s,
@@ -340,6 +343,11 @@ export class CalibrateScene extends BaseScene {
 
   private refreshCopy(): void {
     const measured = this.phase === 'measured' || this.phase === 'failed';
+    const instruction = instructionCopy(this.phase, this.kept !== null);
+    if (this.instruction.text !== instruction) {
+      this.instruction.setText(instruction);
+      if (this.instructionRoom > 0) balanceWrap(this.instruction, this.instructionRoom);
+    }
     this.counted.setText(String(this.run?.count ?? (measured ? CALIBRATION_TAPS : 0)));
     this.countedNote.setText(this.phase === 'counting' ? 'Taps landed' : 'Tap on the beat');
     const reported = currentAudio(this)?.clock.reportedLagMs ?? 0;

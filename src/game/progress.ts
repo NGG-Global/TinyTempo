@@ -107,6 +107,34 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
 }
 
 /**
+ * The reset generation: how many times this progression has been reset, carried in the
+ * cloud save (`playgames/cloudSave.ts`) so a reset reaches the player's other devices.
+ *
+ * The cloud only ever adds, which is right for every merge but one: a progression the
+ * player has deliberately thrown away came straight back on the next sync, so Reset held
+ * for exactly one level. The generation is the one fact a merge reads before it adds —
+ * the side with the higher one wins whole, and the other side's progression is the past.
+ * It is a counter, not a clock: two devices' clocks disagree, and a reset on a device that
+ * has synced knows the generation the cloud holds, since the sync wrote it here.
+ */
+const RESET_KEY = 'tiny-tempo.reset.v1';
+/** More resets than a lifetime of play; a bound on a tampered value. */
+const MAX_RESET_GENERATION = 1_000_000;
+
+export function resetGeneration(storage: Storage | null = safeStorage()): number {
+  try {
+    const value = Number(storage?.getItem(RESET_KEY) ?? 0);
+    return Number.isInteger(value) && value >= 0 && value <= MAX_RESET_GENERATION ? value : 0;
+  } catch { return 0; }
+}
+
+/** Set the stored generation exactly, as a sync does when the cloud's is newer. False means nothing was written. */
+export function setResetGeneration(generation: number, storage: Storage | null = safeStorage()): boolean {
+  const value = Number.isInteger(generation) ? Math.max(0, Math.min(MAX_RESET_GENERATION, generation)) : 0;
+  try { storage?.setItem(RESET_KEY, String(value)); return storage !== null; } catch { return false; }
+}
+
+/**
  * The first-run teach: the flags for what the player has been shown once, and none of
  * them earned progress.
  *
@@ -117,6 +145,11 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
  * tutorial flag out of it.
  */
 const TEACH_KEY = 'small-acts.teach.v1';
+
+/** The teach flags, every one of them cleared: a reset player is a new player. */
+export function clearTeachFlags(storage: Storage | null = safeStorage()): boolean {
+  try { storage?.removeItem(TEACH_KEY); return storage !== null; } catch { return false; }
+}
 
 /** Has the one-cycle demonstration pass already played? It runs once, ever. */
 export function seenDemonstration(storage: Storage | null = safeStorage()): boolean {

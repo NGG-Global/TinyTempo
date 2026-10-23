@@ -161,8 +161,10 @@ read while a bar is playing, from the far end of the screen.
   `docs/TURN_CUE.md` gives — a second pulse under the demonstration's own beats — and the
   lesson's count is the level's.
 - It does not show the ball on every level. The ball is a scaffold, like the guiding ring:
-  the lesson, level 1's first-run pass, the guided level and a new grid's introduction have
-  it; a learnt level reads the block alone.
+  the lesson, level 1's first-run pass, every level through `TEACH_WORDS.ballThrough`
+  (level 3, `game/teachCopy.ts`) and a new grid's introduction have it; from level 4 the
+  block is read alone, and that level says so once on its first task — *No ball this time.
+  Follow the rhythm.* — until it has been cleared.
 
 ## State
 

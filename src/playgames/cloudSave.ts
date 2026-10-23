@@ -1,4 +1,5 @@
-import { loadProgress, mergeProgress, readTeachFlags, saveProgress, setTeachFlags, type Progress, type TeachFlag } from '../game/progress';
+import { clearGateRecord } from '../game/areaGates';
+import { loadProgress, mergeProgress, readTeachFlags, resetGeneration, saveProgress, setResetGeneration, setTeachFlags, type Progress, type TeachFlag } from '../game/progress';
 import { completeTutorial, setTutorialState, skipTutorial, tutorialState } from '../game/TutorialRun';
 import {
   SNAPSHOT_FAILED, type PlayGames, type SnapshotConflict, type SnapshotFailure, type SnapshotPayload, type SnapshotReason,
@@ -18,6 +19,15 @@ import {
  * merged with this device's own, and the merge is the resolution. A timestamp decides
  * nothing. Nothing in a snapshot can take a level away, grant a heart, or restore a
  * purchase, because none of those is in it (`CloudSaveV1`).
+ *
+ * **Except what the player threw away.** Settings → Reset progress is the one deliberate
+ * loss, and a merge that only adds brought the old progression straight back on the next
+ * sync. So a save carries its **reset generation** (`game/resetProgress.ts`), a counter
+ * stamped on the device at each reset and carried in every snapshot since: when two saves
+ * differ in it, the higher one wins whole — progress, lessons and all, with nothing of the
+ * older side kept — and only saves of the same generation merge by adding. A device that
+ * meets a newer generation from the cloud replaces its own progression, which is the reset
+ * arriving on the player's other phone.
  *
  * **The device knows whose progress it holds.** Local storage is device-wide and a Play
  * Games account is not, so a device bound to one player must not hand that player's
@@ -48,6 +58,8 @@ export const CLOUD_SAVE = {
   maxShelf: 8,
   /** How long one Play Games call may take before the sync treats it as failed. */
   timeoutMs: 20_000,
+  /** More resets than a lifetime of play; a bound on a tampered generation. */
+  maxReset: 1_000_000,
 } as const;
 
 /** Passed, skipped, or neither — the stronger fact wins a merge. */
@@ -72,16 +84,23 @@ export interface CloudSaveV1 {
   readonly progress: Progress;
   readonly tutorial: CloudTutorial;
   readonly teach: Readonly<Record<CloudTeach, boolean>>;
+  /** How many times this progression has been reset. The higher generation wins a merge whole. */
+  readonly reset: number;
 }
 
 const NO_TEACH: Readonly<Record<CloudTeach, boolean>> = Object.freeze({ seen: false, triplet: false, sixteenth: false, scrapbook: false });
 const EMPTY_PROGRESS: Progress = Object.freeze({ unlocked: 1, best: Object.freeze({}) });
 
 export function emptyCloudSave(): CloudSaveV1 {
-  return { version: 1, progress: EMPTY_PROGRESS, tutorial: 'none', teach: NO_TEACH };
+  return { version: 1, progress: EMPTY_PROGRESS, tutorial: 'none', teach: NO_TEACH, reset: 0 };
 }
 
 const clampAccuracy = (value: number): number => Math.max(0, Math.min(100, value));
+
+/** A generation as the cloud carries it: a whole number from 0, bounded; anything else is 0, the generation every save started on. */
+function boundReset(value: unknown): number {
+  return typeof value === 'number' && Number.isInteger(value) && value > 0 ? Math.min(CLOUD_SAVE.maxReset, value) : 0;
+}
 
 /** A progress bounded the way the cloud carries it: valid levels only, the frontier never below the clears. */
 function boundProgress(unlocked: unknown, best: unknown): Progress {
@@ -116,6 +135,7 @@ export function encodeCloudSave(save: CloudSaveV1): string {
     progress: { unlocked: progress.unlocked, best },
     tutorial: TUTORIAL_RANK[save.tutorial] === undefined ? 'none' : save.tutorial,
     teach,
+    reset: boundReset(save.reset),
   });
 }
 
@@ -138,7 +158,7 @@ export function decodeCloudSave(text: string | null): CloudDecode {
   let parsed: unknown;
   try { parsed = JSON.parse(text); } catch { return { kind: 'malformed' }; }
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return { kind: 'malformed' };
-  const record = parsed as { version?: unknown; progress?: unknown; tutorial?: unknown; teach?: unknown };
+  const record = parsed as { version?: unknown; progress?: unknown; tutorial?: unknown; teach?: unknown; reset?: unknown };
   const version = record.version;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 1) return { kind: 'malformed' };
   if (version > CLOUD_SAVE.version) return { kind: 'unsupported', version };
@@ -155,12 +175,23 @@ export function decodeCloudSave(text: string | null): CloudDecode {
       progress: boundProgress(progress.unlocked, progress.best),
       tutorial: record.tutorial === 'complete' || record.tutorial === 'skipped' ? record.tutorial : 'none',
       teach,
+      // A payload from before resets travelled has none, and reads as the first generation.
+      reset: boundReset(record.reset),
     },
   };
 }
 
-/** Two saves into one that can only be richer than either: the save code's merge, plus the lessons. */
+/**
+ * Two saves into one. Of the same generation, one that can only be richer than either: the
+ * save code's merge, plus the lessons. Of different generations, the newer one whole: the
+ * older is the progression a reset threw away, and nothing of it is added back.
+ */
 export function mergeCloudSaves(a: CloudSaveV1, b: CloudSaveV1): CloudSaveV1 {
+  const resetA = boundReset(a.reset), resetB = boundReset(b.reset);
+  if (resetA !== resetB) {
+    const newer = resetA > resetB ? a : b;
+    return { ...newer, version: 1, reset: Math.max(resetA, resetB) };
+  }
   const teach = {} as Record<CloudTeach, boolean>;
   for (const flag of CLOUD_TEACH) teach[flag] = a.teach[flag] === true || b.teach[flag] === true;
   return {
@@ -168,6 +199,7 @@ export function mergeCloudSaves(a: CloudSaveV1, b: CloudSaveV1): CloudSaveV1 {
     progress: mergeProgress(a.progress, b.progress),
     tutorial: TUTORIAL_RANK[a.tutorial] >= TUTORIAL_RANK[b.tutorial] ? a.tutorial : b.tutorial,
     teach,
+    reset: resetA,
   };
 }
 
@@ -279,7 +311,10 @@ export function switchBinding(binding: CloudBinding, from: string, to: string, s
 /** The local progression, as the sync reads and writes it. Storage detail stays in the wiring. */
 export interface CloudLocal {
   read(): CloudSaveV1;
-  /** Bring the device up to a save that is at least what it has: progress replaced, lessons OR-ed. */
+  /**
+   * Bring the device up to a save that is at least what it has: progress merged, lessons
+   * OR-ed — unless the save is of a newer generation, when the device takes it whole.
+   */
   write(save: CloudSaveV1): boolean;
   /** Make the device hold exactly this save. Only for a change of owner. */
   replace(save: CloudSaveV1): boolean;
@@ -298,9 +333,11 @@ export interface CloudStore {
  *
  * `write` merges with what is in storage *now*, not with what the sync read before its
  * network calls: a level cleared while a sync was in flight would otherwise be written
- * over by the merge of an older reading. `replace` is the one exact write, for the device
- * changing hands, and it leaves `replayTip` alone — that flag is about the hearts, which
- * stay with the device.
+ * over by the merge of an older reading. A save of a newer generation is the one case
+ * `write` does not merge: it is a reset arriving from another device, and the device takes
+ * it exactly, the one level that may have been cleared meanwhile included in the loss.
+ * `replace` is the one exact write, for the device changing hands, and it leaves
+ * `replayTip` alone — that flag is about the hearts, which stay with the device.
  */
 export function localCloudSave(storage: Storage | null): CloudLocal {
   const teachOf = (flags: Readonly<Record<string, boolean>>): Readonly<Record<CloudTeach, boolean>> => {
@@ -308,9 +345,28 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
     for (const flag of CLOUD_TEACH) teach[flag] = flags[flag] === true;
     return teach;
   };
+  const exact = (save: CloudSaveV1): boolean => {
+    const stored = saveProgress(save.progress, storage);
+    const tutorial = setTutorialState(save.tutorial, storage);
+    // The offbeat, last-beat offbeat and long-phrase introductions are this device's note, not
+    // the cloud's, so they leave with the player whose progress is being shelved; the next
+    // player's save is what keeps them from a veteran (`introConcept`).
+    const teach = setTeachFlags({
+      seen: save.teach.seen, triplet: save.teach.triplet, sixteenth: save.teach.sixteenth, scrapbook: save.teach.scrapbook,
+      offbeat: false, lastOffbeat: false, longPhrase: false,
+    }, storage);
+    // The gate record described the progression being replaced; the next read takes a
+    // baseline from the one arriving (`loadGates`), as a first launch would.
+    clearGateRecord(storage);
+    return stored && tutorial && teach && setResetGeneration(boundReset(save.reset), storage);
+  };
   return {
-    read: () => ({ version: 1, progress: loadProgress(storage), tutorial: tutorialState(storage), teach: teachOf(readTeachFlags(storage)) }),
+    read: () => ({
+      version: 1, progress: loadProgress(storage), tutorial: tutorialState(storage), teach: teachOf(readTeachFlags(storage)),
+      reset: resetGeneration(storage),
+    }),
     write(save) {
+      if (boundReset(save.reset) > resetGeneration(storage)) return exact(save);
       const stored = saveProgress(mergeProgress(loadProgress(storage), save.progress), storage);
       if (save.tutorial === 'complete') completeTutorial(storage);
       else if (save.tutorial === 'skipped') skipTutorial(storage);
@@ -319,18 +375,7 @@ export function localCloudSave(storage: Storage | null): CloudLocal {
       if (Object.keys(seen).length > 0) setTeachFlags(seen, storage);
       return stored;
     },
-    replace(save) {
-      const stored = saveProgress(save.progress, storage);
-      const tutorial = setTutorialState(save.tutorial, storage);
-      // The offbeat, last-beat offbeat and long-phrase introductions are this device's note, not
-      // the cloud's, so they leave with the player whose progress is being shelved; the next
-      // player's save is what keeps them from a veteran (`introConcept`).
-      const teach = setTeachFlags({
-        seen: save.teach.seen, triplet: save.teach.triplet, sixteenth: save.teach.sixteenth, scrapbook: save.teach.scrapbook,
-        offbeat: false, lastOffbeat: false, longPhrase: false,
-      }, storage);
-      return stored && tutorial && teach;
-    },
+    replace: exact,
   };
 }
 

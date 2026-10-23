@@ -14,7 +14,7 @@ import { keepsakeAt } from '../src/game/scrapbook';
 import { starsRequired } from '../src/game/stars';
 import { contrastRatio } from '../src/ui/colour';
 import { FINALE_POSE, buntingPoints, lineShift, pennantSwing, ribbonPose, titleCardPose } from '../src/ui/finalePose';
-import { ROLL_CLEARANCE_SEC, createFinaleSound, synthesizeFinale } from '../src/audio/finaleSounds';
+import { FINALE_SYNTH_BUDGET_MS, ROLL_CLEARANCE_SEC, createFinaleSound, finaleSynth, prepareFinaleSounds, synthesizeFinale } from '../src/audio/finaleSounds';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -288,6 +288,63 @@ describe('the sounds', () => {
     }
     // Deterministic: the same buffer every time it is made.
     expect(synthesizeFinale(rate, 'fanfare')).toEqual(fanfare);
+  });
+
+  it('made a slice at a time, writes exactly the samples a single run would', () => {
+    const rate = 8000;
+    for (const kind of ['roll', 'fanfare'] as const) {
+      const whole = synthesizeFinale(rate, kind, 0.5, 4);
+      const job = finaleSynth(rate, kind, 0.5, 4);
+      expect(job.done).toBe(false);
+      expect(job.progress).toBe(0);
+      let steps = 0;
+      while (!job.done && steps < 10_000) { job.advance(0.05); steps++; }
+      expect(steps).toBeGreaterThan(1);
+      expect(job.done).toBe(true);
+      expect(job.progress).toBe(1);
+      expect(job.finish()).toEqual(whole);
+    }
+    // A zero budget still moves: the first slice is always written, so a job can never stall.
+    const stuck = finaleSynth(rate, 'roll', 0.5, 4);
+    stuck.advance(0);
+    expect(stuck.progress).toBeGreaterThan(0);
+  });
+
+  it('prepares both sounds off the opening frame, the roll first, and hands over buffers whether or not it got there', () => {
+    const made: number[] = [];
+    const context = {
+      sampleRate: 8000,
+      createBuffer(_channels: number, length: number, sampleRate: number) {
+        made.push(length);
+        const data = new Float32Array(length);
+        return { length, sampleRate, getChannelData: () => data };
+      },
+    } as unknown as BaseAudioContext;
+    const prep = prepareFinaleSounds(context, 0.5, 4);
+    expect(prep.done).toBe(false);
+    expect(FINALE_SYNTH_BUDGET_MS).toBeLessThan(16 / 4);
+    let frames = 0;
+    while (!prep.done && frames < 10_000) { prep.advance(0.05); frames++; }
+    expect(prep.done).toBe(true);
+    expect(made).toHaveLength(0);
+    const roll = prep.roll();
+    expect(roll.length).toBe(Math.ceil(8000 * (0.5 * 4 - ROLL_CLEARANCE_SEC)));
+    expect(Array.from(roll.getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'roll', 0.5, 4)));
+    const fanfare = prep.fanfare();
+    expect(Array.from(fanfare.getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'fanfare')));
+    // Taken again, the same buffers; and the fanfare is now the context's cached one.
+    expect(prep.roll()).toBe(roll);
+    expect(prep.fanfare()).toBe(fanfare);
+    expect(createFinaleSound(context, 'fanfare')).toBe(fanfare);
+    expect(made).toHaveLength(2);
+    // Asked before it has got there, a preparation finishes on the spot rather than refusing.
+    const early = prepareFinaleSounds(context, 0.4, 4);
+    expect(early.done).toBe(false);
+    expect(Array.from(early.roll().getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'roll', 0.4, 4)));
+    // With the fanfare cached, a second finale has only the roll to make.
+    expect(early.fanfare()).toBe(fanfare);
+    early.advance(1000);
+    expect(early.done).toBe(true);
   });
 
   it('keeps one fanfare buffer per context and still builds each roll', () => {

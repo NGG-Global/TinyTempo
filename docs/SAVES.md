@@ -166,6 +166,20 @@ In Chromium at 393×851, not only in tests:
 - A typo is refused as a typo; cancelling leaves storage untouched.
 - Restoring the same code twice reports that nothing was ahead of what was there.
 
+## Reset progress
+
+Settings → Progress → Reset, confirmed with a second tap, is the one place progress is
+destroyed, and `game/resetProgress.ts` is the one decision: the save, the teach flags (so
+the first-run pass and every rhythm's introduction play again), the tutorial, the gate
+record, the keepsakes kept from the old act schedule, the hearts and the day's objectives,
+and a **reset generation** stamped on the device and carried in the cloud save so Play
+Games does not merge the old road back (`docs/CLOUD_SAVE.md`). It used to clear the save and
+the hearts alone, which left the gates open, the lessons seen and — on a signed-in device —
+the whole road back on the next sync. Settings, calibration, purchases, replay timers,
+consent, the review record, the daily restarts and Endless's device record are left as they
+are. A save code written before a reset still restores in full: the code is the player's,
+and restoring one is a choice the way resetting is.
+
 ## Still to do
 
 - **The Android side is unverified.** The backup rules are declared but no backup has been

@@ -33,7 +33,8 @@ canonical JSON (fixed key order, levels ascending), a few hundred bytes for a ty
   "version": 1,
   "progress": { "unlocked": 13, "best": { "1": 100, "2": 88, "3": 91 } },
   "tutorial": "complete",
-  "teach": { "seen": true, "triplet": true, "sixteenth": false, "scrapbook": false }
+  "teach": { "seen": true, "triplet": true, "sixteenth": false, "scrapbook": false },
+  "reset": 0
 }
 ```
 
@@ -43,6 +44,7 @@ canonical JSON (fixed key order, levels ascending), a few hundred bytes for a ty
 | `progress.best` | `small-acts.progress.v1` | highest per level |
 | `tutorial` | `small-acts.tutorial.v1` | `complete` > `skipped` > `none` |
 | `teach.seen`, `.triplet`, `.sixteenth`, `.scrapbook` | `small-acts.teach.v1` | logical OR |
+| `reset` | `tiny-tempo.reset.v1` | the higher generation wins **whole**; equal generations merge as above |
 
 Levels above `CLOUD_SAVE.maxLevel` (20 000) are not carried, which bounds the payload far
 under Play's 3 MB; the frontier is bounded as `progress.ts` bounds it. Stars, keepsakes and
@@ -152,6 +154,25 @@ old owner's name, and the next sync shelves again rather than contaminating anyo
 cost is the old owner's un-uploaded local delta, which only a device whose storage refuses
 writes can incur. And the switch happens where the sync runs — boot and resume — so a
 player who changes Play Games profiles mid-session sees it on the next resume.
+
+### Reset progress
+
+The cloud only adds, and Settings → Reset progress is the one deliberate loss, so without
+more the next sync merged the old road straight back: a player reset, cleared level 1, and
+watched their frontier return. Every save now carries its **reset generation**
+(`game/resetProgress.ts`): a counter the device stamps at each reset
+(`tiny-tempo.reset.v1`) and every snapshot carries from then on. `mergeCloudSaves` reads it
+before it adds — two saves of different generations resolve to the newer one whole,
+progress, tutorial and lessons alike, with nothing of the older side kept; two of the same
+generation merge as the table says. `CloudLocal.write` applies the same rule on the device:
+a save of a newer generation arriving from the cloud replaces the device's progression
+exactly, including the one level it may have cleared since, which is the reset reaching the
+player's other phone. A payload from before the field reads as generation 0. The generation
+is a counter rather than a clock because two devices' clocks disagree, and a device that has
+synced knows the generation the cloud holds. Reset also queues a sync, so the reset goes up
+at once rather than with the next cleared level, and it clears the teach flags, the tutorial,
+the gate record, the kept keepsakes, the hearts and the day's objectives on the device, all
+of which had stayed behind.
 
 ## Offline and failure behaviour
 

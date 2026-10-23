@@ -15,7 +15,12 @@ master mute that silences both without discarding them. Progress leaves the devi
 account: Android's Auto Backup, and the save code on `TransferScene` — a checksummed
 Crockford base32 string carrying levels, accuracies and settings, never hearts or
 purchases, and whose one calibration field this build writes but no longer restores. Restoring **merges** (`mergeProgress`), so a code can only ever add. See
-`docs/SAVES.md`.
+`docs/SAVES.md`. **Reset progress is one decision** (`game/resetProgress.ts`): the save, the
+teach flags, the tutorial, the gate record, the kept keepsakes, the hearts and the day's
+objectives go together, and the device stamps a **reset generation** (`tiny-tempo.reset.v1`)
+that the cloud save carries — it cleared the save and the hearts alone before, which left the
+gates open, every introduction seen, and on a signed-in device the whole road merged back from
+Play Games after one cleared level.
 
 The tiers stop at the eighth note; **triplets and sixteenths are a second stage on the
 same curve** (`PROGRESSION.subdivision`, `SUBDIVIDED_TIERS`, `subdivide` in `levels.ts`).
@@ -78,7 +83,10 @@ new arrives. Its opening is `PROGRESSION.finale.openingBars` long, through the b
 pennants over the act that move up under the headline for the result, a title card that is
 off the stage half a beat before the first demonstration, the loop swelling from
 `musicFloor` onto that downbeat, and an "Area complete" ribbon across the plaque's top
-edge — so a new area's finale is a new entry, never a PlayScene edit. On the map every
+edge — so a new area's finale is a new entry, never a PlayScene edit. **Its roll and fanfare
+are synthesized a slice a frame** (`prepareFinaleSounds`, `FINALE_SYNTH_BUDGET_MS`) from the
+scene's `build()`, because built in one go inside the opening they were a tenth of a second
+of per-sample work on the frame the title card dropped in — every finale opened on a hitch. On the map every
 finale in the window is a **stage**, not a flagged stop: a plaza the road widens into,
 bunting in the treatment's pennants, a crown of three star seats over a larger puck, and a
 plate naming the act (`definitionForLap`), locked and previewed ones faded with a padlock
@@ -450,7 +458,8 @@ carries `CloudSaveV1`: `progress`, the tutorial state and four teach flags, and 
 player owes or owns — no hearts, ledgers, Premium, consent, calibration or volume, which
 `tests/cloudSave.test.ts` asserts against the serialized text. The plugin opens it with
 `RESOLUTION_POLICY_MANUAL` and relays bytes; `playgames/cloudSave.ts` (pure) merges —
-highest frontier, highest accuracy per level, lessons OR-ed — and that merge is the only
+highest frontier, highest accuracy per level, lessons OR-ed, **unless the two saves differ in
+reset generation, when the newer one wins whole** — and that merge is the only
 conflict strategy: both sides of a Play conflict are merged with the device's own save and
 sent back as the resolution, bounded at four rounds. A malformed cloud payload is never
 written over and a newer schema is left alone. **The device knows whose progress it holds**:
@@ -626,7 +635,9 @@ subtraction judged every tap late by the device's whole output lag, which on Blu
 a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
-when it is large enough to be the reason a player is failing levels. **The calibration screen
+when it is large enough to be the reason a player is failing levels. Its instruction line
+follows the phase (`instructionCopy`, `game/calibrationCopy.ts`): what Start, Check, Keep
+and Retry do, since one line that only said *tap on every beat* left them unexplained. **The calibration screen
 shows where every tap lands** (`ui/calibrationLane.ts`): a lane with the beat at its centre
 drops a tick at each tap's residual, a tap outside the window flashes the edge it fell past,
 the result names its reason — the spread and the offset before, too few taps, too uneven
@@ -752,10 +763,15 @@ in a **chorus** (`FLAWLESS.chorusAt`): every socket rings together, the plate li
 baton lands again, the word kicks, confetti goes up. **The pulse ball** (`pulseBall` in
 `game/beatTrack.ts`, `BlockState.pulse`) lands on every beat of a task — the shelf's beads,
 then one hop onto the first socket on the downbeat, then the sockets — and is drawn only
-where the game teaches: the tutorial, level 1's first-run pass and guided tasks, and a new
-grid's introduction. The first run adds one 0.75×
-demonstration pass before level 1's first task, with one caption under the act's title
-(`TEACH.caption`), and a guiding ring on that level's sockets —
+where the game teaches: the tutorial, level 1's first-run pass, every level through
+`TEACH_WORDS.ballThrough` (3, `game/teachCopy.ts`), and a new grid's introduction; level 4
+says *No ball this time. Follow the rhythm.* on its first task until it is cleared
+(`noBallLevel`, derived like `guidedLevel`). The first run adds one 0.75×
+demonstration pass before level 1's first task, and **level 1 carries words under the act's
+title** (`teachWords`, set by `PlayScene.refreshTeachWords` from the plan's moment through the
+lesson's `momentOf`): *Watch the red ball*, *Top row: the game's turn*, *3, 2, 1 — the baton
+drops to you*, *Bottom row: your turn*, *Tap when the ball hits a circle*, nothing over a
+coda — and a guiding ring on that level's sockets —
 no scene, no modal, no skip — and the socket ring is `#8f3620` rather than coral, because
 coral on a coral plate is invisible. See `docs/TURN_CUE.md`. The tutorial's words follow
 the ball and say *no pause* before the player is judged, and a solo pass that found no
