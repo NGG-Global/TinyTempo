@@ -12,6 +12,7 @@ import { Feedback } from '@/ui/feedback';
 import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { bugLook, type BugLook } from './bugLooks';
+import { BUG_EXIT_SEC, BUG_SHOE_SETTLE_SEC } from './earlyCodas';
 import { handoverAt } from '@/game/beatTrack';
 import { clamp01, easeOut, isPlayerTurn, turnOpen } from './motion';
 import { floorSpan } from './floorSpan';
@@ -213,7 +214,7 @@ export class BugShoeVignette implements Vignette {
       const p = clamp01(1 - (next - now) / 0.22);
       lift = lift * (1 - p) + (245 + Math.sin(p * Math.PI) * 44 - p ** 5 * 245) * p;
     }
-    if (this.finished) lift = 22 * easeOut(age / 0.45);
+    if (this.finished) lift = 22 * easeOut(age / BUG_SHOE_SETTLE_SEC);
     const squash = age < 0.12 ? Math.sin(clamp01(age / 0.12) * Math.PI) * STYLE.current.exaggeration : 0;
     this.shoe.setPosition(this.contactX, -lift).setRotation(-0.12 * clamp01(lift / 245)).setScale(1 + squash * 0.035, 1 - squash * 0.035);
     this.shadow.setPosition(this.contactX, 7).setScale(1 - lift / 1000, 1).setAlpha(1 - lift / 400);
@@ -222,8 +223,8 @@ export class BugShoeVignette implements Vignette {
     let y = BUG_REST_Y * BUG_SIZE - Math.abs(Math.sin(now * 9)) * (this.reducedMotion ? 0 : 3);
     if (!this.hit && age < 0.4) x += 150 * easeOut(age / 0.15);
     if (this.finished) {
-      x = this.contactX + (this.successful ? -118 : 207) * easeOut(age / 0.5);
-      y = BUG_REST_Y * BUG_SIZE - (this.successful ? 110 : 0) * easeOut(age / 0.5) - Math.sin(clamp01(age / 0.5) * Math.PI) * 100;
+      x = this.contactX + (this.successful ? -118 : 207) * easeOut(age / BUG_EXIT_SEC);
+      y = BUG_REST_Y * BUG_SIZE - (this.successful ? 110 : 0) * easeOut(age / BUG_EXIT_SEC) - Math.sin(clamp01(age / BUG_EXIT_SEC) * Math.PI) * 100;
     }
     const g = this.bug.clear();
     const compression = this.hit ? Math.min(0.9, squash * 0.72) : 0;

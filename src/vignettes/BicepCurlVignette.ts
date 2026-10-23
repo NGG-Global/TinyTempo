@@ -31,6 +31,7 @@ import {
   REFERENCE_BEAT,
 } from './curlMotion';
 import { curlLook, type CurlLook } from './curlLooks';
+import { CURL_CODA } from './earlyCodas';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
@@ -654,7 +655,7 @@ export class BicepCurlVignette implements Vignette {
       // A strong finish holds the squeeze. A rough one lost the weight at the top, and the
       // unloaded arm drifts down to hang.
       const held = now - this.finishAt;
-      return this.successful ? 1 - Math.abs(holdTremor(held)) : 1 - easeOut((held - 0.1) / 0.7) * 0.85;
+      return this.successful ? 1 - Math.abs(holdTremor(held)) : 1 - easeOut((held - CURL_CODA.armDriftAtSec) / CURL_CODA.armDriftSec) * 0.85;
     }
     let flex = curlFlex(age, this.repPeak, beat);
     const next = this.upcoming(now);
@@ -945,7 +946,7 @@ export class BicepCurlVignette implements Vignette {
       else g.lineBetween(gx - 8, gy + 40, gx + TALLY_STEP * 3 + 10, gy + 6);
     }
     if (!this.finished || this.finishAt === null) return;
-    const p = chalkDraw(now - this.finishAt - 0.15);
+    const p = chalkDraw(now - this.finishAt - CURL_CODA.chalkAtSec);
     if (p <= 0) return;
     if (this.successful) {
       // A ring drawn round the count once the weight is held at the top.

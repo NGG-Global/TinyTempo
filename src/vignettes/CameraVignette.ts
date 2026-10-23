@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { STYLE } from '@/config/style';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { SLAB_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { cameraLook, type CameraLook } from './cameraLooks';
 import { developed, ejectOut, flashLife, printRise, printsHung, shutterPress } from './cameraMotion';
@@ -44,7 +45,7 @@ export class CameraVignette extends HouseholdVignette {
 
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = cameraLook(lap);
-    super(scene, look.subject === 'castle' ? 0xeef6f8 : 0xf6f0e6, look.subject === 'castle' ? 0xfff2cf : 0xfbe7cf, { card: { x: -330, y: -224, width: 660, height: 448, radius: 30 } });
+    super(scene, look.subject === 'castle' ? 0xeef6f8 : 0xf6f0e6, look.subject === 'castle' ? 0xfff2cf : 0xfbe7cf, { card: SLAB_CARD });
     this.look = look;
   }
 
