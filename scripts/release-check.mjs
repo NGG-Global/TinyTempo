@@ -40,7 +40,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Review offered on the first two-star finale', text: 'minStars', source: 'src/review/appReview.ts' },
   { feature: 'Tutorial opens on tapping along', text: '1 / 2 · TAP ALONG', source: 'src/scenes/TutorialScene.ts' },
   { feature: 'Tutorial step analytics', text: 'tutorial_step_ended', source: 'src/monetization/analytics.ts' },
-  { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/scenes/PlayScene.ts' },
+  { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/ui/turnWords.ts' },
   { feature: 'Android back button on every screen', text: 'handleBack', source: 'src/core/backButton.ts' },
   { feature: 'Silence while the app is in the background', text: 'setAppActive', source: 'src/audio/backgroundSilence.ts' },
   { feature: 'Analytics off until chosen where consent is required', text: 'analyticsChosen', source: 'src/game/settings.ts' },

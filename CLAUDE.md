@@ -805,7 +805,12 @@ verdict word is struck like a count numeral (`verdictPose`), and **an off-centre
 side it fell on beside it** — EARLY or LATE on a Good, and on a tap that reached for an
 unanswered beat and missed its window (`Judgement.near`, which changes no grade), never on a
 Perfect (`tapTiming`, `ui/verdictTag.ts`; both words made in `build`, posed with the word as one
-group, `docs/TIMING_DETAILS.md`). A flawless task's flourish ends
+group, `docs/TIMING_DETAILS.md`). **The count's numerals, the verdict word with its tag and
+*Flawless!* are one object, `TurnWords` (`ui/turnWords.ts`)**, made in `build`, dressed at
+`layout` or for a new act's ink (`dress`), reset per task, posed every frame and drawn onto the
+block's Graphics — shared by PlayScene, DailyScene and EndlessScene, which until then each
+carried a drifting copy of the same six methods. A scene keeps what differs: what a judgement
+means for its act, the struck socket the block draws, the groove's richer sparks. A flawless task's flourish ends
 in a **chorus** (`FLAWLESS.chorusAt`): every socket rings together, the plate lights, the
 baton lands again, the word kicks, confetti goes up. **The pulse ball** (`pulseBall` in
 `game/beatTrack.ts`, `BlockState.pulse`) lands on every beat of a task — the shelf's beads,
@@ -1330,6 +1335,7 @@ src/
     star.ts            The star glyph
     keepsakes.ts       Each keepsake drawn, and its silhouette
     turnBlock.ts       The two rows and the baton: whose turn it is, as an object
+    turnWords.ts       The count, the verdict word with its tag and "Flawless!": one object the three run scenes share
     trackMetrics.ts    The block's metrics and the verdict line, without Phaser, for the stage to keep clear of
     finaleStage.ts     An area finale's pennants, title card and ribbon, from its treatment
     finalePose.ts      Their poses as pure f(t)
@@ -1692,6 +1698,7 @@ different app and says nothing.
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are
-file-level and all twenty storage keys share one LevelDB store, so nothing can be excluded
+file-level and every storage key (22 today, three of them under the project's old `small-acts`
+name, frozen for the reason `game/progress.ts` gives at `KEY`) shares one LevelDB store, so nothing can be excluded
 selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
 a restored backup granting Premium forever.

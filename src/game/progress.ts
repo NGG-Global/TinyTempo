@@ -15,6 +15,15 @@ export interface LevelOutcome {
   readonly progress: Progress;
 }
 
+/**
+ * `small-acts` was the project's working name before Tiny Tempo. The three keys that still
+ * carry it — this one, `TEACH_KEY` below and the tutorial's in `game/TutorialRun.ts` — are
+ * the ones written by every build players have installed, so the name is frozen: renaming
+ * one without a migration empties every installed save, and a migration is a second read
+ * path on every launch forever, for nothing a player would see. Every key added since is
+ * `tiny-tempo.*` (`docs/SAVE_REVIEW.md` lists them all); `cloudSave.ts`'s `tiny-tempo.cloud`
+ * is a hash salt, not a key.
+ */
 const KEY = 'small-acts.progress.v1';
 /** Written but not required on read, so a future migration has something to branch on. */
 const VERSION = 1;
@@ -144,6 +153,7 @@ export function setResetGeneration(generation: number, storage: Storage | null =
  * save code carries what a player earned, and the same reasoning already keeps the
  * tutorial flag out of it.
  */
+/** The old working name, frozen for the reason given at `KEY`. */
 const TEACH_KEY = 'small-acts.teach.v1';
 
 /** The teach flags, every one of them cleared: a reset player is a new player. */

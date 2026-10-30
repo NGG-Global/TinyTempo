@@ -264,6 +264,7 @@ export interface ShelvedSave {
 
 export const EMPTY_BINDING: CloudBinding = Object.freeze({ version: 1, owner: null, shelf: Object.freeze({}) });
 
+/** A salt for the owner hash, not a storage key, despite the shape; the binding's key is `tiny-tempo.cloud.v1`. */
 const OWNER_SALT = 'tiny-tempo.cloud';
 const FNV_OFFSET = 0xcbf29ce484222325n;
 const FNV_PRIME = 0x100000001b3n;
