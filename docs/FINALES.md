@@ -66,16 +66,25 @@ only tells it *when* — the opening's downbeat, the clear. It never decides *wh
   the example's first beat is heard on its own. Both are scheduled on the context clock at
   placement, like every cue. After a finer grid's introduction the loop is already at full
   level, so there is no swell — ducking it there would read as a fault.
-- **The sounds are made before they are needed.** The roll and the fanfare are
-  per-sample synthesis — about 15 ms and 75 ms of it on a desktop, several times that on
-  a handset — and both used to be built in one go inside `openFinale`, on the frame the
-  title card was dropping in: every finale opened on the longest frame in the game. They
-  are now a `FinaleSoundPrep` (`prepareFinaleSounds`, `audio/finaleSounds.ts`) created
-  in PlayScene's `build()` for a finale, advanced a slice a frame from `update()` under
-  `FINALE_SYNTH_BUDGET_MS` (2.5 ms), the roll first; the opening takes the roll and the
-  ribbon the fanfare as finished buffers. A device too slow to have got there finishes the
-  sound on the spot, which is what every device did before. The fanfare stays cached per
-  context, so a second finale has only its roll to make.
+- **The sounds are made before they are needed, off the main thread.** The roll and the
+  fanfare are per-sample synthesis — about 11 ms and 73 ms of it on a desktop, several times
+  that on a handset — and both used to be built in one go inside `openFinale`, on the frame
+  the title card was dropping in: every finale opened on the longest frame in the game. The
+  first fix sliced them across frames under `FINALE_SYNTH_BUDGET_MS` (2.5 ms), which moved
+  the cost rather than removing it: a 512-sample slice of the fanfare overran the budget by a
+  frame's worth on a handset, every frame, for the two or three seconds it took — a steady
+  frame drop through the start of every finale, reported from a device. They are now a
+  `FinaleSoundPrep` (`prepareFinaleSounds`, `audio/finaleSounds.ts`) created in PlayScene's
+  `build()` for a finale, which posts both to one Web Worker (`finaleSynth.worker.ts`, kept
+  for the session) running the same `synthesizeFinale` and handing the samples back
+  transferred; the main thread copies them into buffers and does nothing else, and both are
+  back inside the opening's first bar. The slices stay as the fallback where there is no
+  worker or it fails, advanced a frame at a time from `update()`, the roll first. Either way
+  the opening takes the roll and the ribbon the fanfare as finished buffers, and a device
+  that has not got there finishes the sound on the spot, which is what every device did
+  before. The fanfare stays cached per context, so a second finale has only its roll to
+  make. The context is `sharedAudio`'s at build, so a debug entry straight into a finale no
+  longer skips the preparation and builds both in the opening.
 - **The payoff.** On a clear the headline names the area; a second after the summary — once
   the third medal has landed — a ribbon unrolls across the plaque's top edge: "Area
   complete", with confetti from both ends and a brass fanfare. The pennant line moves up

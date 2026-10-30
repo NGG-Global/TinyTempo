@@ -85,9 +85,12 @@ pennants over the act that move up under the headline for the result, a title ca
 off the stage half a beat before the first demonstration, the loop swelling from
 `musicFloor` onto that downbeat, and an "Area complete" ribbon across the plaque's top
 edge — so a new area's finale is a new entry, never a PlayScene edit. **Its roll and fanfare
-are synthesized a slice a frame** (`prepareFinaleSounds`, `FINALE_SYNTH_BUDGET_MS`) from the
+are synthesized in a Web Worker** (`prepareFinaleSounds`, `finaleSynth.worker.ts`) from the
 scene's `build()`, because built in one go inside the opening they were a tenth of a second
-of per-sample work on the frame the title card dropped in — every finale opened on a hitch. On the map every
+of per-sample work on the frame the title card dropped in — every finale opened on a hitch —
+and sliced across frames under `FINALE_SYNTH_BUDGET_MS` they overran the budget on a handset
+every frame for the first seconds of every finale, a steady drop; the slices are the fallback
+where there is no worker. On the map every
 finale in the window is a **stage**, not a flagged stop: a plaza the road widens into,
 bunting in the treatment's pennants, a crown of three star seats over a larger puck, and a
 plate naming the act (`definitionForLap`), locked and previewed ones faded with a padlock
@@ -1198,7 +1201,8 @@ src/
     musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
-    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
+    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized; prepared in a worker, sliced on the main thread without one
+    finaleSynth.worker.ts  That worker: one request in, the samples out, transferred
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     gateSounds.ts      The unlock a ready gate is tapped open with, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
