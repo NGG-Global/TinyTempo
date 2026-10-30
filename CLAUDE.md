@@ -1692,6 +1692,7 @@ different app and says nothing.
 Auto Backup is declared rather than defaulted: `res/xml/backup_rules.xml` and
 `res/xml/data_extraction_rules.xml` name `app_webview/` and nothing else, and both exist
 because Android reads the first below API 31 and the second from 31 up. Backup rules are
-file-level and all twenty storage keys share one LevelDB store, so nothing can be excluded
+file-level and every storage key (22 today, three of them under the project's old `small-acts`
+name, frozen for the reason `game/progress.ts` gives at `KEY`) shares one LevelDB store, so nothing can be excluded
 selectively — which is why the premium cache carries a `checkedAt` and expires, instead of
 a restored backup granting Premium forever.
