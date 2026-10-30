@@ -56,6 +56,20 @@ const SETTINGS = {
   friction: 7.5,
   /** Past this the pointer was a scroll, not a tap on whatever it started over. */
   tapSlop: 12,
+  /**
+   * The shadow the pinned header and footer cast onto the sections sliding under them, in
+   * design units, and the scroll it takes to bring one up to full strength. It says that
+   * there is more above or below, where the camera's clip alone cut a card off mid-letter.
+   */
+  edgeShade: 22,
+  edgeRamp: 36,
+  /** The scroll thumb right of the cards: its width, its centre's distance from their edge, and how long it stays after the last move. */
+  thumbWidth: 5,
+  thumbInset: 24,
+  thumbHoldSec: 0.9,
+  thumbFadeSec: 0.35,
+  /** An armed Reset disarms itself after this long without the second tap. */
+  resetArmSec: 6,
 } as const;
 
 /** Where an action leads. `tune` and `done` leave the scene; the rest act in place. */
@@ -100,6 +114,27 @@ export class SettingsScene extends BaseScene {
   private pinned!: Phaser.GameObjects.Graphics;
   private backMark!: Phaser.GameObjects.Graphics;
   /**
+   * The band's two edge shadows, children of the band so its camera draws them, kept at the
+   * viewport's edges by `applyScroll`. Each fades in with the scroll past it, so a band with
+   * nothing more above shows no shadow at its top.
+   */
+  private edgeTop!: Phaser.GameObjects.Graphics;
+  private edgeBottom!: Phaser.GameObjects.Graphics;
+  /**
+   * The scroll thumb, a child of the band like the edge shadows: the band's camera renders
+   * after the main one, so a thumb on the main camera was painted over by the cards' own
+   * shadows wherever the two met. It rides the scroll the same way and is drawn last.
+   */
+  private thumb!: Phaser.GameObjects.Graphics;
+  private thumbAlpha = -1;
+  private thumbScroll = -1;
+  private lastScrollAt = -Infinity;
+  /** Where the two drawn dots of the legal line sit, from the measured words. */
+  private legalDots: number[] = [];
+  private legalY = 0;
+  /** The cards' right edge, which the thumb stands clear of. */
+  private cardsRight = 0;
+  /**
    * The sections, their controls and the pinned back puck and Done: some 17,000 commands
    * that change only on a press, a slide or a switch, so each is a raster at rest
    * (`ui/bakedLayer.ts`) and live only while it moves.
@@ -134,6 +169,7 @@ export class SettingsScene extends BaseScene {
   private pressed: Action | null = null;
   private pressDirty = false;
   private resetArmed = false;
+  private resetArmedAt = -Infinity;
   private commerceBusy = false;
   private notice = '';
   private from: string = SceneKey.Menu;
@@ -214,6 +250,15 @@ export class SettingsScene extends BaseScene {
     this.eyebrows = ['Sound & feel', 'Timing', 'Hearts', 'Workshop store', 'Progress', 'Privacy', 'Help', 'Credits']
       .map(caption => this.banded(label(this, caption, { size: 21, colour: PALETTE.muted })).setOrigin(0, 0.5));
     this.buildTexts();
+    // After every text, so the shadows lie over the words sliding under the header.
+    this.edgeTop = this.add.graphics();
+    this.edgeBottom = this.add.graphics();
+    this.thumb = this.add.graphics();
+    this.band.add([this.edgeTop, this.edgeBottom, this.thumb]);
+    // The first layout's scroll counts as a move, so the thumb shows on the way in and a
+    // first look says the sections go on under Done.
+    this.thumbAlpha = this.thumbScroll = -1;
+    this.lastScrollAt = -Infinity;
     // Earbuds in or out while Settings is open: the timing row names the new route and its value.
     this.stopWatchingRoute = onRouteChange(() => { if (!this.disposed) { this.refreshCopy(); this.layout(); } });
     this.input.on(Phaser.Input.Events.POINTER_DOWN, this.pointerDown, this);
@@ -312,8 +357,11 @@ export class SettingsScene extends BaseScene {
       // inside a centred box came out ragged against the card's own centre line.
       notice: this.banded(body(this, '', { size: 24, colour: muted, align: 'center' })).setOrigin(0.5),
     };
-    this.texts.legal = body(this, 'Privacy · Terms', { size: 24, colour: muted, align: 'center' }).setOrigin(0.5).setDepth(5);
-    this.texts.version = body(this, `· v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
+    // Two links and a version, each its own text, so a tap target is the word it names and
+    // the links can wear the underline that says they open something.
+    this.texts.privacy = body(this, 'Privacy', { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
+    this.texts.terms = body(this, 'Terms', { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
+    this.texts.version = body(this, `v${__APP_VERSION__}`, { size: 24, colour: muted }).setOrigin(0, 0.5).setDepth(5);
     this.texts.done = display(this, 'Done', { size: 50, colour: cream, align: 'center' }).setOrigin(0.5).setDepth(5);
   }
 
@@ -360,22 +408,32 @@ export class SettingsScene extends BaseScene {
     const doneH = Math.max(120 * s, control);
     const doneRect = new Phaser.Geom.Rectangle(left, safe.bottom - 44 * s - doneH, width, doneH);
     this.hits.push({ name: 'done', rect: doneRect, pinned: true });
-    const legalY = doneRect.y - 38 * s;
-    resize(this.texts.legal!, 24 * s, PALETTE.muted, STYLE.current, false);
-    resize(this.texts.version!, 24 * s, PALETTE.muted, STYLE.current, false);
-    // Privacy · Terms · vX, laid out from the measured widths so the dots sit evenly.
-    const legal = this.texts.legal!, version = this.texts.version!;
-    // A word space, so "Terms · v1" spaces its dot as "Privacy · Terms" does.
-    const gap = 6 * s;
-    const total = legal.width + gap + version.width;
-    legal.setPosition(safe.centerX - total / 2 + legal.width / 2, legalY);
-    version.setPosition(legal.x + legal.width / 2 + gap, legalY);
-    const half = legal.width / 2;
-    // Two targets inside one string: the left half is Privacy, the right half is Terms.
-    this.hits.push({ name: 'privacy', rect: new Phaser.Geom.Rectangle(legal.x - half, legalY - control / 2, half, control), pinned: true });
-    this.hits.push({ name: 'terms', rect: new Phaser.Geom.Rectangle(legal.x, legalY - control / 2, half, control), pinned: true });
+    const legalY = this.legalY = doneRect.y - 38 * s;
+    // Privacy · Terms · vX, laid out from the measured words with a drawn dot between each
+    // pair, so the dots sit evenly and each link's target is exactly its word plus a pad.
+    const words = [this.texts.privacy!, this.texts.terms!, this.texts.version!];
+    for (const word of words) resize(word, 24 * s, PALETTE.muted, STYLE.current, false);
+    const dot = 26 * s;
+    const total = words.reduce((sum, word) => sum + word.width, 0) + dot * (words.length - 1);
+    let x = safe.centerX - total / 2;
+    this.legalDots = [];
+    for (const [i, word] of words.entries()) {
+      word.setPosition(x, legalY);
+      x += word.width;
+      if (i < words.length - 1) { this.legalDots.push(x + dot / 2); x += dot; }
+    }
+    for (const name of ['privacy', 'terms'] as const) {
+      const word = this.texts[name]!;
+      this.hits.push({ name, rect: new Phaser.Geom.Rectangle(word.x - 12 * s, legalY - control / 2, word.width + 24 * s, control), pinned: true });
+    }
 
-    this.bandRect.setTo(left - 16 * s, safe.top + 122 * s, width + 32 * s, legalY - 30 * s - (safe.top + 122 * s));
+    // The band reaches past the cards on the right as far as the thumb needs — the cards'
+    // cast shadows take the first dozen units of margin, and a thumb inside them was lost
+    // against the side walls — and never past the safe edge.
+    this.cardsRight = left + width;
+    const bandLeft = left - 16 * s;
+    const bandRight = Math.min(safe.right, this.cardsRight + (SETTINGS.thumbInset + 10) * s);
+    this.bandRect.setTo(bandLeft, safe.top + 122 * s, bandRight - bandLeft, legalY - 30 * s - (safe.top + 122 * s));
     this.bandCamera.setViewport(this.bandRect.x, this.bandRect.y, this.bandRect.width, this.bandRect.height);
     // Everything the main camera draws, the band camera must not, or the backdrop and the
     // pinned chrome are painted a second time inside the viewport.
@@ -384,6 +442,8 @@ export class SettingsScene extends BaseScene {
     const height = this.buildBand(left, width, s, control);
     this.scrollMax = Math.max(0, height - this.bandRect.height);
     this.scrollY = Math.min(this.scrollY, this.scrollMax);
+    this.drawEdges(s);
+    this.thumbScroll = -1;
     this.applyScroll();
     this.sheenAt = Number.NaN;
     this.drawPinned(0, doneRect);
@@ -596,8 +656,17 @@ export class SettingsScene extends BaseScene {
 
     // Reset stays last: the destructive row is the one furthest from the thumb's first reach.
     const resetRow = new Phaser.Geom.Rectangle(left, progress.y + row * (1 + extra), width, row);
-    this.texts.level!.setPosition(left + 28 * s, resetRow.centerY);
-    this.texts.levelNote!.setPosition(left + 28 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
+    // At rest the area's name follows the level on one line. Armed, the row takes the shape
+    // of every other two-line row: the title rides up and the note under it says what the
+    // second tap destroys, beside the chip that reads CONFIRM — a coral chip alone said that
+    // something was about to happen, not what.
+    if (this.resetArmed) {
+      this.texts.level!.setPosition(left + 28 * s, resetRow.centerY - 15 * s);
+      this.texts.levelNote!.setPosition(left + 28 * s, resetRow.centerY + 19 * s);
+    } else {
+      this.texts.level!.setPosition(left + 28 * s, resetRow.centerY);
+      this.texts.levelNote!.setPosition(left + 28 * s + this.texts.level!.width + 10 * s, resetRow.centerY);
+    }
     const resetW = Math.max(160 * s, control);
     const resetRect = new Phaser.Geom.Rectangle(resetRow.right - 26 * s - resetW, resetRow.centerY - control / 2, resetW, control);
     this.rows.reset = resetRect;
@@ -862,6 +931,15 @@ export class SettingsScene extends BaseScene {
       resize(this.texts.done!, 50 * s, SHELL.cream);
       this.texts.done!.setPosition(done.centerX, done.centerY + CHROME.block.depth * s * p * 0.8);
     }
+    // The legal line's dots, and a rule under each link: the two words that open a page look
+    // like the version beside them otherwise, and nothing else on the screen is tapped text.
+    g.fillStyle(PALETTE.muted, 0.9);
+    for (const x of this.legalDots) g.fillCircle(x, this.legalY + 1.5 * s, 2.4 * s);
+    g.fillStyle(PALETTE.muted, 0.45);
+    for (const name of ['privacy', 'terms'] as const) {
+      const word = this.texts[name];
+      if (word) g.fillRect(word.x, this.legalY + 15 * s, word.width, Math.max(1.5, 2 * s));
+    }
     this.layers[2]?.invalidate();
   }
 
@@ -899,7 +977,8 @@ export class SettingsScene extends BaseScene {
     for (const key of ['achievements', 'achievementsNote', 'achievementsGo']) this.texts[key]!.setVisible(achievements);
     const area = areaOf(progress.unlocked);
     this.texts.level!.setText(`Level ${progress.unlocked}`);
-    this.texts.levelNote!.setText(`· ${area.name}`);
+    this.texts.levelNote!.setText(this.resetArmed ? 'Erases every level and star' : `· ${area.name}`);
+    resize(this.texts.levelNote!, 24 * this.uiScale, this.resetArmed ? shade(PALETTE.coral, -0.25) : PALETTE.muted, STYLE.current, false);
     // `label` uppercases on creation only; a later setText must match the other chips itself.
     this.texts.reset!.setText(this.resetArmed ? 'CONFIRM' : 'RESET');
     this.texts.notice!.setText(this.notice).setVisible(this.notice !== '');
@@ -935,6 +1014,10 @@ export class SettingsScene extends BaseScene {
       if (chip !== this.texts.storeStatus!.text) { this.texts.storeStatus!.setText(chip); this.pressDirty = true; }
     }
     this.storeCard.update(now, this.reducedMotion, Date.now());
+    this.drawThumb(now);
+    // An armed Reset that is left alone goes back to rest, so the coral CONFIRM never waits
+    // for a stray tap a minute later.
+    if (this.resetArmed && now - this.resetArmedAt > SETTINGS.resetArmSec) this.disarmReset();
     bakeOne(this.layers);
     const age = now - this.enteredAt;
     if (age < 1.1) {
@@ -991,7 +1074,57 @@ export class SettingsScene extends BaseScene {
   /** The band's camera holds the scroll, so a scroll moves nothing and relays out nothing. */
   private applyScroll(): void {
     // On a whole pixel, so the sections' raster is shown as it was drawn rather than resampled.
-    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + Math.round(this.scrollY));
+    const scroll = Math.round(this.scrollY);
+    this.bandCamera.setScroll(this.bandRect.x, this.bandRect.y + scroll);
+    // The shadows ride with the camera, so they stay on the viewport's edges, and each is as
+    // strong as the scroll past it: none at the top of the list, none at its end.
+    const ramp = SETTINGS.edgeRamp * this.uiScale;
+    this.edgeTop.setY(scroll).setAlpha(Math.min(1, this.scrollY / ramp));
+    this.edgeBottom.setY(scroll).setAlpha(Math.min(1, (this.scrollMax - this.scrollY) / ramp));
+    this.thumb.setY(scroll);
+    if (scroll !== this.thumbScroll) this.lastScrollAt = performance.now() / 1000;
+  }
+
+  /** The two edge shadows, drawn once per layout at the band's own edges; `applyScroll` moves them. */
+  private drawEdges(s: number): void {
+    const r = this.bandRect;
+    const depth = SETTINGS.edgeShade * s;
+    const steps = 8;
+    for (const [g, fromTop] of [[this.edgeTop, true], [this.edgeBottom, false]] as const) {
+      g.clear();
+      for (let i = 0; i < steps; i++) {
+        const t = i / steps;
+        const h = depth / steps + 1;
+        const y = fromTop ? r.y + t * depth : r.bottom - (t + 1) * depth / steps - 1;
+        g.fillStyle(0x1a1410, 0.11 * (1 - t) ** 1.6).fillRect(r.x, y, r.width, h);
+      }
+    }
+  }
+
+  /**
+   * The scroll thumb: shown when the screen opens and while the band moves, gone a moment
+   * after. It stands right of the cards, clear of their shadows, and is redrawn only when
+   * its alpha or the scroll has changed.
+   */
+  private drawThumb(now: number): void {
+    const s = this.uiScale;
+    const since = now - this.lastScrollAt;
+    const held = this.drag !== null && this.drag.scrollable && this.drag.moved;
+    const alpha = this.scrollMax <= 0 ? 0 : held || since < SETTINGS.thumbHoldSec ? 1
+      : Math.max(0, 1 - (since - SETTINGS.thumbHoldSec) / SETTINGS.thumbFadeSec);
+    const scroll = Math.round(this.scrollY);
+    if (alpha === this.thumbAlpha && scroll === this.thumbScroll) return;
+    this.thumbAlpha = alpha;
+    this.thumbScroll = scroll;
+    const g = this.thumb.clear();
+    if (alpha <= 0) return;
+    const r = this.bandRect;
+    const pad = 10 * s;
+    const track = r.height - pad * 2;
+    const length = Math.max(44 * s, track * r.height / (r.height + this.scrollMax));
+    const y = r.y + pad + (track - length) * (this.scrollMax > 0 ? this.scrollY / this.scrollMax : 0);
+    const w = SETTINGS.thumbWidth * s;
+    g.fillStyle(PALETTE.muted, 0.45 * alpha).fillRoundedRect(this.cardsRight + SETTINGS.thumbInset * s - w / 2, y, w, length, w / 2);
   }
 
   private pointerDown(pointer: Phaser.Input.Pointer): void {
@@ -1073,7 +1206,14 @@ export class SettingsScene extends BaseScene {
       this.act(hit.name);
       return;
     }
-    if (this.resetArmed) { this.resetArmed = false; this.refreshCopy(); this.pressDirty = true; }
+    if (this.resetArmed) this.disarmReset();
+  }
+
+  /** Back to rest: the row's note returns to the area's name and the chip to RESET. */
+  private disarmReset(): void {
+    this.resetArmed = false;
+    this.refreshCopy();
+    this.layout();
   }
 
   private act(name: Action): void {
@@ -1081,7 +1221,7 @@ export class SettingsScene extends BaseScene {
     this.pressed = name;
     this.pressDirty = true;
     vibrate('tap');
-    if (name !== 'reset') this.resetArmed = false;
+    if (name !== 'reset' && this.resetArmed) { this.resetArmed = false; this.refreshCopy(); this.layout(); }
     this.notice = '';
     switch (name) {
       case 'back':
@@ -1269,7 +1409,13 @@ export class SettingsScene extends BaseScene {
 
   /** Two taps, because there is no undo: the second one destroys every cleared level. */
   private resetTapped(): void {
-    if (!this.resetArmed) { this.resetArmed = true; this.refreshCopy(); return; }
+    if (!this.resetArmed) {
+      this.resetArmed = true;
+      this.resetArmedAt = performance.now() / 1000;
+      this.refreshCopy();
+      this.layout();
+      return;
+    }
     this.resetArmed = false;
     // The save, the lessons, the gates, the hearts and the day's objectives, as one decision
     // (`game/resetProgress.ts`), stamped with a reset generation the cloud merge honours.

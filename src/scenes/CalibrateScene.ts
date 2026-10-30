@@ -17,12 +17,12 @@ import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
 import { drawBack } from '@/ui/icons';
-import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
 import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawCalibrationLane, type LaneFlash, type LaneTick } from '@/ui/calibrationLane';
+import { drawStrikeCue, strikePose, strikeWord } from '@/ui/strikeCue';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 /**
@@ -36,10 +36,12 @@ import { drawCalibrationLane, type LaneFlash, type LaneTick } from '@/ui/calibra
 const WORTH_MENTIONING_MS = 80;
 
 const TUNE = {
-  countHeight: 300,
+  countHeight: 480,
   countWidth: 432,
-  beadGap: 76,
-  beadRadius: 20,
+  /** Inside the count card: the strike ring's centre, the count-in word under it, and the count's centre. */
+  ringTop: 150,
+  cueTop: 224,
+  countTop: 348,
   resultHeight: 132,
   laneHeight: 64,
   laneGap: 26,
@@ -62,6 +64,12 @@ interface Button { readonly rect: Phaser.Geom.Rectangle; readonly text: Phaser.G
  * Music is silent here so the metronome is the only beat. `CalibrationRun` owns the maths;
  * this scene owns the screen and the audio.
  *
+ * **The beat can be seen coming** (`ui/strikeCue.ts`): a ball hops off a ring after every click
+ * and lands on it with the next, with the count-in's words under it — *Listen*, 3, 2, 1,
+ * *Tap!* — so the player knows when to strike before the first measured beat rather than
+ * finding the pulse by ear while already being measured. The four beads it replaced lit on
+ * each click and so said only where the beat had been.
+ *
  * **The player sees where every tap lands** (`ui/calibrationLane.ts`): a lane under the count
  * with the beat at its centre drops a tick at each tap's residual as it happens, so early,
  * late and uneven are visible before the result says so, and a tap that fell outside the
@@ -75,7 +83,8 @@ export class CalibrateScene extends BaseScene {
   private backdrop!: Backdrop;
   private plates!: Phaser.GameObjects.Graphics;
   private controls!: Phaser.GameObjects.Graphics;
-  private beats!: Phaser.GameObjects.Graphics;
+  private strike!: Phaser.GameObjects.Graphics;
+  private cue!: Phaser.GameObjects.Text;
   private lane!: Phaser.GameObjects.Graphics;
   private laneEarly!: Phaser.GameObjects.Text;
   private laneLate!: Phaser.GameObjects.Text;
@@ -88,13 +97,13 @@ export class CalibrateScene extends BaseScene {
   private resultNote!: Phaser.GameObjects.Text;
   private resultValue!: Phaser.GameObjects.Text;
   private backMark!: Phaser.GameObjects.Graphics;
-  private buttons: Record<'run' | 'keep' | 'retry' | 'reset', Button> = null!;
+  private buttons: Record<'run' | 'stop' | 'keep' | 'retry' | 'reset', Button> = null!;
   private backAt = { x: 0, y: 0 };
   private backRect = new Phaser.Geom.Rectangle();
   private countRect = new Phaser.Geom.Rectangle();
   private laneRect = new Phaser.Geom.Rectangle();
   private resultRect = new Phaser.Geom.Rectangle();
-  private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
+  private strikeAt = { x: 0, y: 0 };
   private taps!: TapInput;
   private curtain!: SceneCurtain;
   private uiScale = 1;
@@ -150,7 +159,8 @@ export class CalibrateScene extends BaseScene {
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.2 }, glowAlpha: 0.6 });
     this.plates = this.add.graphics();
     this.controls = this.add.graphics().setDepth(2);
-    this.beats = this.add.graphics().setDepth(2);
+    this.strike = this.add.graphics().setDepth(2);
+    this.cue = display(this, '', { size: 50, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setDepth(3).setVisible(false);
     this.lane = this.add.graphics().setDepth(2);
     this.laneEarly = label(this, 'EARLY', { size: 18, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5).setDepth(3);
     this.laneLate = label(this, 'LATE', { size: 18, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(3);
@@ -167,6 +177,9 @@ export class CalibrateScene extends BaseScene {
     this.resultValue = display(this, '', { size: 38, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(3);
     this.buttons = {
       run: this.button('Start', true, 48),
+      // Stop is its own small chip, never the hero re-labelled: the coral block read as
+      // the pad to tap the tempo on, and a tap on it ended the run with too few taps.
+      stop: this.button('Stop', false, 24),
       keep: this.button('Keep', false, 24),
       retry: this.button('Retry', false, 24),
       reset: this.button('Reset', false, 24),
@@ -230,12 +243,17 @@ export class CalibrateScene extends BaseScene {
 
     // Start and the result share the footer: the run button is the thing to press until
     // there is a measurement, and then the measurement is. Only one is ever on screen, so
-    // the screen never carries an empty strip where the other one will be.
+    // the screen never carries an empty strip where the other one will be. While the beat
+    // runs, neither: the hero re-labelled Stop read as the pad to tap the tempo on.
     const heroH = Math.max(112 * s, control);
     const resultH = Math.max(TUNE.resultHeight * s, control + 44 * s);
     const footerBottom = safe.bottom - 56 * s;
     this.resultRect.setTo(left, footerBottom - resultH, width, resultH);
     this.buttons.run.rect.setTo(left, footerBottom - heroH, width, heroH);
+    // While the beat runs the footer is empty but for Stop, a small chip at its right edge
+    // with a stop glyph, so nothing on the screen competes with the ring for the thumb.
+    const stopW = Math.max(176 * s, control), stopH = Math.max(88 * s, control);
+    this.buttons.stop.rect.setTo(left + width - stopW, footerBottom - heroH / 2 - stopH / 2, stopW, stopH);
 
     // Everything between the title and the footer belongs to the measurement.
     const bandTop = safe.top + 132 * s;
@@ -245,20 +263,20 @@ export class CalibrateScene extends BaseScene {
     this.instructionRoom = Math.min(520 * s, width);
     balanceWrap(this.instruction, this.instructionRoom);
     this.instruction.setPosition(safe.centerX, bandTop);
-    this.beadRow = {
-      x: safe.centerX - 1.5 * TUNE.beadGap * s, y: centre - TUNE.countHeight * s / 2 - 44 * s,
-      gap: TUNE.beadGap * s, radius: TUNE.beadRadius * s,
-    };
     this.countRect.setTo(
       safe.centerX - TUNE.countWidth * s / 2, centre - TUNE.countHeight * s / 2,
       TUNE.countWidth * s, TUNE.countHeight * s,
     );
+    // The strike ring at the top of the card, the count-in's word under it, the count below.
+    this.strikeAt = { x: this.countRect.centerX, y: this.countRect.y + TUNE.ringTop * s };
+    resize(this.cue, 50 * s, PALETTE.coral);
+    this.cue.setPosition(this.countRect.centerX, this.countRect.y + TUNE.cueTop * s);
     // Flat, not dressed: at this size the headline's outline turns a reading into a logo,
     // and the card behind it is already doing the work of setting it off the paper.
     resize(this.counted, 132 * s, PALETTE.ink);
     resize(this.countedOf, 62 * s, PALETTE.muted, STYLE.current, false);
     const span = this.counted.width + this.countedOf.width;
-    const countY = this.countRect.centerY - 12 * s;
+    const countY = this.countRect.y + TUNE.countTop * s;
     this.counted.setPosition(this.countRect.centerX - span / 2 + this.counted.width, countY);
     this.countedOf.setPosition(this.counted.x, countY + 14 * s);
     resize(this.countedNote, 22 * s, PALETTE.muted, STYLE.current, false);
@@ -322,8 +340,10 @@ export class CalibrateScene extends BaseScene {
       g.lineStyle(STYLE.current.outline * s * 0.4, shade(SHELL.puck, -0.4), 1).strokeRoundedRect(r.x, r.y, r.width, r.height, radius);
       g.lineStyle(2 * s, BRASS, 0.5).strokeRoundedRect(r.x + 7 * s, r.y + 7 * s, r.width - 14 * s, r.height - 14 * s, radius - 7 * s);
     }
+    const counting = this.phase === 'counting';
     for (const [name, button] of Object.entries(this.buttons)) {
-      const shown = name === 'run' ? !measured
+      const shown = name === 'run' ? !measured && !counting
+        : name === 'stop' ? counting
         : name === 'reset' ? this.phase === 'idle' && this.calibrated !== null
         : measured && (name === 'retry' || this.phase === 'measured');
       button.text.setVisible(shown);
@@ -331,13 +351,23 @@ export class CalibrateScene extends BaseScene {
       const p = this.pressed === button ? press : 0;
       const depth = button.hero ? CHROME.block.depth : 10;
       drawPanel(g, button.rect, s, {
-        fill: button.hero ? PALETTE.coral : name === 'retry' ? SHELL.bench : SHELL.cream,
+        fill: button.hero ? PALETTE.coral : name === 'retry' || name === 'stop' ? SHELL.bench : SHELL.cream,
         depth, press: p, hero: button.hero,
         radius: Math.min(button.rect.height / 2, STYLE.current.radius * 1.4),
       });
       const size = button.hero ? 48 * s : 24 * s;
       resize(button.text, size, button.hero ? SHELL.cream : PALETTE.ink, STYLE.current, button.hero);
-      button.text.setPosition(button.rect.centerX, button.rect.centerY + depth * s * p * 0.8);
+      const sink = depth * s * p * 0.8;
+      if (name === 'stop') {
+        // The glyph and the word centred together: a square says stop before the word is read.
+        const glyph = 11 * s, gap = 12 * s;
+        const span = glyph * 2 + gap + button.text.width;
+        const left = button.rect.centerX - span / 2;
+        g.fillStyle(PALETTE.ink, 1).fillRoundedRect(left, button.rect.centerY + sink - glyph, glyph * 2, glyph * 2, 3 * s);
+        button.text.setPosition(left + glyph * 2 + gap + button.text.width / 2, button.rect.centerY + sink);
+        continue;
+      }
+      button.text.setPosition(button.rect.centerX, button.rect.centerY + sink);
     }
   }
 
@@ -357,7 +387,7 @@ export class CalibrateScene extends BaseScene {
       : this.calibrated === null ? 'not calibrated yet' : `currently ${formatOffset(this.calibrated)}`;
     const named = route === 'unknown' ? `${now.charAt(0).toUpperCase()}${now.slice(1)}` : `${ROUTE_LABELS[route]} · ${now}`;
     this.current.setText(reported >= WORTH_MENTIONING_MS && this.kept === null ? `${named} · your device adds about ${reported} ms` : named);
-    this.buttons.run.text.setText(this.phase === 'counting' ? 'Stop' : this.kept !== null ? 'Check' : 'Start');
+    this.buttons.run.text.setText(this.kept !== null ? 'Check' : 'Start');
     const copy = resultCopy(this.verdict, this.calibrated, this.checking);
     this.resultNote.setText(copy.note);
     this.fitResultNote();
@@ -384,7 +414,7 @@ export class CalibrateScene extends BaseScene {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(age, 0.7);
       this.headline.setPosition(this.headlineAt.x, this.headlineAt.y + rise * 30 * this.uiScale).setAlpha(alpha);
     }
-    this.drawBeats();
+    this.drawStrike();
     this.drawLane(now);
   }
 
@@ -396,37 +426,39 @@ export class CalibrateScene extends BaseScene {
     drawCalibrationLane(this.lane.clear(), this.laneRect, this.uiScale, ticks, flash, still);
   }
 
-  /** Four beads on the count-in's own pulse, so the beat can be seen with the sound. */
-  private drawBeats(): void {
-    if (this.phase !== 'counting') { this.beats.clear(); return; }
-    const audio = currentAudio(this);
-    if (!audio || !this.run) return;
-    audio.clock.refresh();
-    const g = this.beats.clear();
+  /**
+   * The strike cue: the ball resting on its ring until a run, then hopping off every click
+   * and landing on the next, with the count-in's word under it. Heard clock, not
+   * currentTime: the clicks are scheduled on the write clock and reach the speaker an
+   * output-lag later. A cue on currentTime lands before the sound, and a player tapping
+   * with it would measure a negative offset that undoes a real calibration.
+   */
+  private drawStrike(): void {
     const s = this.uiScale;
-    // Heard clock, not currentTime: the clicks are scheduled on the write clock and reach
-    // the speaker an output-lag later. Beads on currentTime pulse before the sound, and a
-    // player tapping those would measure a negative offset that undoes a real calibration.
-    const elapsed = this.run.beatAt(audio.clock.now());
-    const beat = Math.floor(Math.max(0, elapsed));
-    const phase = Math.max(0, elapsed) % 1;
+    const g = this.strike.clear();
     const still = this.reducedMotion;
-    for (let i = 0; i < 4; i++) {
-      const lit = i === beat % 4;
-      const grow = lit && !still ? 1 + (1 - phase) ** 2 * 0.7 * STYLE.current.exaggeration : 1;
-      const f = faces(lit ? PALETTE.coral : shade(SHELL.puck, -0.3));
-      const x = this.beadRow.x + i * this.beadRow.gap, r = this.beadRow.radius * grow;
-      g.fillStyle(f.edge, 1).fillCircle(x, this.beadRow.y + 3 * s, r);
-      g.fillStyle(f.face, 1).fillCircle(x, this.beadRow.y, r);
-      g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, this.beadRow.y - r * 0.35, r * 0.3);
+    const audio = currentAudio(this);
+    if (this.phase !== 'counting' || !audio || !this.run) {
+      drawStrikeCue(g, this.strikeAt.x, this.strikeAt.y, s, { height: 0, landing: 0 }, false);
+      this.cue.setVisible(false).setScale(1);
+      return;
     }
+    audio.clock.refresh();
+    const elapsed = this.run.beatAt(audio.clock.now());
+    const pose = strikePose(elapsed, this.run.period, still);
+    drawStrikeCue(g, this.strikeAt.x, this.strikeAt.y, s, pose, elapsed >= CALIBRATION.leadBeats);
+    const word = strikeWord(elapsed);
+    this.cue.setVisible(word !== null);
+    if (word !== null && this.cue.text !== word) this.cue.setText(word);
+    // The word kicks with the landing, so "Tap!" says *now* on every beat and not only once.
+    this.cue.setScale(still ? 1 : 1 + 0.22 * pose.landing);
     if (audio.clock.now() > this.run.end) this.finish();
   }
 
-  /** Anywhere on the screen is a beat while counting; only the controls opt out. */
+  /** Anywhere on the screen is a beat while counting; only Stop and Back opt out. */
   private handleTap(tap: Tap): void {
     if (this.curtain.active) return;
-    if (this.phase === 'counting' && !Phaser.Geom.Rectangle.Contains(this.buttons.run.rect, tap.x, tap.y)
+    if (this.phase === 'counting' && !Phaser.Geom.Rectangle.Contains(this.buttons.stop.rect, tap.x, tap.y)
       && !Phaser.Geom.Rectangle.Contains(this.backRect, tap.x, tap.y)) {
       this.recordTap(tap);
       return;
@@ -440,6 +472,7 @@ export class CalibrateScene extends BaseScene {
       if (!button.text.visible || !Phaser.Geom.Rectangle.Contains(button.rect, tap.x, tap.y)) continue;
       this.press(button);
       if (name === 'run') void this.runTapped();
+      else if (name === 'stop') this.finish();
       else if (name === 'keep') this.keep();
       else if (name === 'reset') this.resetOffset();
       else this.retry();
@@ -455,7 +488,7 @@ export class CalibrateScene extends BaseScene {
   }
 
   private async runTapped(): Promise<void> {
-    if (this.phase === 'counting') { this.finish(); return; }
+    if (this.phase === 'counting') return;
     await this.start();
   }
 

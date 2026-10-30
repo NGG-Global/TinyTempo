@@ -45,13 +45,32 @@ not draw the scene curtain, because a `setScrollFactor(0)` object lands offset b
 the viewport's own origin under a second camera; the sections fade out over the
 first frames of a sweep instead.
 
+**The band's edges say that there is more.** The camera's clip alone cut a card off
+mid-letter under the title with nothing to say the list went on, which on a 16:9 handset
+left the store and everything under it out of sight. Two shadows now lie along the band's
+edges — the pinned header and footer casting onto the sections sliding under them — each
+as strong as the scroll past it (`SETTINGS.edgeShade`, `edgeRamp`), so a list at its top
+shows none above and a list at its end none below. A thumb in the band's right margin
+shows for a moment on entry and whenever the band moves, then fades (`thumbHoldSec`,
+`thumbFadeSec`). Both are children of the band kept at the viewport's edges by
+`applyScroll`, because the band's camera renders after the main one and would paint the
+cards over anything drawn there on the main camera.
+
+**An armed Reset says what the second tap does.** The chip turns coral and reads
+*CONFIRM*, and the row takes the shape of every two-line row: *Level 12* over *Erases
+every level and star* in coral, where it read *Level 12 · Grass*. Left alone it disarms
+itself after `SETTINGS.resetArmSec`, so the coral never waits for a stray tap later.
+
 Controls fire on the release, with a slop check. `TapInput` reports the press,
 which is right in gameplay because there the press *is* the musical event; in a
 scrolling list a press is the start of a gesture that may turn out to be a scroll.
 
 Privacy and Terms open the published pages
 (`https://tinytempo.games/privacy/` and `https://tinytempo.games/terms/`)
-in the system browser. The version comes from
+in the system browser. Each is its own text with a rule under it and a tap target the
+width of its word, with the version beside them and a drawn dot between each pair: the
+line used to be one string split down the middle for its two targets, and the links
+looked like the version they stood next to. The version comes from
 `package.json` through `__APP_VERSION__`, defined in `vite.config.ts`, so the
 footer cannot drift from the package.
 
@@ -79,11 +98,28 @@ to hold a beat for sixteen seconds.
 residual against the offset already in force — and this scene owns only the screen
 and the audio. Start and the result share the footer: the run button is the thing
 to press until there is a measurement, and then the measurement is, so the screen
-never carries an empty strip where the other one will be. **Reset** on this screen
+never carries an empty strip where the other one will be. **While the beat runs the
+footer holds only a small Stop chip** at its right edge, a stop square before the word on
+the bench tone the small controls use. It used to be the coral hero re-labelled *Stop*,
+and the one coral block on a screen that says "tap anywhere" read as the pad to tap the
+tempo on — a tap on it ended the run with too few taps. Coral is Start's alone. **Reset** on this screen
 and on the Settings row writes zero without another measurement, which is the only
 way back to an uncalibrated clock short of measuring the inverse. Music is silent
-here so the metronome is the only beat, and the four beads pulse on the heard clock
-rather than `currentTime`, or they would lead the clicks by the device's output lag.
+here so the metronome is the only beat.
+
+**The beat can be seen coming** (`ui/strikeCue.ts`, pure poses and one draw). The count
+card used to carry four beads, one lighting as each click sounded — a report of where the
+beat had been, not a cue for where the next one was, so the player found the pulse by ear
+while already being measured and said the screen did not show when to strike. The card now
+carries the game's own answer to *when*: a ball that leaves a ring after each click, rises,
+and falls back to land on it with the next, squashing and throwing a ripple on the hit — the
+pulse ball a level lands on a socket (`docs/TURN_CUE.md`), landing on one ring. Under it the
+count-in's words follow the clicks: *Listen* while the first sets the tempo, then 3, 2, 1,
+then *Tap!* from the first measured beat on, kicked on every landing, and the ring turns
+coral from there. The pose is
+read from the heard clock rather than `currentTime`, or the landing would lead the click by
+the device's output lag and a player tapping with it would measure a negative offset. Under
+reduced motion the ball stays on the ring and the landing is a blink.
 
 **The player sees where every tap lands** (`ui/calibrationLane.ts`, pure poses and one
 draw). A lane under the count has the beat at its centre and the run's acceptance window

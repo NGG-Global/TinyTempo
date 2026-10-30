@@ -14,7 +14,7 @@ import { keepsakeAt } from '../src/game/scrapbook';
 import { starsRequired } from '../src/game/stars';
 import { contrastRatio } from '../src/ui/colour';
 import { FINALE_POSE, buntingPoints, lineShift, pennantSwing, ribbonPose, titleCardPose } from '../src/ui/finalePose';
-import { FINALE_SYNTH_BUDGET_MS, ROLL_CLEARANCE_SEC, createFinaleSound, finaleSynth, prepareFinaleSounds, synthesizeFinale } from '../src/audio/finaleSounds';
+import { FINALE_SYNTH_BUDGET_MS, ROLL_CLEARANCE_SEC, createFinaleSound, finaleSynth, prepareFinaleSounds, synthesizeFinale, type FinaleSynthReply, type FinaleSynthRequest, type SynthWorker } from '../src/audio/finaleSounds';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -348,6 +348,72 @@ describe('the sounds', () => {
     expect(early.fanfare()).toBe(fanfare);
     early.advance(1000);
     expect(early.done).toBe(true);
+  });
+
+  it('hands the synthesis to a worker when there is one, does nothing on the main thread meanwhile, and falls back when it fails', () => {
+    const made: number[] = [];
+    const context = {
+      sampleRate: 8000,
+      createBuffer(_channels: number, length: number, sampleRate: number) {
+        made.push(length);
+        const data = new Float32Array(length);
+        return { length, sampleRate, getChannelData: () => data };
+      },
+    } as unknown as BaseAudioContext;
+    // A stand-in worker that answers when told to, with the same synthesis the worker runs.
+    const asked: FinaleSynthRequest[] = [];
+    const fake: SynthWorker = { postMessage: request => { asked.push(request); }, onmessage: null, onerror: null };
+    const answer = (request: FinaleSynthRequest) => fake.onmessage?.({
+      data: { id: request.id, kind: request.kind, samples: synthesizeFinale(request.sampleRate, request.kind, request.beatSec, request.rollBeats) },
+    } as MessageEvent<FinaleSynthReply>);
+    // A fresh context, so the fanfare is wanted too: both sounds go to the worker, the roll first.
+    const prep = prepareFinaleSounds(context, 0.5, 4, () => fake);
+    expect(asked.map(r => r.kind)).toEqual(['roll', 'fanfare']);
+    expect(asked[0]).toMatchObject({ sampleRate: 8000, beatSec: 0.5, rollBeats: 4 });
+    // While the worker has them, a frame's advance does no main-thread work at all.
+    const before = performance.now();
+    for (let i = 0; i < 50; i++) prep.advance(1000);
+    expect(performance.now() - before).toBeLessThan(50);
+    expect(prep.done).toBe(false);
+    answer(asked[0]!);
+    answer(asked[1]!);
+    expect(prep.done).toBe(true);
+    expect(made).toHaveLength(0);
+    // The buffers are the worker's samples, which are the synthesis's.
+    expect(Array.from(prep.roll().getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'roll', 0.5, 4)));
+    expect(Array.from(prep.fanfare().getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'fanfare')));
+    expect(made).toHaveLength(2);
+    // Asked before the worker has answered, the roll is finished on the spot, as before.
+    const early = prepareFinaleSounds(context, 0.4, 4, () => fake);
+    expect(Array.from(early.roll().getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'roll', 0.4, 4)));
+    // A late answer for a sound already finished changes nothing; the fanfare is the cached one.
+    answer(asked[2]!);
+    expect(early.roll()).toBe(early.roll());
+    expect(early.fanfare()).toBe(prep.fanfare());
+    // A worker that fails hands the rest back to the main thread's slices.
+    const failing = prepareFinaleSounds(context, 0.3, 4, () => fake);
+    fake.onerror?.({} as ErrorEvent);
+    expect(failing.done).toBe(false);
+    let frames = 0;
+    while (!failing.done && frames < 10_000) { failing.advance(0.05); frames++; }
+    expect(frames).toBeGreaterThan(1);
+    expect(Array.from(failing.roll().getChannelData(0))).toEqual(Array.from(synthesizeFinale(8000, 'roll', 0.3, 4)));
+    // And no worker at all is the sliced path from the start.
+    const none = prepareFinaleSounds(context, 0.5, 4, () => null);
+    expect(none.done).toBe(false);
+    none.advance(1000);
+    expect(none.done).toBe(true);
+  });
+
+  it('runs the same synthesis in the worker as on the main thread', () => {
+    const worker = readFileSync('src/audio/finaleSynth.worker.ts', 'utf8');
+    expect(worker).toContain("import { synthesizeFinale, type FinaleSynthRequest, type FinaleSynthReply } from './finaleSounds';");
+    expect(worker).toContain('synthesizeFinale(sampleRate, kind, beatSec, rollBeats)');
+    expect(worker).toContain('[samples.buffer]');
+    // PlayScene prepares the sounds from a context that always exists at build, and advances them each frame.
+    const scene = readFileSync('src/scenes/PlayScene.ts', 'utf8');
+    expect(scene).toContain('const context = sharedAudio(this).context;');
+    expect(scene).toContain('if (this.finalePrep && !this.finalePrep.prep.done) this.finalePrep.prep.advance();');
   });
 
   it('keeps one fanfare buffer per context and still builds each roll', () => {

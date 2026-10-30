@@ -4,7 +4,7 @@ import { vibrate } from '@/core/haptics';
 import { reducedMotion, previewReducedMotion } from '@/core/motionPreference';
 import type { AudioEngine } from '@/audio/AudioEngine';
 import { setMusicBed } from '@/audio/musicBed';
-import { currentAudio, outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
+import { outputSilent, sharedAudio, toggleMute } from '@/audio/sharedAudio';
 import { activeCalibration, currentRoute, noteLevelLean, syncClockCalibration } from '@/audio/audioRoute';
 import { samples } from '@/audio/samples';
 import { MUSIC } from '@/config/music';
@@ -707,11 +707,13 @@ export class PlayScene extends BaseScene {
     this.finaleCleared = false;
     this.finalePrep = null;
     if (finale) {
-      // The engine is game-wide and unlocked by the menu's PLAY, so it is here under the
-      // curtain on every ordinary entry; without it the opening builds the sounds itself.
-      const context = currentAudio(this)?.context;
+      // The engine is game-wide and unlocked by the menu's PLAY, so it is here on every
+      // ordinary entry; a debug entry straight into a level has none yet, and `sharedAudio`
+      // makes the one the round would make a moment later, so the sounds are never left
+      // for the opening to build in one go.
+      const context = sharedAudio(this).context;
       const first = this.spec.tasks[0];
-      if (context && first) {
+      if (first) {
         const beatSec = 60 / first.bpm, rollBeats = Math.min(first.leadBeats, RHYTHM.beatsPerBar);
         this.finalePrep = { context, beatSec, rollBeats, prep: prepareFinaleSounds(context, beatSec, rollBeats) };
       }

@@ -34,6 +34,17 @@ describe('the calibration lane', () => {
     expect(scene).toContain("if (outcome === 'early' || outcome === 'late') {");
     expect(scene).toContain("if (outcome !== 'landed') return;");
   });
+
+  it('keeps Stop a small chip while the beat runs, never the coral hero re-labelled', () => {
+    const scene = readFileSync('src/scenes/CalibrateScene.ts', 'utf8');
+    // Its own non-hero control, shown only while counting, and the hero hidden meanwhile.
+    expect(scene).toContain("stop: this.button('Stop', false, 24),");
+    expect(scene).toContain("const shown = name === 'run' ? !measured && !counting");
+    expect(scene).toContain(": name === 'stop' ? counting");
+    expect(scene).not.toContain("? 'Stop' :");
+    // Only Stop and Back opt out of being a beat while counting.
+    expect(scene).toContain("if (this.phase === 'counting' && !Phaser.Geom.Rectangle.Contains(this.buttons.stop.rect, tap.x, tap.y)");
+  });
 });
 
 describe('the result\'s words', () => {

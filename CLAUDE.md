@@ -85,9 +85,12 @@ pennants over the act that move up under the headline for the result, a title ca
 off the stage half a beat before the first demonstration, the loop swelling from
 `musicFloor` onto that downbeat, and an "Area complete" ribbon across the plaque's top
 edge — so a new area's finale is a new entry, never a PlayScene edit. **Its roll and fanfare
-are synthesized a slice a frame** (`prepareFinaleSounds`, `FINALE_SYNTH_BUDGET_MS`) from the
+are synthesized in a Web Worker** (`prepareFinaleSounds`, `finaleSynth.worker.ts`) from the
 scene's `build()`, because built in one go inside the opening they were a tenth of a second
-of per-sample work on the frame the title card dropped in — every finale opened on a hitch. On the map every
+of per-sample work on the frame the title card dropped in — every finale opened on a hitch —
+and sliced across frames under `FINALE_SYNTH_BUDGET_MS` they overran the budget on a handset
+every frame for the first seconds of every finale, a steady drop; the slices are the fallback
+where there is no worker. On the map every
 finale in the window is a **stage**, not a flagged stop: a plaza the road widens into,
 bunting in the treatment's pennants, a crown of three star seats over a larger puck, and a
 plate naming the act (`definitionForLap`), locked and previewed ones faded with a padlock
@@ -357,8 +360,9 @@ divisor, so the shared puck row does not shift size between the map and Settings
 A text's `align` agrees with its origin, and a caption that can wrap hangs from its top edge so
 a second line grows away from the title above it rather than up into it.
 Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Settings is
-labelled sections scrolling between a pinned title and a pinned Done, with calibration on
-its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
+labelled sections scrolling between a pinned title and a pinned Done — the band's edges
+carry a shadow and a scroll thumb that say there is more, both children of the band because
+its camera renders after the main one — with calibration on its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
 knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid-run.
 **The medals seat in a tray inside the plaque, each over a chip naming its threshold**
 (`ui/resultLayout.ts`, `game/resultCopy.ts`, read from `spec.starAccuracy`, never
@@ -623,7 +627,9 @@ the encoder writes it with a 0.1 s head and the loop's opening copied after its 
 first downbeat on the music's start (`THEME.bpm`), and `ThemeMusic.playheadAt` drives the
 tempo beads and a silent hammer blow on beat 1 of every bar through the same `musicPulse`,
 on the frame clock until the theme sounds; a beat blow never sinks the nail, and reduced
-motion has none. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
+motion has none. **The title screen's bench controls square up with Play** (`ui/menuRow.ts`): the objectives
+puck's left edge sits on the Play block's, and the row of blocks over Play runs from the puck
+to Play's right edge rather than being centred at a fixed width. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
 (`MenuScene.knock` → `HammerNailVignette.knock`, round `onPlayerHit`'s turn gate, since the
 cover has no plan), voiced by the act's own hit as a stinger on the effects bus rather than
 through `setSounds`, which belongs to the level that set it. The nail gives `KNOCK.depth` on
@@ -671,7 +677,11 @@ subtraction judged every tap late by the device's whole output lag, which on Blu
 a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
-when it is large enough to be the reason a player is failing levels. Its instruction line
+when it is large enough to be the reason a player is failing levels. **The calibration
+screen shows the beat coming** (`ui/strikeCue.ts`): a ball hops off a ring on every click and
+lands on it with the next, posed from the heard clock, with *Listen*, 3, 2, 1, *Tap!* under
+it, because four beads that lit on each click said where the beat had been and not when to
+strike. Its instruction line
 follows the phase (`instructionCopy`, `game/calibrationCopy.ts`): what Start, Check, Keep
 and Retry do, since one line that only said *tap on every beat* left them unexplained. **The calibration screen
 shows where every tap lands** (`ui/calibrationLane.ts`): a lane with the beat at its centre
@@ -1191,7 +1201,8 @@ src/
     musicBed.ts        Shell, level or silent: which job the loop is doing, and which track
     ThemeMusic.ts      The title screen's own track: load, loop, fade in and out
     *Sounds.ts         Deterministic per-vignette synthesis, one file per act
-    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized
+    finaleSounds.ts    The finale's opening roll and payoff fanfare, synthesized; prepared in a worker, sliced on the main thread without one
+    finaleSynth.worker.ts  That worker: one request in, the samples out, transferred
     grooveSounds.ts    Groove's shaker, chime and mastery sting, synthesized
     gateSounds.ts      The unlock a ready gate is tapped open with, synthesized
     sharedAudio.ts     Game-wide engine in the registry; applies stored settings
@@ -1341,6 +1352,7 @@ src/
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
     calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
+    strikeCue.ts       The calibration screen's strike cue: a ball landing on a ring every click, and the count-in's word; poses pure
     restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus

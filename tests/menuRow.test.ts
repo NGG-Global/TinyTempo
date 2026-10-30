@@ -16,29 +16,41 @@ describe('the title screen’s row over Play', () => {
     expect(rowBlocks({ daily: true, endless: true, lesson: true })).toEqual(['daily', 'endless']);
   });
 
-  it('gives one block the single width and two the split row, with the smaller label', () => {
-    const one = menuRow({ daily: true, endless: false, lesson: false }, 360, 1000, 96, 1);
-    expect(one.daily).toEqual({ x: 360 - MENU_ROW.single / 2, y: 1000, width: MENU_ROW.single, height: 96 });
+  it('fills the span with one block, or splits it with a gap, with the smaller label', () => {
+    const span = { left: 160, right: 640 };
+    const one = menuRow({ daily: true, endless: false, lesson: false }, span, 1000, 96, 1);
+    expect(one.daily).toEqual({ x: 160, y: 1000, width: 480, height: 96 });
     expect(one.endless).toBeNull();
     expect(one.lesson).toBeNull();
     expect(one.labelSize).toBe(MENU_ROW.label);
-    const two = menuRow({ daily: true, endless: true, lesson: true }, 360, 1000, 96, 1);
-    const half = (MENU_ROW.split - MENU_ROW.gap) / 2;
-    expect(two.daily).toEqual({ x: 360 - MENU_ROW.split / 2, y: 1000, width: half, height: 96 });
-    expect(two.endless).toEqual({ x: 360 + MENU_ROW.gap / 2, y: 1000, width: half, height: 96 });
+    const two = menuRow({ daily: true, endless: true, lesson: true }, span, 1000, 96, 1);
+    const half = (480 - MENU_ROW.gap) / 2;
+    expect(two.daily).toEqual({ x: 160, y: 1000, width: half, height: 96 });
+    expect(two.endless).toEqual({ x: 160 + half + MENU_ROW.gap, y: 1000, width: half, height: 96 });
     expect(two.lesson).toBeNull();
     expect(two.labelSize).toBe(MENU_ROW.splitLabel);
-    // The row scales with the scene, and an empty row has no frames.
-    const scaled = menuRow({ daily: false, endless: false, lesson: true }, 480, 800, 120, 1.5);
-    expect(scaled.lesson).toEqual({ x: 480 - MENU_ROW.single / 2 * 1.5, y: 800, width: MENU_ROW.single * 1.5, height: 120 });
-    const none = menuRow({ daily: false, endless: false, lesson: false }, 360, 1000, 96, 1);
+    // The gap scales with the scene; the span is already in the scene's units.
+    const scaled = menuRow({ daily: true, endless: false, lesson: true }, { left: 100, right: 700 }, 800, 120, 1.5);
+    const scaledHalf = (600 - MENU_ROW.gap * 1.5) / 2;
+    expect(scaled.daily).toEqual({ x: 100, y: 800, width: scaledHalf, height: 120 });
+    expect(scaled.lesson).toEqual({ x: 100 + scaledHalf + MENU_ROW.gap * 1.5, y: 800, width: scaledHalf, height: 120 });
+    // The two blocks together span exactly the row: the right one's edge is the span's.
+    expect(scaled.lesson!.x + scaled.lesson!.width).toBeCloseTo(700);
+    // An empty row has no frames, and a span narrower than its gap never goes negative.
+    const none = menuRow({ daily: false, endless: false, lesson: false }, span, 1000, 96, 1);
     expect(none.blocks).toEqual([]);
     expect([none.daily, none.endless, none.lesson]).toEqual([null, null, null]);
+    const cramped = menuRow({ daily: true, endless: true, lesson: false }, { left: 0, right: 10 }, 0, 96, 1);
+    expect(cramped.daily!.width).toBe(0);
   });
 
   it('is what the title screen lays out from, and its Daily block keeps the theme on the way out', () => {
     const menu = readFileSync('src/scenes/MenuScene.ts', 'utf8');
-    expect(menu).toContain('menuRow({ daily: this.dailyOpen, endless: this.endlessOpen, lesson: this.lessonOnMenu }');
+    expect(menu).toContain('menuRow({ daily: this.dailyOpen, endless: this.endlessOpen, lesson: this.lessonOnMenu }, span');
+    // The row runs from the objectives puck to the Play block's right edge, and the puck's
+    // left edge sits on Play's, so the bench's controls square up as one object.
+    expect(menu).toContain('this.objectivesAt = { x: this.buttonRect.x + CHROME.puckRadius * s, y: rowY + this.controlSize / 2 };');
+    expect(menu).toContain('right: this.buttonRect.right }');
     expect(menu).toContain('this.dailyOpen = DAILY_TEMPO_AVAILABLE;');
     // The card's Play is the audio gesture, so the title screen unlocks nothing here and
     // carries its theme on, as it does into Settings and the Scrapbook.
