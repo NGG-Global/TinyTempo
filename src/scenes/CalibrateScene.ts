@@ -97,7 +97,7 @@ export class CalibrateScene extends BaseScene {
   private resultNote!: Phaser.GameObjects.Text;
   private resultValue!: Phaser.GameObjects.Text;
   private backMark!: Phaser.GameObjects.Graphics;
-  private buttons: Record<'run' | 'keep' | 'retry' | 'reset', Button> = null!;
+  private buttons: Record<'run' | 'stop' | 'keep' | 'retry' | 'reset', Button> = null!;
   private backAt = { x: 0, y: 0 };
   private backRect = new Phaser.Geom.Rectangle();
   private countRect = new Phaser.Geom.Rectangle();
@@ -177,6 +177,9 @@ export class CalibrateScene extends BaseScene {
     this.resultValue = display(this, '', { size: 38, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(3);
     this.buttons = {
       run: this.button('Start', true, 48),
+      // Stop is its own small chip, never the hero re-labelled: the coral block read as
+      // the pad to tap the tempo on, and a tap on it ended the run with too few taps.
+      stop: this.button('Stop', false, 24),
       keep: this.button('Keep', false, 24),
       retry: this.button('Retry', false, 24),
       reset: this.button('Reset', false, 24),
@@ -240,12 +243,17 @@ export class CalibrateScene extends BaseScene {
 
     // Start and the result share the footer: the run button is the thing to press until
     // there is a measurement, and then the measurement is. Only one is ever on screen, so
-    // the screen never carries an empty strip where the other one will be.
+    // the screen never carries an empty strip where the other one will be. While the beat
+    // runs, neither: the hero re-labelled Stop read as the pad to tap the tempo on.
     const heroH = Math.max(112 * s, control);
     const resultH = Math.max(TUNE.resultHeight * s, control + 44 * s);
     const footerBottom = safe.bottom - 56 * s;
     this.resultRect.setTo(left, footerBottom - resultH, width, resultH);
     this.buttons.run.rect.setTo(left, footerBottom - heroH, width, heroH);
+    // While the beat runs the footer is empty but for Stop, a small chip at its right edge
+    // with a stop glyph, so nothing on the screen competes with the ring for the thumb.
+    const stopW = Math.max(176 * s, control), stopH = Math.max(88 * s, control);
+    this.buttons.stop.rect.setTo(left + width - stopW, footerBottom - heroH / 2 - stopH / 2, stopW, stopH);
 
     // Everything between the title and the footer belongs to the measurement.
     const bandTop = safe.top + 132 * s;
@@ -332,8 +340,10 @@ export class CalibrateScene extends BaseScene {
       g.lineStyle(STYLE.current.outline * s * 0.4, shade(SHELL.puck, -0.4), 1).strokeRoundedRect(r.x, r.y, r.width, r.height, radius);
       g.lineStyle(2 * s, BRASS, 0.5).strokeRoundedRect(r.x + 7 * s, r.y + 7 * s, r.width - 14 * s, r.height - 14 * s, radius - 7 * s);
     }
+    const counting = this.phase === 'counting';
     for (const [name, button] of Object.entries(this.buttons)) {
-      const shown = name === 'run' ? !measured
+      const shown = name === 'run' ? !measured && !counting
+        : name === 'stop' ? counting
         : name === 'reset' ? this.phase === 'idle' && this.calibrated !== null
         : measured && (name === 'retry' || this.phase === 'measured');
       button.text.setVisible(shown);
@@ -341,13 +351,23 @@ export class CalibrateScene extends BaseScene {
       const p = this.pressed === button ? press : 0;
       const depth = button.hero ? CHROME.block.depth : 10;
       drawPanel(g, button.rect, s, {
-        fill: button.hero ? PALETTE.coral : name === 'retry' ? SHELL.bench : SHELL.cream,
+        fill: button.hero ? PALETTE.coral : name === 'retry' || name === 'stop' ? SHELL.bench : SHELL.cream,
         depth, press: p, hero: button.hero,
         radius: Math.min(button.rect.height / 2, STYLE.current.radius * 1.4),
       });
       const size = button.hero ? 48 * s : 24 * s;
       resize(button.text, size, button.hero ? SHELL.cream : PALETTE.ink, STYLE.current, button.hero);
-      button.text.setPosition(button.rect.centerX, button.rect.centerY + depth * s * p * 0.8);
+      const sink = depth * s * p * 0.8;
+      if (name === 'stop') {
+        // The glyph and the word centred together: a square says stop before the word is read.
+        const glyph = 11 * s, gap = 12 * s;
+        const span = glyph * 2 + gap + button.text.width;
+        const left = button.rect.centerX - span / 2;
+        g.fillStyle(PALETTE.ink, 1).fillRoundedRect(left, button.rect.centerY + sink - glyph, glyph * 2, glyph * 2, 3 * s);
+        button.text.setPosition(left + glyph * 2 + gap + button.text.width / 2, button.rect.centerY + sink);
+        continue;
+      }
+      button.text.setPosition(button.rect.centerX, button.rect.centerY + sink);
     }
   }
 
@@ -367,7 +387,7 @@ export class CalibrateScene extends BaseScene {
       : this.calibrated === null ? 'not calibrated yet' : `currently ${formatOffset(this.calibrated)}`;
     const named = route === 'unknown' ? `${now.charAt(0).toUpperCase()}${now.slice(1)}` : `${ROUTE_LABELS[route]} · ${now}`;
     this.current.setText(reported >= WORTH_MENTIONING_MS && this.kept === null ? `${named} · your device adds about ${reported} ms` : named);
-    this.buttons.run.text.setText(this.phase === 'counting' ? 'Stop' : this.kept !== null ? 'Check' : 'Start');
+    this.buttons.run.text.setText(this.kept !== null ? 'Check' : 'Start');
     const copy = resultCopy(this.verdict, this.calibrated, this.checking);
     this.resultNote.setText(copy.note);
     this.fitResultNote();
@@ -435,10 +455,10 @@ export class CalibrateScene extends BaseScene {
     if (audio.clock.now() > this.run.end) this.finish();
   }
 
-  /** Anywhere on the screen is a beat while counting; only the controls opt out. */
+  /** Anywhere on the screen is a beat while counting; only Stop and Back opt out. */
   private handleTap(tap: Tap): void {
     if (this.curtain.active) return;
-    if (this.phase === 'counting' && !Phaser.Geom.Rectangle.Contains(this.buttons.run.rect, tap.x, tap.y)
+    if (this.phase === 'counting' && !Phaser.Geom.Rectangle.Contains(this.buttons.stop.rect, tap.x, tap.y)
       && !Phaser.Geom.Rectangle.Contains(this.backRect, tap.x, tap.y)) {
       this.recordTap(tap);
       return;
@@ -452,6 +472,7 @@ export class CalibrateScene extends BaseScene {
       if (!button.text.visible || !Phaser.Geom.Rectangle.Contains(button.rect, tap.x, tap.y)) continue;
       this.press(button);
       if (name === 'run') void this.runTapped();
+      else if (name === 'stop') this.finish();
       else if (name === 'keep') this.keep();
       else if (name === 'reset') this.resetOffset();
       else this.retry();
@@ -467,7 +488,7 @@ export class CalibrateScene extends BaseScene {
   }
 
   private async runTapped(): Promise<void> {
-    if (this.phase === 'counting') { this.finish(); return; }
+    if (this.phase === 'counting') return;
     await this.start();
   }
 

@@ -98,7 +98,11 @@ to hold a beat for sixteen seconds.
 residual against the offset already in force — and this scene owns only the screen
 and the audio. Start and the result share the footer: the run button is the thing
 to press until there is a measurement, and then the measurement is, so the screen
-never carries an empty strip where the other one will be. **Reset** on this screen
+never carries an empty strip where the other one will be. **While the beat runs the
+footer holds only a small Stop chip** at its right edge, a stop square before the word on
+the bench tone the small controls use. It used to be the coral hero re-labelled *Stop*,
+and the one coral block on a screen that says "tap anywhere" read as the pad to tap the
+tempo on — a tap on it ended the run with too few taps. Coral is Start's alone. **Reset** on this screen
 and on the Settings row writes zero without another measurement, which is the only
 way back to an uncalibrated clock short of measuring the inverse. Music is silent
 here so the metronome is the only beat.
