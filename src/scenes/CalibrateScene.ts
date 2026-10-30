@@ -17,12 +17,12 @@ import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawPuck, pressAmount, puckSink } from '@/ui/chrome';
 import { shade } from '@/ui/colour';
 import { drawBack } from '@/ui/icons';
-import { faces } from '@/ui/light';
 import { drawPanel, BRASS } from '@/ui/panel';
 import { SceneCurtain } from '@/ui/SceneCurtain';
 import { arrive } from '@/ui/spring';
 import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
 import { drawCalibrationLane, type LaneFlash, type LaneTick } from '@/ui/calibrationLane';
+import { drawStrikeCue, strikePose, strikeWord } from '@/ui/strikeCue';
 
 /** Design-unit metrics for the one measurement this screen makes. */
 /**
@@ -36,10 +36,12 @@ import { drawCalibrationLane, type LaneFlash, type LaneTick } from '@/ui/calibra
 const WORTH_MENTIONING_MS = 80;
 
 const TUNE = {
-  countHeight: 300,
+  countHeight: 480,
   countWidth: 432,
-  beadGap: 76,
-  beadRadius: 20,
+  /** Inside the count card: the strike ring's centre, the count-in word under it, and the count's centre. */
+  ringTop: 150,
+  cueTop: 224,
+  countTop: 348,
   resultHeight: 132,
   laneHeight: 64,
   laneGap: 26,
@@ -62,6 +64,12 @@ interface Button { readonly rect: Phaser.Geom.Rectangle; readonly text: Phaser.G
  * Music is silent here so the metronome is the only beat. `CalibrationRun` owns the maths;
  * this scene owns the screen and the audio.
  *
+ * **The beat can be seen coming** (`ui/strikeCue.ts`): a ball hops off a ring after every click
+ * and lands on it with the next, with the count-in's words under it — *Listen*, 3, 2, 1,
+ * *Tap!* — so the player knows when to strike before the first measured beat rather than
+ * finding the pulse by ear while already being measured. The four beads it replaced lit on
+ * each click and so said only where the beat had been.
+ *
  * **The player sees where every tap lands** (`ui/calibrationLane.ts`): a lane under the count
  * with the beat at its centre drops a tick at each tap's residual as it happens, so early,
  * late and uneven are visible before the result says so, and a tap that fell outside the
@@ -75,7 +83,8 @@ export class CalibrateScene extends BaseScene {
   private backdrop!: Backdrop;
   private plates!: Phaser.GameObjects.Graphics;
   private controls!: Phaser.GameObjects.Graphics;
-  private beats!: Phaser.GameObjects.Graphics;
+  private strike!: Phaser.GameObjects.Graphics;
+  private cue!: Phaser.GameObjects.Text;
   private lane!: Phaser.GameObjects.Graphics;
   private laneEarly!: Phaser.GameObjects.Text;
   private laneLate!: Phaser.GameObjects.Text;
@@ -94,7 +103,7 @@ export class CalibrateScene extends BaseScene {
   private countRect = new Phaser.Geom.Rectangle();
   private laneRect = new Phaser.Geom.Rectangle();
   private resultRect = new Phaser.Geom.Rectangle();
-  private beadRow = { x: 0, y: 0, gap: 0, radius: 0 };
+  private strikeAt = { x: 0, y: 0 };
   private taps!: TapInput;
   private curtain!: SceneCurtain;
   private uiScale = 1;
@@ -150,7 +159,8 @@ export class CalibrateScene extends BaseScene {
     this.backdrop = new Backdrop(this, PALETTE.paper, SHELL.sun, { glowAt: { x: 0.3, y: 0.2 }, glowAlpha: 0.6 });
     this.plates = this.add.graphics();
     this.controls = this.add.graphics().setDepth(2);
-    this.beats = this.add.graphics().setDepth(2);
+    this.strike = this.add.graphics().setDepth(2);
+    this.cue = display(this, '', { size: 50, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setDepth(3).setVisible(false);
     this.lane = this.add.graphics().setDepth(2);
     this.laneEarly = label(this, 'EARLY', { size: 18, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5).setDepth(3);
     this.laneLate = label(this, 'LATE', { size: 18, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5).setDepth(3);
@@ -245,20 +255,20 @@ export class CalibrateScene extends BaseScene {
     this.instructionRoom = Math.min(520 * s, width);
     balanceWrap(this.instruction, this.instructionRoom);
     this.instruction.setPosition(safe.centerX, bandTop);
-    this.beadRow = {
-      x: safe.centerX - 1.5 * TUNE.beadGap * s, y: centre - TUNE.countHeight * s / 2 - 44 * s,
-      gap: TUNE.beadGap * s, radius: TUNE.beadRadius * s,
-    };
     this.countRect.setTo(
       safe.centerX - TUNE.countWidth * s / 2, centre - TUNE.countHeight * s / 2,
       TUNE.countWidth * s, TUNE.countHeight * s,
     );
+    // The strike ring at the top of the card, the count-in's word under it, the count below.
+    this.strikeAt = { x: this.countRect.centerX, y: this.countRect.y + TUNE.ringTop * s };
+    resize(this.cue, 50 * s, PALETTE.coral);
+    this.cue.setPosition(this.countRect.centerX, this.countRect.y + TUNE.cueTop * s);
     // Flat, not dressed: at this size the headline's outline turns a reading into a logo,
     // and the card behind it is already doing the work of setting it off the paper.
     resize(this.counted, 132 * s, PALETTE.ink);
     resize(this.countedOf, 62 * s, PALETTE.muted, STYLE.current, false);
     const span = this.counted.width + this.countedOf.width;
-    const countY = this.countRect.centerY - 12 * s;
+    const countY = this.countRect.y + TUNE.countTop * s;
     this.counted.setPosition(this.countRect.centerX - span / 2 + this.counted.width, countY);
     this.countedOf.setPosition(this.counted.x, countY + 14 * s);
     resize(this.countedNote, 22 * s, PALETTE.muted, STYLE.current, false);
@@ -384,7 +394,7 @@ export class CalibrateScene extends BaseScene {
       const { rise, alpha } = this.reducedMotion ? { rise: 0, alpha: 1 } : arrive(age, 0.7);
       this.headline.setPosition(this.headlineAt.x, this.headlineAt.y + rise * 30 * this.uiScale).setAlpha(alpha);
     }
-    this.drawBeats();
+    this.drawStrike();
     this.drawLane(now);
   }
 
@@ -396,30 +406,32 @@ export class CalibrateScene extends BaseScene {
     drawCalibrationLane(this.lane.clear(), this.laneRect, this.uiScale, ticks, flash, still);
   }
 
-  /** Four beads on the count-in's own pulse, so the beat can be seen with the sound. */
-  private drawBeats(): void {
-    if (this.phase !== 'counting') { this.beats.clear(); return; }
-    const audio = currentAudio(this);
-    if (!audio || !this.run) return;
-    audio.clock.refresh();
-    const g = this.beats.clear();
+  /**
+   * The strike cue: the ball resting on its ring until a run, then hopping off every click
+   * and landing on the next, with the count-in's word under it. Heard clock, not
+   * currentTime: the clicks are scheduled on the write clock and reach the speaker an
+   * output-lag later. A cue on currentTime lands before the sound, and a player tapping
+   * with it would measure a negative offset that undoes a real calibration.
+   */
+  private drawStrike(): void {
     const s = this.uiScale;
-    // Heard clock, not currentTime: the clicks are scheduled on the write clock and reach
-    // the speaker an output-lag later. Beads on currentTime pulse before the sound, and a
-    // player tapping those would measure a negative offset that undoes a real calibration.
-    const elapsed = this.run.beatAt(audio.clock.now());
-    const beat = Math.floor(Math.max(0, elapsed));
-    const phase = Math.max(0, elapsed) % 1;
+    const g = this.strike.clear();
     const still = this.reducedMotion;
-    for (let i = 0; i < 4; i++) {
-      const lit = i === beat % 4;
-      const grow = lit && !still ? 1 + (1 - phase) ** 2 * 0.7 * STYLE.current.exaggeration : 1;
-      const f = faces(lit ? PALETTE.coral : shade(SHELL.puck, -0.3));
-      const x = this.beadRow.x + i * this.beadRow.gap, r = this.beadRow.radius * grow;
-      g.fillStyle(f.edge, 1).fillCircle(x, this.beadRow.y + 3 * s, r);
-      g.fillStyle(f.face, 1).fillCircle(x, this.beadRow.y, r);
-      g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, this.beadRow.y - r * 0.35, r * 0.3);
+    const audio = currentAudio(this);
+    if (this.phase !== 'counting' || !audio || !this.run) {
+      drawStrikeCue(g, this.strikeAt.x, this.strikeAt.y, s, { height: 0, landing: 0 }, false);
+      this.cue.setVisible(false).setScale(1);
+      return;
     }
+    audio.clock.refresh();
+    const elapsed = this.run.beatAt(audio.clock.now());
+    const pose = strikePose(elapsed, this.run.period, still);
+    drawStrikeCue(g, this.strikeAt.x, this.strikeAt.y, s, pose, elapsed >= CALIBRATION.leadBeats);
+    const word = strikeWord(elapsed);
+    this.cue.setVisible(word !== null);
+    if (word !== null && this.cue.text !== word) this.cue.setText(word);
+    // The word kicks with the landing, so "Tap!" says *now* on every beat and not only once.
+    this.cue.setScale(still ? 1 : 1 + 0.22 * pose.landing);
     if (audio.clock.now() > this.run.end) this.finish();
   }
 

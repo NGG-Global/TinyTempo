@@ -101,8 +101,21 @@ to press until there is a measurement, and then the measurement is, so the scree
 never carries an empty strip where the other one will be. **Reset** on this screen
 and on the Settings row writes zero without another measurement, which is the only
 way back to an uncalibrated clock short of measuring the inverse. Music is silent
-here so the metronome is the only beat, and the four beads pulse on the heard clock
-rather than `currentTime`, or they would lead the clicks by the device's output lag.
+here so the metronome is the only beat.
+
+**The beat can be seen coming** (`ui/strikeCue.ts`, pure poses and one draw). The count
+card used to carry four beads, one lighting as each click sounded — a report of where the
+beat had been, not a cue for where the next one was, so the player found the pulse by ear
+while already being measured and said the screen did not show when to strike. The card now
+carries the game's own answer to *when*: a ball that leaves a ring after each click, rises,
+and falls back to land on it with the next, squashing and throwing a ripple on the hit — the
+pulse ball a level lands on a socket (`docs/TURN_CUE.md`), landing on one ring. Under it the
+count-in's words follow the clicks: *Listen* while the first sets the tempo, then 3, 2, 1,
+then *Tap!* from the first measured beat on, kicked on every landing, and the ring turns
+coral from there. The pose is
+read from the heard clock rather than `currentTime`, or the landing would lead the click by
+the device's output lag and a player tapping with it would measure a negative offset. Under
+reduced motion the ball stays on the ring and the landing is a blink.
 
 **The player sees where every tap lands** (`ui/calibrationLane.ts`, pure poses and one
 draw). A lane under the count has the beat at its centre and the run's acceptance window

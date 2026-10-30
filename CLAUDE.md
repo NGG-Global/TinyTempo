@@ -674,7 +674,11 @@ subtraction judged every tap late by the device's whole output lag, which on Blu
 a fifth of a second. `AudioClock.calibrationMs` is then the correction on top for whatever
 the platform under-reports, it applies to judged input only — never to cue scheduling or
 visuals, which the device does not delay — and `CalibrateScene` names the reported lag
-when it is large enough to be the reason a player is failing levels. Its instruction line
+when it is large enough to be the reason a player is failing levels. **The calibration
+screen shows the beat coming** (`ui/strikeCue.ts`): a ball hops off a ring on every click and
+lands on it with the next, posed from the heard clock, with *Listen*, 3, 2, 1, *Tap!* under
+it, because four beads that lit on each click said where the beat had been and not when to
+strike. Its instruction line
 follows the phase (`instructionCopy`, `game/calibrationCopy.ts`): what Start, Check, Keep
 and Retry do, since one line that only said *tap on every beat* left them unexplained. **The calibration screen
 shows where every tap lands** (`ui/calibrationLane.ts`): a lane with the beat at its centre
@@ -1344,6 +1348,7 @@ src/
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
     calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
+    strikeCue.ts       The calibration screen's strike cue: a ball landing on a ring every click, and the count-in's word; poses pure
     restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
     routeNotice.ts     The map's "Bluetooth audio detected" card: Tune, or close for the session
     starReveal.ts      Result poses as f(t): medals, plaque swing, jolt, chorus
