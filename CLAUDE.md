@@ -357,8 +357,9 @@ divisor, so the shared puck row does not shift size between the map and Settings
 A text's `align` agrees with its origin, and a caption that can wrap hangs from its top edge so
 a second line grows away from the title above it rather than up into it.
 Three chrome screens follow the refined design in `docs/UI_REFINEMENTS.md`: Settings is
-labelled sections scrolling between a pinned title and a pinned Done, with calibration on
-its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
+labelled sections scrolling between a pinned title and a pinned Done — the band's edges
+carry a shadow and a scroll thumb that say there is more, both children of the band because
+its camera renders after the main one — with calibration on its own `CalibrateScene`; the level result is a plaque that hangs on ropes and takes a
 knock from each medal; and out-of-hearts is one ranked sheet, on the map and mid-run.
 **The medals seat in a tray inside the plaque, each over a chip naming its threshold**
 (`ui/resultLayout.ts`, `game/resultCopy.ts`, read from `spec.starAccuracy`, never
@@ -623,7 +624,9 @@ the encoder writes it with a 0.1 s head and the loop's opening copied after its 
 first downbeat on the music's start (`THEME.bpm`), and `ThemeMusic.playheadAt` drives the
 tempo beads and a silent hammer blow on beat 1 of every bar through the same `musicPulse`,
 on the frame clock until the theme sounds; a beat blow never sinks the nail, and reduced
-motion has none. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
+motion has none. **The title screen's bench controls square up with Play** (`ui/menuRow.ts`): the objectives
+puck's left edge sits on the Play block's, and the row of blocks over Play runs from the puck
+to Play's right edge rather than being centred at a fixed width. **The title screen's hammer is a toy.** A tap anywhere that is not a control lands a blow
 (`MenuScene.knock` → `HammerNailVignette.knock`, round `onPlayerHit`'s turn gate, since the
 cover has no plan), voiced by the act's own hit as a stinger on the effects bus rather than
 through `setSounds`, which belongs to the level that set it. The nail gives `KNOCK.depth` on

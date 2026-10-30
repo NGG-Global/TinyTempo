@@ -45,6 +45,11 @@ show the rows that only appear short of three stars.
 - The row holds at most two blocks (`ui/menuRow.ts`): **Daily Tempo first** whenever it is
   shipped, then Endless once level 100 is cleared, else How to play. With all three wanted,
   How to play leaves the row for Settings → Help, which carries the lesson in every build.
+  **The row is laid along a span, from the objectives puck to the Play block's right edge**,
+  and the puck's left edge sits on Play's (`MENU.rowGap`), so the puck, the row and the block
+  square up as one object on the bench. Centred on the screen at a fixed width, the row sat
+  inside Play's edges by a different amount on every frame and the puck stood alone at the
+  screen's edge — on a tablet, a third of the width away from the row it belongs to.
   The Daily block shows today's stars on a chip and a coral dot until the day has had a run;
   it opens the Daily card with the theme carried on, since the card's Play is the gesture.
 - First-visit labels sit on the icon-only pucks (`ui/puckLabel.ts`), each until it has been

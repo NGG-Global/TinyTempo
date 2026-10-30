@@ -45,13 +45,32 @@ not draw the scene curtain, because a `setScrollFactor(0)` object lands offset b
 the viewport's own origin under a second camera; the sections fade out over the
 first frames of a sweep instead.
 
+**The band's edges say that there is more.** The camera's clip alone cut a card off
+mid-letter under the title with nothing to say the list went on, which on a 16:9 handset
+left the store and everything under it out of sight. Two shadows now lie along the band's
+edges — the pinned header and footer casting onto the sections sliding under them — each
+as strong as the scroll past it (`SETTINGS.edgeShade`, `edgeRamp`), so a list at its top
+shows none above and a list at its end none below. A thumb in the band's right margin
+shows for a moment on entry and whenever the band moves, then fades (`thumbHoldSec`,
+`thumbFadeSec`). Both are children of the band kept at the viewport's edges by
+`applyScroll`, because the band's camera renders after the main one and would paint the
+cards over anything drawn there on the main camera.
+
+**An armed Reset says what the second tap does.** The chip turns coral and reads
+*CONFIRM*, and the row takes the shape of every two-line row: *Level 12* over *Erases
+every level and star* in coral, where it read *Level 12 · Grass*. Left alone it disarms
+itself after `SETTINGS.resetArmSec`, so the coral never waits for a stray tap later.
+
 Controls fire on the release, with a slop check. `TapInput` reports the press,
 which is right in gameplay because there the press *is* the musical event; in a
 scrolling list a press is the start of a gesture that may turn out to be a scroll.
 
 Privacy and Terms open the published pages
 (`https://tinytempo.games/privacy/` and `https://tinytempo.games/terms/`)
-in the system browser. The version comes from
+in the system browser. Each is its own text with a rule under it and a tap target the
+width of its word, with the version beside them and a drawn dot between each pair: the
+line used to be one string split down the middle for its two targets, and the links
+looked like the version they stood next to. The version comes from
 `package.json` through `__APP_VERSION__`, defined in `vite.config.ts`, so the
 footer cannot drift from the package.
 

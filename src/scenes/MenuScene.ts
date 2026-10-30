@@ -45,9 +45,10 @@ const MENU = {
   sign: { width: 560, height: 328, top: 110, ropeInset: 150 },
   /**
    * The row over Play holds at most two blocks (`ui/menuRow.ts`): Daily Tempo first, then
-   * Endless once it opens or How to play until the lesson is passed; the row is widened for
-   * two only as far as keeps it clear of the objectives puck on its left.
+   * Endless once it opens or How to play until the lesson is passed. It runs from the
+   * objectives puck to the Play block's right edge, this far clear of the puck's rim.
    */
+  rowGap: 24,
   /** One bead a beat, a bar across the sign: the theme's own 4/4. */
   dots: 4,
 } as const;
@@ -139,7 +140,7 @@ export class MenuScene extends BaseScene {
   private bookAt = { x: 0, y: 0 };
   /** A coral dot on the book while it holds keepsakes the player has never opened it to see. */
   private bookDot = false;
-  /** Today's objectives, beside How to play: near the thumb and clear of the sign's swing. */
+  /** Today's objectives, on the row's left with its edge on Play's: near the thumb and clear of the sign's swing. */
   private objectivesAt = { x: 0, y: 0 };
   private objectives!: ObjectivesState;
   private objectivesCard!: ObjectivesCard;
@@ -265,7 +266,13 @@ export class MenuScene extends BaseScene {
     this.drawButton(0, s);
     resize(this.playLabel, 40 * s, SHELL.cream);
     const rowY = this.buttonRect.y - this.controlSize - 24 * s;
-    const row = menuRow({ daily: this.dailyOpen, endless: this.endlessOpen, lesson: this.lessonOnMenu }, safe.centerX, rowY, this.controlSize, s);
+    // The bench's controls square up with the block under them: the objectives puck's left
+    // edge on Play's left edge, and the row running from the puck to Play's right edge, so
+    // the three read as one object rather than a puck at the screen's edge beside a row
+    // centred on its own.
+    this.objectivesAt = { x: this.buttonRect.x + CHROME.puckRadius * s, y: rowY + this.controlSize / 2 };
+    const span = { left: this.objectivesAt.x + (CHROME.puckRadius + MENU.rowGap) * s, right: this.buttonRect.right };
+    const row = menuRow({ daily: this.dailyOpen, endless: this.endlessOpen, lesson: this.lessonOnMenu }, span, rowY, this.controlSize, s);
     const setRect = (rect: Phaser.Geom.Rectangle, frame: { x: number; y: number; width: number; height: number } | null) =>
       rect.setTo(frame?.x ?? 0, frame?.y ?? 0, frame?.width ?? 0, frame?.height ?? 0);
     setRect(this.tutorialRect, row.lesson);
@@ -291,7 +298,6 @@ export class MenuScene extends BaseScene {
       resize(this.dailyLabel, row.labelSize * s, SHELL.cream);
     }
     // The objectives puck keeps the row's line whether or not the row has a block on it.
-    this.objectivesAt = { x: safe.left + 56 * s, y: rowY + this.controlSize / 2 };
     this.drawPucks(s, 0);
     this.placeLabels(s);
     this.objectivesCard.layout(safe, full, s);
