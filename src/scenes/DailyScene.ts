@@ -18,7 +18,7 @@ import { BaseScene } from '@/core/BaseScene';
 import { wrongOrientation } from '@/core/shell';
 import { RoundController, type Phase } from '@/game/RoundController';
 import { canPlaceNextTask, TaskSequence } from '@/game/TaskSequence';
-import { batonLanding, beatsPlayed, countIn, handover, isFlawless, isLastRestBar, markFor, numeralStyle, restCopy, restProgress, trackGeometry, turnCount, turnCountExit, turnCountPose, type Mark } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, handover, isFlawless, isLastRestBar, markFor, restCopy, restProgress, trackGeometry, type Mark } from '@/game/beatTrack';
 import { bandBars, bandLabel, dailyChart, type DailyChart } from '@/game/dailyChart';
 import { applyDailyRewards, timerMinutesFor, todaysRewards, type AppliedRewards, type DailyRewardRecord, type Stars } from '@/game/dailyRewards';
 import { dailyTempoDay, msUntilNextDay, untilNextDayCopy, weekdayName } from '@/game/dayKey';
@@ -31,23 +31,19 @@ import { scoreLabel } from '@/game/resultCopy';
 import type { RoundResult } from '@/game/scoring';
 import { KEEPSAKES, ownsKeepsake } from '@/game/scrapbook';
 import { finishOutcome, levelBars } from '@/game/taskVerdict';
-import { tapTiming } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { track } from '@/monetization/analytics';
 import { queueCloudSave, startHeldTimerSynced } from '@/playgames/cloudSync';
 import { dailyTempoLeaderboardOffered, openDailyTempoLeaderboard, recordDailyTempo } from '@/playgames/dailyTempo';
 import { submissionCopy } from '@/playgames/leaderboard';
 import type { Judgement } from '@/rhythm/judge';
-import type { RoundPlan } from '@/rhythm/RhythmScheduler';
 import { MaterialKey } from '@/textures/materials';
 import { Backdrop } from '@/ui/backdrop';
 import { CHROME, drawActionDisc, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
-import { mix, shade } from '@/ui/colour';
+import { shade } from '@/ui/colour';
 import { planDailyCard } from '@/ui/dailyCard';
 import { planDailyPlaque, type DailyPlaquePlan } from '@/ui/dailyPlaque';
 import { Feedback, FxKey } from '@/ui/feedback';
-import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
-import { verdictPose, verdictWord, type VerdictGrade } from '@/ui/hitPose';
 import { drawBack, drawHeart, drawPause, drawRestart, drawSpeaker, drawSun } from '@/ui/icons';
 import { drawKeepsake } from '@/ui/keepsakes';
 import { drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
@@ -61,17 +57,15 @@ import { drawStar, drawStarMark, drawStarSeat, STAR_PRIZE } from '@/ui/star';
 import { starMeterPose } from '@/ui/starMeter';
 import { starAge, starImpactAge, starPose } from '@/ui/starReveal';
 import { drawTimerToken } from '@/ui/timerToken';
-import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine } from '@/ui/turnBlock';
+import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK } from '@/ui/turnBlock';
 import { balanceWrap, body, display, label, resize, wrapWidth } from '@/ui/type';
-import { VerdictTag } from '@/ui/verdictTag';
+import { TurnWords } from '@/ui/turnWords';
 import { easeInOutCubic, easeOut } from '@/vignettes/motion';
 import { VIGNETTES } from '@/vignettes/registry';
 import { definitionForLap, type Vignette, type VignetteDefinition } from '@/vignettes/Vignette';
 
 /** The cloth texture's alpha over the Play and Continue blocks, which the disc shows through. */
 const BLOCK_CLOTH_ALPHA = 0.35;
-const TURN_CALL = { min: 42, max: 54 } as const;
-const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 /** The task beads over the meter: one a task, the current one larger, a tick at the breather. */
 const BEAD = { radius: 5.5, current: 7, gap: 28 } as const;
 /** The HUD's rows from the safe top, in design units: the pill shares the pucks' row. */
@@ -157,30 +151,17 @@ export class DailyScene extends BaseScene {
   private roomDim!: Phaser.GameObjects.Image;
   private roomPaper = -1;
   private outcomes: Mark[] = [];
+  /** The count, the verdict word with its tag, and "Flawless!", as a level draws them (`ui/turnWords.ts`). */
+  private words!: TurnWords;
   private struckIndex = -1;
   private struckAt = -Infinity;
   private struckPerfect = false;
-  private flawless!: Phaser.GameObjects.Text;
-  private flawlessHalo!: Phaser.GameObjects.Image;
-  private flawlessAt = -Infinity;
-  private flawlessSwept = 0;
-  private flawlessChorused = false;
   private columnX = 0;
   private extraAt = -Infinity;
   private punchAt = -Infinity;
-  private verdict!: Phaser.GameObjects.Text;
-  private verdictTag!: VerdictTag;
-  private verdictAt = -Infinity;
-  private verdictGrade: VerdictGrade = 'Good';
-  private verdictIndex = 0;
-  private turnCalls: Phaser.GameObjects.Text[] = [];
-  private turnCalled: number | null = null;
-  private goStruck = false;
   private trackY = 0;
   private trackWidth = 0;
   private blockS = 1;
-  private verdictY = 0;
-  private turnCallY = 0;
   private uiScale = 1;
   private controlSize = 96;
   private muted = false;
@@ -320,11 +301,7 @@ export class DailyScene extends BaseScene {
     this.roomDim = this.add.image(0, 0, FxKey.vignette).setDepth(6).setAlpha(0);
     this.roomPaper = -1;
     this.marks = this.add.graphics().setDepth(8);
-    this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
-    this.verdictTag = new VerdictTag(this, 8, ink);
-    this.flawlessHalo = this.add.image(0, 0, FxKey.glow).setTint(0xffe7a0).setAlpha(0).setDepth(8);
-    this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
-    this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
+    this.words = new TurnWords(this, this.fx, ink, 8);
     // The leave sheet.
     this.sheet = this.add.graphics().setDepth(40).setVisible(false);
     this.sheetTitle = display(this, 'Leave this run?', { size: 40, colour: ink, align: 'center' }).setOrigin(0.5).setDepth(41).setVisible(false);
@@ -378,9 +355,7 @@ export class DailyScene extends BaseScene {
     this.heldJudgements = [];
     this.outcomes = [];
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.punchAt = this.verdictAt = this.flawlessAt = -Infinity;
-    this.flawlessSwept = 0;
-    this.flawlessChorused = false;
+    this.struckAt = this.extraAt = this.punchAt = -Infinity;
     this.applied = null;
     this.postingNote = '';
     this.newBest = false;
@@ -421,20 +396,8 @@ export class DailyScene extends BaseScene {
     const b = this.blockS = blockScale(s);
     this.trackWidth = columnRoom(Math.min(620 * b, safe.width - 48 * s), b);
     this.columnX = safe.centerX + columnShift(b);
-    this.verdictY = verdictLine(this.trackY, s);
-    this.verdict.setPosition(safe.centerX, this.verdictY);
-    resize(this.verdict, 38 * s, this.verdictColour());
-    this.flawless.setPosition(safe.centerX, this.verdictY);
-    resize(this.flawless, 54 * s, PALETTE.coral);
-    this.verdictTag.layout(s, this.verdictColour());
-    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
-    this.turnCalls.forEach((text, i) => {
-      const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
-      text.setPosition(safe.centerX, this.turnCallY);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * b, mix(this.ink, PALETTE.coral, heat));
-    });
-    this.turnCalled = null;
-    this.restCall.setPosition(safe.centerX, this.turnCallY);
+    this.words.layout(safe.centerX, this.trackY, s, b);
+    this.restCall.setPosition(safe.centerX, this.words.turnCallY);
     resize(this.restCall, 40 * b, this.ink);
     this.headlineY = safe.top + HUD.headlineY * s;
     resize(this.headline, 48 * s, SHELL.cream);
@@ -471,11 +434,7 @@ export class DailyScene extends BaseScene {
     this.changeHeadline('');
     this.marks.clear();
     this.roomDim.setAlpha(0);
-    this.verdict.setAlpha(0);
-    this.verdictTag.clear();
-    this.hideTurnCall();
-    this.flawless.setAlpha(0);
-    this.flawlessHalo.setAlpha(0);
+    this.words.reset();
     // The chart may have turned over during a run that crossed the day: the card reads it fresh.
     const day = dailyTempoDay();
     if (day !== this.day) this.refreshChart();
@@ -710,9 +669,7 @@ export class DailyScene extends BaseScene {
     this.hidePlaque();
     this.hideSheet();
     this.phase = 'run';
-    this.verdict.setAlpha(0);
-    this.verdictTag.clear();
-    this.hideTurnCall();
+    this.words.reset();
     this.changeHeadline('');
     this.setHud(true);
     this.drawHud();
@@ -784,12 +741,8 @@ export class DailyScene extends BaseScene {
     act.layout(this.viewport);
     this.act = act;
     setErrorContext('act', definition.id);
-    resize(this.verdict, 38 * this.uiScale, this.verdictColour());
-    this.verdictTag.layout(this.uiScale, this.verdictColour());
-    this.turnCalls.forEach((text, i) => {
-      const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * this.blockS, mix(definition.ink, PALETTE.coral, heat));
-    });
+    // The act's ink dresses the verdict and the count; re-dress them for it once, here.
+    this.words.dress(definition.ink);
   }
 
   /** The act's voices, synthesized once per scene life, on the engine the run plays through. */
@@ -811,15 +764,10 @@ export class DailyScene extends BaseScene {
     this.outcomes = task.pattern.hits.map(() => 'pending');
     this.heldJudgements = [];
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.verdictAt = this.flawlessAt = -Infinity;
-    this.flawlessSwept = 0;
-    this.flawlessChorused = false;
-    this.goStruck = false;
+    this.struckAt = this.extraAt = -Infinity;
+    this.words.reset();
     this.resultTaken = false;
     this.finishUnlock = Infinity;
-    this.verdict.setAlpha(0);
-    this.verdictTag.clear();
-    this.hideTurnCall();
     this.sequence = new TaskSequence(task.bpm, startAt, 1);
     this.controller!.start(task.pattern, task.bpm, audio.context.currentTime, performance.now(), startAt, task.leadBeats, this.definition.gridAction === true || audio.clock.tapVoiceLate);
     this.act!.reset(this.controller!.plan!);
@@ -844,6 +792,10 @@ export class DailyScene extends BaseScene {
     this.presentJudgement(result);
   }
 
+  private sayVerdict(result: Judgement, now: number): void {
+    const { centres } = this.beadRow();
+    this.words.say(result, now, this.columnX + (centres[result.index ?? 0] ?? 0), this.reducedMotion);
+  }
   private presentJudgement(result: Judgement): void {
     const now = this.now();
     this.act?.onAccuracy(result, now);
@@ -865,24 +817,7 @@ export class DailyScene extends BaseScene {
     for (const result of pending) this.presentJudgement(result);
   }
 
-  private sayVerdict(result: Judgement, now: number): void {
-    const word = verdictWord(result);
-    this.verdictAt = now;
-    this.verdictGrade = word;
-    this.verdictIndex = result.index ?? this.verdictIndex + 1;
-    this.verdict.setText(word);
-    resize(this.verdict, 38 * this.uiScale, this.verdictColour(result));
-    this.verdictTag.set(tapTiming(result));
-    if (result.grade === 'Perfect' && result.kind === 'hit' && !this.reducedMotion) {
-      const { centres } = this.beadRow();
-      this.fx.burst('sparks', this.columnX + (centres[result.index ?? 0] ?? 0), this.trackY, [PALETTE.coral, SHELL.cream], 8);
-    }
-  }
 
-  private verdictColour(result?: Judgement): number {
-    if (!result) return this.ink;
-    return result.grade === 'Perfect' ? PALETTE.coral : result.grade === 'Good' ? this.ink : PALETTE.muted;
-  }
 
   /**
    * One task resolved: the result is kept, the meter moves, the act plays its coda against
@@ -899,12 +834,7 @@ export class DailyScene extends BaseScene {
     const flawless = isFlawless(this.outcomes) && result.extras === 0;
     if (flawless) {
       this.tally.flawless++;
-      this.flawlessAt = now;
-      this.flawlessSwept = 0;
-      this.flawlessChorused = false;
-      this.verdictAt = -Infinity;
-      this.verdict.setAlpha(0);
-      this.verdictTag.clear();
+      this.words.flawlessNow(now);
       vibrate('stamp');
     }
     this.drawMeter();
@@ -1171,10 +1101,7 @@ export class DailyScene extends BaseScene {
       // The medals' reveal runs on the plaque's own clock for its first seconds.
       this.drawPlaque(0);
     }
-    const verdict = this.verdictPose(now);
-    if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
-    else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
-    this.verdictTag.pose(this.verdict, this.viewport.safe.centerX, verdict);
+    this.words.pose(now, still);
     if (this.phase === 'run' && this.over && now >= this.finishUnlock) this.showPlaque();
   }
 
@@ -1298,9 +1225,7 @@ export class DailyScene extends BaseScene {
     const phase = this.controller?.phase;
     if (!phase || phase === 'idle' || phase === 'paused' || this.phase !== 'run') {
       this.roomDim.setAlpha(0);
-      this.hideTurnCall();
-      if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
-      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
+      this.words.settle();
       if (this.restCall.alpha !== 0) this.restCall.setAlpha(0);
       if (this.restLabel.alpha !== 0) this.restLabel.setAlpha(0);
       return;
@@ -1333,13 +1258,13 @@ export class DailyScene extends BaseScene {
       struck: { index: this.struckIndex, amount: still ? 0 : squash(now - this.struckAt, 0.22, 0.45), age: now - this.struckAt, perfect: this.struckPerfect },
       rattle, still, ghost: null, ink: this.ink, paper,
       landed: now - batonLanding(plan),
-      flawless: now - this.flawlessAt,
+      flawless: this.words.flawlessAge(now),
       rest: rest && {
         bar: rest.bar, beat: rest.beat, bars: rest.bars, pressAge: now - rest.at, barAge,
         returning: !lastBar ? 0 : still ? 1 : easeInOutCubic(Math.min(1, barAge / (beatSec * 0.9))),
       },
     });
-    this.drawFlawless(geo.columnX, centres, geo.faceCentreY, now);
+    this.words.drawFlawless(geo.columnX, centres, geo.faceCentreY, now, still);
     const pips = countIn(plan, now);
     if (pips !== null) {
       const gap = TRACK.pipGap * s, pipY = geo.shelf.y - 22 * s;
@@ -1349,8 +1274,8 @@ export class DailyScene extends BaseScene {
         else g.lineStyle(2.5 * s, this.ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
-    this.drawTurnCall(plan, now, paper);
-    this.drawVerdictPill(now, paper);
+    this.words.drawCall(g, plan, now, paper, still);
+    this.words.drawVerdictPill(g, now, paper, still);
     this.roomDim.setAlpha(turn.yours * 0.5);
   }
 
@@ -1368,90 +1293,10 @@ export class DailyScene extends BaseScene {
     }
   }
 
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number; readonly tag: number } | null {
-    const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
-    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt, tag: pose.tag };
-  }
 
-  private drawVerdictPill(now: number, paper: number): void {
-    const pose = this.verdictPose(now);
-    if (!pose || pose.alpha <= 0.01 || this.verdict.text === '') return;
-    const s = this.uiScale;
-    const w = this.verdictTag.width(this.verdict, pose.scale) + 28 * s, h = 38 * s * 1.3 * pose.scale;
-    const x = this.viewport.safe.centerX - w / 2, y = pose.y - h / 2;
-    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
-    this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
-    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(x, y, w, h, h / 2);
-  }
 
-  private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
-    const call = plan && turnCount(plan, now);
-    if (!plan || !call) { this.hideTurnCall(); return; }
-    const s = this.blockS;
-    const go = call.count === 0;
-    const beat = 60 / plan.bpm;
-    const still = this.reducedMotion;
-    const pose = turnCountPose(call, beat, still);
-    const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
-    if (call.count !== this.turnCalled) { this.hideTurnCall(); this.turnCalled = call.count; }
-    const previous = this.turnCalls[RHYTHM.turnCountBeats - call.count - 1];
-    if (previous) {
-      const exit = turnCountExit(call.age, beat, call.count + 1, still);
-      if (exit) previous.setAlpha(exit.alpha).setScale(exit.scale).setRotation(exit.tilt).setY(this.turnCallY + exit.rise * s);
-      else if (previous.alpha !== 0) previous.setAlpha(0);
-    }
-    const size = (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s;
-    const pw = Math.max(turnCall.width * pose.scale + 18 * s, size * 1.3);
-    const ph = size * 1.2 * pose.scale;
-    const px = this.viewport.safe.centerX - pw / 2;
-    const py = this.turnCallY + pose.rise * s - ph / 2;
-    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
-    this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
-    this.marks.lineStyle(1.5 * s, mix(paper, this.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(px, py, pw, ph, ph / 2);
-    turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.turnCallY + pose.rise * s);
-    if (pose.ring.alpha > 0.01) {
-      const reach = (30 + 70 * pose.ring.spread) * s;
-      this.marks.lineStyle((5 - 3.5 * pose.ring.spread) * s, mix(this.ink, PALETTE.coral, pose.heat), pose.ring.alpha)
-        .strokeCircle(this.viewport.safe.centerX, this.turnCallY, reach);
-    }
-    if (go && !this.goStruck) {
-      this.goStruck = true;
-      if (!still) this.fx.burst('sparks', this.viewport.safe.centerX, this.turnCallY, [PALETTE.coral, SHELL.cream], 12);
-    }
-  }
 
-  private hideTurnCall(): void {
-    for (const text of this.turnCalls) if (text.alpha !== 0) text.setAlpha(0);
-    this.turnCalled = null;
-  }
 
-  private drawFlawless(centreX: number, centres: readonly number[], faceY: number, now: number): void {
-    const age = now - this.flawlessAt;
-    const still = this.reducedMotion;
-    const pose = flawlessPose(age, still);
-    if (!pose) {
-      if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
-      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
-      return;
-    }
-    const s = this.uiScale;
-    this.flawless.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt).setY(this.verdictY + pose.rise * s);
-    if (pose.glow > 0.01) {
-      const w = this.flawless.width * pose.scale;
-      this.flawlessHalo.setPosition(this.viewport.safe.centerX, this.verdictY + pose.rise * s).setDisplaySize(w * 2, 170 * s * pose.scale).setAlpha(pose.glow * 0.8);
-    } else if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
-    if (still) return;
-    while (this.flawlessSwept < centres.length && socketGlint(age, this.flawlessSwept, centres.length) >= 0) {
-      const x = centreX + centres[this.flawlessSwept]!;
-      this.fx.burst('sparks', x, faceY, [SHELL.sun, 0xffe7a0, PALETTE.coral], 6);
-      this.flawlessSwept++;
-    }
-    if (!this.flawlessChorused && age >= FLAWLESS.chorusAt) {
-      this.flawlessChorused = true;
-      this.fx.burst('confetti', centreX, faceY - 10 * s, [PALETTE.coral, SHELL.cream, SHELL.sun], 22);
-      vibrate('hit');
-    }
-  }
 
   // ---------------------------------------------------------------- the leave sheet
 
@@ -1471,7 +1316,7 @@ export class DailyScene extends BaseScene {
   private placeSheet(): void {
     const s = this.uiScale, { safe } = this.viewport;
     const w = Math.min(560 * s, safe.width - 40 * s), h = 330 * s;
-    const x = safe.centerX - w / 2, y = this.verdictY - 60 * s - h;
+    const x = safe.centerX - w / 2, y = this.words.verdictY - 60 * s - h;
     this.sheetRect.setTo(x, y, w, h);
     const bw = (w - 76 * s) / 2, bh = Math.max(88 * s, this.controlSize);
     this.keepRect.setTo(x + 28 * s, y + h - bh - 28 * s, bw, bh);
@@ -1510,15 +1355,11 @@ export class DailyScene extends BaseScene {
     // The run's grid has stopped; so does the click under it. The stems ring on.
     this.audio?.music.stopMetronome();
     this.hideSheet();
-    this.hideTurnCall();
+    this.words.reset();
     this.roomDim.setAlpha(0);
-    this.verdict.setAlpha(0);
-    this.verdictTag.clear();
     this.marks.clear();
     this.restCall.setAlpha(0);
     this.restLabel.setAlpha(0);
-    this.flawless.setAlpha(0);
-    this.flawlessHalo.setAlpha(0);
     this.changeHeadline('');
     this.setHud(false);
     // The coda has finished (`finishUnlock`), so the act leaves the stage: the result stands

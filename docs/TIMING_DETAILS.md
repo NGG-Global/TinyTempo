@@ -33,8 +33,8 @@ and offers no toggle.
 
 The tray tells a player their lean after the level. The same fact is also said **on each
 tap while the level is running**, beside the verdict word: **EARLY** or **LATE**
-(`tapTiming` in `game/timingReport.ts`, drawn by `ui/verdictTag.ts` in PlayScene and in
-Endless Mode).
+(`tapTiming` in `game/timingReport.ts`, drawn by `ui/verdictTag.ts` inside `TurnWords`,
+`ui/turnWords.ts`, which a level, the Daily Tempo and Endless Mode share).
 
 - A **Good** says which side of the beat it fell on. Negative is early, as everywhere the
   judge's errors are read.
