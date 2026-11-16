@@ -119,8 +119,9 @@ it as `text/plain`). It holds Google's line first, then **Unity's list as its da
 generated it** (163 lines, added as delivered — `unity.com, 161555041, DIRECT` among them),
 under a comment naming it. One line, `dauup.com`, carries a 15-character certification id
 where the rest carry 16; it is Unity's to correct, and a buyer ignores a field it cannot
-read, so it stays as delivered. **`OWNERDOMAIN` is still missing**: step 4 below waits on the
-owner naming the business domain. Do not add guessed or placeholder lines —
+read, so it stays as delivered. **`OWNERDOMAIN=tinytempo.games`** follows Google's line: the
+owner chose the site's own domain, which Unity allows where there is no separate business
+domain, and it serves without a redirect, as Unity asks. Do not add guessed or placeholder lines —
 `tests/unityMediation.test.ts` refuses placeholders.
 
 How it was done, and how to redo it when Unity's list changes:
