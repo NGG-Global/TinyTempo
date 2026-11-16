@@ -506,6 +506,29 @@ main {
   background: var(--puck);
 }
 
+/*
+ * Google's own badge, unaltered (only its transparent margin is cropped), and
+ * first in the row: the hero's job is now the install. Its face is a .cta's
+ * height so the row reads as one line, and the extra margin keeps a quarter of
+ * its height clear around it, as Google's badge guidelines ask.
+ */
+.store-badge {
+  display: inline-block;
+  margin: 0.1rem 0.15rem 0.1rem 0;
+  border-radius: 0.6rem;
+  transition: transform 90ms ease;
+}
+
+.store-badge img {
+  width: auto;
+  height: 3.3rem;
+}
+
+.store-badge:hover,
+.store-badge:focus-visible {
+  transform: translateY(2px);
+}
+
 .cta .play-glyph {
   width: 0;
   height: 0;
