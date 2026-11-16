@@ -54,32 +54,29 @@ the screen, never a crash.
   result) are the act behind the plaque. Dimming it would also dim the coda's last picture.
   Left alone, but noted.
 
-## Not changed: render resolution
+## Render resolution
 
-**The game renders at its logical size, and the browser stretches the canvas to the
-screen.** On a 393 CSS-pixel phone at 2.75× the canvas is 720×1559 against 1,081×2,338
-device pixels: a 1.5× upscale of every letter, outline and edge. Text and strokes are
+**The game used to render at its logical size, and the browser stretched the canvas to the
+screen.** On a 393 CSS-pixel phone at 2.75× the canvas was 720×1559 against 1,081×2,338
+device pixels: a 1.5× upscale of every letter, outline and edge. Text and strokes were
 readable but visibly soft next to a native app.
 
-This is a recorded decision, not an oversight. `config/design.ts` chose the 720-wide box for
-half the fill rate of 1080p, and Phaser 4.2 has no resolution or device-pixel-ratio
-option. Making it sharp means rendering a larger logical frame, about
-`devicePixelRatio × min(cssWidth / 720, cssHeight / 1280)` times the design box (~1.5 on
-that phone), and capping it. Because every scene lays out from
-`s = min(safe.width / 720, safe.height / 1150)` and the viewport, most of the game would
-follow on its own.
+**It now draws the design box larger by that ratio.** `renderScale` in `config/design.ts`
+takes the device pixel ratio and the parent's size, works out the upscale the compositor
+would otherwise apply (`devicePixelRatio × min(cssWidth / 720, cssHeight / 1280)`), and
+`createGameConfig` hands the Scale Manager the design box multiplied by it, so one logical
+pixel lands on one device pixel. The scale is settled once at boot and is never below 1.
+Because every scene lays out from `s = min(safe.width / 720, safe.height / 1150)` and the
+Viewport, the game follows on its own. The one thing sized outside `s` was the particle
+presets in `ui/feedback.ts` — speeds, gravity and chip sizes written against the 720 box —
+and those are scaled once as each emitter is made (`scalePreset`). The band camera in
+Settings and the material tiles already went through `s`.
 
-The parts that would not follow are anything sized in raw pixels rather than through `s`:
-
-- particle presets;
-- the material tiles' scale;
-- the second camera's viewport in Settings;
-- each act's own scale formula.
-
-The cost is about 2.25× the pixels filled per frame on that phone.
-
-It needs a measured decision on a mid-range handset. It is the one change here that could
-lose frames, so it was not made inside an audit.
+**`RENDER_SCALE_MAX` is the one number to tune on a handset.** It is 1.5: sharp on a 2.75×
+phone at about 2.25× the fill of the old frame; a 3× flagship stops there rather than
+paying for 3×. Setting it to 1 gives the previous behaviour back exactly. The fill cost has
+not been measured on a mid-range Android yet — that measurement, on the DJ and trombone
+stages (the heaviest), is what should decide whether the cap stays at 1.5 or comes down.
 
 ## Not verified
 

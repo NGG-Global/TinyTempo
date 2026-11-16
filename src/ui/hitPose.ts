@@ -70,7 +70,18 @@ export function hitPose(age: number, perfect: boolean, still: boolean): HitPose 
   };
 }
 
-export type VerdictGrade = 'Perfect' | 'Good' | 'Miss';
+export type VerdictGrade = 'Perfect' | 'Good' | 'Miss' | 'Extra';
+
+/**
+ * The word the verdict strikes for a judgement. An untapped beat and a surplus tap are
+ * different mistakes — one asks for more, the other for less — and both read "Miss" until
+ * the result's timing details counted them apart; "Extra" says which while the player can
+ * still do something about the next beat. The grade is unchanged: an extra is still scored
+ * as the judge scores it.
+ */
+export function verdictWord(result: { readonly kind: 'hit' | 'omission' | 'extra'; readonly grade: 'Perfect' | 'Good' | 'Miss' }): VerdictGrade {
+  return result.kind === 'extra' ? 'Extra' : result.grade;
+}
 
 export interface VerdictPose {
   readonly alpha: number;
@@ -133,7 +144,7 @@ export function verdictPose(age: number, grade: VerdictGrade, index: number, sti
     alpha: alpha * leaving,
     rise: -(1 - rise) * 18 + lift,
     scale: (grade === 'Good' ? 0.85 + 0.15 * overshoot(Math.min(1, age / 0.45), 0.4) : 1) * shrink,
-    tilt: grade === 'Miss' ? settle(age, 40, 10) * 0.05 : 0,
+    tilt: grade === 'Miss' || grade === 'Extra' ? settle(age, 40, 10) * 0.05 : 0,
     tag,
   };
 }

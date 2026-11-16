@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   BIG_FISH, bigFish, FISHING_MOTION, FISHING_REVEAL_SEC, haulFinale, HEAVE, JUNK, junkFor, rodHeave, shadowRise,
 } from '../src/vignettes/fishingMotion';
-import { synthesizeFishing } from '../src/audio/fishingSounds';
+import { createFishingSounds, synthesizeFishing } from '../src/audio/fishingSounds';
 import { actEnding } from '../src/vignettes/motion';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { actLevel, levelSpec } from '../src/game/levels';
@@ -120,7 +120,7 @@ describe('fisherman act', () => {
 
   it('has distinct, deterministic, click-free and unclipped voices', () => {
     for (const rate of [44100, 48000]) {
-      const voices = ['action', 'success', 'rough', 'scrape', 'judder'] as const;
+      const voices = ['action', 'success', 'partial', 'rough', 'scrape', 'judder'] as const;
       const signatures = new Set<number>();
       for (const kind of voices) {
         const samples = synthesizeFishing(rate, kind);
@@ -136,9 +136,9 @@ describe('fisherman act', () => {
     }
   });
 
-  it('puts both finales\' splash where the picture breaks the surface', () => {
+  it('puts every finale\'s splash where the picture breaks the surface', () => {
     const rate = 48000;
-    for (const kind of ['success', 'rough'] as const) {
+    for (const kind of ['success', 'partial', 'rough'] as const) {
       const voice = synthesizeFishing(rate, kind);
       const from = Math.floor(rate * FISHING_MOTION.breachSec), to = Math.floor(rate * (FISHING_MOTION.breachSec + 0.08));
       const before = voice.subarray(Math.floor(rate * 0.15), from).reduce((sum, v) => sum + v * v, 0) / (from - Math.floor(rate * 0.15));
@@ -146,5 +146,27 @@ describe('fisherman act', () => {
       // The splash is the loudest thing after the pull itself has died away.
       expect(splash).toBeGreaterThan(before * 3);
     }
+  });
+
+  it('gives the small fish a coda of its own: a smaller plop, then the reel, inside the hold', () => {
+    const rate = 48000;
+    const band = (data: Float32Array, from: number, to: number) => {
+      const slice = data.subarray(Math.floor(from * rate), Math.floor(to * rate));
+      return slice.reduce((sum, v) => sum + v * v, 0) / slice.length;
+    };
+    const at = FISHING_MOTION.breachSec;
+    const [success, partial, rough] = (['success', 'partial', 'rough'] as const).map(kind => synthesizeFishing(rate, kind));
+    expect(band(partial!, at, at + 0.08)).toBeLessThan(band(success!, at, at + 0.08));
+    expect(band(partial!, at, at + 0.08)).toBeGreaterThan(band(rough!, at, at + 0.08) * 0.2);
+    // The reel's ratchet: eight clicks after the plop has died away, each louder than the
+    // quiet just before the reel starts, and nothing like it in the other two codas.
+    const quiet = band(partial!, at + 0.2, at + 0.29);
+    for (let c = 0; c < 8; c++) expect(band(partial!, at + 0.3 + c * 0.045, at + 0.3 + c * 0.045 + 0.008)).toBeGreaterThan(quiet * 3);
+    expect(partial!.length / rate).toBeLessThanOrEqual(FISHING_REVEAL_SEC);
+    const context = {
+      sampleRate: rate,
+      createBuffer: (_channels: number, length: number) => { const data = new Float32Array(length); return { length, getChannelData: () => data }; },
+    } as unknown as AudioContext;
+    expect(createFishingSounds(context).partial).toBeDefined();
   });
 });

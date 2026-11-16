@@ -2,6 +2,7 @@ import type Phaser from 'phaser';
 import { cubicContour, traceContour } from '@/ui/illustration';
 import { shade } from '@/ui/colour';
 import { HouseholdVignette } from './HouseholdVignette';
+import { SLAB_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { prospectorLook, type ProspectorLook } from './prospectorLooks';
 import { cracksShown, pickAngle, pickBlow, revealGlow, sparkLife, splitOpen } from './prospectorMotion';
@@ -48,7 +49,7 @@ export class ProspectorVignette extends HouseholdVignette {
 
   public constructor(scene: Phaser.Scene, lap = 0) {
     const look = prospectorLook(lap);
-    super(scene, look.lantern ? 0xe6e1ea : 0xf3ead9, look.lantern ? 0xffd98a : 0xfbe6c4, { card: { x: -330, y: -224, width: 660, height: 448, radius: 30 } });
+    super(scene, look.lantern ? 0xe6e1ea : 0xf3ead9, look.lantern ? 0xffd98a : 0xfbe6c4, { card: SLAB_CARD });
     this.look = look;
   }
 

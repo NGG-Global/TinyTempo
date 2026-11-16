@@ -20,11 +20,11 @@ import { RoundController, pauseShouldShowSummary, resultDue, suspendedTooLong, t
 import { createRoundPlan, type RoundPlan } from '@/rhythm/RhythmScheduler';
 import { capRound, type RoundResult } from '@/game/scoring';
 import { barsFor, finishOutcome, levelBars } from '@/game/taskVerdict';
-import { addRound, deviceLean, EMPTY_TIMING, tapTiming, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
+import { addRound, deviceLean, EMPTY_TIMING, timingReport, type TimingReport, type TimingTally } from '@/game/timingReport';
 import { TapInput, type Tap } from '@/input/TapInput';
 import { MaterialKey } from '@/textures/materials';
 import type { Judgement } from '@/rhythm/judge';
-import { batonLanding, beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, numeralStyle, pulseBall, restCopy, restProgress, trackGeometry, turnCount, turnCountExit, turnCountPose, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
+import { batonLanding, beatsPlayed, countIn, GHOST_FADE, ghostRing, handover, isFlawless, isLastRestBar, markFor, pulseBall, restCopy, restProgress, trackGeometry, type Handover, type Mark, type RestProgress } from '@/game/beatTrack';
 import { breatherTask, levelSpec, meanAccuracy, starsFor, type LevelSpec } from '@/game/levels';
 import { areaFinale } from '@/game/finale';
 import { advanceGroove, GROOVE_START, isMastered, type GrooveState, type GrooveLevel } from '@/game/groove';
@@ -36,16 +36,20 @@ import {
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
-import { loadReplayTimer, redeemTimer, replayTimerActive, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { interstitialPacer, interstitialVerdict } from '@/game/interstitialPacing';
+import { loadReplayTimer, redeemHeldTimer, replayTimerActive, shelfView, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
+import { startRefusalCopy } from '@/game/store';
 import { syncReminders } from '@/reminders/sync';
 import { GrooveStage } from '@/ui/grooveStage';
 import { MASTERY, masteryPose } from '@/ui/groove';
 import { createGrooveVoices, type GrooveVoices } from '@/audio/grooveSounds';
 import { objectiveContext, objectiveReport, recordObjectives } from '@/game/objectives';
 import { syncAchievements } from '@/playgames/achievementSync';
-import { queueCloudSave } from '@/playgames/cloudSync';
+import { queueCloudSave, startHeldTimerSynced } from '@/playgames/cloudSync';
 import { appReview, createContinuation, type Continuation } from '@/review';
-import { createFinaleSound } from '@/audio/finaleSounds';
+import { createFinaleSound, prepareFinaleSounds, type FinaleSoundPrep } from '@/audio/finaleSounds';
+import { momentOf } from '@/game/TutorialRun';
+import { noBallLevel, showsBall, teachWords, type TeachPass } from '@/game/teachCopy';
 import { PROGRESSION } from '@/config/progression';
 import type { Pattern } from '@/rhythm/patterns';
 import {
@@ -65,15 +69,13 @@ import { attemptMode, playAnalytics, type ConceptIntroVisit, type LevelRun } fro
 import { STYLE } from '@/config/style';
 import { PALETTE, SHELL } from '@/config/theme';
 import { drawHeart, drawMap, drawRestart, drawSpeaker } from '@/ui/icons';
-import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK, verdictLine, type Ghost } from '@/ui/turnBlock';
+import { blockGeometry, blockScale, blockWidth, columnRoom, columnShift, drawBlock, TRACK, type Ghost } from '@/ui/turnBlock';
 import { faces } from '@/ui/light';
 import { hex, mix, shade, starColour } from '@/ui/colour';
 import { CHROME, drawActionDisc, drawHeartRow, drawPuck, drawRopes, pressAmount, puckSink } from '@/ui/chrome';
 import { BRASS, drawPanel, placeSurface, Rect, surface } from '@/ui/panel';
 import { Feedback, FxKey } from '@/ui/feedback';
-import { FLAWLESS, flawlessPose, socketGlint } from '@/ui/flourish';
-import { verdictPose, type VerdictGrade } from '@/ui/hitPose';
-import { VerdictTag } from '@/ui/verdictTag';
+import { TurnWords } from '@/ui/turnWords';
 import { levelBackAction } from '@/core/backButton';
 import { arrive, settle, squash } from '@/ui/spring';
 import { punch } from '@/ui/punch';
@@ -108,11 +110,21 @@ const REST_LABEL_DROP = 1.36;
  * carried down, answered below. The turn cue is what teaches; this only runs it once
  * where nothing is at stake.
  */
+/**
+ * The task marks' metrics, design units at scale 1. Sized against `TRACK.pipRadius` (6):
+ * a mark is a bead, a little under a count-in pip, and the current task's a little over,
+ * so the row is read as beads and the count-in as pips rather than as the same thing twice.
+ */
+const TASK_MARK = {
+  radius: 5.5,
+  current: 7,
+  /** Bead pitch; an eight-task row stays inside the pucks' clear middle on a 720 frame. */
+  gap: 26,
+} as const;
+
 const TEACH = {
   /** Fraction of the level's own tempo the pass plays at. */
   tempo: 0.75,
-  /** The one line said over the pass: what to watch for, and the fact first players miss. */
-  caption: 'Watch once: their row, then yours. No pause.',
   /**
    * Whole bars, at the teaching tempo: one to count in, one demonstrated, one answered,
    * and one to let it land. Whole bars matter because the music's rate goes back to the
@@ -162,15 +174,6 @@ const FINALE_PAYOFF = {
   fanfareGain: 0.5,
   rollGain: 0.32,
 } as const;
-
-/**
- * The count-in numeral's size in design units, from the quietest "3" to the "Go!". The
- * floor rose from 36 to 42 for legibility; "Go!" is unchanged and still the strongest.
- * Under the face on the 16:9 frame the "Go!" at its strike still clears the safe edge.
- */
-const TURN_CALL = { min: 42, max: 54 } as const;
-/** The count's words in strike order, "3" first and "Go!" last; one Text each. */
-const NUMERALS = ['3', '2', '1', 'Go!'] as const;
 
 /** Composes the existing engine with registered visual vignettes. No judgement rules live here. */
 export class PlayScene extends BaseScene {
@@ -248,9 +251,15 @@ export class PlayScene extends BaseScene {
   private roomDim!: Phaser.GameObjects.Image;
   /** The paper the dim was last tinted from; the act paints the camera, and the dim follows it. */
   private roomPaper = -1;
-  private flawlessHalo!: Phaser.GameObjects.Image;
   /** This level still shows the guiding ring, because the player has not cleared it yet. */
   private guided = false;
+  /**
+   * Which words the first levels carry over the act (`game/teachCopy.ts`): the guided
+   * level's, the first level without the ball's, or none. Set where `guided` is.
+   */
+  private teachPass: TeachPass | null = null;
+  /** The ball rides the block on this level's every task, a scaffold through the first few. */
+  private ballShown = false;
   /**
    * The first-run pass, while it is running. It owns the block and the grid until it
    * hands both to the controller; there is no new phase machine, only a plan and a
@@ -323,6 +332,12 @@ export class PlayScene extends BaseScene {
   private introCaption!: Phaser.GameObjects.Text;
   /** An area finale's pennants, title card and payoff; null on every other level. */
   private finale: FinaleStage | null = null;
+  /**
+   * A finale's roll and fanfare, synthesized a slice a frame from the scene's entry, so
+   * the opening's frame does not build them. Keyed to the context and the beat they were
+   * made for; anything else falls back to building the sound when it is asked for.
+   */
+  private finalePrep: { readonly context: BaseAudioContext; readonly beatSec: number; readonly rollBeats: number; readonly prep: FinaleSoundPrep } | null = null;
   /** This run cleared a finale, so the result carries the "Area complete" payoff. */
   private finaleCleared = false;
   /**
@@ -428,8 +443,8 @@ export class PlayScene extends BaseScene {
   private trackWidth = 0;
   /** The scale the turn block is drawn at: the scene's, times `BLOCK_SCALE`. */
   private blockS = 1;
-  private verdictY = 0;
-  private turnCallY = 0;
+  /** The count, the verdict word with its tag, and "Flawless!": the words round the block (`ui/turnWords.ts`). */
+  private words!: TurnWords;
   private struckIndex = -1;
   private struckAt = -Infinity;
   /** Whether the last struck socket was answered Perfect: the hit's ring and rays are its alone. */
@@ -437,22 +452,8 @@ export class PlayScene extends BaseScene {
   /** The x the block's column offsets are measured from (`columnShift`), for a burst at a socket. */
   private columnX = 0;
   private extraAt = -Infinity;
-  private verdict!: Phaser.GameObjects.Text;
-  /** EARLY or LATE beside the verdict word, for an off-centre tap. */
-  private verdictTag!: VerdictTag;
-  private verdictAt = -Infinity;
-  /** The grade the word is showing and the beat it answered, for its pose (`verdictPose`). */
-  private verdictGrade: VerdictGrade = 'Good';
-  private verdictIndex = 0;
   /** The last Perfect, or a clean coda's contact, on the audio clock: when the act's stage was punched. */
   private punchAt = -Infinity;
-  /**
-   * The count into the player's turn: "3 2 1 Go!", in the free band under the face. One
-   * Text per numeral, dressed once at layout (`numeralStyle`) and only shown on its beat:
-   * re-rasterising one Text per strike put a raster on the downbeat frame, where the
-   * first tap is read.
-   */
-  private turnCalls: Phaser.GameObjects.Text[] = [];
   /**
    * The breather's words: "Halfway" or "Last bar" under the headline, "Rest" on the shelf,
    * and "3 bars to go" in the count-in's place under the face, which is free until the
@@ -461,17 +462,6 @@ export class PlayScene extends BaseScene {
   private restLabel!: Phaser.GameObjects.Text;
   private restShelf!: Phaser.GameObjects.Text;
   private restCall!: Phaser.GameObjects.Text;
-  /** The numeral currently rasterised, so the beat pays for `setText` and nothing else does. */
-  private turnCalled: number | null = null;
-  /** Whether the "Go!" of the current task has thrown its sparks; once per task, on the strike. */
-  private goStruck = false;
-  /** The word over the shelf for a task answered Perfect throughout, and when it was earned. */
-  private flawless!: Phaser.GameObjects.Text;
-  private flawlessAt = -Infinity;
-  /** How many sockets the flawless sweep has passed and thrown sparks from. */
-  private flawlessSwept = 0;
-  /** Whether this flourish's chorus has thrown its confetti; once per flourish. */
-  private flawlessChorused = false;
   private headlineColour = SHELL.cream;
   private sequence: TaskSequence | null = null;
   /** Beat-aligned table slide between tasks; the next task and the music's new tempo both start at `next`. */
@@ -632,15 +622,11 @@ export class PlayScene extends BaseScene {
     this.scrim = this.add.graphics().setDepth(7).setVisible(false);
     this.emptyHearts = this.add.graphics().setDepth(11).setVisible(false);
     this.marks = this.add.graphics().setDepth(8);
-    this.verdict = display(this, '', { size: 38, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
-    this.verdictTag = new VerdictTag(this, 8, ink);
-    this.turnCalls = NUMERALS.map(word => display(this, word, { size: 46, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8));
+    // The count, the verdict word and "Flawless!", shared with the Daily Tempo and Endless.
+    this.words = new TurnWords(this, this.fx, ink, 8);
     this.restLabel = label(this, '', { size: 22, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5, 0).setAlpha(0).setDepth(12);
     this.restShelf = label(this, 'Rest', { size: 18, colour: SHELL.cream, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.restCall = display(this, '', { size: 40, colour: ink, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
-    // Under the word, by creation order at the same depth: one soft image is the halo.
-    this.flawlessHalo = this.add.image(0, 0, FxKey.glow).setTint(0xffe7a0).setAlpha(0).setDepth(8);
-    this.flawless = display(this, 'Flawless!', { size: 54, colour: PALETTE.coral, align: 'center' }).setOrigin(0.5).setAlpha(0).setDepth(8);
     this.keepsakeCard = this.add.graphics().setDepth(11).setVisible(false);
     this.keepsakeLabel = label(this, 'New keepsake', { size: 20, colour: PALETTE.coral }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
     this.keepsakeName = display(this, '', { size: 34, colour: PALETTE.ink }).setOrigin(0, 0.5).setDepth(11).setVisible(false);
@@ -671,14 +657,24 @@ export class PlayScene extends BaseScene {
     this.replayOffered = false;
     this.summaryStars = 0;
     this.resultPlan = null;
-    this.flawlessAt = -Infinity;
-    this.flawlessSwept = 0;
-    this.goStruck = false;
     this.taskMarks = this.add.graphics().setDepth(11);
     // Assigned on every entry, like every field that holds scene objects.
     const finale = areaFinale(this.spec.level);
     this.finale = finale ? new FinaleStage(this, finale, this.starFx) : null;
     this.finaleCleared = false;
+    this.finalePrep = null;
+    if (finale) {
+      // The engine is game-wide and unlocked by the menu's PLAY, so it is here on every
+      // ordinary entry; a debug entry straight into a level has none yet, and `sharedAudio`
+      // makes the one the round would make a moment later, so the sounds are never left
+      // for the opening to build in one go.
+      const context = sharedAudio(this).context;
+      const first = this.spec.tasks[0];
+      if (first) {
+        const beatSec = 60 / first.bpm, rollBeats = Math.min(first.leadBeats, RHYTHM.beatsPerBar);
+        this.finalePrep = { context, beatSec, rollBeats, prep: prepareFinaleSounds(context, beatSec, rollBeats) };
+      }
+    }
     this.curtain = new SceneCurtain(this);
     this.debug = this.text('', 16, 'monospace').setVisible(this.debugMode);
     if (this.debugMode) this.installReplayPanel();
@@ -717,6 +713,9 @@ export class PlayScene extends BaseScene {
     // Hangs from its top edge under the headline's actual bottom, placed per frame in
     // `update`: the headline is 48 units while a try plays and 88 between tries.
     this.introCaption.setPosition(safe.centerX, this.headlineY + this.headlineSize * 1.08);
+    // Wrapped as a guard: every line is written to fit a handset, and this only keeps a
+    // longer one from running off the frame.
+    wrapWidth(this.introCaption, Math.min(660 * s, safe.width - 32 * s));
     resize(this.introCaption, 30 * s, SHELL.cream);
     this.controlSize = Math.max(88 * s, 48 * this.viewport.unitScale);
     const gap = Math.max(88 * s, this.controlSize + 4 * s);
@@ -737,34 +736,12 @@ export class PlayScene extends BaseScene {
     this.trackWidth = columnRoom(Math.min(620 * b, safe.width - 48 * s), b);
     // The block's rows are centred on the frame; its columns stand right of that centre.
     this.columnX = safe.centerX + columnShift(b);
-    // Above the shelf, not above the face: the demonstration row now occupies the band
-    // the verdict word used to sit in, and a word over the beads is a word over the cue.
-    this.verdictY = verdictLine(this.trackY, s);
-    this.verdict.setPosition(safe.centerX, this.verdictY);
-    resize(this.verdict, 38 * s, this.verdictColour());
-    this.verdictTag.layout(s, this.verdictColour());
+    // The verdict's line above the shelf and the count's band under the face, both placed
+    // from the block by `TurnWords`; the breather's "3 bars to go" takes the count's band.
+    this.words.layout(safe.centerX, this.trackY, s, b);
     // Above the verdict's line, so the rows the player is answering on stay in sight.
-    this.restartSheet.layout(safe.centerX, this.verdictY - 34 * s, safe.width - 40 * s, s, this.controlSize);
-    // The flawless word takes the verdict's line: it is the verdict on the whole task.
-    this.flawless.setPosition(safe.centerX, this.verdictY);
-    resize(this.flawless, 54 * s, PALETTE.coral);
-    // Under the player's row, not in the verdict's band above the shelf. The two would
-    // otherwise want the same line at the same instant: a tap landing on the downbeat is
-    // judged there and then, so the verdict would wipe the "Go!" for exactly the player
-    // who got it right. Below the face is also the furthest point on the screen from the
-    // act, which is where a count-in belongs — it is counting the player in, not narrating
-    // the example. The band is free for it because the action block is hidden for the
-    // whole of a task: `setAction('')` on both `prepare` and `respond`, which is every
-    // phase the count can appear in. A resize leaves the numeral dressed at the old
-    // scale, so the cache is dropped and the next beat re-dresses it.
-    this.turnCallY = this.trackY + (TRACK.plateHeight / 2 + TRACK.plateDepth + 44) * b;
-    this.turnCalls.forEach((text, i) => {
-      const { heat, weight } = numeralStyle(RHYTHM.turnCountBeats - i);
-      text.setPosition(safe.centerX, this.turnCallY);
-      resize(text, (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * weight) * b, mix(this.definition.ink, PALETTE.coral, heat));
-    });
-    this.turnCalled = null;
-    this.restCall.setPosition(safe.centerX, this.turnCallY);
+    this.restartSheet.layout(safe.centerX, this.words.verdictY - 34 * s, safe.width - 40 * s, s, this.controlSize);
+    this.restCall.setPosition(safe.centerX, this.words.turnCallY);
     this.restLabel.setX(safe.centerX);
     resize(this.restCall, 40 * b, this.definition.ink);
     resize(this.restLabel, 22 * b, PALETTE.muted, STYLE.current, false);
@@ -831,7 +808,7 @@ export class PlayScene extends BaseScene {
     drawHeartRow(g, {
       centreX: this.viewport.safe.centerX, y: this.viewport.safe.top + 247 * s,
       count: view.maxHearts, radius: 23 * s, gap: 60 * s,
-      filled: view.hearts, part: heartProgress(view),
+      filled: view.hearts, part: heartProgress(view), spare: view.spare,
       full: PALETTE.coral, empty: SHELL.cream, emptyAlpha: 0.18, emptyOutline: SHELL.cream,
     });
   }
@@ -1194,7 +1171,9 @@ export class PlayScene extends BaseScene {
         spec: this.spec, progress: before, attemptId, heartSpent: begun.spent, continuing: continueAt !== null,
       });
       this.heartRefunded = false;
-      this.guided = guidedLevel(loadProgress()) === this.spec.level;
+      this.guided = guidedLevel(before) === this.spec.level;
+      this.teachPass = this.guided ? 'play' : noBallLevel(before) === this.spec.level ? 'noBall' : null;
+      this.ballShown = showsBall(this.spec.level);
       if (continueAt !== null) {
         // The task it stopped in, at that task's tempo from the first downbeat, after a bar to
         // find the pulse again. No teach pass and no introduction: both came before task 1.
@@ -1239,7 +1218,8 @@ export class PlayScene extends BaseScene {
       cue: 0, answered: 0, phase: 'prepare', swapped: false,
     };
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.verdictAt = -Infinity;
+    this.struckAt = this.extraAt = -Infinity;
+    this.words.reset();
     this.audio!.music.setRate(bpm / MUSIC.sourceBpm, origin);
     // The demonstration half is the plan's own cues; the answered half is the game
     // sounding each target itself. Both go in ahead of time, like every other phrase.
@@ -1247,10 +1227,7 @@ export class PlayScene extends BaseScene {
     for (const target of plan.targets) this.audio!.play(target, 'action');
     this.vignette.reset(plan);
     this.vignette.onPhase('prepare', origin);
-    // Said once, under the act's title, for the one pass that is watched rather than
-    // played: what the ball is about to show. The caption clears when the grid is handed
-    // to the controller, so the level's own task carries no words at the top.
-    this.setIntroCaption(TEACH.caption);
+    // The words over the pass follow the ball, moment by moment (`refreshTeachWords`).
     this.drawTaskMarks();
   }
 
@@ -1278,7 +1255,6 @@ export class PlayScene extends BaseScene {
       // Same deadline the task change uses, on the clock the cues are scheduled against.
       if (!canPlaceNextTask(this.audio!.context.currentTime, teach.taskAt)) { this.interrupt(); return; }
       teach.swapped = true;
-      this.setIntroCaption('');
       // Seen, once the whole cycle has played. Marking it at the start would have spent
       // the one showing on a player who backed out during the count-in.
       markDemonstrationSeen();
@@ -1374,12 +1350,15 @@ export class PlayScene extends BaseScene {
     const demo = startAt + this.task.leadBeats * beat;
     this.finale!.showTitle(startAt, demo - FINALE_PAYOFF.cardClearBeats * beat);
     const rollBeats = Math.min(this.task.leadBeats, RHYTHM.beatsPerBar);
-    // The fanfare is about a second of synthesis. The ribbon wants it while the medals
-    // are already moving; building it here, inside the opening lead-in, is the same work
-    // done where a long frame cannot expire a target. The buffer is cached per context,
-    // so the ribbon and a replay both reuse it.
-    createFinaleSound(audio.context, 'fanfare');
-    audio.playStinger(demo - rollBeats * beat, createFinaleSound(audio.context, 'roll', beat, rollBeats), FINALE_PAYOFF.rollGain);
+    // Both sounds have been synthesizing a slice a frame since the scene was built
+    // (`finalePrep`), so taking the roll here is a copy into a buffer, not a tenth of a
+    // second of per-sample work on the frame the title card drops in. The fanfare is cached
+    // per context, so the ribbon and a replay both reuse it.
+    const prep = this.finalePrep;
+    const roll = prep && prep.context === audio.context && prep.beatSec === beat && prep.rollBeats === rollBeats
+      ? prep.prep.roll()
+      : createFinaleSound(audio.context, 'roll', beat, rollBeats);
+    audio.playStinger(demo - rollBeats * beat, roll, FINALE_PAYOFF.rollGain);
     // After an introduction the loop is already at full level, and ducking it would read as
     // a fault rather than a build.
     if (startAt === this.levelOrigin) {
@@ -1399,14 +1378,8 @@ export class PlayScene extends BaseScene {
     this.outcomes = pattern.hits.map(() => 'pending');
     this.heldJudgements = [];
     this.struckIndex = -1;
-    this.struckAt = this.extraAt = this.verdictAt = this.flawlessAt = -Infinity;
-    this.flawlessSwept = 0;
-    this.goStruck = false;
-    this.verdict.setAlpha(0);
-    this.verdictTag.clear();
-    this.hideTurnCall();
-    this.flawless.setAlpha(0);
-    this.flawlessHalo.setAlpha(0);
+    this.struckAt = this.extraAt = -Infinity;
+    this.words.reset();
     this.controller!.start(
       pattern, bpm, this.audio!.context.currentTime, performance.now(),
       // The trombone's note is always the plan. On a route that delays sound by more than
@@ -1657,6 +1630,9 @@ export class PlayScene extends BaseScene {
     // objects the scene just destroyed throws, and that throw is reported as a crash
     // on the way out of a level.
     if (this.disposed) return;
+    // A finale's sounds, a slice a frame until they are made. Before the tick, so the
+    // budget is spent on a frame that is not also placing a task.
+    if (this.finalePrep && !this.finalePrep.prep.done) this.finalePrep.prep.advance();
     // The pump keeps the judge honest through a dropped frame; the frame itself also
     // advances the task, so a phase change or a demonstration beat due this frame is drawn
     // on it rather than up to a timer interval later.
@@ -1748,10 +1724,7 @@ export class PlayScene extends BaseScene {
     }
     // The verdict word rises, pops and fades; one instance, so a quick double replaces
     // rather than stacks. Its pill is drawn with the block, from the same pose.
-    const verdict = this.verdictPose(now);
-    if (verdict) this.verdict.setAlpha(verdict.alpha).setY(verdict.y).setScale(verdict.scale).setRotation(verdict.tilt);
-    else if (this.verdict.alpha !== 0) this.verdict.setAlpha(0);
-    this.verdictTag.pose(this.verdict, this.viewport.safe.centerX, verdict);
+    this.words.pose(now, still);
     if (this.controller?.phase === 'result' && !this.transition && !this.summaryShown && resultDue(now, this.finishUnlock, performance.now(), this.finishWallMs)) {
       if (now < this.finishUnlock) this.reportStalledClock(now);
       this.showSummary();
@@ -1858,6 +1831,18 @@ export class PlayScene extends BaseScene {
     }
     this.presentJudgement(result);
   }
+  private sayVerdict(result: Judgement, now: number): void {
+    const perfect = result.grade === 'Perfect' && result.kind === 'hit';
+    // At level 3 the room answers a Perfect too: the pool flares for a moment.
+    if (perfect && !this.intro && !this.teach && this.controller?.phase === 'respond' && (this.groovePreview ?? this.groove.level) === 3) this.grooveStage.flare(now);
+    const { centres } = this.beads();
+    // Richer with the groove: a few more sparks, and the sun among them from level 2.
+    const level = this.groove.level;
+    this.words.say(result, now, this.columnX + (centres[result.index ?? 0] ?? 0), this.reducedMotion, {
+      tints: level >= 2 ? [PALETTE.coral, SHELL.cream, SHELL.sun] : [PALETTE.coral, SHELL.cream],
+      count: 8 + (level >= 2 ? 3 : 0) + (level >= 3 ? 3 : 0),
+    });
+  }
   private presentJudgement(result: Judgement): void {
     // In an introduction an extra tap shakes the rows and nothing else: no scrape, no Miss.
     // The rattle already says "that one was not a beat", which is all a first try needs.
@@ -1888,48 +1873,6 @@ export class PlayScene extends BaseScene {
     for (const result of pending) this.presentJudgement(result);
   }
 
-  /**
-   * One word at the action, replaced rather than stacked: a quick double would otherwise
-   * pile two on top of each other, which the design notes warn against.
-   */
-  private sayVerdict(result: Judgement, now: number): void {
-    const word = result.kind === 'extra' ? 'Miss' : result.grade;
-    const colour = this.verdictColour(result);
-    this.verdictAt = now;
-    this.verdictGrade = word;
-    this.verdictIndex = result.index ?? this.verdictIndex + 1;
-    this.verdict.setText(word);
-    resize(this.verdict, 38 * this.uiScale, colour);
-    // Which side of the beat an off-centre tap fell, beside the word: the result's lean, a
-    // tap at a time, while the player can still do something about the next one.
-    this.verdictTag.set(tapTiming(result));
-    if (result.grade === 'Perfect' && result.kind === 'hit') {
-      // At level 3 the room answers a Perfect too: the pool flares for a moment.
-      if (!this.intro && !this.teach && this.controller?.phase === 'respond' && (this.groovePreview ?? this.groove.level) === 3) this.grooveStage.flare(now);
-      if (!this.reducedMotion) {
-        const { centres } = this.beads();
-        const x = this.columnX + (centres[result.index ?? 0] ?? 0);
-        // Richer with the groove: a few more sparks, and the sun among them from level 2.
-        const level = this.groove.level;
-        this.fx.burst('sparks', x, this.trackY, level >= 2 ? [PALETTE.coral, SHELL.cream, SHELL.sun] : [PALETTE.coral, SHELL.cream], 8 + (level >= 2 ? 3 : 0) + (level >= 3 ? 3 : 0));
-      }
-    }
-  }
-  /**
-   * Where the verdict word is in its hold: a Perfect is struck like the count's numerals,
-   * a Good arrives with its pop, a Miss arrives flat with a shake (`ui/hitPose.ts`). Null
-   * once it has gone.
-   */
-  private verdictPose(now: number): { readonly alpha: number; readonly y: number; readonly scale: number; readonly tilt: number; readonly tag: number } | null {
-    const pose = verdictPose(now - this.verdictAt, this.verdictGrade, this.verdictIndex, this.reducedMotion);
-    return pose && { alpha: pose.alpha, y: this.verdictY + pose.rise * this.uiScale, scale: pose.scale, tilt: pose.tilt, tag: pose.tag };
-  }
-  private verdictColour(result?: Judgement): number {
-    if (!result) return this.definition.ink;
-    // A darker grey than the track's, because the word is read against whatever the
-    // vignette has behind it — on the pale stages the palette's muted all but disappears.
-    return result.grade === 'Perfect' ? PALETTE.coral : result.grade === 'Good' ? this.definition.ink : PALETTE.muted;
-  }
   /** The bead centres the track is drawn at, so a burst lands on the bead it belongs to. */
   private beads(count = this.outcomes.length): { readonly centres: readonly number[]; readonly radius: number } {
     return trackGeometry(count, this.trackWidth, TRACK.beadGap * this.blockS, TRACK.beadRadius * this.blockS);
@@ -1954,14 +1897,13 @@ export class PlayScene extends BaseScene {
     // the band: the moment the last beat lands is exactly when a player wants to read it.
     if (!phase || phase === 'idle' || phase === 'paused' || this.summaryShown) {
       this.roomDim.setAlpha(0);
-      this.hideTurnCall();
-      this.flawless.setAlpha(0);
-      this.flawlessHalo.setAlpha(0);
+      this.words.settle();
       this.setRestWords(null);
       // A pause or summary settles the room; an idle gap retains this attempt's light.
       // A temporarily idle/null plan during a table slide is still the same attempt.
       this.grooveStage.show(this.summaryShown || phase === 'paused' ? 0 : (this.groovePreview ?? this.groove.level), now);
       this.grooveStage.update(now, null, this.reducedMotion);
+      this.refreshTeachWords(null, now, false, true);
       return;
     }
     const { safe } = this.viewport;
@@ -2008,6 +1950,7 @@ export class PlayScene extends BaseScene {
     const lastBar = isLastRestBar(rest);
     this.restShelf.setAlpha(rest && !lastBar ? 0.7 : 0).setPosition(geo.shelf.centerX, geo.shelfCentreY);
 
+    this.refreshTeachWords(plan, now, teach !== null, rest !== null);
     drawBlock(g, geo, s, {
       centres,
       socketRadius: radius,
@@ -2021,10 +1964,10 @@ export class PlayScene extends BaseScene {
       ink: this.definition.ink,
       paper,
       landed: now - batonLanding(plan),
-      flawless: now - this.flawlessAt,
+      flawless: this.words.flawlessAge(now),
       // The ball shows the pulse crossing from their row into yours where the game still
-      // teaches: the first-run pass, the guided level and a new grid's introduction.
-      pulse: (teach || this.guided || this.intro) && !rest ? pulseBall(plan, now, still) : null,
+      // teaches: the first-run pass, the first few levels (`showsBall`) and a new grid's introduction.
+      pulse: (teach || this.guided || this.ballShown || this.intro) && !rest ? pulseBall(plan, now, still) : null,
       rest: rest && {
         bar: rest.bar, beat: rest.beat, bars: rest.bars,
         pressAge: now - rest.at, barAge,
@@ -2037,7 +1980,7 @@ export class PlayScene extends BaseScene {
     const bar = plan ? { origin: plan.demo, bpm: plan.bpm, from: plan.start } : null;
     this.grooveStage.show(this.teach || this.intro ? 0 : (this.groovePreview ?? this.groove.level), now);
     this.grooveStage.drawRim(g, geo.face, TRACK.plateRadius * s, s, this.grooveStage.update(now, bar, still));
-    this.drawFlawless(geo.columnX, centres, geo.faceCentreY, now);
+    this.words.drawFlawless(geo.columnX, centres, geo.faceCentreY, now, still);
 
     // The count-in: the last four ticks before the example, so the opening bar is not
     // dead air. A breather shows nothing until its final four beats.
@@ -2052,8 +1995,8 @@ export class PlayScene extends BaseScene {
         else g.lineStyle(2.5 * s, ink, 0.35).strokeCircle(x, pipY, TRACK.pipRadius * s);
       }
     }
-    this.drawTurnCall(plan, now, paper);
-    this.drawVerdictPill(now, paper);
+    this.words.drawCall(g, plan, now, paper, still);
+    this.words.drawVerdictPill(g, now, paper, still);
     // The workshop steps back as the turn arrives, so the block comes forward without
     // anything on it having to get brighter. The texture is clear over the middle and
     // whole only in the corners, so the peak here is the corners' and the room's sides
@@ -2061,147 +2004,22 @@ export class PlayScene extends BaseScene {
     this.roomDim.setAlpha(turn.yours * 0.5);
   }
 
-  /**
-   * A patch of the act's paper under the verdict word, so every grade reads on every
-   * act: coral and the muted grey lost their contrast on wood and on the dark stages,
-   * and the outline rule (`typeStroke`) gives dark ink no outline to carry. It follows
-   * the word's own pose, so it lands and leaves with it.
-   */
-  private drawVerdictPill(now: number, paper: number): void {
-    const pose = this.verdictPose(now);
-    if (!pose || pose.alpha <= 0.01 || this.verdict.text === '') return;
-    const s = this.uiScale;
-    const w = this.verdictTag.width(this.verdict, pose.scale) + 28 * s;
-    const h = 38 * s * 1.3 * pose.scale;
-    const x = this.viewport.safe.centerX - w / 2;
-    const y = pose.y - h / 2;
-    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(x, y + 3 * s, w, h, h / 2);
-    this.marks.fillStyle(paper, pose.alpha * 0.9).fillRoundedRect(x, y, w, h, h / 2);
-    // The same faint line the block's sheet carries, so the pill is a cut card and not a blur.
-    this.marks.lineStyle(1.5 * s, mix(paper, this.definition.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(x, y, w, h, h / 2);
-  }
+
+
+
 
   /**
-   * The count into the player's turn, under their own row: "3", "2", "1" on the beats
-   * before their first target and "Go!" on the target itself.
-   *
-   * The block already says all of this, and says it early — but it says it in colour,
-   * position and motion, and a player meeting it for the first time has nothing to hold
-   * on to while it happens. Testers were still missing the downbeat with the whole
-   * handover in front of them. A count-in is the one form of this everybody already
-   * knows, so it is added as a count-in rather than as a label: on the grid and at the
-   * thumb, under the row it is counting the player onto, so it reinforces where to look
-   * instead of adding a second place to look. It sits below the face rather than in the
-   * verdict's band above the shelf, because the two want the same line at the same
-   * instant — a tap on the downbeat is judged there and then, and the verdict would wipe
-   * the "Go!" for exactly the player who got it right.
-   *
-   * Two things keep it off the example. It is weighted — quiet at "3", where the
-   * demonstration is still the thing to watch, and full only at "Go!", where the
-   * demonstration is over. And the slot is occupied from the first numeral onward, so
-   * "Go!" *replaces* the "1" in place rather than arriving on the beat it announces:
-   * the block's property still holds, and by the downbeat nothing new appears.
+   * The words over the first levels (`game/teachCopy.ts`), from the plan's own moment —
+   * the lesson's reading, so *your turn* is said on the downbeat and never after it — set
+   * every frame and rasterised only when they change. The first-run pass is watched, the
+   * guided level's tasks are played, and the first level without the ball says so on its
+   * first task only. An introduction's caption is its own and is left alone.
    */
-  private drawTurnCall(plan: RoundPlan | null, now: number, paper: number): void {
-    const call = plan && turnCount(plan, now);
-    if (!plan || !call) { this.hideTurnCall(); return; }
-    // The count belongs to the block and is drawn at its scale.
-    const s = this.blockS;
-    const go = call.count === 0;
-    const beat = 60 / plan.bpm;
-    const still = this.reducedMotion;
-    const pose = turnCountPose(call, beat, still);
-    // Each numeral is its own Text, dressed at layout: the numeral warms from the act's
-    // ink toward coral one strike at a time, so the count is the row's colour arriving
-    // rather than a caption in a third colour, and nothing is rasterised on the beat.
-    const turnCall = this.turnCalls[RHYTHM.turnCountBeats - call.count] ?? this.turnCalls[0]!;
-    if (call.count !== this.turnCalled) {
-      this.hideTurnCall();
-      this.turnCalled = call.count;
-    }
-    // The numeral this strike replaced is knocked down off the line under it, so the slot
-    // is never empty on the beat and "Go!" visibly displaces the "1" rather than succeeding it.
-    const previous = this.turnCalls[RHYTHM.turnCountBeats - call.count - 1];
-    if (previous) {
-      const exit = turnCountExit(call.age, beat, call.count + 1, still);
-      if (exit) previous.setAlpha(exit.alpha).setScale(exit.scale).setRotation(exit.tilt).setY(this.turnCallY + exit.rise * s);
-      else if (previous.alpha !== 0) previous.setAlpha(0);
-    }
-    // A patch of the act's paper under the numeral, at the numeral's own weight and
-    // stamped down with it. Dark ink has no outline to carry (`typeStroke`) and its pale
-    // drop was nothing on the hammer's wood at "3": this is the backing the dressed type
-    // cannot be, and it makes the count legible without making it louder.
-    const size = (TURN_CALL.min + (TURN_CALL.max - TURN_CALL.min) * call.weight) * s;
-    const pw = Math.max(turnCall.width * pose.scale + 18 * s, size * 1.3);
-    const ph = size * 1.2 * pose.scale;
-    const px = this.viewport.safe.centerX - pw / 2;
-    const py = this.turnCallY + pose.rise * s - ph / 2;
-    this.marks.fillStyle(0x000000, pose.alpha * 0.12).fillRoundedRect(px, py + 3 * s, pw, ph, ph / 2);
-    this.marks.fillStyle(paper, pose.alpha * 0.88).fillRoundedRect(px, py, pw, ph, ph / 2);
-    this.marks.lineStyle(1.5 * s, mix(paper, this.definition.ink, 0.5), pose.alpha * 0.2).strokeRoundedRect(px, py, pw, ph, ph / 2);
-    // A strike rather than an entrance: each numeral drops in oversized and stamps down to
-    // size on its beat, leaning alternate ways so three strikes read as three, and the
-    // "Go!" stands up straight. All of it is f(age) from the clock the beat is on.
-    turnCall.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
-      .setY(this.turnCallY + pose.rise * s);
-    if (pose.ring.alpha > 0.01) {
-      // The ring a strike leaves, drawn on the block's own Graphics so it clears with it.
-      const reach = (30 + 70 * pose.ring.spread) * s;
-      this.marks.lineStyle((5 - 3.5 * pose.ring.spread) * s, mix(this.definition.ink, PALETTE.coral, pose.heat), pose.ring.alpha)
-        .strokeCircle(this.viewport.safe.centerX, this.turnCallY, reach);
-    }
-    // The "Go!" throws sparks once, on its strike. Under reduced motion the word alone.
-    if (go && !this.goStruck) {
-      this.goStruck = true;
-      if (!still) this.fx.burst('sparks', this.viewport.safe.centerX, this.turnCallY, [PALETTE.coral, SHELL.cream], 12);
-    }
-  }
-
-  private hideTurnCall(): void {
-    for (const text of this.turnCalls) if (text.alpha !== 0) text.setAlpha(0);
-    this.turnCalled = null;
-  }
-
-  /**
-   * The word for a flawless task, over the shelf, and the sparks the sweep throws from
-   * each socket as it passes. The band of light and the glints themselves are drawn by
-   * the block; this is the part that reaches for a Text and the particle emitters.
-   */
-  private drawFlawless(centreX: number, centres: readonly number[], faceY: number, now: number): void {
-    const age = now - this.flawlessAt;
-    const still = this.reducedMotion;
-    const pose = flawlessPose(age, still);
-    if (!pose) {
-      if (this.flawless.alpha !== 0) this.flawless.setAlpha(0);
-      if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
-      return;
-    }
-    const s = this.uiScale;
-    this.flawless.setAlpha(pose.alpha).setScale(pose.scale).setRotation(pose.tilt)
-      .setY(this.verdictY + pose.rise * s);
-    if (pose.glow > 0.01) {
-      // A warm halo behind the word: one soft image, the texture the stage's pool is made
-      // of, sized to the word. It used to be three fainter offset passes of an ellipse,
-      // since Graphics cannot blur, and frame by frame those read as a smeared double
-      // image rather than as light.
-      const w = this.flawless.width * pose.scale;
-      this.flawlessHalo.setPosition(this.viewport.safe.centerX, this.verdictY + pose.rise * s)
-        .setDisplaySize(w * 2, 170 * s * pose.scale).setAlpha(pose.glow * 0.8);
-    } else if (this.flawlessHalo.alpha !== 0) this.flawlessHalo.setAlpha(0);
-    if (still) return;
-    // One burst per socket as the band reaches it, from where that socket is drawn.
-    while (this.flawlessSwept < centres.length && socketGlint(age, this.flawlessSwept, centres.length) >= 0) {
-      const x = centreX + centres[this.flawlessSwept]!;
-      this.fx.burst('sparks', x, faceY, [SHELL.sun, 0xffe7a0, PALETTE.coral], 6);
-      this.flawlessSwept++;
-    }
-    // The chorus: the whole row answers at once, and confetti goes up from the face. The
-    // block draws the rings and the plate's light; this is the part that reaches the emitter.
-    if (!this.flawlessChorused && age >= FLAWLESS.chorusAt) {
-      this.flawlessChorused = true;
-      this.fx.burst('confetti', centreX, faceY - 10 * s, [PALETTE.coral, SHELL.cream, SHELL.sun], 22);
-      vibrate('hit');
-    }
+  private refreshTeachWords(plan: RoundPlan | null, now: number, watching: boolean, resting: boolean): void {
+    if (this.teachPass === null || this.intro) return;
+    const pass: TeachPass = watching ? 'watch' : this.teachPass;
+    const silent = resting || plan === null || (pass === 'noBall' && this.taskIndex > 0);
+    this.setIntroCaption(silent ? '' : teachWords(pass, momentOf(plan, now)));
   }
 
   /**
@@ -2255,12 +2073,7 @@ export class PlayScene extends BaseScene {
     const flawless = isFlawless(this.outcomes) && result.extras === 0 && credited === result;
     if (flawless) {
       this.tally.flawless++;
-      this.flawlessAt = this.now();
-      this.flawlessSwept = 0;
-      this.flawlessChorused = false;
-      this.verdictAt = -Infinity;
-      this.verdict.setAlpha(0);
-      this.verdictTag.clear();
+      this.words.flawlessNow(this.now());
       vibrate('stamp');
     }
     this.results[this.taskIndex] = credited.accuracy;
@@ -2416,6 +2229,10 @@ export class PlayScene extends BaseScene {
     });
     this.summaryAt = this.now();
     this.summaryWallAt = performance.now() / 1000;
+    // The count is over: nothing follows the last coda, so the metronome bar ends here
+    // rather than clicking on under the plaque until the road takes the loop back. The
+    // stems ring on at the level's mix; the shell's own `setMusicBed` refits them.
+    this.audio?.music.stopMetronome();
     // The longer note is shown once, here; after it, every later card is the short one.
     if (this.keepsake && this.keepsakeFirst) markScrapbookSeen();
     this.keepsakeStruck = false;
@@ -2424,6 +2241,9 @@ export class PlayScene extends BaseScene {
     const accuracy = meanAccuracy(this.results);
     this.recordOutcome();
     const outcome = this.outcome!;
+    // Counted when the result opens rather than on Continue, so a clear left by the map puck
+    // still counts toward the next Continue's interstitial (`game/interstitialPacing.ts`).
+    if (outcome.cleared && !this.previewResult) interstitialPacer.noteClear(this.spec.level);
     // A cleared finale names the area it closed, and the ribbon over the plaque says so.
     this.finaleCleared = this.finale !== null && outcome.cleared && !this.saveFailed;
     // The mastery payoff waits for the medals, and on a finale for the ribbon and its card:
@@ -2443,7 +2263,11 @@ export class PlayScene extends BaseScene {
       this.finale!.showComplete(at);
       // Scheduled at the heard time the ribbon unrolls, which on the context clock is the
       // same number: a sound placed at T is heard when `now()` reads T.
-      if (this.audio) this.audio.playStinger(at, createFinaleSound(this.audio.context, 'fanfare'), FINALE_PAYOFF.fanfareGain);
+      if (this.audio) {
+        const prep = this.finalePrep;
+        const fanfare = prep && prep.context === this.audio.context ? prep.prep.fanfare() : createFinaleSound(this.audio.context, 'fanfare');
+        this.audio.playStinger(at, fanfare, FINALE_PAYOFF.fanfareGain);
+      }
     }
     this.scoreValue.setText(scoreLabel(accuracy));
     this.accuracy.setText('');
@@ -2650,10 +2474,18 @@ export class PlayScene extends BaseScene {
     this.keepsakeNote.setPosition(tx, r.y + KEEPSAKE_CARD.noteTop * s).setAlpha(pose.alpha).setVisible(true);
   }
 
+  /**
+   * The level's task marks, under the top edge between the pucks: one bead a task, lit as
+   * it is reached. They are the quietest thing on screen on purpose (`docs/VISUAL_POLISH.md`),
+   * but quiet is not the same as unreadable: at radius 4.5 a mark was two and a half CSS
+   * pixels on a handset, under the size of the count-in's own pips, and the row read as
+   * a smudge rather than a count. `TASK_MARK` keeps the row to the same height and the
+   * same place, and the pitch widens with the bead so the beads stay apart.
+   */
   private drawTaskMarks(): void {
     const s = this.uiScale, { safe } = this.viewport;
     const count = this.spec.tasks.length;
-    const gap = 20 * s, y = safe.top + 58 * s;
+    const gap = TASK_MARK.gap * s, y = safe.top + 58 * s;
     const g = this.taskMarks.clear();
     const f = faces(this.definition.ink);
     // A level with a breather marks its midpoint: a short tick between the last task before
@@ -2669,7 +2501,7 @@ export class PlayScene extends BaseScene {
       const x = at(i);
       const done = i < this.taskIndex || this.summaryShown;
       const current = i === this.taskIndex && !this.summaryShown && !this.intro;
-      const r = (current ? 5.5 : 4.5) * s;
+      const r = (current ? TASK_MARK.current : TASK_MARK.radius) * s;
       g.fillStyle(f.edge, done || current ? 1 : 0.25).fillCircle(x, y + 1.5 * s, r);
       g.fillStyle(done ? f.face : current ? f.lit : SHELL.puck, done || current ? 1 : 0.6).fillCircle(x, y, r);
       if (done || current) g.fillStyle(f.rim, 0.8).fillCircle(x - r * 0.3, y - r * 0.35, r * 0.28);
@@ -3075,8 +2907,9 @@ export class PlayScene extends BaseScene {
   }
   /**
    * The cleared result's Continue. Not `leaveForMap`, which the map puck and the mid-run
-   * sheet also use: only this exit is where a review milestone's flow is launched, and
-   * it goes to the map on every branch — unavailable, refused, failed or slow included.
+   * sheet also use: only this exit is where a review milestone's flow is launched, or else
+   * an interstitial the pacing says is due, and it goes to the map on every branch —
+   * unavailable, refused, failed or slow included.
    */
   private continueFromSummary(): void {
     if (this.curtain.active) return;
@@ -3084,10 +2917,35 @@ export class PlayScene extends BaseScene {
       async () => {
         const result = await appReview().launch();
         if (result !== 'skipped') breadcrumb('review launched', { result });
+        await this.playInterstitial(result !== 'skipped');
       },
       () => { if (!this.disposed) this.leaveForMap(); },
     );
     void this.continuation.run();
+  }
+  /**
+   * The level is over and the player has asked to move on, which is the break Google allows
+   * an interstitial at. Never waited for: one that is not loaded is skipped, and the map warms
+   * the next. `commerceBusy` holds the result still behind it, as a rewarded ad does.
+   */
+  private async playInterstitial(reviewLaunched: boolean): Promise<void> {
+    if (this.previewResult || this.disposed) return;
+    const ads = monetization();
+    const level = this.spec.level;
+    const now = Date.now();
+    const verdict = interstitialVerdict({
+      level, clears: interstitialPacer.clears, premium: ads.premium(), timerRunning: replayTimerActive(now),
+      reviewLaunched, now, lastAdClosedAt: ads.lastAdClosedAt(),
+    });
+    if (verdict !== 'show') return;
+    this.commerceBusy = true;
+    try {
+      const result = await ads.showInterstitial({ level });
+      if (result.shown) interstitialPacer.noteShown();
+      else breadcrumb('interstitial skipped', { reason: result.reason });
+    } finally {
+      this.commerceBusy = false;
+    }
   }
   private leaveForMap(): void {
     if (this.curtain.active) return;
@@ -3225,6 +3083,8 @@ export class PlayScene extends BaseScene {
       premium: monetization().premium(), timerActive: replayTimerActive(now), attemptId: this.attemptId,
       outcomeRecorded: this.outcome !== null, scoredResponseBegun: this.scoredResponseBegun,
       restartsLeft: restartsLeft(loadDailyRestarts(), now),
+      // Only what can be started: an item past its window is the shelf's to show, not the sheet's.
+      shelf: shelfView(loadReplayTimer(undefined, now), now).items.filter(item => item.state !== 'expired'),
     };
   }
 
@@ -3259,12 +3119,12 @@ export class PlayScene extends BaseScene {
     }
     const sheet = sheetFor(kind)!;
     playAnalytics.restartRequested(this.spec.level, sheet, this.restartFlags(facts));
-    this.openRestartSheet(sheet, facts.restartsLeft);
+    this.openRestartSheet(sheet, facts);
   }
 
-  private openRestartSheet(kind: RestartSheetKind, left: number): void {
+  private openRestartSheet(kind: RestartSheetKind, facts: RestartFacts): void {
     const previous = this.restartSheet.kind;
-    this.restartSheet.show(kind, performance.now() / 1000, left);
+    this.restartSheet.show(kind, performance.now() / 1000, facts.restartsLeft, facts.shelf);
     // The ad is reported when the empty sheet is what the player is looking at, once per
     // showing of it, never for the daily sheet: an ad is never offered beside a restart.
     // The timers are reported once per opening of their picker, one offer per product.
@@ -3284,7 +3144,7 @@ export class PlayScene extends BaseScene {
     const facts = this.restartFacts();
     const next = liveSheet(facts, this.restartSheet.kind);
     if (next === null) { this.closeRestartSheet('run_ended'); return; }
-    this.openRestartSheet(next, facts.restartsLeft);
+    this.openRestartSheet(next, facts);
   }
 
   /** Close without restarting. Reported once; a sheet waiting on an ad is reported by that path instead. */
@@ -3304,7 +3164,7 @@ export class PlayScene extends BaseScene {
     const shown = this.restartSheet.kind;
     if (choice === 'keep') {
       // The picker's Back is a page turn, not a decision: the empty sheet is still the answer.
-      if (shown === 'timers') { this.openRestartSheet('empty', this.restartFacts().restartsLeft); return; }
+      if (shown === 'timers') { this.openRestartSheet('empty', this.restartFacts()); return; }
       this.closeRestartSheet('keep_playing');
       return;
     }
@@ -3312,8 +3172,12 @@ export class PlayScene extends BaseScene {
     // begun, the day turned, a timer arrived — the sheet changes and asks again.
     const facts = this.restartFacts();
     if (liveSheet(facts, shown) !== shown) { this.refreshRestartSheet(); return; }
-    if (choice === 'timers') { this.openRestartSheet('timers', facts.restartsLeft); return; }
-    if (typeof choice === 'object') { void this.buyTimerToRestart(choice.buy); return; }
+    if (choice === 'timers') { this.openRestartSheet('timers', facts); return; }
+    // A length picked on the picker is a choice, not a purchase: Buy & restart is the purchase.
+    if (typeof choice === 'object' && 'pick' in choice) { this.restartSheet.pick(choice.pick); return; }
+    // A timer already on the shelf: started and the level restarts, nothing bought.
+    if (typeof choice === 'object') { this.startHeldToRestart(choice.start, facts); return; }
+    if (shown === 'timers') { void this.buyTimerToRestart(this.restartSheet.picked); return; }
     if (shown === 'free') {
       this.restartSheet.hide();
       playAnalytics.restartConfirmed(this.spec.level, 'free', this.restartFlags(facts));
@@ -3334,12 +3198,35 @@ export class PlayScene extends BaseScene {
   }
 
   /**
-   * A row of the picker: buy the timer and restart. The grant is the billing adapter's
-   * (`fulfilTimer`, idempotent per claim id), so the purchase has already added its minutes
-   * by the time the result arrives; `redeemTimer` here is a no-op that reads the same claim,
-   * kept so a result that reaches the scene before the adapter's fulfilment still restarts
-   * on a timer. The restart itself is the same free reset every other restart is, and only
-   * on the run that asked for it (`ticketStillApplies`): a store sheet can outlive a level.
+   * A shelf row on the empty sheet: start the held timer and restart. Starting is the
+   * player's choice, made here, so the restart is free from this moment; a start the record
+   * refuses (a week already stacked, an item gone past its hour) says why and restarts
+   * nothing, since nothing paid for it.
+   */
+  private startHeldToRestart(id: string, facts: RestartFacts): void {
+    const outcome = startHeldTimerSynced(id);
+    if (!outcome.started) {
+      this.restartSheet.say(startRefusalCopy(outcome.reason));
+      this.refreshRestartSheet();
+      return;
+    }
+    vibrate('stamp');
+    this.puckDirty = true;
+    this.restartSheet.hide();
+    playAnalytics.restartConfirmed(this.spec.level, 'timer', { ...this.restartFlags(facts), timer: true });
+    void this.startRound('free_restart');
+  }
+
+  /**
+   * The picker's Buy & restart: buy the length picked and restart. The hold is the billing adapter's
+   * (`fulfilTimer`, idempotent per claim id), so the purchase is already on the shelf by the
+   * time the result arrives; `redeemHeldTimer` here is a no-op that reads the same claim,
+   * kept so a result that reaches the scene before the adapter's fulfilment still finds the
+   * item. **This is the one place a purchase starts at once**: the player asked to restart,
+   * so the held item is started and the level restarts, and they never tap twice. A start
+   * the record cannot take (a week already stacked) keeps the item held and says so. The
+   * restart itself is the same free reset every other restart is, and only on the run that
+   * asked for it (`ticketStillApplies`): a store sheet can outlive a level.
    */
   private async buyTimerToRestart(product: TimerProductId): Promise<void> {
     if (this.commerceBusy || this.curtain.active) return;
@@ -3349,11 +3236,17 @@ export class PlayScene extends BaseScene {
     this.restartSheet.setBusy(RESTART_COPY.buying);
     try {
       const result = await monetization().purchase(product);
-      if (result.ok) redeemTimer(product, result.claimId);
+      if (result.ok) redeemHeldTimer(product, result.claimId);
+      const started = result.ok ? startHeldTimerSynced(result.claimId) : null;
       if (this.disposed) return;
       this.restartSheet.setBusy(null);
       if (!result.ok) {
         this.restartSheet.say(purchaseFeedback(result.reason));
+        return;
+      }
+      if (started && !started.started && started.reason !== 'started') {
+        // Held, not started: the timer is the player's on the shelf, and nothing restarts.
+        this.restartSheet.say(STORE_COPY.timerHeldInstead);
         return;
       }
       vibrate('stamp');
@@ -3571,5 +3464,6 @@ export class PlayScene extends BaseScene {
     // The engine and its music belong to the game (see sharedAudio); only this scene's voices stop.
     this.audio?.cancel();
     this.audio = null;
+    this.finalePrep = null;
   }
 }

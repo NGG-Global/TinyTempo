@@ -1,4 +1,5 @@
 import type Phaser from 'phaser';
+import { currentRenderScale } from '@/config/design';
 import { STYLE } from '@/config/style';
 
 /**
@@ -125,6 +126,32 @@ const PRESET_TEXTURE: Readonly<Record<Preset, string>> = {
   splinters: FxKey.splinter, droplets: FxKey.droplet, rings: FxKey.ring, flakes: FxKey.flake,
 };
 
+type Range = number | { min: number; max: number } | { start: number; end: number };
+
+/** A preset value in logical units per design unit, scaled; `undefined` stays unset. */
+function scaled(value: Range | undefined, by: number): Range | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') return value * by;
+  if ('min' in value) return { min: value.min * by, max: value.max * by };
+  return { start: value.start * by, end: value.end * by };
+}
+
+/**
+ * The presets are written in design units: a spark's speed, the pull of gravity and the
+ * size of a chip were all tuned against the 720-wide box. The frame is drawn larger
+ * than that by the render scale (`config/design.ts`), and nothing here goes through a
+ * scene's `s`, so the lengths are scaled once, as the emitter is made. Lifespans and
+ * angles are not lengths and stay as written.
+ */
+function scalePreset(config: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig, by: number): void {
+  if (by === 1) return;
+  const c = config as Record<string, unknown>;
+  for (const key of ['speed', 'gravityY', 'gravityX', 'scale'] as const) {
+    const value = scaled(c[key] as Range | undefined, by);
+    if (value !== undefined) c[key] = value;
+  }
+}
+
 export class Feedback {
   private readonly emitters = new Map<Preset, Emitter>();
   /** With a `parent`, emitters live in that container and burst in its local space. */
@@ -179,6 +206,7 @@ export class Feedback {
           lifespan: { min: 420, max: 760 }, scale: { start: 0.8, end: 0.55 }, alpha: { start: 1, end: 0.1 } });
         break;
     }
+    scalePreset(config, currentRenderScale());
     const texture = PRESET_TEXTURE[preset];
     const emitter = this.scene.add.particles(0, 0, texture, config).setDepth(this.depth);
     this.parent?.add(emitter);

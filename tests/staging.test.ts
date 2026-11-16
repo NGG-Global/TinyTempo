@@ -4,7 +4,7 @@ import { relativeLuminance } from '../src/ui/colour';
 import { LIGHT } from '../src/ui/light';
 import { VERDICT_REACH, verdictLine } from '../src/ui/trackMetrics';
 import {
-  cardOutline, falloff, FRAME_CARD, PANEL_CARD, roomBelowCard, SHELF, shelfColour, shelfFor, type StageCard,
+  cardOutline, falloff, FRAME_CARD, PANEL_CARD, roomBelowCard, SHELF, shelfColour, shelfFor, SLAB_CARD, type StageCard,
 } from '../src/vignettes/staging';
 
 /** HouseholdVignette.layout's stage placement, for a frame of the given logical size. */
@@ -48,7 +48,7 @@ describe('the shelf under a household card', () => {
 
   it('stays clear of the verdict pill on the 16:9 frame, where the room is tightest on a phone', () => {
     const f = FRAMES.short;
-    for (const card of [FRAME_CARD, PANEL_CARD, { x: -352, y: -250, width: 704, height: 500, radius: 24 }]) {
+    for (const card of [FRAME_CARD, PANEL_CARD, SLAB_CARD, { x: -352, y: -250, width: 704, height: 500, radius: 24 }]) {
       const room = roomBelowCard(card, f.y, f.scale, f.bottom, f.ui);
       const shelf = shelfFor(card, room);
       expect(shelf).not.toBeNull();

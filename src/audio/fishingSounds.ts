@@ -1,9 +1,14 @@
 import type { VignetteSounds, VoiceName } from './AudioEngine';
 import { FISHING_MOTION } from '../vignettes/fishingMotion';
 
-type Voice = VoiceName;
+/** The fisherman's voices, including the small fish's own coda. */
+export type FishingVoice = VoiceName | 'partial';
 const TAU = Math.PI * 2;
-const LENGTH: Record<Voice, number> = { action: 0.34, success: 1.6, rough: 1.0, scrape: 0.14, judder: 0.2 };
+const LENGTH: Record<FishingVoice, number> = { action: 0.34, success: 1.6, partial: 1.3, rough: 1.0, scrape: 0.14, judder: 0.2 };
+/** The small fish's plop against the big one's splash: the picture's own ratio (`haulFinale`). */
+const SMALL_SPLASH = 0.45;
+/** The reel-in that sends the small fish back: when it starts after the breach, its clicks and their spacing. */
+const REEL = { afterBreachSec: 0.3, clicks: 8, gapSec: 0.045 } as const;
 const decay = (t: number, rate: number) => t < 0 ? 0 : Math.exp(-t * rate);
 const tone = (t: number, hz: number, rate: number) => t < 0 ? 0 : Math.sin(TAU * hz * t) * decay(t, rate);
 const bell = (t: number, hz: number) => tone(t, hz, 6) * 0.3 + tone(t, hz * 2.71, 14) * 0.1 + tone(t, hz * 4.9, 30) * 0.03;
@@ -17,10 +22,12 @@ const whoosh = (t: number, noise: number, from: number, to: number, length: numb
 /**
  * The fisherman's voices. The pull is the beat: a thump as the weight comes onto the
  * rod, the rod's creak, the line's taut twang bending up in pitch as the tension rises,
- * and the water sloshing at the line. The two finales open with the same pull, and put
- * their splash at `FISHING_MOTION.breachSec`, where the picture breaks the surface.
+ * and the water sloshing at the line. The three finales open with the same pull, and put
+ * their splash at `FISHING_MOTION.breachSec`, where the picture breaks the surface. The
+ * small fish used to share the rough coda; it has a plop of its own and the reel-in that
+ * gives it back to the lake.
  */
-export function synthesizeFishing(sampleRate: number, kind: Voice): Float32Array {
+export function synthesizeFishing(sampleRate: number, kind: FishingVoice): Float32Array {
   const duration = LENGTH[kind];
   const data = new Float32Array(Math.ceil(sampleRate * duration));
   let seed = 9173, low = 0, band = 0;
@@ -53,6 +60,18 @@ export function synthesizeFishing(sampleRate: number, kind: Voice): Float32Array
           v = pull * 0.9 + splash;
           for (let d = 0; d < 4; d++) v += tone(breach - 0.32 - d * 0.09, 1400 + d * 260, 70) * 0.06;
           v += bell(t - 0.82, 659.25) * 0.5 + bell(t - 0.96, 880) * 0.55 + bell(t - 1.1, 1318.5) * 0.5;
+        } else if (kind === 'partial') {
+          // A small plop, sized between the big splash and the junk's, then the reel's
+          // ratchet rising as the little one is wound in, and a soft twang as it is let go.
+          const plop = (noise * decay(breach, 22) * 0.7 + low * decay(breach, 16) * 0.9 + whoosh(breach, band, 0.8, 0.3, 0.3) * 0.5) * SMALL_SPLASH;
+          v = pull * 0.85 + plop;
+          const reel = breach - REEL.afterBreachSec;
+          for (let c = 0; c < REEL.clicks; c++) {
+            const click = reel - c * REEL.gapSec;
+            v += tone(click, 1900 + c * 140, 120) * 0.14 + band * decay(click, 180) * 0.1;
+          }
+          const release = reel + REEL.clicks * REEL.gapSec + 0.08;
+          v += tone(t - release, 420 - 90 * (1 - decay(t - release, 12)), 9) * 0.14;
         } else {
           // A smaller, duller plop, then drips off whatever came up, and the rod settling.
           const plop = low * decay(breach, 26) * 1.1 + tone(breach, 150 - breach * 120, 30) * 0.5 + noise * decay(breach, 60) * 0.25;
@@ -71,11 +90,11 @@ export function synthesizeFishing(sampleRate: number, kind: Voice): Float32Array
 }
 
 export function createFishingSounds(context: AudioContext): VignetteSounds {
-  const make = (kind: Voice): AudioBuffer => {
+  const make = (kind: FishingVoice): AudioBuffer => {
     const samples = synthesizeFishing(context.sampleRate, kind);
     const buffer = context.createBuffer(1, samples.length, context.sampleRate);
     buffer.getChannelData(0).set(samples);
     return buffer;
   };
-  return { action: make('action'), success: make('success'), rough: make('rough'), scrape: make('scrape'), judder: make('judder') };
+  return { action: make('action'), success: make('success'), partial: make('partial'), rough: make('rough'), scrape: make('scrape'), judder: make('judder') };
 }

@@ -4,7 +4,7 @@ import type { Progress } from '../src/game/progress';
 import {
   HEALTH, HEALTH_COPY, abandonAttempt, attemptCostsHeart, beginAttempt, calendarDay, canBeginAttempt,
   canClaimDailyHeart, claimDailyHeart, claimFill, claimHeart, clearHealth, createAttemptId, fillHearts,
-  finishAttempt, formatCountdown, grantHeart, healthHud, heartProgress, isCleared, isMastered, isProtectedLevel,
+  finishAttempt, formatCountdown, grantHeart, grantRewardHeart, healthHud, heartProgress, isCleared, isMastered, isProtectedLevel,
   levelToPolish, loadHealth, reconcile, redeemDailyHeart, saveHealth, viewHealth, type Health,
 } from '../src/game/health';
 
@@ -37,6 +37,7 @@ function full(over: Partial<Health> = {}): Health {
     hearts: over.hearts ?? HEALTH.max,
     refillStartedAt: over.refillStartedAt === undefined ? null : over.refillStartedAt,
     spentAttempt: over.spentAttempt === undefined ? null : over.spentAttempt,
+    spare: over.spare ?? 0,
   };
 }
 
@@ -61,7 +62,7 @@ describe('health persistence', () => {
     const spent = full({ hearts: 4, refillStartedAt: T0, spentAttempt: 'a' });
     expect(saveHealth(spent, storage)).toBe(true);
     expect(JSON.parse(storage.getItem('tiny-tempo.health.v1')!)).toEqual({
-      version: 1, hearts: 4, refillStartedAt: T0, spentAttempt: 'a',
+      version: 1, hearts: 4, refillStartedAt: T0, spentAttempt: 'a', spare: 0,
     });
     expect(loadHealth(storage, T0)).toEqual(spent);
   });
@@ -245,9 +246,9 @@ describe('countdown display', () => {
     expect(spent.refillStartedAt).toBe(T0);
     expect(view.nextHeartInMs).toBe(HEALTH.regenMs - 90_000);
     expect(viewHealth(spent, later + 1_000).nextHeartInMs).toBe(HEALTH.regenMs - 91_000);
-    expect(healthHud(viewHealth(spent, later))).toEqual({ count: '4/5', wait: '18:30' });
-    expect(healthHud(viewHealth(full(), later))).toEqual({ count: '5/5', wait: null });
-    expect(healthHud(viewHealth(spent, later), { premium: true })).toEqual({ count: '∞', wait: null });
+    expect(healthHud(viewHealth(spent, later))).toEqual({ count: '4/5', wait: '18:30', spare: null });
+    expect(healthHud(viewHealth(full(), later))).toEqual({ count: '5/5', wait: null, spare: null });
+    expect(healthHud(viewHealth(spent, later), { premium: true })).toEqual({ count: '∞', wait: null, spare: null });
   });
 
   it('formats a countdown as m:ss', () => {
@@ -517,17 +518,17 @@ describe('daily free heart', () => {
 describe('the refill a screen draws', () => {
   it('is zero with nothing on the way, and climbs across the interval', () => {
     const now = 1_700_000_000_000;
-    expect(heartProgress(viewHealth({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null }, now))).toBe(0);
+    expect(heartProgress(viewHealth({ hearts: HEALTH.max, refillStartedAt: null, spentAttempt: null, spare: 0 }, now))).toBe(0);
     // A heart that has just started coming back has come no distance.
-    const fresh = viewHealth({ hearts: 1, refillStartedAt: now, spentAttempt: null }, now);
+    const fresh = viewHealth({ hearts: 1, refillStartedAt: now, spentAttempt: null, spare: 0 }, now);
     expect(heartProgress(fresh)).toBeCloseTo(0, 5);
-    const half = viewHealth({ hearts: 1, refillStartedAt: now - HEALTH.regenMs / 2, spentAttempt: null }, now);
+    const half = viewHealth({ hearts: 1, refillStartedAt: now - HEALTH.regenMs / 2, spentAttempt: null, spare: 0 }, now);
     expect(heartProgress(half)).toBeCloseTo(0.5, 3);
   });
   it('never leaves 0-1, even for a clock that moved backwards', () => {
     const now = 1_700_000_000_000;
     for (const started of [now + HEALTH.regenMs, now - HEALTH.regenMs * 4, now - 1]) {
-      const p = heartProgress(viewHealth({ hearts: 1, refillStartedAt: started, spentAttempt: null }, now));
+      const p = heartProgress(viewHealth({ hearts: 1, refillStartedAt: started, spentAttempt: null, spare: 0 }, now));
       expect(p).toBeGreaterThanOrEqual(0);
       expect(p).toBeLessThanOrEqual(1);
     }
@@ -558,5 +559,45 @@ describe('the level the first empty bar points back to', () => {
     expect(HEALTH_COPY.firstEmptyLead).toMatch(/free/);
     expect(HEALTH_COPY.firstEmptyPlay).toMatch(/three stars/);
     expect(HEALTH_COPY.firstEmptyMastered).toMatch(/three stars/);
+  });
+});
+
+describe('the spare heart', () => {
+  it('takes a reward heart onto the bar while it has room, holds one spare above a full bar, and refuses a second', () => {
+    const half = grantRewardHeart(full({ hearts: 3, refillStartedAt: T0 }), T0);
+    expect(half.granted).toBe(true);
+    expect(half.health).toMatchObject({ hearts: 4, spare: 0 });
+    const spare = grantRewardHeart(full(), T0);
+    expect(spare.granted).toBe(true);
+    expect(spare.health).toMatchObject({ hearts: HEALTH.max, spare: 1, refillStartedAt: null });
+    const again = grantRewardHeart(spare.health, T0);
+    expect(again.granted).toBe(false);
+    expect(again.health.spare).toBe(HEALTH.spareMax);
+    expect(healthHud(viewHealth(spare.health, T0))).toEqual({ count: '5/5', wait: null, spare: '+1' });
+  });
+
+  it('is spent before the bar, leaving the bar and its clock alone, and survives a reload', () => {
+    const storage = memoryStorage();
+    const held = grantRewardHeart(full(), T0).health;
+    expect(saveHealth(held, storage)).toBe(true);
+    expect(loadHealth(storage, T0).spare).toBe(1);
+    const begun = beginAttempt(held, ROAD, PAID, 'spare-run', T0);
+    expect(begun).toMatchObject({ ok: true, spent: true });
+    expect(begun.health).toMatchObject({ hearts: HEALTH.max, spare: 0, refillStartedAt: null, spentAttempt: 'spare-run' });
+    // An empty bar with a spare can still begin; the refund goes to the bar, never above it.
+    const low = { ...full({ hearts: 0, refillStartedAt: T0 }), spare: 1 };
+    expect(canBeginAttempt(low, ROAD, PAID, T0)).toBe(true);
+    const kept = finishAttempt(beginAttempt(full(), ROAD, PAID, 'k', T0).health, 'k', 2, T0).health;
+    expect(kept).toMatchObject({ hearts: HEALTH.max, spare: 0 });
+    const keptSpare = finishAttempt(beginAttempt(held, ROAD, PAID, 'k2', T0).health, 'k2', 2, T0).health;
+    expect(keptSpare).toMatchObject({ hearts: HEALTH.max, spare: 0 });
+  });
+
+  it('reads only a whole spare of 0 or 1 from storage; anything else is none', () => {
+    expect(loadHealth(memoryStorage({ 'tiny-tempo.health.v1': '{"hearts":5,"spare":3}' }), T0).spare).toBe(1);
+    expect(loadHealth(memoryStorage({ 'tiny-tempo.health.v1': '{"hearts":5,"spare":"x"}' }), T0).spare).toBe(0);
+    expect(loadHealth(memoryStorage({ 'tiny-tempo.health.v1': '{"hearts":5,"spare":-1}' }), T0).spare).toBe(0);
+    expect(loadHealth(memoryStorage({ 'tiny-tempo.health.v1': '{"hearts":5}' }), T0).spare).toBe(0);
+    expect(loadHealth(memoryStorage({ 'tiny-tempo.health.v1': '{"hearts":9}' }), T0).hearts).toBe(HEALTH.max);
   });
 });

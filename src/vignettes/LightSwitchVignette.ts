@@ -19,7 +19,7 @@ export class LightSwitchVignette extends HouseholdVignette {
 
   protected draw(now: number, ending: number): void {
     const g = this.art.clear();
-    const reveal = roomReveal(ending, this.successful);
+    const reveal = roomReveal(ending, this.successful, this.still);
     const on = ending >= 0 ? this.successful : this.strokes % 2 === 1;
     const switchPulse = contactPulse(ending >= 0 ? ending : now - this.strikeAt, 0.16);
     const room = (colour: number) => mix(0x293840, colour, reveal);

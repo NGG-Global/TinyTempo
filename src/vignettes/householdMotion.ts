@@ -22,6 +22,12 @@ export function doorOpening(age: number, successful: boolean, still = false): nu
   return successful ? easeOut((age - (still ? 0 : 0.16)) / (still ? 0.15 : 0.82)) : 0;
 }
 
-export function roomReveal(age: number, successful: boolean): number {
-  return successful ? easeOut((age - 0.12) / 0.95) : 0;
+/**
+ * How much of the lit room has come up. Under reduced motion the room is simply on from
+ * the contact — the step the errands' cards and bell boy take — rather than fading in over
+ * a second; this was the one household coda that still faded with motion reduced.
+ */
+export function roomReveal(age: number, successful: boolean, still = false): number {
+  if (!successful) return 0;
+  return still ? (age >= 0 ? 1 : 0) : easeOut((age - 0.12) / 0.95);
 }

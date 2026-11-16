@@ -39,7 +39,7 @@ code and accepts one back, which covers cleared data, a lost device and a suppor
 email. Restoring merges, so it can only ever add. Backup rules are file-level and
 every key shares one LevelDB store — progress, settings, the tutorial, the teach
 flags, hearts, the refill ledger, the daily heart, the premium cache, daily
-objectives, and the Daily Tempo best (unused while that mode is off) — so the
+objectives, the Daily Tempo best and the day's rewards record — so the
 premium cache could not be excluded. It is bounded instead, and a restored backup
 can no longer grant Premium forever. See `docs/SAVES.md`. What is left needs
 hardware: take and restore a real backup.
@@ -50,8 +50,8 @@ stars, gates, the tutorial, finales, the Scrapbook, objectives) reach Google
 Analytics for Firebase through `@capacitor-firebase/analytics`, behind the same
 split crash reporting uses: `analytics/eventShape.ts` holds Firebase's limits as
 pure functions, and `analytics/firebase.ts` is the only file that knows the
-vendor. Play Games leaderboard events are on the same bus and are not sent while
-`DAILY_TEMPO_AVAILABLE` is false. Worth being precise about what the commerce
+vendor. Play Games leaderboard events are on the same bus, sent from the Daily
+Tempo's result (`docs/DAILY_TEMPO.md`). Worth being precise about what the commerce
 events bought: Play Console already reported purchases and AdMob already reported
 impressions, so what was invisible was the **top** of the funnel — offers shown,
 and the players who declined. Settings → Privacy carries a **Share usage data**
@@ -87,9 +87,9 @@ authored RTL. Hebrew is an obvious first candidate given where this is written.
 **7. ~~No Play Games Services.~~ Sign-in, achievements and Saved Games are in; two-device behaviour needs hardware.**
 Play Games Services v2 authenticates on Android and is never required to play.
 Five achievements unlock from clearing levels 10–50 and are derived from the
-save, so an old save is owed them on the first signed-in launch. One leaderboard
-id exists for a Daily Tempo that does not: `DAILY_TEMPO_AVAILABLE` is false, so
-nothing is submitted and no button shows. Saved Games carries earned progression
+save, so an old save is owed them on the first signed-in launch. The Daily Tempo
+leaderboard is fed by the mode's result and opened from its card; it has not been
+watched on a native build yet. Saved Games carries earned progression
 and one-time lessons in one snapshot per player, merges rather than replaces,
 resolves Play's conflicts with the same merge, and keeps two Play Games accounts
 on one device apart (`docs/CLOUD_SAVE.md`). The player id crosses the bridge and
@@ -284,6 +284,12 @@ these is a blocker — but none has been run on a device.
 - [ ] **Confirm the unit is a rewarded unit** in the AdMob console. An ad unit ID does
       not encode its format, the adapter only ever calls `prepareRewardVideoAd`, and a
       unit of any other format fails to load rather than saying why.
+- [ ] **Unity Ads mediation mapping.** The Unity SDK and Google's adapter are in the build
+      (`docs/UNITY_MEDIATION.md`), but Unity bids only once the rewarded unit's mediation
+      group in AdMob has **Unity Ads (bidding)** with the Unity game id and placement id.
+      Those ids live in AdMob and nowhere in this repository. Add Unity Ads to the GDPR
+      message's ad partners, and decide whether to publish a **US states** message — it is
+      the only source of the US opt-out the game forwards to Unity.
 - [ ] **UMP Privacy & messaging.** Create a GDPR (EEA/UK) message for the Android app
       and enable the privacy options form on it. Settings only shows **Ad privacy**
       while `privacyOptionsRequirementStatus` is `REQUIRED`; without that message the
@@ -316,9 +322,32 @@ these is a blocker — but none has been run on a device.
       price returns no offer, and the game leaves a product with no localized price out of
       the catalogue rather than showing a guessed one — the button simply reports the
       store as unavailable.
-- [ ] Link the AdMob app to the Play listing.
-- [ ] Publish `app-ads.txt` at the root of your developer-website domain and
-      declare that domain in AdMob. The live site is `tinytempo.games`.
+- [ ] **Link the AdMob app the build uses to the Play listing**: `…~3245294136`, the one
+      holding the rewarded unit. A second AdMob app (`…~2309485949`, "Tiny Tempo: Rhythm…")
+      was created and linked to `com.tinytempo.app` instead; no build references it and it
+      has no ad units. A package can be linked to one AdMob app at a time, so clear that
+      app's store details first (App settings → App store details → Clear store details),
+      then Add store on `…~3245294136`, and hide the other under App visibility.
+- [ ] Publish `app-ads.txt` at the root of your developer-website domain. The live
+      site is `tinytempo.games`, and the Pages workflow serves `legal/app-ads.txt` at
+      `https://tinytempo.games/app-ads.txt`.
+- [ ] **Set the Play listing's Website to `https://tinytempo.games`** (Store settings →
+      Store listing contact details). AdMob takes no domain of its own: it crawls
+      `/app-ads.txt` on the *hostname* of this field. A `ngg-global.github.io/TinyTempo/`
+      URL there sends the crawler to `ngg-global.github.io/app-ads.txt`, which does not
+      exist — the 301 to `tinytempo.games` is on the path, not the root — and the app
+      stays unverified. AdMob can take up to 24 hours to see a changed listing.
+- [x] ~~**Add Unity's app-ads.txt lines.**~~ Done — Unity's list is in `legal/app-ads.txt`
+      under Google's line, as its dashboard generated it.
+- [ ] **Add `OWNERDOMAIN` to `legal/app-ads.txt`**, which Unity requires: the owner's business
+      domain, matching the seller domain in sellers.json (`docs/UNITY_MEDIATION.md`). Never a
+      guessed one.
+- [ ] **Interstitial**: confirm the unit `ca-app-pub-6818267616933452/6246850626` is an
+      *Interstitial* unit under the app `…~3245294136`, set its frequency cap on the unit (not
+      the app — an app cap counts rewarded ads too), and add Unity Ads (bidding) to its
+      mediation group. On a release build from Play, clear three levels past 10 and check
+      that one plays on the third Continue and that the map follows when it closes
+      (`docs/INTERSTITIAL.md`).
 - [ ] Set up a merchant account for paid distribution.
 - [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
       APK never sees an update; that is Play's rule, not a bug. Ship a higher
@@ -368,14 +397,17 @@ the pinned SDK. None of this has run between two real devices.
 ### F. Play Console — the forms that get apps rejected
 
 - [ ] **Data Safety.** Declare what the SDKs collect, not what your code does:
-      AdMob collects device and advertising identifiers; Google Play processes the
+      AdMob collects device and advertising identifiers; **Unity Ads**, mediated by AdMob,
+      is a second ad SDK in the bundle and collects device and advertising identifiers and
+      ad interaction data under Unity's own policy (*review against Unity's current
+      Data safety guidance*); Google Play processes the
       purchases and the app keeps no purchase history of its own; **Sentry now receives crash
       reports** — declare these under Crash logs and Diagnostics. **Firebase
       Analytics now receives the commerce events and the gameplay events** (levels,
       stars, gates, tutorial, finales, Scrapbook, objectives) plus the device, app
       and app-instance information Firebase collects itself — declare these under
       App activity and Diagnostics, and note the Settings switch as the user
-      control. Leaderboard events are not sent while Daily Tempo is off. **Play
+      control. Leaderboard events are sent from the Daily Tempo's result. **Play
       Games** receives the player id and display name when the player is signed
       in, achievement unlocks, and **the saved game**: unlocked levels, best accuracy
       per level and one-time lesson flags, stored in the player's Play Games account
@@ -423,6 +455,10 @@ the pinned SDK. None of this has run between two real devices.
       your phones' hashed ids in `VITE_ADMOB_TEST_DEVICES` (Logcat prints a phone's id the
       first time it requests an ad) or register them in the AdMob console.
 - [ ] Watch a real rewarded ad and confirm the heart lands.
+- [ ] **Unity Ads through Ad Inspector**: single ad source testing with *Unity Ads
+      (Bidding)* on the rewarded unit, with Unity's test mode on for the device; then test
+      mode off in AdMob and Unity before promoting. The full list is in
+      `docs/UNITY_MEDIATION.md`.
 - [ ] Exercise the AdMob consent form in an EEA/UK locale.
 - [ ] Confirm Settings → Privacy shows **Ad privacy** in that locale, that the
       privacy-options form opens from it, and that refusing or withdrawing consent

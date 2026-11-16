@@ -15,6 +15,15 @@ export interface LevelOutcome {
   readonly progress: Progress;
 }
 
+/**
+ * `small-acts` was the project's working name before Tiny Tempo. The three keys that still
+ * carry it — this one, `TEACH_KEY` below and the tutorial's in `game/TutorialRun.ts` — are
+ * the ones written by every build players have installed, so the name is frozen: renaming
+ * one without a migration empties every installed save, and a migration is a second read
+ * path on every launch forever, for nothing a player would see. Every key added since is
+ * `tiny-tempo.*` (`docs/SAVE_REVIEW.md` lists them all); `cloudSave.ts`'s `tiny-tempo.cloud`
+ * is a hash salt, not a key.
+ */
 const KEY = 'small-acts.progress.v1';
 /** Written but not required on read, so a future migration has something to branch on. */
 const VERSION = 1;
@@ -107,6 +116,34 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
 }
 
 /**
+ * The reset generation: how many times this progression has been reset, carried in the
+ * cloud save (`playgames/cloudSave.ts`) so a reset reaches the player's other devices.
+ *
+ * The cloud only ever adds, which is right for every merge but one: a progression the
+ * player has deliberately thrown away came straight back on the next sync, so Reset held
+ * for exactly one level. The generation is the one fact a merge reads before it adds —
+ * the side with the higher one wins whole, and the other side's progression is the past.
+ * It is a counter, not a clock: two devices' clocks disagree, and a reset on a device that
+ * has synced knows the generation the cloud holds, since the sync wrote it here.
+ */
+const RESET_KEY = 'tiny-tempo.reset.v1';
+/** More resets than a lifetime of play; a bound on a tampered value. */
+const MAX_RESET_GENERATION = 1_000_000;
+
+export function resetGeneration(storage: Storage | null = safeStorage()): number {
+  try {
+    const value = Number(storage?.getItem(RESET_KEY) ?? 0);
+    return Number.isInteger(value) && value >= 0 && value <= MAX_RESET_GENERATION ? value : 0;
+  } catch { return 0; }
+}
+
+/** Set the stored generation exactly, as a sync does when the cloud's is newer. False means nothing was written. */
+export function setResetGeneration(generation: number, storage: Storage | null = safeStorage()): boolean {
+  const value = Number.isInteger(generation) ? Math.max(0, Math.min(MAX_RESET_GENERATION, generation)) : 0;
+  try { storage?.setItem(RESET_KEY, String(value)); return storage !== null; } catch { return false; }
+}
+
+/**
  * The first-run teach: the flags for what the player has been shown once, and none of
  * them earned progress.
  *
@@ -116,7 +153,13 @@ export function clearProgress(storage: Storage | null = safeStorage()): boolean 
  * save code carries what a player earned, and the same reasoning already keeps the
  * tutorial flag out of it.
  */
+/** The old working name, frozen for the reason given at `KEY`. */
 const TEACH_KEY = 'small-acts.teach.v1';
+
+/** The teach flags, every one of them cleared: a reset player is a new player. */
+export function clearTeachFlags(storage: Storage | null = safeStorage()): boolean {
+  try { storage?.removeItem(TEACH_KEY); return storage !== null; } catch { return false; }
+}
 
 /** Has the one-cycle demonstration pass already played? It runs once, ever. */
 export function seenDemonstration(storage: Storage | null = safeStorage()): boolean {
@@ -199,7 +242,7 @@ export function markScreenHintSeen(id: ScreenHintId, storage: Storage | null = s
  * unlock rule on the map — stay until the puck has been opened once. Device-local, as the
  * screen hints are. The Scrapbook's label goes with its screen hint, not with a flag of its own.
  */
-export type LabelledPuck = 'objectives' | 'endless';
+export type LabelledPuck = 'objectives' | 'endless' | 'store';
 
 export function seenPuck(puck: LabelledPuck, storage: Storage | null = safeStorage()): boolean {
   return readTeach(storage)[PUCK_FLAG[puck]] === true;
@@ -210,7 +253,7 @@ export function markPuckSeen(puck: LabelledPuck, storage: Storage | null = safeS
   return writeTeach(storage, { [PUCK_FLAG[puck]]: true });
 }
 
-const PUCK_FLAG = { objectives: 'puckObjectives', endless: 'puckEndless' } as const satisfies Record<LabelledPuck, TeachFlag>;
+const PUCK_FLAG = { objectives: 'puckObjectives', endless: 'puckEndless', store: 'puckStore' } as const satisfies Record<LabelledPuck, TeachFlag>;
 
 const SCREEN_HINT_FLAG = {
   scrapbook: 'hintScrapbook',
@@ -222,7 +265,7 @@ const SCREEN_HINT_FLAG = {
 /** Every flag the teach object may carry. Anything else in it is dropped on the next write. */
 export const TEACH_FLAGS = [
   'seen', 'replayTip', 'triplet', 'sixteenth', 'scrapbook', 'offbeat', 'longPhrase',
-  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless', 'lastOffbeat', 'hintReminder',
+  'hintScrapbook', 'hintSettings', 'hintEndless', 'puckObjectives', 'puckEndless', 'lastOffbeat', 'hintReminder', 'puckStore',
 ] as const;
 export type TeachFlag = typeof TEACH_FLAGS[number];
 type Teach = { readonly [K in TeachFlag]?: unknown };

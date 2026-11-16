@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CalibrationRun, CALIBRATION } from '../src/game/CalibrationRun';
 import { CALIBRATION_TAPS } from '../src/game/settings';
+import { instructionCopy, type CalibrationPhase } from '../src/game/calibrationCopy';
 
 function measure(offsets: number[], current = 0): CalibrationRun {
   const run = new CalibrationRun(10, current);
@@ -66,5 +67,25 @@ describe('what a run says about itself', () => {
     if (steady.kind === 'measured') { expect(steady.residualMs).toBeCloseTo(92, 6); expect(steady.spreadMs).toBeLessThan(5); }
     expect(measure(Array(8).fill(0)).spreadMs).toBe(0);
     expect(new CalibrationRun(1, 0).spreadMs).toBe(0);
+  });
+});
+
+describe('the instruction line', () => {
+  it('says what to do in every phase, and names the control that does it', () => {
+    expect(instructionCopy('idle', false)).toMatch(/Start/);
+    expect(instructionCopy('idle', false)).toMatch(/every click/);
+    expect(instructionCopy('idle', true)).toMatch(/Check/);
+    expect(instructionCopy('idle', true)).toMatch(/Spot on/);
+    expect(instructionCopy('counting', false)).toMatch(/every click/);
+    expect(instructionCopy('counting', false)).toMatch(/eight/);
+    expect(instructionCopy('measured', false)).toMatch(/Keep/);
+    expect(instructionCopy('measured', false)).toMatch(/Retry/);
+    expect(instructionCopy('failed', false)).toMatch(/Retry/);
+    expect(instructionCopy('failed', false)).toMatch(/Nothing was saved/);
+    // Every phase reads differently, and short enough for three lines on a handset.
+    const phases: CalibrationPhase[] = ['idle', 'counting', 'measured', 'failed'];
+    const lines = phases.map(phase => instructionCopy(phase, false));
+    expect(new Set(lines).size).toBe(lines.length);
+    for (const line of [...lines, instructionCopy('idle', true)]) expect(line.length).toBeLessThanOrEqual(125);
   });
 });

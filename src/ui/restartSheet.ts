@@ -2,33 +2,49 @@ import Phaser from 'phaser';
 import { STYLE } from '../config/style';
 import { PALETTE, SHELL } from '../config/theme';
 import { RESTARTS } from '../game/dailyRestarts';
-import { REPLAY_TIMERS, type TimerProductId } from '../game/replayTimer';
+import { REPLAY_TIMERS, timerOption, type ShelfItemView, type TimerProductId } from '../game/replayTimer';
 import type { RestartSheetKind } from '../game/restart';
 import { STORE_COPY } from '../monetization/copy';
 import { shade } from './colour';
 import { drawChevron, drawPlay, drawRestart, drawTimer } from './icons';
+import { drawTimerToken } from './timerToken';
 import { BRASS, drawPanel } from './panel';
 import { body, display, label, resize } from './type';
 
 /**
  * The words, in one place. What a restart costs is said before anything is spent, and only
  * where something will be: the free sheet says nothing is used, the daily sheet how many of
- * today's restarts it takes, and the empty one what the ad is for — and, under it, that a
- * replay timer makes every restart free for a while. The picker names the four and their
- * prices, and a tap on one buys it and restarts.
+ * today's restarts it takes, and the empty one offers, in order, the timers already on the
+ * player's shelf (each with Start & restart), the ad, and a replay timer to buy. The picker
+ * names the four lengths and their prices; its one action buys the length picked and
+ * restarts at once — the one place a purchase starts without a second tap.
  */
 export const RESTART_COPY = {
   free: { title: 'Restart from the beginning?', note: 'No restart will be used.', confirm: 'Restart' },
   daily: { title: 'Restart level?', confirm: 'Restart' },
   empty: { title: 'No restarts left', note: `Watch an ad to restart now. ${RESTARTS.daily} more tomorrow.`, confirm: 'Watch ad & Restart' },
-  timers: { title: STORE_COPY.timersHeadline, note: STORE_COPY.timerPick, confirm: '' },
-  /** The empty sheet's second way: the brass block that opens the picker. */
+  timers: { title: STORE_COPY.timersHeadline, note: STORE_COPY.timersTerms, confirm: 'Buy & restart' },
+  /** The empty sheet's brass block, which opens the picker. */
   timer: { title: STORE_COPY.timerShort, note: 'Unlimited restarts for a while' },
+  /** The shelf rows over the choices on the empty sheet. */
+  fromShelf: 'From your shelf',
+  startRestart: 'Start & restart',
+  or: 'Or',
+  adSeconds: STORE_COPY.watchTerms,
+  wonToday: 'Won today',
+  boughtKeeps: 'Bought · keeps until you start it',
   keep: 'Keep playing',
   back: 'Back',
   watching: 'Waiting for the ad…',
   buying: 'Waiting for the store…',
 } as const;
+
+/** A shelf row's two lines: "40 min timer", then where it came from and its window. */
+export function shelfRowCopy(item: ShelfItemView): { readonly title: string; readonly note: string } {
+  const title = `${item.label} timer`;
+  if (item.source === 'won') return { title, note: `${RESTART_COPY.wonToday} · ${(item.startWithin ?? '').replace(/^Start/, 'start')}` };
+  return { title, note: RESTART_COPY.boughtKeeps };
+}
 
 /** The daily sheet's note: what this restart takes from today's, said in plain numbers. */
 export function dailyNote(left: number): string {
@@ -50,9 +66,10 @@ export function fromPrice(price: (product: TimerProductId) => string | null): st
 
 /**
  * What a tap on the sheet asked for. `swallow` is the sheet itself, or a tap too soon after
- * it changed; `timers` opens the picker; `buy` is one of its rows.
+ * it changed; `timers` opens the picker; `pick` chooses a length on it, and its `confirm`
+ * buys that length and restarts; `start` is a held timer from the shelf.
  */
-export type RestartSheetTap = 'confirm' | 'keep' | 'timers' | 'swallow' | { readonly buy: TimerProductId };
+export type RestartSheetTap = 'confirm' | 'keep' | 'timers' | 'swallow' | { readonly pick: TimerProductId } | { readonly start: string };
 
 /**
  * Seconds a changed sheet ignores taps for. The sheet can change under a thumb — the
@@ -68,8 +85,14 @@ const SHEET = Object.freeze({
   noteSize: 24,
   confirmH: 104,
   timerH: 96,
+  /** The picker's four length chips, in one row. */
   optionH: 86,
   optionGap: 12,
+  /** A shelf row: a token, two lines and Start & restart. */
+  shelfRowH: 92,
+  shelfGap: 10,
+  eyebrowH: 30,
+  dividerH: 34,
   keepH: 84,
   gap: 16,
   chipW: 112,
@@ -83,11 +106,16 @@ export interface RestartSheetLayout {
   readonly titleY: number;
   readonly noteY: number;
   readonly feedbackY: number;
-  /** The one action. Zero-sized on the picker, which has none. */
+  /** The empty sheet's shelf rows, one per held timer, and the eyebrow over them; empty elsewhere. */
+  readonly shelfRows: readonly { readonly id: string; readonly rect: SheetRect }[];
+  readonly eyebrowY: number | null;
+  /** The "Or" between the shelf and the other ways; null without shelf rows. */
+  readonly dividerY: number | null;
+  /** The one action: Restart, Watch ad & Restart, or the picker's Buy & restart. */
   readonly confirm: SheetRect;
   /** The empty sheet's timer block; zero-sized elsewhere. */
   readonly timer: SheetRect;
-  /** The picker's rows, one per `REPLAY_TIMERS` entry; empty elsewhere. */
+  /** The picker's length chips, one per `REPLAY_TIMERS` entry, in one row; empty elsewhere. */
   readonly options: readonly SheetRect[];
   readonly keep: SheetRect;
 }
@@ -104,19 +132,22 @@ const NONE: SheetRect = { x: 0, y: 0, width: 0, height: 0 };
 export function restartSheetLayout(
   frame: { readonly centerX: number; readonly bottom: number; readonly maxWidth: number; readonly s: number; readonly control: number },
   kind: RestartSheetKind = 'free',
+  shelf: readonly { readonly id: string }[] = [],
 ): RestartSheetLayout {
   const { s, control } = frame;
   const width = Math.min(SHEET.width * s, frame.maxWidth);
   const pad = SHEET.pad * s, gap = SHEET.gap * s;
   const picker = kind === 'timers';
-  const confirmH = picker ? 0 : Math.max(SHEET.confirmH * s, control);
+  const held = kind === 'empty' ? shelf : [];
+  const confirmH = Math.max(SHEET.confirmH * s, control);
   const timerH = kind === 'empty' ? Math.max(SHEET.timerH * s, control) : 0;
   const optionH = picker ? Math.max(SHEET.optionH * s, control) : 0;
   const optionGap = SHEET.optionGap * s;
-  const optionsH = picker ? optionH * REPLAY_TIMERS.length + optionGap * (REPLAY_TIMERS.length - 1) : 0;
+  const shelfRowH = Math.max(SHEET.shelfRowH * s, control), shelfGap = SHEET.shelfGap * s;
+  const shelfH = held.length > 0 ? SHEET.eyebrowH * s + held.length * shelfRowH + (held.length - 1) * shelfGap + SHEET.dividerH * s : 0;
   const keepH = Math.max(SHEET.keepH * s, control);
   const words = (SHEET.titleSize + 14 + SHEET.noteSize + 12 + 26) * s;
-  const stack = (picker ? optionsH : confirmH) + (timerH > 0 ? gap + timerH : 0);
+  const stack = shelfH + (picker ? optionH + gap : 0) + confirmH + (timerH > 0 ? gap + timerH : 0);
   const height = pad + words + gap + stack + gap + keepH + pad;
   const x = frame.centerX - width / 2;
   const y = frame.bottom - height;
@@ -125,19 +156,32 @@ export function restartSheetLayout(
   const noteY = titleY + (SHEET.titleSize / 2 + 14 + SHEET.noteSize / 2) * s;
   const feedbackY = noteY + (SHEET.noteSize / 2 + 12 + 10) * s;
   let cursor = y + pad + words + gap;
-  const confirm = picker ? NONE : { x: x + pad, y: cursor, width: inner, height: confirmH };
-  cursor += picker ? 0 : confirmH;
+  const shelfRows: { id: string; rect: SheetRect }[] = [];
+  let eyebrowY: number | null = null, dividerY: number | null = null;
+  if (held.length > 0) {
+    eyebrowY = cursor + SHEET.eyebrowH * s / 2;
+    cursor += SHEET.eyebrowH * s;
+    held.forEach((item, i) => {
+      shelfRows.push({ id: item.id, rect: { x: x + pad, y: cursor + i * (shelfRowH + shelfGap), width: inner, height: shelfRowH } });
+    });
+    cursor += held.length * shelfRowH + (held.length - 1) * shelfGap;
+    dividerY = cursor + SHEET.dividerH * s / 2;
+    cursor += SHEET.dividerH * s;
+  }
   const options: SheetRect[] = [];
   if (picker) {
+    const chipW = (inner - optionGap * (REPLAY_TIMERS.length - 1)) / REPLAY_TIMERS.length;
     REPLAY_TIMERS.forEach((_, i) => {
-      options.push({ x: x + pad, y: cursor + i * (optionH + optionGap), width: inner, height: optionH });
+      options.push({ x: x + pad + i * (chipW + optionGap), y: cursor, width: chipW, height: optionH });
     });
-    cursor += optionsH;
+    cursor += optionH + gap;
   }
+  const confirm = { x: x + pad, y: cursor, width: inner, height: confirmH };
+  cursor += confirmH;
   const timer = timerH > 0 ? { x: x + pad, y: cursor + gap, width: inner, height: timerH } : NONE;
   cursor += timerH > 0 ? gap + timerH : 0;
   const keep = { x: x + pad, y: cursor + gap, width: inner, height: keepH };
-  return { card: { x, y, width, height }, titleY, noteY, feedbackY, confirm, timer, options, keep };
+  return { card: { x, y, width, height }, titleY, noteY, feedbackY, shelfRows, eyebrowY, dividerY, confirm, timer, options, keep };
 }
 
 const within = (r: SheetRect, x: number, y: number): boolean =>
@@ -145,12 +189,13 @@ const within = (r: SheetRect, x: number, y: number): boolean =>
 
 /** The control a point lands on, or `swallow` on the card's face, or null off the card. */
 export function restartSheetHit(layout: RestartSheetLayout, x: number, y: number): RestartSheetTap | null {
+  for (const row of layout.shelfRows) if (within(row.rect, x, y)) return { start: row.id };
   if (within(layout.confirm, x, y)) return 'confirm';
   if (within(layout.keep, x, y)) return 'keep';
   if (within(layout.timer, x, y)) return 'timers';
   for (let i = 0; i < layout.options.length; i++) {
     const option = REPLAY_TIMERS[i];
-    if (option !== undefined && within(layout.options[i]!, x, y)) return { buy: option.product };
+    if (option !== undefined && within(layout.options[i]!, x, y)) return { pick: option.product };
   }
   return within(layout.card, x, y) ? 'swallow' : null;
 }
@@ -185,8 +230,19 @@ export class RestartSheet {
   private readonly timerFrom: Phaser.GameObjects.Text;
   private readonly optionLabels: readonly Phaser.GameObjects.Text[];
   private readonly optionPrices: readonly Phaser.GameObjects.Text[];
+  private readonly eyebrow: Phaser.GameObjects.Text;
+  private readonly divider: Phaser.GameObjects.Text;
+  private readonly shelfTitles: Phaser.GameObjects.Text[] = [];
+  private readonly shelfNotes: Phaser.GameObjects.Text[] = [];
+  private readonly shelfStarts: Phaser.GameObjects.Text[] = [];
+  private readonly shelfMinutes: Phaser.GameObjects.Text[] = [];
+  private readonly adSeconds: Phaser.GameObjects.Text;
+  private readonly makeText: (make: () => Phaser.GameObjects.Text) => Phaser.GameObjects.Text;
   private shown: RestartSheetKind | null = null;
   private left: number = RESTARTS.daily;
+  private shelf: readonly ShelfItemView[] = [];
+  /** The length the picker has chosen; the default is the hour, the store's own. */
+  private pickedProduct: TimerProductId = REPLAY_TIMERS[1]?.product ?? REPLAY_TIMERS[0]!.product;
   private layoutNow: RestartSheetLayout | null = null;
   private frame = { centerX: 0, bottom: 0, maxWidth: 0, s: 1, control: 88 };
   private busyCopy: string | null = null;
@@ -205,11 +261,17 @@ export class RestartSheet {
     this.timerLabel = words(() => display(scene, RESTART_COPY.timer.title, { size: 34, colour: SHELL.cream, outline: shade(BRASS, -0.62), align: 'left' }).setOrigin(0, 0.5));
     this.timerNote = words(() => body(scene, RESTART_COPY.timer.note, { size: 21, colour: shade(BRASS, -0.62), align: 'left' }).setOrigin(0, 0.5));
     this.timerFrom = words(() => label(scene, '', { size: 22, colour: SHELL.cream, align: 'center' }).setOrigin(0.5));
-    this.optionLabels = REPLAY_TIMERS.map(option => words(() => display(scene, option.label, { size: 32, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5)));
-    this.optionPrices = REPLAY_TIMERS.map(() => words(() => label(scene, '', { size: 24, colour: SHELL.cream, align: 'center' }).setOrigin(0.5)));
+    this.optionLabels = REPLAY_TIMERS.map(option => words(() => display(scene, option.short, { size: 24, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5)));
+    this.optionPrices = REPLAY_TIMERS.map(() => words(() => body(scene, '', { size: 18, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5)));
+    this.eyebrow = words(() => label(scene, RESTART_COPY.fromShelf, { size: 20, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5));
+    this.divider = words(() => label(scene, RESTART_COPY.or, { size: 20, colour: PALETTE.muted, align: 'center' }).setOrigin(0.5));
+    this.adSeconds = words(() => label(scene, RESTART_COPY.adSeconds, { size: 20, colour: PALETTE.muted, align: 'right' }).setOrigin(1, 0.5));
+    this.makeText = words;
   }
 
   public get kind(): RestartSheetKind | null { return this.shown; }
+  /** The length the picker's Buy & restart buys. */
+  public get picked(): TimerProductId { return this.pickedProduct; }
   public get open(): boolean { return this.shown !== null; }
   public get busy(): boolean { return this.busyCopy !== null; }
 
@@ -224,15 +286,17 @@ export class RestartSheet {
    * its way to the old button is swallowed rather than landing on the new one. `left` is
    * today's restarts still unused, which the daily sheet says.
    */
-  public show(kind: RestartSheetKind, now: number, left: number): void {
-    const changed = kind !== this.shown;
-    if (!changed && left === this.left) return;
+  public show(kind: RestartSheetKind, now: number, left: number, shelf: readonly ShelfItemView[] = []): void {
+    const shelfChanged = shelf.length !== this.shelf.length || shelf.some((item, i) => item.id !== this.shelf[i]?.id || item.startWithin !== this.shelf[i]?.startWithin);
+    const changed = kind !== this.shown || (kind === 'empty' && shelf.length !== this.shelf.length);
+    if (!changed && left === this.left && !shelfChanged) return;
     if (changed) {
       this.armedAt = now + RESTART_SHEET_ARM_SEC;
       this.feedback.setText('');
     }
     this.shown = kind;
     this.left = left;
+    this.shelf = shelf;
     this.draw();
   }
 
@@ -271,7 +335,19 @@ export class RestartSheet {
     return [
       this.plate, this.title, this.note, this.feedback, this.confirmLabel, this.chipLabel, this.keepLabel,
       this.timerLabel, this.timerNote, this.timerFrom, ...this.optionLabels, ...this.optionPrices,
+      this.eyebrow, this.divider, this.adSeconds, ...this.shelfTitles, ...this.shelfNotes, ...this.shelfStarts, ...this.shelfMinutes,
     ];
+  }
+
+  /** A shelf row's four texts, made the first time a row needs them and kept. */
+  private shelfTexts(i: number): { title: Phaser.GameObjects.Text; note: Phaser.GameObjects.Text; start: Phaser.GameObjects.Text; minutes: Phaser.GameObjects.Text } {
+    while (this.shelfTitles.length <= i) {
+      this.shelfTitles.push(this.makeText(() => display(this.plate.scene, '', { size: 28, colour: PALETTE.ink, align: 'left' }).setOrigin(0, 0.5)));
+      this.shelfNotes.push(this.makeText(() => body(this.plate.scene, '', { size: 19, colour: PALETTE.muted, align: 'left' }).setOrigin(0, 0.5)));
+      this.shelfStarts.push(this.makeText(() => label(this.plate.scene, RESTART_COPY.startRestart, { size: 19, colour: SHELL.cream, align: 'center' }).setOrigin(0.5)));
+      this.shelfMinutes.push(this.makeText(() => display(this.plate.scene, '', { size: 16, colour: PALETTE.ink, align: 'center' }).setOrigin(0.5)));
+    }
+    return { title: this.shelfTitles[i]!, note: this.shelfNotes[i]!, start: this.shelfStarts[i]!, minutes: this.shelfMinutes[i]! };
   }
 
   private draw(): void {
@@ -281,7 +357,7 @@ export class RestartSheet {
     this.layoutNow = null;
     if (kind === null) return;
     const { s } = this.frame;
-    const layout = restartSheetLayout(this.frame, kind);
+    const layout = restartSheetLayout(this.frame, kind, kind === 'empty' ? this.shelf : []);
     this.layoutNow = layout;
     const rect = (r: SheetRect) => new Phaser.Geom.Rectangle(r.x, r.y, r.width, r.height);
     const dim = this.busyCopy === null ? 1 : 0.55;
@@ -302,10 +378,14 @@ export class RestartSheet {
 
     if (kind === 'timers') {
       this.drawOptions(g, layout, s, dim);
+      this.drawBuy(g, layout, s, dim);
     } else {
       this.drawConfirm(g, layout, kind, s, dim);
     }
-    if (kind === 'empty') this.drawTimerBlock(g, layout, s, dim);
+    if (kind === 'empty') {
+      this.drawShelf(g, layout, s, dim);
+      this.drawTimerBlock(g, layout, s, dim);
+    }
 
     const k = layout.keep;
     drawPanel(g, rect(k), s, { fill: SHELL.bench, depth: 8 });
@@ -314,9 +394,74 @@ export class RestartSheet {
     resize(this.keepLabel, 32 * s, PALETTE.ink, STYLE.current, false);
   }
 
-  /** The one action: coral, with what it takes on a struck chip at its right end. */
+  /** The shelf rows: a token, the timer's name and where it came from, and Start & restart; then "Or". */
+  private drawShelf(g: Phaser.GameObjects.Graphics, layout: RestartSheetLayout, s: number, dim: number): void {
+    if (layout.eyebrowY !== null) this.eyebrow.setPosition(layout.card.x + SHEET.pad * s + 8 * s, layout.eyebrowY).setVisible(true);
+    resize(this.eyebrow, 20 * s, PALETTE.muted, STYLE.current, false);
+    layout.shelfRows.forEach((row, i) => {
+      const item = this.shelf[i];
+      if (!item) return;
+      const r = row.rect, cy = r.y + r.height / 2;
+      drawPanel(g, new Phaser.Geom.Rectangle(r.x, r.y, r.width, r.height), s, { fill: SHELL.puck, depth: 8, radius: 20 });
+      const tokenR = 24 * s, tokenX = r.x + 22 * s + tokenR;
+      drawTimerToken(g, tokenX, cy + 2 * s, tokenR, item.source, item.window, s);
+      const texts = this.shelfTexts(i);
+      texts.minutes.setText(item.compact).setPosition(tokenX, cy + 2 * s).setAlpha(dim).setVisible(true);
+      resize(texts.minutes, 15 * s, PALETTE.ink);
+      const copy = shelfRowCopy(item);
+      const copyX = tokenX + tokenR + 20 * s;
+      texts.title.setText(copy.title).setPosition(copyX, cy - 15 * s).setAlpha(dim).setVisible(true);
+      resize(texts.title, 27 * s, PALETTE.ink);
+      texts.note.setText(copy.note).setPosition(copyX, cy + 17 * s).setAlpha(dim).setVisible(true);
+      resize(texts.note, 19 * s, PALETTE.muted, STYLE.current, false);
+      // Start & restart: an ink block, since brass is for sale and coral is the level's one action.
+      const bw = Math.min(236 * s, r.width * 0.42), bh = Math.min(r.height - 20 * s, 64 * s);
+      const bx = r.x + r.width - 16 * s - bw;
+      drawPanel(g, new Phaser.Geom.Rectangle(bx, cy - bh / 2, bw, bh), s, { fill: PALETTE.ink, depth: 8, radius: 16 });
+      texts.start.setPosition(bx + bw / 2, cy).setAlpha(dim).setVisible(true);
+      resize(texts.start, 19 * s, SHELL.cream, STYLE.current, false);
+      texts.start.setScale(texts.start.width > bw - 16 * s ? (bw - 16 * s) / texts.start.width : 1);
+      const room = bx - 12 * s - copyX;
+      for (const text of [texts.title, texts.note]) text.setScale(text.width > room ? room / text.width : 1);
+    });
+    if (layout.dividerY !== null) {
+      const cx = layout.card.x + layout.card.width / 2;
+      this.divider.setPosition(cx, layout.dividerY).setVisible(true);
+      resize(this.divider, 20 * s, PALETTE.muted, STYLE.current, false);
+      const half = this.divider.width / 2 + 16 * s, span = layout.card.width / 2 - SHEET.pad * s;
+      g.lineStyle(2 * s, shade(SHELL.cream, -0.25), 1).lineBetween(cx - span, layout.dividerY, cx - half, layout.dividerY).lineBetween(cx + half, layout.dividerY, cx + span, layout.dividerY);
+    }
+  }
+
+  /** The picker's one action: brass, the length picked and its price, and it restarts at once. */
+  private drawBuy(g: Phaser.GameObjects.Graphics, layout: RestartSheetLayout, s: number, dim: number): void {
+    const c = layout.confirm;
+    drawPanel(g, new Phaser.Geom.Rectangle(c.x, c.y, c.width, c.height), s, { fill: BRASS, depth: 12, hero: true, frame: SHELL.cream });
+    const cy = c.y + c.height / 2;
+    const picked = timerOption(this.pickedProduct) ?? REPLAY_TIMERS[0]!;
+    const price = this.price(picked.product);
+    this.confirmLabel.setText(price === null ? `${RESTART_COPY.timers.confirm} · ${picked.label}` : `${RESTART_COPY.timers.confirm} · ${picked.label} · ${price}`)
+      .setOrigin(0.5, 0.5).setPosition(c.x + c.width / 2, cy).setAlpha(dim).setVisible(true);
+    resize(this.confirmLabel, 32 * s, SHELL.cream);
+    const room = c.width - 40 * s;
+    this.confirmLabel.setScale(this.confirmLabel.width > room ? room / this.confirmLabel.width : 1);
+  }
+
+  /** The one action: coral for a restart the player already has; the ad's row in the puck's colour, with its length beside it. */
   private drawConfirm(g: Phaser.GameObjects.Graphics, layout: RestartSheetLayout, kind: Exclude<RestartSheetKind, 'timers'>, s: number, dim: number): void {
     const c = layout.confirm;
+    if (kind === 'empty') {
+      // The ad is a way, not the way: cream, with the thirty seconds it costs at the right.
+      drawPanel(g, new Phaser.Geom.Rectangle(c.x, c.y, c.width, c.height), s, { fill: SHELL.puck, depth: 10, radius: 20 });
+      const cy = c.y + c.height / 2;
+      this.confirmLabel.setText(RESTART_COPY.empty.confirm).setOrigin(0, 0.5).setPosition(c.x + 26 * s, cy).setAlpha(dim).setVisible(true);
+      resize(this.confirmLabel, 32 * s, PALETTE.ink);
+      this.adSeconds.setPosition(c.x + c.width - 26 * s, cy).setAlpha(dim).setVisible(true);
+      resize(this.adSeconds, 20 * s, PALETTE.muted, STYLE.current, false);
+      const room = c.width - 52 * s - this.adSeconds.width - 16 * s;
+      this.confirmLabel.setScale(this.confirmLabel.width > room ? room / this.confirmLabel.width : 1);
+      return;
+    }
     drawPanel(g, new Phaser.Geom.Rectangle(c.x, c.y, c.width, c.height), s, { fill: PALETTE.coral, depth: 12, hero: true });
     const chip = kind !== 'free';
     const chipW = SHEET.chipW * s, chipH = SHEET.chipH * s;
@@ -365,27 +510,28 @@ export class RestartSheet {
     for (const text of [this.timerLabel, this.timerNote]) text.setScale(text.width > copyRoom ? copyRoom / text.width : 1);
   }
 
-  /** The picker: a cream row per timer, its length on the left and its price on a coral chip. */
+  /** The picker: four length chips in a row, the picked one in ink, each with its price under its name. */
   private drawOptions(g: Phaser.GameObjects.Graphics, layout: RestartSheetLayout, s: number, dim: number): void {
-    layout.options.forEach((row, i) => {
+    layout.options.forEach((chip, i) => {
       const option = REPLAY_TIMERS[i];
       const labelText = this.optionLabels[i], priceText = this.optionPrices[i];
       if (option === undefined || labelText === undefined || priceText === undefined) return;
-      drawPanel(g, new Phaser.Geom.Rectangle(row.x, row.y, row.width, row.height), s, { fill: SHELL.puck, depth: 8, radius: 20 });
-      const cy = row.y + row.height / 2;
-      drawTimer(g, row.x + 24 * s + 16 * s, cy, 16 * s, PALETTE.ink, dim);
-      labelText.setPosition(row.x + 24 * s + 32 * s + 16 * s, cy).setAlpha(dim).setVisible(true);
-      resize(labelText, 30 * s, PALETTE.ink, STYLE.current, false);
+      const chosen = option.product === this.pickedProduct;
+      drawPanel(g, new Phaser.Geom.Rectangle(chip.x, chip.y, chip.width, chip.height), s, { fill: chosen ? PALETTE.ink : SHELL.puck, depth: 8, radius: 18 });
+      const cx = chip.x + chip.width / 2, cy = chip.y + chip.height / 2;
+      labelText.setPosition(cx, cy - 13 * s).setAlpha(dim).setVisible(true);
+      resize(labelText, 24 * s, chosen ? SHELL.cream : PALETTE.ink);
       const price = this.price(option.product);
-      priceText.setText((price ?? 'Buy').toUpperCase()).setAlpha(dim).setVisible(true);
-      resize(priceText, 23 * s, SHELL.cream, STYLE.current, false);
-      const pw = Math.max(96 * s, priceText.width + 28 * s), ph = Math.min(row.height - 16 * s, 50 * s);
-      const px = row.x + row.width - 18 * s - pw;
-      g.fillStyle(shade(PALETTE.coral, -0.45), 1).fillRoundedRect(px, cy - ph / 2 + 3 * s, pw, ph, 14 * s);
-      g.fillStyle(PALETTE.coral, 1).fillRoundedRect(px, cy - ph / 2, pw, ph, 14 * s);
-      priceText.setPosition(px + pw / 2, cy);
-      const roomFor = px - 12 * s - labelText.x;
-      labelText.setScale(labelText.width > roomFor ? roomFor / labelText.width : 1);
+      priceText.setText(price ?? '').setPosition(cx, cy + 16 * s).setAlpha(dim).setVisible(price !== null);
+      resize(priceText, 18 * s, chosen ? SHELL.sun : PALETTE.muted, STYLE.current, false);
+      labelText.setScale(labelText.width > chip.width - 12 * s ? (chip.width - 12 * s) / labelText.width : 1);
     });
+  }
+
+  /** A length chosen on the picker: redrawn in place; nothing is bought until Buy & restart. */
+  public pick(product: TimerProductId): void {
+    if (product === this.pickedProduct) return;
+    this.pickedProduct = product;
+    this.draw();
   }
 }

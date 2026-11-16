@@ -8,16 +8,18 @@ Two Google Play Games Services leaderboards on top of the existing v2 authentica
 milliseconds — so they are two boards, never one, and `scripts/check-android-config.mjs`
 refuses them sharing an id.
 
-**Daily Tempo does not exist yet.** The leaderboard is created and its id is configured
-(`CgkI0Mey9o8ZEAIQAQ`, in `src/config/leaderboards.ts`), but `DAILY_TEMPO_AVAILABLE` in
-`src/config/dailyTempo.ts` is `false`, so in every current build nothing is submitted and no
-leaderboard button is shown. Everything below is built and tested; the mode that feeds it is
-the remaining piece.
+**Daily Tempo is shipped** (`docs/DAILY_TEMPO.md`): `DAILY_TEMPO_AVAILABLE` in
+`src/config/dailyTempo.ts` is `true`, the result of a run calls `recordDailyTempo` with the
+run's mean accuracy and its **start** time, and the card and the result carry the leaderboard
+puck where `dailyTempoLeaderboardOffered()` says it can open. The id is `CgkI0Mey9o8ZEAIQAQ`
+(`src/config/leaderboards.ts`). Turning the flag off darkens all of it at once.
 
 | File | What it holds |
 | --- | --- |
 | `src/config/leaderboards.ts` | The leaderboard id, and Play Games' daily reset offset. |
-| `src/config/dailyTempo.ts` | Whether Daily Tempo exists. |
+| `src/config/dailyTempo.ts` | Whether Daily Tempo is shipped, and the chart's and rewards' tuning. |
+| `src/game/dayKey.ts` | `dailyTempoDay` and what hangs off it: the one day key the chart, the rewards and the board share. |
+| `src/scenes/DailyScene.ts` | The mode: the card, the run and the result that submits. |
 | `src/playgames/leaderboard.ts` | Score conversion, id validation, the day's best, submission and retry rules. Pure. |
 | `src/playgames/dailyTempo.ts` | The same, wired to the installed adapter, storage and analytics. What scenes call. |
 | `src/playgames/playGames.ts`, `native.ts` | `submitScore` and `showLeaderboard` on the existing adapter and bridge. |
@@ -58,9 +60,9 @@ everyone: on local dates, players in different time zones would be posting diffe
 charts onto the same daily view, and a best kept until local midnight would reach Play
 Games after it had begun the next day's board. On UTC−7 the day's chart, the best kept for
 it and the board turn over at the same instant. The daily heart and the daily objectives
-stay on local time; they are the player's own day. (One consequence for later: the "Finish
+stay on local time; they are the player's own day. One consequence, decided: the "Finish
 today's Daily Tempo" objective counts on local time, so near midnight it can credit a run to
-the neighbouring objective day. That is cosmetic, and is worth settling when the mode ships.)
+the neighbouring objective day. That is cosmetic, and the objectives stay on the player's day.
 
 ## Best score only
 
@@ -102,8 +104,9 @@ The Settings → Progress row **Daily Tempo leaderboard** exists only when
 `dailyTempoLeaderboardOffered()` is true: a native build, a valid id, and Daily Tempo
 switched on. Signed out is not a reason to hide it. Tapping it is the **one place the game
 offers Play Games sign-in**, because the player asked; if they decline, or the screen will
-not open, the notice line says so once. The Daily Tempo result screen, when it exists,
-should show the same button through `openDailyTempoLeaderboard()`.
+not open, the notice line says so once. The Daily Tempo card and its result show the same
+through their leaderboard puck (`openDailyTempoLeaderboard()`), and the result's line under
+the score carries `submissionCopy`'s one line once the posting has an answer.
 
 ## Configuration
 

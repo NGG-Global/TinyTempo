@@ -40,7 +40,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Review offered on the first two-star finale', text: 'minStars', source: 'src/review/appReview.ts' },
   { feature: 'Tutorial opens on tapping along', text: '1 / 2 · TAP ALONG', source: 'src/scenes/TutorialScene.ts' },
   { feature: 'Tutorial step analytics', text: 'tutorial_step_ended', source: 'src/monetization/analytics.ts' },
-  { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/scenes/PlayScene.ts' },
+  { feature: 'Early or late beside the verdict', text: 'verdictTag', source: 'src/ui/turnWords.ts' },
   { feature: 'Android back button on every screen', text: 'handleBack', source: 'src/core/backButton.ts' },
   { feature: 'Silence while the app is in the background', text: 'setAppActive', source: 'src/audio/backgroundSilence.ts' },
   { feature: 'Analytics off until chosen where consent is required', text: 'analyticsChosen', source: 'src/game/settings.ts' },
@@ -60,7 +60,14 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'How to play moves to Settings after the lesson', text: 'Take the short lesson again', source: 'src/scenes/SettingsScene.ts' },
   { feature: 'Tap-to-open gates and area badges', text: 'Area badge collected', source: 'src/scenes/MapScene.ts' },
   { feature: 'The last-beat offbeat held to level 11, with its introduction', text: 'Ends after beat 4', source: 'src/game/conceptIntro.ts' },
+  { feature: 'Reset progress holds, on the device and across Play Games', text: 'tiny-tempo.reset.v1', source: 'src/game/progress.ts' },
+  { feature: 'Words over the first levels, and the ball through level 3', text: 'No ball this time', source: 'src/game/teachCopy.ts' },
   { feature: 'Replay timers for sale, Premium honoured but withdrawn', text: 'replay_timer_30m', source: 'src/monetization/types.ts' },
+  { feature: 'The Workshop store on the map, with the timer left', text: 'Restore purchases', source: 'src/monetization/copy.ts' },
+  { feature: 'US-state opt-outs passed to Unity Ads', text: 'UnityAdsPrivacy', source: 'src/monetization/native.ts' },
+  { feature: 'Timer shelf: bought timers are held and started by the player', text: 'Your timers', source: 'src/monetization/copy.ts' },
+  { feature: 'Daily Tempo', text: 'Free to play. No heart needed.', source: 'src/scenes/DailyScene.ts' },
+  { feature: 'Interstitial on a cleared level\'s Continue, paced', text: 'interstitial_shown', source: 'src/monetization/service.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

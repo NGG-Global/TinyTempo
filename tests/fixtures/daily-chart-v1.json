@@ -1,0 +1,434 @@
+{
+  "2026-10-23": {
+    "band": "steady",
+    "role": "tempo",
+    "areaStep": 4,
+    "actIndex": 15,
+    "vignette": "balloon",
+    "lap": 3,
+    "peakBpm": 138,
+    "maxTier": 1,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t0-2",
+        "bpm": 120,
+        "tier": 0,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t0-3",
+        "bpm": 124,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t0-0",
+        "bpm": 127,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-1",
+        "bpm": 131,
+        "tier": 1,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t1-2",
+        "bpm": 134,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-3",
+        "bpm": 138,
+        "tier": 1,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2026-10-24": {
+    "band": "steady",
+    "role": "combination",
+    "areaStep": 8,
+    "actIndex": 2,
+    "vignette": "bug",
+    "lap": 2,
+    "peakBpm": 134,
+    "maxTier": 3,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t1-0",
+        "bpm": 120,
+        "tier": 1,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t1-2",
+        "bpm": 123,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-2",
+        "bpm": 126,
+        "tier": 2,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-0",
+        "bpm": 128,
+        "tier": 2,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t3-2",
+        "bpm": 131,
+        "tier": 3,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t3-3",
+        "bpm": 134,
+        "tier": 3,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2026-10-25": {
+    "band": "steady",
+    "role": "pattern",
+    "areaStep": 2,
+    "actIndex": 10,
+    "vignette": "bubble",
+    "lap": 1,
+    "peakBpm": 126,
+    "maxTier": 3,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t1-1",
+        "bpm": 120,
+        "tier": 1,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t1-2",
+        "bpm": 121,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-2",
+        "bpm": 122,
+        "tier": 2,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-0",
+        "bpm": 124,
+        "tier": 2,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t3-3",
+        "bpm": 125,
+        "tier": 3,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t3-0",
+        "bpm": 126,
+        "tier": 3,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2026-11-01": {
+    "band": "steady",
+    "role": "endurance",
+    "areaStep": 5,
+    "actIndex": 0,
+    "vignette": "hammer",
+    "lap": 3,
+    "peakBpm": 126,
+    "maxTier": 2,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t0-2",
+        "bpm": 120,
+        "tier": 0,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t0-3",
+        "bpm": 121,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-3",
+        "bpm": 122,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-0",
+        "bpm": 124,
+        "tier": 1,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t2-3",
+        "bpm": 125,
+        "tier": 2,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-1",
+        "bpm": 126,
+        "tier": 2,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2026-12-25": {
+    "band": "steady",
+    "role": "tempo",
+    "areaStep": 4,
+    "actIndex": 12,
+    "vignette": "doorbell",
+    "lap": 2,
+    "peakBpm": 138,
+    "maxTier": 1,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t0-3",
+        "bpm": 120,
+        "tier": 0,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t0-1",
+        "bpm": 124,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t0-0",
+        "bpm": 127,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-0",
+        "bpm": 131,
+        "tier": 1,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t1-1",
+        "bpm": 134,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-3",
+        "bpm": 138,
+        "tier": 1,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2027-01-01": {
+    "band": "steady",
+    "role": "pattern",
+    "areaStep": 2,
+    "actIndex": 16,
+    "vignette": "stapler",
+    "lap": 2,
+    "peakBpm": 126,
+    "maxTier": 3,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t1-2",
+        "bpm": 120,
+        "tier": 1,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t1-1",
+        "bpm": 121,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-2",
+        "bpm": 122,
+        "tier": 2,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-0",
+        "bpm": 124,
+        "tier": 2,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t3-0",
+        "bpm": 125,
+        "tier": 3,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t3-2",
+        "bpm": 126,
+        "tier": 3,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2027-02-14": {
+    "band": "steady",
+    "role": "combination",
+    "areaStep": 7,
+    "actIndex": 4,
+    "vignette": "tomato",
+    "lap": 0,
+    "peakBpm": 132,
+    "maxTier": 3,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t1-2",
+        "bpm": 120,
+        "tier": 1,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t1-1",
+        "bpm": 122,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-1",
+        "bpm": 125,
+        "tier": 2,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t2-0",
+        "bpm": 127,
+        "tier": 2,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t3-0",
+        "bpm": 130,
+        "tier": 3,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t3-2",
+        "bpm": 132,
+        "tier": 3,
+        "leadBeats": 0
+      }
+    ]
+  },
+  "2027-07-04": {
+    "band": "steady",
+    "role": "tempo",
+    "areaStep": 4,
+    "actIndex": 1,
+    "vignette": "window",
+    "lap": 0,
+    "peakBpm": 138,
+    "maxTier": 1,
+    "clearAccuracy": 60,
+    "starAccuracy": [
+      60,
+      73,
+      87
+    ],
+    "tasks": [
+      {
+        "pattern": "t0-0",
+        "bpm": 120,
+        "tier": 0,
+        "leadBeats": 4
+      },
+      {
+        "pattern": "t0-2",
+        "bpm": 124,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t0-3",
+        "bpm": 127,
+        "tier": 0,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-2",
+        "bpm": 131,
+        "tier": 1,
+        "leadBeats": 16
+      },
+      {
+        "pattern": "t1-0",
+        "bpm": 134,
+        "tier": 1,
+        "leadBeats": 0
+      },
+      {
+        "pattern": "t1-3",
+        "bpm": 138,
+        "tier": 1,
+        "leadBeats": 0
+      }
+    ]
+  }
+}

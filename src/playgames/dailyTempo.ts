@@ -1,5 +1,6 @@
 import { DAILY_TEMPO_AVAILABLE } from '@/config/dailyTempo';
-import { LEADERBOARDS, PGS_DAILY_RESET_UTC_OFFSET_HOURS } from '@/config/leaderboards';
+import { LEADERBOARDS } from '@/config/leaderboards';
+import { dailyTempoDay } from '@/game/dayKey';
 import { track } from '@/monetization/analytics';
 import { playGames } from './boot';
 import { createDailyTempoLeaderboard, leaderboardId, type DailyTempoLeaderboard, type LeaderboardEvent } from './leaderboard';
@@ -19,22 +20,11 @@ import { stubPlayGames } from './playGames';
 const LEADERBOARD = 'daily_tempo';
 
 /**
- * The day a Daily Tempo result belongs to. **One function**, shared by the mode, the best
- * kept for the day and the leaderboard, so none of them can disagree about "today".
- *
- * It is the date on Play Games' own daily clock, UTC−7 all year, not the player's local
- * date. A daily leaderboard is one board for everyone: keyed to local midnight, a player
- * in Tokyo and one in London would be posting different days' charts onto the same daily
- * view, and a best kept until local midnight would be sent after Play Games had already
- * started the next day's board. On this clock the chart, the local best and the board all
- * turn over together. (The daily heart and the daily objectives stay on local time: they
- * are the player's own day, not a shared one.)
+ * The day a Daily Tempo result belongs to is `game/dayKey.ts`'s: one function, shared by the
+ * mode, the rewards, the best kept for the day and the leaderboard, so none of them can
+ * disagree about "today". Re-exported here so the leaderboard's callers keep one import.
  */
-export function dailyTempoDay(now: number = Date.now()): string {
-  const shifted = new Date(now + PGS_DAILY_RESET_UTC_OFFSET_HOURS * 3_600_000);
-  const y = shifted.getUTCFullYear(), m = shifted.getUTCMonth() + 1, d = shifted.getUTCDate();
-  return `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-}
+export { dailyTempoDay };
 
 function report(event: LeaderboardEvent): void {
   const flag = (value: boolean): 0 | 1 => (value ? 1 : 0);

@@ -40,7 +40,7 @@
             This policy describes how Dor Vadai (“we”, “us”) handles information
             in the Tiny Tempo Android app (package name <code>com.tinytempo.app</code>).
           </p>
-          <p class="meta">Effective date: 16 September 2026 · Last updated: 22 October 2026</p>
+          <p class="meta">Effective date: 16 September 2026 · Last updated: 23 October 2026</p>
         </div>
 
         <article class="document">
@@ -79,7 +79,7 @@
           <ul>
             <li>We do not ask you to create an account or give us your name or email in the app.</li>
             <li>Level progress, settings, hearts, daily restarts, a replay timer, a short-lived Premium cache, the tutorial, a few one-time prompts and the day’s objectives are saved on the device, and are included in Android’s backup to your own Google account.</li>
-            <li>Optional rewarded video ads are served by Google AdMob. Watching an ad can grant a heart.</li>
+            <li>Optional rewarded video ads are served through Google AdMob, which may fill an ad from another ad network it works with, such as Unity Ads. Watching an ad can grant a heart.</li>
             <li>Optional Google Play purchases (a heart refill and replay timers; an earlier one-time Premium unlock is honoured but no longer sold) are processed by Google Play Billing. We never see your full payment card details. There is no separate billing company in between.</li>
             <li>On Android the app can sign you into Google Play Games. That is optional: the game plays the same if you decline. While you are signed in, Google holds your Play Games player id and display name, we ask Google to unlock achievements you have earned, your best Endless Mode time is posted to a public Play Games leaderboard under your Play Games name, and your progression (levels, best accuracies and which one-time lessons you have seen) is stored in your Play Games account as a saved game so it follows you to another device. Hearts, purchases, settings and calibration are not part of it. We do not copy that id into analytics or crash reports.</li>
             <li>If the app hits an error, a crash report is sent to
@@ -170,6 +170,20 @@
             wait for a heart to regenerate or buy a refill, and for a restart
             you can wait for the next day’s allowance or buy a replay timer.
           </p>
+          <h3>Ad networks through AdMob mediation</h3>
+          <p>
+            AdMob decides which ad you see. Through AdMob mediation it can ask
+            other ad networks to bid for the same rewarded ad, and for Tiny Tempo
+            that includes <a href="https://unity.com/products/unity-ads">Unity Ads</a>,
+            run by Unity Technologies. The Unity Ads software is built into the
+            app for this purpose only: the app does not start it or request ads
+            from it on its own. AdMob starts it, and AdMob is started only once
+            the consent checks below allow ads to be requested. When Unity Ads
+            bids for or supplies an ad, it receives information from your device
+            much as Google does, and handles it under
+            <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity’s
+            Game Player and App User Privacy Policy</a>.
+          </p>
           <p>
             If ads are available, Google’s User Messaging Platform may show a
             consent message where required (for example under European privacy
@@ -178,15 +192,34 @@
             not serve those ads and continues to work without them.
           </p>
           <p>
-            Google and its advertising partners may collect device and advertising
-            identifiers (including the Android Advertising ID), IP address,
-            approximate location derived from IP, device and app information,
-            coarse diagnostic data, and information about the ad that was shown
-            or clicked. Their collection is governed by
+            The choices you make in that message also apply to Unity Ads. Where
+            European privacy law applies, Google’s software for Unity Ads passes
+            your answer on from the consent record the message keeps on your
+            device. Where the message lets you opt out of the sale or sharing of
+            your personal information, or of targeted advertising, under a US
+            state privacy law, the app passes that opt-out to Unity Ads itself,
+            when it starts and whenever you change your choices. Unity Ads keeps
+            that opt-out on the device: if you later withdraw it, Unity Ads goes
+            on treating you as opted out until the app’s storage is cleared.
+            Where the app shows <strong>Ad privacy</strong> in Settings, it
+            reopens these choices.
+          </p>
+          <p>
+            Google, Unity and other advertising partners may collect device and
+            advertising identifiers (including the Android Advertising ID), IP
+            address, approximate location derived from IP, device and app
+            information, coarse diagnostic data, and information about the ad
+            that was shown or clicked. Their collection is governed by
             <a href="https://policies.google.com/privacy">Google’s Privacy Policy</a>
-            and the partners in Google’s ads system. You can reset or opt out of
-            personalised ads in Android settings (Google → Ads, or the equivalent
-            on your device).
+            (see also <a href="https://policies.google.com/technologies/partner-sites">how
+            Google uses information from apps that use its services</a>),
+            <a href="https://unity.com/legal/game-player-and-app-user-privacy-policy">Unity’s
+            privacy policy</a> for the ads Unity Ads bids for or supplies, and the
+            policies of the other partners in Google’s ads system. You can reset
+            or opt out of personalised ads in Android settings (Google → Ads, or
+            the equivalent on your device). An ad supplied by Unity Ads may also
+            carry Unity’s own privacy icon, through which Unity takes requests
+            about the data it holds.
           </p>
 
           <h2 id="purchases">5. Purchases</h2>
@@ -362,7 +395,7 @@
           <h2 id="use">9. How information is used</h2>
           <ul>
             <li>On-device data: to run the game, remember progress, mute and calibration, hearts, restarts, the replay timer, and Premium on that device.</li>
-            <li>Advertising data (by Google and partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
+            <li>Advertising data (by Google, Unity Ads and other partners): to serve, measure and (where allowed) personalise rewarded ads, detect invalid traffic, and meet legal duties.</li>
             <li>Purchase data (by Google): to complete a purchase, grant or restore Premium, prevent a refill or a replay timer from being granted twice, and handle support requests you send us.</li>
             <li>Play Games data (by Google): to sign you in if you allow it, to record achievements you have earned, and to show your Endless Mode time on its leaderboard.</li>
             <li>Feedback you send from Settings → Help → Feedback: to decide what to fix and change. It goes to a form we run on Google Forms or, where the app has no form, by email, and it holds only what you write there.</li>
@@ -390,7 +423,7 @@
           <h2 id="sharing">10. Sharing</h2>
           <p>We share information only as follows:</p>
           <ul>
-            <li><strong>Advertising:</strong> Google AdMob and its partners, when a rewarded ad is requested or shown.</li>
+            <li><strong>Advertising:</strong> Google AdMob and its partners, including the ad networks AdMob mediates for this app, such as Unity Ads (Unity Technologies), when a rewarded ad is requested or shown.</li>
             <li><strong>Payments:</strong> Google Play, when you buy or restore.</li>
             <li><strong>Play Games:</strong> Google, when you are signed in, for the player id, display name, achievement unlocks and Endless leaderboard time described in section 6. Your leaderboard entry is visible to other Play Games players.</li>
             <li><strong>Feedback:</strong> Google, through Google Forms, for what you write in the feedback form.</li>
@@ -399,7 +432,7 @@
             <li><strong>Legal:</strong> if we are required to disclose information by law, regulation, or a valid legal process, or to protect the app, our users, or our rights.</li>
             <li><strong>Change of publisher:</strong> if Tiny Tempo is sold or transferred to another publisher, on-device data is not a hosted customer database that could change hands, but this policy and the app listing may transfer with it.</li>
           </ul>
-          <p>We do not sell personal information, and we do not share it for cross-context behavioural advertising for our own purposes beyond the AdMob rewarded-ad integration described here.</p>
+          <p>We do not sell personal information, and we do not share it for cross-context behavioural advertising for our own purposes beyond the rewarded-ad integration described here (AdMob and the ad networks it mediates).</p>
 
           <h2 id="retention">11. Retention</h2>
           <p>
@@ -416,7 +449,7 @@
           <h2 id="rights">12. Your choices and rights</h2>
           <ul>
             <li>Play without watching ads: wait for hearts or buy a refill; wait for tomorrow’s restarts or buy a replay timer.</li>
-            <li>Advertising preferences: use the in-ad or consent form choices where shown, and Android’s ad settings.</li>
+            <li>Advertising preferences: use the in-ad or consent form choices where shown (they apply to Unity Ads as well, as section 4 describes), and Android’s ad settings.</li>
             <li>Analytics: the <strong>Share usage data</strong> switch in Settings, under Privacy, turns the collection of usage events on and off at any time. Turning it off stops collection on that device.</li>
             <li>Progress: Reset in Settings clears saved level progress on that device.</li>
             <li>Purchases: manage Google Play purchases in your Google account. Restore Purchases restores a previously bought Premium only.</li>
@@ -436,9 +469,11 @@
           <p>
             If you are a California resident, we do not sell or share personal
             information as those terms are used in the CCPA/CPRA for our own
-            selling of data. AdMob may use identifiers for advertising as
-            described above. You can use Android ad controls and, where shown,
-            the consent form.
+            selling of data. AdMob, and the ad networks it mediates such as
+            Unity Ads, may use identifiers for advertising as described above.
+            You can use Android ad controls and, where shown, the consent form;
+            an opt-out you make there is passed to Unity Ads as section 4
+            describes.
           </p>
 
           <h2 id="children">13. Children</h2>
@@ -456,7 +491,8 @@
           <p>
             On-device data is only as protected as the device and any backup
             you enable. Traffic to Google and Sentry uses their HTTPS APIs.
-            Those companies may process data in the United States and other
+            Those companies, and Unity for the ads Unity Ads bids for or
+            supplies, may process data in the United States and other
             countries. Where required, they are responsible for their own
             transfer safeguards (for example Standard Contractual Clauses).
           </p>

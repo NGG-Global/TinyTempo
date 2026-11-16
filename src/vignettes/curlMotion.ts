@@ -78,14 +78,18 @@ export function pumpLevel(reps: number, targets: number): number {
 
 /** When the dropped weight first meets the mat, in seconds after it leaves the hand. The rough sound's thud is placed here. */
 export const DROP_LANDING_SEC = 0.3;
+/** The two bounces after it lands, smaller each time. */
+export const DROP_BOUNCE_SEC = { first: 0.3, second: 0.18 } as const;
+/** How long a chalk stroke takes to draw on. */
+export const CHALK_DRAW_SEC = 0.42;
 
 /**
  * The dropped weight in the rough coda: its height above where it comes to rest on the
  * mat, falling `from` figure units under gravity and bouncing twice, smaller each time.
  */
 export function dropHeight(age: number, from: number): number {
-  const firstSec = 0.3;
-  const secondSec = 0.18;
+  const firstSec = DROP_BOUNCE_SEC.first;
+  const secondSec = DROP_BOUNCE_SEC.second;
   if (age <= 0) return from;
   if (age < DROP_LANDING_SEC) return from * (1 - (age / DROP_LANDING_SEC) ** 2);
   const first = age - DROP_LANDING_SEC;
@@ -103,7 +107,7 @@ export function holdTremor(age: number): number {
 
 /** A chalk stroke drawn on: 0 before it starts, 1 complete. */
 export function chalkDraw(age: number): number {
-  return easeOut(age / 0.42);
+  return easeOut(age / CHALK_DRAW_SEC);
 }
 
 /**

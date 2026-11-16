@@ -278,7 +278,9 @@ faint ring and nothing else, so the two still read apart; a Miss gets nothing he
 the bar through the socket already says it. The verdict word is struck too (`verdictPose`):
 a Perfect drops in oversized and stamps down to size, leaning alternate ways by the beat it
 answered, the way the count's numerals land; a Good arrives with its old pop; a Miss arrives
-flat with a shake. Every judged hit pulses the thumb — `HAPTIC.hit` on a Perfect, `tap` on a
+flat with a shake, and so does **Extra**, the word a tap that answered no beat gets
+(`verdictWord`): a beat left untapped and a tap too many are different mistakes, and both
+read "Miss" until the result's timing details counted them apart. Every judged hit pulses the thumb — `HAPTIC.hit` on a Perfect, `tap` on a
 Good — which the haptics setting existed for and nothing in play had used.
 
 The scene passes `struck.age` and `struck.perfect` in `BlockState` and the block draws the
@@ -486,11 +488,19 @@ downbeat. It is the handover made literal and the oldest timing cue there is: th
 you tap. It rests on each landing and takes at most one beat to reach the next, so on a rest
 it waits rather than floats; its shadow grows on the landing it is coming to, so the next
 beat is seen before it is heard; and it sits *on* a bead or socket rather than over it, so
-the mark underneath stays legible. It appears where the game still teaches — this pass, the
-guided level and a new grid's introduction — and in every pass of the tutorial, and nowhere
-else: a level the player has learnt reads the block alone. Under reduced motion it sits on
-each landing and is simply on the next when its beat comes. The pass also carries one line
-under the act's title (`TEACH.caption`): *Watch once: their row, then yours. No pause.*
+the mark underneath stays legible. It appears where the game still teaches — this pass,
+every level through level 3 (`showsBall`, `game/teachCopy.ts`) and a new grid's introduction
+— and in every pass of the tutorial, and nowhere else: a level the player has learnt reads
+the block alone, and level 4 says *No ball this time. Follow the rhythm.* on its first task
+until it is cleared (`noBallLevel`). Under reduced motion it sits on each landing and is
+simply on the next when its beat comes. **The first level carries words** (`teachWords`,
+read by `PlayScene.refreshTeachWords` from the plan's own moment, the lesson's `momentOf`,
+so *your turn* is said on the downbeat and never after it): over the watched pass, *Watch
+the red ball*, *Top row: the game's turn*, *3, 2, 1 — the baton drops to you*, *Bottom
+row: your turn*, *Next: tap when the ball hits a circle*; over the level's own tasks, *Follow
+the red ball* through *Tap when the ball hits a circle*; nothing over a coda. They sit under
+the act's title where the one old line (*Watch once: their row, then yours. No pause.*)
+did, each short enough not to wrap on a handset.
 
 **The guiding ring** contracts onto the next socket over the beat before it is due,
 on the level that still teaches. The ring says *where*; the beat says *when*, which

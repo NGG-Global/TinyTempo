@@ -45,7 +45,15 @@ export function dashes(path: readonly Point[], dash: number, gap: number): [Poin
     let cursor = travelled % period;
     // Walk this straight span, emitting the parts of it that land on a dash.
     for (let along = 0; along < length; ) {
-      const remaining = cursor < dash ? dash - cursor : period - cursor;
+      let remaining = cursor < dash ? dash - cursor : period - cursor;
+      // The modulo above can leave the cursor a rounding error short of the dash's end or
+      // the period's, and a step that small adds nothing to `along` once it is a few hundred
+      // units in — which walked this loop forever on the Daily card's dashed box. Snap to
+      // the boundary and take the whole next part instead.
+      if (remaining < 1e-6 || along + remaining === along) {
+        cursor = cursor < dash ? dash : 0;
+        remaining = cursor < dash ? dash - cursor : period - cursor;
+      }
       const end = Math.min(length, along + remaining);
       if (cursor < dash) {
         const t0 = along / length;

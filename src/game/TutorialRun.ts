@@ -293,6 +293,7 @@ function verdictWords(run: Pick<TutorialRun, 'step' | 'verdict' | 'offersPlay'>)
   }
 }
 
+/** The project's old working name, frozen: see `KEY` in `game/progress.ts`. */
 const KEY = 'small-acts.tutorial.v1';
 
 /** Passed, or *Let's play* taken: what a save code carries and Support reports. */

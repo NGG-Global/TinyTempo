@@ -14,6 +14,7 @@ import { castShadow, faces } from '@/ui/light';
 import type { Vignette } from './Vignette';
 import { handoverAt } from '@/game/beatTrack';
 import { windowLook, type WindowLook } from './windowLooks';
+import { WINDOW_GLINT_SEC } from './earlyCodas';
 import { easeOut, isPlayerTurn, turnOpen } from './motion';
 
 export const GLASS = { paper: 0xe9e4e7, ink: 0x49394e, frame: 0x82718a, blue: 0xb7d9db, light: 0xfff5df, glove: 0xdc9775, sill: 0xd1c1cd };
@@ -345,7 +346,7 @@ export class WindowCleaningVignette implements Vignette {
     shine.lineStyle(4, GLASS.light, 0.15 + clean * 0.65).lineBetween(-192, 76, -34, -185);
     shine.lineStyle(12, GLASS.light, clean * 0.3).lineBetween(-169, 82, -12, -179);
     if (this.finished && this.finishAt !== null) {
-      const p = easeOut((now - this.finishAt) / 0.45);
+      const p = easeOut((now - this.finishAt) / WINDOW_GLINT_SEC);
       if (this.successful) {
         // The reflected sun becomes a crisp little four-point glint.
         shine.fillStyle(GLASS.light, p).fillTriangle(106, -188, 98, -144, 114, -144);

@@ -108,6 +108,12 @@ dependencies {
     // Play Games Services v2, used directly by PlayGamesPlugin. v2 only: the deprecated
     // com.google.android.gms:play-services-games (v1) must never be added beside it.
     implementation "com.google.android.gms:play-services-games-v2:$playGamesVersion"
+    // Unity Ads, reached only through AdMob mediation: the Google adapter initialises the SDK
+    // from the mediation mapping in AdMob (game and placement ids live there, not here) and
+    // AdMob presents its ads. Unity's own SDK comes from Maven Central, the adapter from
+    // Google's Maven. UnityAdsPrivacyPlugin calls the SDK for one thing: a US-state opt-out.
+    implementation "com.unity3d.ads:unity-ads:$unityAdsVersion"
+    implementation "com.google.ads.mediation:unity:$unityMediationAdapterVersion"
     testImplementation "junit:junit:$junitVersion"
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"

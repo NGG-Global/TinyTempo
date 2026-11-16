@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { levelSpec } from '../src/game/levels';
-import { loadProgress, readTeachFlags, saveProgress, setTeachFlags, type Progress } from '../src/game/progress';
+import { loadProgress, readTeachFlags, resetGeneration, saveProgress, setTeachFlags, type Progress } from '../src/game/progress';
+import { resetProgress } from '../src/game/resetProgress';
+import { GATE_RECORD_KEY, openArea } from '../src/game/areaGates';
 import { completeTutorial, skipTutorial, tutorialState } from '../src/game/TutorialRun';
 import { decodeSaveCode, encodeSaveCode } from '../src/game/saveCode';
 import { achievementsFrom, hasEarned } from '../src/playgames/achievements';
@@ -14,6 +16,7 @@ import {
   type PlayGames, type PlayGamesClient, type PlayGamesStatus, type SnapshotConflict, type SnapshotPayload, type SnapshotRead, type SnapshotReason,
 } from '../src/playgames/playGames';
 import { ACHIEVEMENTS } from '../src/config/achievements';
+import { loadReplayTimer, shelfView, startHeldTimerNow } from '../src/game/replayTimer';
 
 vi.mock('phaser', () => ({ default: {} }));
 
@@ -157,13 +160,15 @@ describe('the payload', () => {
       'tiny-tempo.premium.v1': '{"entitled":true,"checkedAt":1}',
       'tiny-tempo.settings.v1': '{"calibrationMs":-120,"muted":true,"music":0.4,"sfx":0.7,"haptics":false,"analytics":true}',
       'tiny-tempo.objectives.v1': '{"day":"2026-10-03"}',
+      'tiny-tempo.replayTimer.v1': `{"version":2,"expiresAt":${Date.now() + 3_600_000},"claims":["play:aaaaaaaaaaaaaaaa"],"shelf":[{"id":"play:bbbbbbbbbbbbbbbb","minutes":60,"source":"bought"}]}`,
     });
     play(storage, road(12, { 3: 91 }));
     completeTutorial(storage);
     setTeachFlags({ seen: true, triplet: true, replayTip: true, offbeat: true, longPhrase: true }, storage);
     const text = encodeCloudSave(localCloudSave(storage).read());
     const parsed = JSON.parse(text);
-    expect(Object.keys(parsed).sort()).toEqual(['progress', 'teach', 'tutorial', 'version']);
+    expect(Object.keys(parsed).sort()).toEqual(['held', 'progress', 'reset', 'teach', 'tutorial', 'version']);
+    expect(parsed.reset).toBe(0);
     expect(Object.keys(parsed.progress).sort()).toEqual(['best', 'unlocked']);
     expect(Object.keys(parsed.teach).sort()).toEqual(['scrapbook', 'seen', 'sixteenth', 'triplet']);
     expect(parsed.version).toBe(CLOUD_SAVE.version);
@@ -171,8 +176,10 @@ describe('the payload', () => {
     expect(parsed.progress.best['3']).toBe(91);
     expect(parsed.tutorial).toBe('complete');
     expect(parsed.teach).toEqual({ seen: true, triplet: true, sixteenth: false, scrapbook: false });
+    // The one owned thing: the replay-timer shelf, held items only — never the running expiry or the claim ledger.
+    expect(parsed.held).toEqual([{ id: 'play:bbbbbbbbbbbbbbbb', minutes: 60, source: 'bought' }]);
     // Hearts, ledgers, Premium, calibration, volumes, consent, objectives: none of it, by name or by value.
-    expect(text).not.toMatch(/heart|regen|fill|claim|daily|premium|entitle|purchase|calibrat|offset|latency|mute|music|sfx|volume|haptic|analytics|consent|objective|stamp|replayTip|offbeat|longPhrase/i);
+    expect(text).not.toMatch(/heart|regen|fill|claim|daily|premium|entitle|purchase|expires|calibrat|offset|latency|mute|music|sfx|volume|haptic|analytics|consent|objective|stamp|replayTip|offbeat|longPhrase/i);
     expect(text).not.toContain('-120');
     expect(text).not.toContain('0.4');
   });
@@ -234,6 +241,12 @@ describe('the payload', () => {
     expect(merged.tutorial).toBe('complete');
     expect(merged.teach).toEqual({ seen: true, triplet: true, sixteenth: false, scrapbook: false });
     expect(mergeCloudSaves(b, a)).toEqual(merged);
+    // The shelf unions by id, a started copy beating a held one, and survives a newer generation whole.
+    const heldItem = { id: 'play:cccccccccccccccc', minutes: 60, source: 'bought' as const };
+    const stone = { ...heldItem, startedAt: 5 };
+    expect(mergeCloudSaves(save(road(1), { held: [heldItem] }), save(road(1), { held: [stone] })).held).toEqual([stone]);
+    expect(mergeCloudSaves(save(road(1), { held: [heldItem], reset: 0 }), save(road(2), { reset: 1 })).held).toEqual([heldItem]);
+    expect(mergeCloudSaves(save(road(1), { held: [heldItem], reset: 0 }), save(road(2), { reset: 1 })).progress).toEqual(road(2));
     // A skip never demotes a pass, whichever side it is on.
     expect(mergeCloudSaves(save(road(1), { tutorial: 'complete' }), save(road(1), { tutorial: 'skipped' })).tutorial).toBe('complete');
     expect(mergeCloudSaves(save(road(1), { tutorial: 'none' }), save(road(1), { tutorial: 'skipped' })).tutorial).toBe('skipped');
@@ -244,6 +257,126 @@ describe('the payload', () => {
     expect(payload.description).toBe('Level 11, 10 cleared');
     expect(payload.progress).toBe(11);
     expect(JSON.parse(payload.data).version).toBe(1);
+  });
+});
+
+describe('a reset', () => {
+  it('is carried as a generation: absent from an older payload, bounded, and canonical', () => {
+    const decoded = decodeCloudSave('{"version":1,"progress":{"unlocked":3,"best":{"1":80}},"tutorial":"complete","teach":{}}');
+    expect(decoded.kind === 'save' && decoded.save.reset).toBe(0);
+    const tampered = decodeCloudSave('{"version":1,"progress":{"unlocked":1,"best":{}},"reset":1e12}');
+    expect(tampered.kind === 'save' && tampered.save.reset).toBe(CLOUD_SAVE.maxReset);
+    for (const bad of ['-1', '"2"', '1.5', 'null']) {
+      const read = decodeCloudSave(`{"version":1,"progress":{"unlocked":1,"best":{}},"reset":${bad}}`);
+      expect(read.kind === 'save' && read.save.reset, bad).toBe(0);
+    }
+    expect(JSON.parse(encodeCloudSave({ ...emptyCloudSave(), reset: 3 })).reset).toBe(3);
+    expect(sameCloudSave({ ...emptyCloudSave(), reset: 3 }, { ...emptyCloudSave(), reset: 2 })).toBe(false);
+  });
+
+  it('wins a merge whole: the newer generation keeps nothing of the older side', () => {
+    const old = save(road(40, { 3: 99 }), { tutorial: 'complete', teach: { seen: true, triplet: true, sixteenth: true, scrapbook: true } });
+    const fresh = { ...save(road(2), { tutorial: 'none' }), reset: 1 };
+    for (const merged of [mergeCloudSaves(old, fresh), mergeCloudSaves(fresh, old)]) {
+      expect(merged.progress).toEqual(road(2));
+      expect(merged.tutorial).toBe('none');
+      expect(merged.teach).toEqual({ seen: false, triplet: false, sixteenth: false, scrapbook: false });
+      expect(merged.reset).toBe(1);
+    }
+    // Of the same generation, the merge adds as it always did.
+    const same = mergeCloudSaves({ ...old, reset: 1 }, fresh);
+    expect(same.progress).toEqual(road(40, { 3: 99 }));
+    expect(same.reset).toBe(1);
+  });
+
+  it('holds on the device that made it: the next sync carries it up instead of bringing the old save back', async () => {
+    const cloud = new FakeCloud();
+    const { storage, sync } = device(cloud);
+    play(storage, road(40, { 3: 99 }));
+    completeTutorial(storage);
+    synced(await sync());
+    expect(cloud.saved?.progress.unlocked).toBe(41);
+    // Reset, then clear level 1 — the sequence a player reported as "reset, play one level, and it all came back".
+    expect(resetProgress(storage).cleared).toBe(true);
+    expect(resetGeneration(storage)).toBe(1);
+    play(storage, road(1));
+    const outcome = synced(await sync());
+    expect(outcome).toMatchObject({ uploaded: true, imported: false });
+    expect(loadProgress(storage)).toEqual(road(1));
+    expect(tutorialState(storage)).toBe('none');
+    expect(cloud.saved?.progress).toEqual(road(1));
+    expect(cloud.saved?.reset).toBe(1);
+    // And the sync after that has nothing to add from either side.
+    expect(synced(await sync())).toMatchObject({ uploaded: false, imported: false });
+    expect(loadProgress(storage)).toEqual(road(1));
+  });
+
+  it('reaches the player’s other device, which takes the reset whole rather than merging its old road back', async () => {
+    const cloud = new FakeCloud();
+    const a = device(cloud);
+    const b = device(cloud);
+    play(a.storage, road(40, { 3: 99 }));
+    completeTutorial(a.storage);
+    synced(await a.sync());
+    synced(await b.sync());
+    expect(loadProgress(b.storage).unlocked).toBe(41);
+    // A resets and plays two levels; B, still on the old road, plays one more meanwhile.
+    resetProgress(a.storage);
+    play(a.storage, road(2));
+    synced(await a.sync());
+    play(b.storage, road(41));
+    openArea(4, road(41), b.storage);
+    const outcome = synced(await b.sync());
+    expect(outcome).toMatchObject({ imported: true, uploaded: false });
+    expect(loadProgress(b.storage)).toEqual(road(2));
+    // B's gates stood open over the old road; they stand again over the new one.
+    expect(b.storage.getItem(GATE_RECORD_KEY)).toBeNull();
+    expect(resetGeneration(b.storage)).toBe(1);
+    expect(tutorialState(b.storage)).toBe('none');
+    expect(readTeachFlags(b.storage)).toMatchObject({ seen: false, triplet: false, offbeat: false, lastOffbeat: false, longPhrase: false });
+    expect(cloud.saved?.progress).toEqual(road(2));
+    // From here both devices add again.
+    play(b.storage, road(3));
+    synced(await b.sync());
+    synced(await a.sync());
+    expect(loadProgress(a.storage)).toEqual(road(3));
+    expect(cloud.saved?.reset).toBe(1);
+  });
+
+  it('resolves a conflict between a reset and the road it threw away in the reset’s favour', async () => {
+    const cloud = new FakeCloud();
+    const { storage, sync } = device(cloud);
+    resetProgress(storage);
+    play(storage, road(2));
+    cloud.conflict = {
+      kind: 'conflict', conflictId: 'c1',
+      base: encodeCloudSave(save(road(40))),
+      other: encodeCloudSave(save(road(35, { 5: 97 }), { tutorial: 'complete' })),
+    };
+    const outcome = synced(await sync());
+    expect(outcome.conflicts).toBe(1);
+    expect(loadProgress(storage)).toEqual(road(2));
+    expect(cloud.saved?.progress).toEqual(road(2));
+    expect(cloud.saved?.reset).toBe(1);
+  });
+
+  it('shelves and restores with its generation when the device changes hands', async () => {
+    const cloudA = new FakeCloud();
+    const a = device(cloudA, { player: PLAYER_A });
+    play(a.storage, road(12));
+    resetProgress(a.storage);
+    play(a.storage, road(4));
+    synced(await a.sync());
+    // Another player on the same device: their own cloud, their own generation.
+    const cloudB = new FakeCloud();
+    const b = device(cloudB, { storage: a.storage, player: PLAYER_B });
+    synced(await b.sync());
+    expect(loadProgress(a.storage)).toEqual({ unlocked: 1, best: {} });
+    expect(resetGeneration(a.storage)).toBe(0);
+    const back = device(cloudA, { storage: a.storage, player: PLAYER_A });
+    synced(await back.sync());
+    expect(loadProgress(a.storage)).toEqual(road(4));
+    expect(resetGeneration(a.storage)).toBe(1);
   });
 });
 
@@ -639,11 +772,43 @@ describe('failing safely', () => {
       'tiny-tempo.daily-heart.v1': '{}',
       'tiny-tempo.premium.v1': '{"entitled":false}',
       'tiny-tempo.settings.v1': '{"calibrationMs":-77,"analytics":false}',
+      'tiny-tempo.replayTimer.v1': `{"version":2,"expiresAt":${Date.now() + 600_000},"claims":["play:aaaaaaaaaaaaaaaa"],"shelf":[]}`,
     };
     const { storage, sync } = device(cloud, { storage: memoryStorage(before) });
     synced(await sync());
     for (const [key, value] of Object.entries(before)) expect(storage.getItem(key)).toBe(value);
     expect(loadProgress(storage)).toEqual(road(20));
+  });
+
+  it('carries a bought timer down to a reinstall, and a start on one device takes the held copy off the other', async () => {
+    const heldItem = { id: 'play:dddddddddddddddd', minutes: 120, source: 'bought' as const };
+    const cloud = new FakeCloud();
+    cloud.data = encodeCloudSave(save(road(3), { held: [heldItem] }));
+    // A fresh device: the shelf arrives, and its own expiry and ledger stay what they were (nothing).
+    const fresh = device(cloud);
+    synced(await fresh.sync());
+    expect(loadReplayTimer(fresh.storage)).toEqual({ expiresAt: 0, claims: [], shelf: [heldItem] });
+    // The other device starts it and syncs: the tombstone goes up.
+    const other = device(cloud, { storage: memoryStorage({ 'tiny-tempo.replayTimer.v1': JSON.stringify({ version: 2, expiresAt: 0, claims: [heldItem.id], shelf: [heldItem] }) }) });
+    const started = startHeldTimerNow(heldItem.id, Date.now(), other.storage);
+    expect(started.started).toBe(true);
+    synced(await other.sync());
+    expect(JSON.parse(cloud.data!).held[0].startedAt).toBeTypeOf('number');
+    // The fresh device syncs again: its held copy is now the tombstone, and the running expiry is untouched.
+    synced(await fresh.sync());
+    const after = loadReplayTimer(fresh.storage)!;
+    expect(after.shelf[0]?.startedAt).toBeTypeOf('number');
+    expect(after.expiresAt).toBe(0);
+    expect(shelfView(after, Date.now()).items).toEqual([]);
+  });
+
+  it('never brings a won timer back once its window has passed', async () => {
+    const stale = { id: 'won:2026-10-22', minutes: 40, source: 'won' as const, startBy: Date.now() - 1 };
+    const cloud = new FakeCloud();
+    cloud.data = encodeCloudSave(save(road(3), { held: [stale] }));
+    const { storage, sync } = device(cloud);
+    synced(await sync());
+    expect(loadReplayTimer(storage)?.shelf ?? []).toEqual([]);
   });
 });
 

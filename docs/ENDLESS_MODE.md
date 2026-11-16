@@ -93,6 +93,10 @@ Play Games *Time* leaderboard.
   (`trackForLevel(100)`), which under `TRACK_CYCLE = ['b']` is track B. Nothing restarts a
   source between acts; an act change is `RoundController.start` on the running grid. The
   act's coda is cut on the swap beat exactly as a level cuts it.
+- **The turn block, as a level draws it**, hit poses, EARLY/LATE and the flawless flourish
+  included: a step answered Perfect throughout with nothing extra strikes *Flawless!* over
+  the face, sweeps the sockets and ends in the chorus (`ui/flourish.ts`). Groove is a
+  level's and not here: no warm room, no rim, no accents.
 
 ## What ends a run, and what it records
 
@@ -104,7 +108,9 @@ Play Games *Time* leaderboard.
 
 ## Two doors, one card
 
-Endless opens from the map's infinity puck and, once level 100 is cleared, from an
+Endless opens from the map's infinity puck — tagged *Opens after level 100* while it is
+locked and *Endless* once it is open, until the card has been opened once
+(`ui/puckLabel.ts`) — and, once level 100 is cleared, from an
 **Endless** block on the title screen beside How to play (`MenuScene`): the title screen is
 where a player who has finished the road comes back to. Both open the same `EndlessCard`,
 and opening it from either marks the unlock seen, which clears the coral dot on both. The

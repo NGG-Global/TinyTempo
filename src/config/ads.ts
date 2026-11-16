@@ -1,5 +1,6 @@
 /**
- * The live AdMob app and rewarded unit for Tiny Tempo.
+ * The live AdMob app and its two units for Tiny Tempo: the rewarded unit the player opts
+ * into, and the interstitial a cleared level's Continue may show (`INTERSTITIAL`).
  *
  * `appId` is duplicated in `android/app/src/main/res/values/strings.xml`, because the
  * manifest needs it before any JavaScript runs and the two files share no source. They
@@ -16,6 +17,11 @@
 export const ADMOB = {
   appId: 'ca-app-pub-6818267616933452~3245294136',
   rewardedUnitId: 'ca-app-pub-6818267616933452/9892619657',
+  /**
+   * The interstitial shown on a cleared level's Continue, paced by `INTERSTITIAL`. An empty
+   * string turns the format off: nothing is loaded and nothing is shown.
+   */
+  interstitialUnitId: 'ca-app-pub-6818267616933452/6246850626',
   /**
    * The most mature ad content the game will show. Parental guidance, one step above
    * General: the game declares an audience of 13 and over, but its cartoon workshop will
@@ -35,6 +41,29 @@ export const ADMOB = {
    * phone's id the first time it requests an ad.
    */
   testDevices: testDeviceIds(import.meta.env.VITE_ADMOB_TEST_DEVICES),
+} as const;
+
+/**
+ * When the interstitial may play. Google allows one only at a break between levels and never
+ * after every action (docs/INTERSTITIAL.md), and every rule here is a business knob rather than
+ * a fact — tune them from the analytics, not by feel. The counts are session memory: nothing is
+ * stored, so a fresh launch starts the count again and a short session may see none.
+ */
+export const INTERSTITIAL = {
+  /**
+   * The first level whose clear can count. The first area (1–10) is where the game asks
+   * nothing of a new player — its hearts are free too (`HEALTH.protectedThrough`) — so an ad
+   * there would be the first thing about money a new player meets.
+   */
+  fromLevel: 11,
+  /** At most one interstitial per this many cleared levels from `fromLevel` on. */
+  everyClears: 3,
+  /**
+   * The least time after any full-screen ad has closed, the player's own rewarded ads
+   * included, before an interstitial may open. Google forbids one straight after another;
+   * this keeps one off the heels of a rewarded ad as well.
+   */
+  minGapMs: 3 * 60_000,
 } as const;
 
 function testDeviceIds(raw: unknown): readonly string[] {

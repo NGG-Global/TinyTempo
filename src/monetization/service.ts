@@ -1,7 +1,8 @@
 import { track } from './analytics';
 import { stubAds, stubBilling } from './stub';
 import type {
-  Billing, Monetization, ProductId, PurchaseResult, RestoreResult, RewardedAds, RewardedResult,
+  Billing, InterstitialAds, InterstitialReason, InterstitialResult, Monetization, ProductId, PurchaseResult, RestoreResult,
+  RewardedAds, RewardedResult,
 } from './types';
 
 /** Native SDKs can hang a WebView; better to fail the offer than freeze the map. */
@@ -17,6 +18,8 @@ export interface MonetizationOptions {
   readonly timeoutMs?: number;
   readonly showTimeoutMs?: number;
   readonly purchaseTimeoutMs?: number;
+  /** Wall clock for `lastAdClosedAt`; tests pass their own. */
+  readonly now?: () => number;
 }
 
 function asBoolean(read: () => boolean): boolean {
@@ -34,6 +37,14 @@ function hasPrivacyOptions(ads: RewardedAds): ads is RewardedAds & {
   };
   return typeof candidate.privacyOptionsAvailable === 'function'
     && typeof candidate.showPrivacyOptions === 'function';
+}
+
+/** AdMob ads carry the interstitial; the stub and a RewardedAds test double do not. */
+function hasInterstitial(ads: RewardedAds): ads is RewardedAds & InterstitialAds {
+  const candidate = ads as RewardedAds & Partial<Record<keyof InterstitialAds, unknown>>;
+  return typeof candidate.interstitialReady === 'function'
+    && typeof candidate.prepareInterstitial === 'function'
+    && typeof candidate.showInterstitial === 'function';
 }
 
 function withTimeout<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
@@ -60,6 +71,13 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const showTimeoutMs = options.showTimeoutMs ?? options.timeoutMs ?? DEFAULT_SHOW_TIMEOUT_MS;
   const purchaseTimeoutMs = options.purchaseTimeoutMs ?? options.timeoutMs ?? DEFAULT_PURCHASE_TIMEOUT_MS;
+  const now = options.now ?? Date.now;
+  /** When the last full-screen ad closed, this session. Session memory, stored nowhere. */
+  let lastClosed: number | null = null;
+  const interstitialFailed = (level: number, reason: InterstitialReason): InterstitialResult => {
+    track('interstitial_failed', { level, reason });
+    return { shown: false, reason };
+  };
 
   return {
     rewardedAvailable: () => {
@@ -79,6 +97,8 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
           showTimeoutMs,
           { ok: false, reason: 'failed' } satisfies RewardedResult,
         );
+        // A watched ad and a skipped one were both on screen; either starts the interstitial's gap.
+        if (result.ok || result.reason === 'cancelled') lastClosed = now();
         if (result.ok) track('rewarded_completed', {});
         else track('rewarded_failed', { reason: result.reason });
         return result;
@@ -87,6 +107,43 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
         return { ok: false, reason: 'failed' };
       }
     },
+
+    warmInterstitial(): void {
+      if (asBoolean(() => billing.premium()) || !hasInterstitial(ads)) return;
+      try {
+        void Promise.resolve().then(() => ads.prepareInterstitial()).catch(() => { /* the next warm tries again */ });
+      } catch { /* a throwing adapter loads nothing */ }
+    },
+
+    interstitialReady: () => {
+      if (asBoolean(() => billing.premium()) || !hasInterstitial(ads)) return false;
+      return asBoolean(() => ads.interstitialReady());
+    },
+
+    /**
+     * Shows a loaded interstitial and settles when it has closed, or at once when there is
+     * none to show. Premium never sees one, whatever asks. Pacing is the caller's
+     * (`game/interstitialPacing.ts`): this decides only whether one can play now.
+     */
+    async showInterstitial(context: { readonly level: number }): Promise<InterstitialResult> {
+      const { level } = context;
+      if (asBoolean(() => billing.premium()) || !hasInterstitial(ads)) return interstitialFailed(level, 'unavailable');
+      try {
+        const result = await withTimeout(
+          Promise.resolve().then(() => ads.showInterstitial()),
+          showTimeoutMs,
+          { shown: false, reason: 'failed' } satisfies InterstitialResult,
+        );
+        if (!result.shown) return interstitialFailed(level, result.reason);
+        lastClosed = now();
+        track('interstitial_shown', { level });
+        return result;
+      } catch {
+        return interstitialFailed(level, 'failed');
+      }
+    },
+
+    lastAdClosedAt: () => lastClosed,
 
     purchasesAvailable: () => asBoolean(() => billing.available()),
 

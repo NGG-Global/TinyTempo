@@ -1,5 +1,6 @@
 import type Phaser from 'phaser';
 import { HouseholdVignette } from './HouseholdVignette';
+import { SLAB_CARD } from './staging';
 import { HOME_INK, shape, slab, sparkle } from './householdArt';
 import { dishLook, type DishLook } from './dishLooks';
 import { cleanedSpots, cleaningPulse, cleaningReveal } from './cleaningMotion';
@@ -9,7 +10,7 @@ export class DishCleaningVignette extends HouseholdVignette {
   private readonly look: DishLook;
 
   public constructor(scene: Phaser.Scene, lap = 0) {
-    super(scene, 0xe4eee9, 0xd4eeed, { card: { x: -330, y: -224, width: 660, height: 448, radius: 30 } });
+    super(scene, 0xe4eee9, 0xd4eeed, { card: SLAB_CARD });
     this.look = dishLook(lap);
   }
 

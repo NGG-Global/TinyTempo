@@ -112,6 +112,11 @@ describe('household finales and integration', () => {
     expect(doorOpening(1, true)).toBe(1);
     expect(roomReveal(2, false)).toBe(0);
     expect(roomReveal(1.1, true)).toBe(1);
+    expect(roomReveal(0.3, true)).toBeLessThan(1);
+    // Reduced motion: the room is on at the contact, not faded in after it.
+    expect(roomReveal(0, true, true)).toBe(1);
+    expect(roomReveal(-0.01, true, true)).toBe(0);
+    expect(roomReveal(2, false, true)).toBe(0);
     expect(eggReveal(1, false).drop).toBe(0);
     expect(eggReveal(1, true).drop).toBe(1);
     expect(eggReveal(0.7, true, true).splash).toBe(0);

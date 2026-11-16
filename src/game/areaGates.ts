@@ -130,6 +130,15 @@ export function loadGates(progress: Progress, storage: Storage | null = safeStor
 }
 
 /**
+ * Reset progress: the record goes with the save it described, so a reset road starts with
+ * every gate standing again rather than open on stars the player no longer has. False
+ * means nothing was removed.
+ */
+export function clearGateRecord(storage: Storage | null = safeStorage()): boolean {
+  try { storage?.removeItem(GATE_RECORD_KEY); return storage !== null; } catch { return false; }
+}
+
+/**
  * The player tapped a ready gate open. Written before the unlock plays, so an app closed
  * mid-ceremony keeps the area. False means nothing was written; the area is open for the
  * session regardless, since the scene holds the record it returned.

@@ -39,7 +39,9 @@ The light switch and doorbell take a look from the rotation lap, as
 `docs/VARIANTS.md` sets out: lap 0 keeps the original salon and the teal
 four-panel door; later visits open a kitchen, a study or a bedroom, and a
 crimson, ochre or navy leaf. The lamp, the rocker, the hinge and the cat do not
-change.
+change. Under reduced motion the lit room is simply on from the finishing contact
+(`roomReveal`'s `still`), as the errands' cards and bell boy are; it was the one
+household coda that still faded in with motion reduced.
 
 In development, open `?debug&level=10` through `?debug&level=13`. Accurate,
 Rough and Spam replay exercise the real input path. `tests/household.test.ts`

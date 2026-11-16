@@ -76,6 +76,9 @@ describe('which screen plays what', () => {
   it('chooses by the screen that opened it', () => {
     expect(source('src/scenes/SettingsScene.ts')).toContain('ensureScreenMusic(this, this.from === SceneKey.Menu);');
     expect(source('src/scenes/ScrapbookScene.ts')).toContain('ensureScreenMusic(this, this.from === SceneKey.Menu);');
+    // The Daily card keeps the music of the screen that opened it, and a run ends the theme before the loop is judged against.
+    expect(source('src/scenes/DailyScene.ts')).toContain('ensureScreenMusic(this, this.from === SceneKey.Menu);');
+    expect(source('src/scenes/DailyScene.ts')).toContain('stopTheme(audio);');
     for (const page of ['src/scenes/TransferScene.ts', 'src/scenes/SupportScene.ts']) {
       expect(source(page), page).toContain('ensureScreenMusic(this, this.enteredFrom() === SceneKey.Menu);');
       expect(source(page), page).not.toContain('ensureShellMusic(this)');

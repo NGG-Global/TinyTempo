@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { HIT, hitPose, verdictGroup, verdictPose } from '../src/ui/hitPose';
+import { HIT, hitPose, verdictGroup, verdictPose, verdictWord } from '../src/ui/hitPose';
 
 describe('what a hit does to the row', () => {
   it('throws a ring that spreads and fades, rays for the first instant, and a flash that cools', () => {
@@ -75,10 +75,19 @@ describe('how the verdict lands', () => {
     expect(miss.scale).toBe(1);
     expect(miss.tilt).not.toBe(0);
     expect(verdictPose(0.3, 'Good', 0, false)!.scale).toBeGreaterThan(0.99);
+    // A surplus tap is struck the way a miss is, under its own word.
+    expect(verdictPose(0.02, 'Extra', 0, false)).toEqual(verdictPose(0.02, 'Miss', 0, false));
+  });
+
+  it('names a surplus tap apart from an untapped beat, and leaves every grade its own word', () => {
+    expect(verdictWord({ kind: 'extra', grade: 'Miss' })).toBe('Extra');
+    expect(verdictWord({ kind: 'omission', grade: 'Miss' })).toBe('Miss');
+    expect(verdictWord({ kind: 'hit', grade: 'Perfect' })).toBe('Perfect');
+    expect(verdictWord({ kind: 'hit', grade: 'Good' })).toBe('Good');
   });
 
   it('holds every grade the same time, leaves over the back of it, and is gone', () => {
-    for (const grade of ['Perfect', 'Good', 'Miss'] as const) {
+    for (const grade of ['Perfect', 'Good', 'Miss', 'Extra'] as const) {
       expect(verdictPose(0.3, grade, 0, false)!.alpha).toBeCloseTo(1, 1);
       expect(verdictPose(HIT.verdictHold * 0.95, grade, 0, false)!.alpha).toBeLessThan(0.5);
       expect(verdictPose(HIT.verdictHold, grade, 0, false)).toBeNull();
@@ -98,7 +107,7 @@ describe('how the verdict lands', () => {
   it('lifts off as it leaves, a little up and a little smaller, and is at rest through its hold', () => {
     // A Perfect sits on its line through the hold; a Good and a Miss hold where they arrived.
     expect(verdictPose(0.34, 'Perfect', 0, false)!.rise).toBeCloseTo(0, 1);
-    for (const grade of ['Perfect', 'Good', 'Miss'] as const) {
+    for (const grade of ['Perfect', 'Good', 'Miss', 'Extra'] as const) {
       const held = verdictPose(0.34, grade, 0, false)!;
       const going = verdictPose(HIT.verdictHold * 0.95, grade, 0, false)!;
       expect(going.rise).toBeLessThan(held.rise - 3);
@@ -136,12 +145,17 @@ describe('the verdict and its early/late tag', () => {
   it('is made once and only shown, never re-rasterised on the frame of a tap', () => {
     const tag = readFileSync('src/ui/verdictTag.ts', 'utf8');
     expect(tag).not.toMatch(/setText\(/);
-    for (const scene of ['src/scenes/PlayScene.ts', 'src/scenes/EndlessScene.ts']) {
+    // The word, its tag and the pill live in one object the three run scenes share.
+    const words = readFileSync('src/ui/turnWords.ts', 'utf8');
+    expect(words).toContain('this.verdictTag.set(tapTiming(result));');
+    expect(words).toMatch(/this\.verdictTag = new VerdictTag\(/);
+    // The pill behind the word is as wide as the word and its tag together.
+    expect(words).toContain('this.verdictTag.width(this.verdict, pose.scale)');
+    for (const scene of ['src/scenes/PlayScene.ts', 'src/scenes/EndlessScene.ts', 'src/scenes/DailyScene.ts']) {
       const source = readFileSync(scene, 'utf8');
-      expect(source).toContain('this.verdictTag.set(tapTiming(result));');
-      expect(source).toMatch(/this\.verdictTag = new VerdictTag\(/);
-      // The pill behind the word is as wide as the word and its tag together.
-      expect(source).toContain('this.verdictTag.width(this.verdict, pose.scale)');
+      expect(source).toMatch(/this\.words = new TurnWords\(/);
+      expect(source).not.toContain('new VerdictTag(');
+      expect(source).not.toContain("'Flawless!'");
     }
   });
 });

@@ -6,6 +6,7 @@ import {
   markObjectivesSeen, objectiveContext, objectiveDefinition, objectiveReport, parseObjectives, reachableLevels,
   recordObjectives, redrawToday, resetObjectivesMemory, rollover, selectObjectives, stampWeek, unseenDone,
   type ObjectiveContext, type ObjectiveReport, type ObjectivesState,
+  dailyObjectiveReport,
 } from '../src/game/objectives';
 import { PlayAnalytics } from '../src/game/playAnalytics';
 import type { Progress } from '../src/game/progress';
@@ -164,11 +165,11 @@ describe('what can be drawn', () => {
     expect(drawnFor(road(10, 3)).has('new-level')).toBe(true);
   });
 
-  it('never draws the Daily Tempo while it does not exist, and may once it does', () => {
-    expect(DAILY_TEMPO_AVAILABLE).toBe(false);
-    expect(objectiveContext(road(20, 2)).dailyTempo).toBe(false);
-    expect(drawnFor(road(20, 2)).has('daily-tempo')).toBe(false);
+  it('draws the Daily Tempo now that it exists, and never in a build that turns it off', () => {
+    expect(DAILY_TEMPO_AVAILABLE).toBe(true);
+    expect(objectiveContext(road(20, 2)).dailyTempo).toBe(true);
     expect(drawnFor(road(20, 2), true).has('daily-tempo')).toBe(true);
+    expect(drawnFor(road(20, 2), false).has('daily-tempo')).toBe(false);
   });
 
   it('only ever draws what the save can reach, on every day of a year, for every kind of save', () => {
@@ -202,6 +203,20 @@ describe('progress', () => {
       state = applyReport(state, r).state;
     }
     expect(state.objectives[0]).toMatchObject({ progress: 2, tokens: ['egg', 'bell'] });
+  });
+
+  it('counts a Daily Tempo run as a run, never as a level', () => {
+    const daily = dailyObjectiveReport({ vignette: 'saw' }, { perfect: 11, flawless: 2 });
+    expect(daily).toMatchObject({ level: 0, vignette: 'saw', cleared: false, replay: false, stars: 0, dailyTempo: true, perfect: 11, flawless: 2, grids: [], keepsake: false });
+    // The Daily objective finishes on it, the Perfects count, and nothing a level earns moves.
+    expect(objectiveDefinition('daily-tempo')!.advance(daily)).toBe(1);
+    expect(objectiveDefinition('perfects')!.advance(daily)).toBe(11);
+    expect(objectiveDefinition('flawless')!.advance(daily)).toBe(2);
+    for (const id of ['clear', 'new-level', 'acts', 'finale', 'three-stars', 'improve', 'replay', 'stars', 'keepsake']) {
+      const definition = objectiveDefinition(id);
+      if (definition) expect(definition.advance(daily), id).toBe(0);
+    }
+    expect(dailyObjectiveReport({ vignette: 'saw' }, { perfect: -3, flawless: 1.7 })).toMatchObject({ perfect: 0, flawless: 1 });
   });
 
   it('reads replays, improvements and new stars from the save, not from the run', () => {

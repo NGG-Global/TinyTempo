@@ -18,6 +18,7 @@ import {
 } from './sawMotion';
 import { handoverAt } from '@/game/beatTrack';
 import { sawLook, type SawLook } from './sawLooks';
+import { SAW_CODA } from './earlyCodas';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** Cold linen and slate. Sawdust is the only warm note, so the accent doubles as the reward. */
@@ -549,7 +550,7 @@ export class SawTimberVignette implements Vignette {
     }
     if (this.finished && this.successful) {
       // One late mote of dust, after everything else has already settled.
-      const p = clamp01((now - this.finishAt! - 0.95) / 0.34);
+      const p = clamp01((now - this.finishAt! - SAW_CODA.moteAtSec) / SAW_CODA.moteSec);
       if (p > 0 && p < 1) {
         g.fillStyle(this.wood.sawdust, (1 - p) * 0.85);
         g.fillRect(CUT_X + 3, 6 + p * 74, 3.5, 4.5);
@@ -597,11 +598,11 @@ export class SawTimberVignette implements Vignette {
     }
     const age = now - this.finishAt;
     if (this.successful) {
-      const drop = easeOut(age / 0.42);
+      const drop = easeOut(age / SAW_CODA.dropSec);
       const rock = Math.sin(age * 13) * Math.exp(-age * 5) * 0.03;
       this.offcut.setPosition(CUT_X + KERF_HALF + drop * 16, THICK + drop * 330);
-      this.offcut.setRotation(age > 0.42 ? rock : -TILT * drop);
-      if (age >= 0.42 && !this.landed) {
+      this.offcut.setRotation(age > SAW_CODA.dropSec ? rock : -TILT * drop);
+      if (age >= SAW_CODA.dropSec && !this.landed) {
         this.landed = true;
         if (!this.reducedMotion) this.bursts.burst('dust', LANDING.x, LANDING.y, [this.wood.sawdust, this.wood.lit, this.wood.grain], 9);
       }

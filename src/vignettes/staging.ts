@@ -11,7 +11,7 @@ import { VERDICT_REACH, verdictLine } from '@/ui/trackMetrics';
  *
  * The original nine acts sit on a full-width surface — the hammer's bench, the knife's
  * board — and read as lit from the upper left, because their own backdrops put the pool
- * of light where they can be seen. The twenty-three on the household lifecycle draw their
+ * of light where they can be seen. The twenty-seven on the household lifecycle draw their
  * scene inside a framed card, and the card used to float in the upper half of the screen
  * on empty paper, with the backdrop's pool of light hidden behind it. Everything here is
  * drawn once per `layout` into two Graphics inside the act's stage, one under its art and
@@ -34,6 +34,13 @@ export interface StageCard {
 export const FRAME_CARD: StageCard = Object.freeze({ x: -346, y: -246, width: 692, height: 490, radius: 22 });
 /** The 680 x 460 rounder panel the percussion, picnic and grooming acts share. */
 export const PANEL_CARD: StageCard = Object.freeze({ x: -340, y: -228, width: 680, height: 460, radius: 34 });
+/**
+ * The 660 x 448 slab the dish, the prospector, the ice cream and the camera draw their
+ * scene on. Named so an act cannot draw it and forget to stand it on the shelf: the ice
+ * cream drew this exact slab and passed no card, and was the one shelf-era act with no
+ * shelf under it and no light across it.
+ */
+export const SLAB_CARD: StageCard = Object.freeze({ x: -330, y: -224, width: 660, height: 448, radius: 30 });
 
 export interface StagingOptions {
   /** The act's card, in stage units. Without one, nothing is grounded or lit. */

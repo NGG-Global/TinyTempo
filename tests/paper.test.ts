@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { PAPER_CONTOURS, PAPER_MOTION, PAPER_SHAPE_SETS, PAPER_SHAPES, paperCutPoint, paperHandoff, paperReveal, paperShape, scissorOpening } from '../src/vignettes/paperMotion';
 import { actEnding, TURN_OPEN_SEC } from '../src/vignettes/motion';
-import { synthesizePaper } from '../src/audio/paperSounds';
+import { createPaperSounds, synthesizePaper } from '../src/audio/paperSounds';
 import { TaskSequence } from '../src/game/TaskSequence';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { actLevel, levelSpec } from '../src/game/levels';
@@ -114,12 +114,35 @@ describe('paper cutting presentation', () => {
     for (const invalid of [0, 1.5, 2, 4, -1]) expect(() => new TaskSequence(120, 0).ending(1, invalid)).toThrow();
   });
 
-  it.each(['action', 'success', 'rough', 'scrape', 'judder'] as const)('synthesizes an audible, deterministic and bounded %s voice', kind => {
+  it.each(['action', 'success', 'partial', 'rough', 'scrape', 'judder'] as const)('synthesizes an audible, deterministic and bounded %s voice', kind => {
     const samples = synthesizePaper(48000, kind);
     expect(samples).toEqual(synthesizePaper(48000, kind));
     expect(samples[0]).toBe(0);
     expect(Math.abs(samples.at(-1)!)).toBe(0);
     expect(samples.every(v => Number.isFinite(v) && Math.abs(v) <= 1)).toBe(true);
     expect(samples.reduce((max, v) => Math.max(max, Math.abs(v)), 0)).toBeGreaterThan(0.04);
+  });
+
+  it('gives the almost-a-masterpiece a coda of its own: a snip, then a tear, and no bells', () => {
+    const rate = 48000;
+    const voices = ['success', 'partial', 'rough'] as const;
+    const energy = (data: Float32Array, from: number, to: number) => {
+      const slice = data.subarray(Math.floor(from * rate), Math.floor(to * rate));
+      return slice.reduce((sum, v) => sum + v * v, 0) / slice.length;
+    };
+    const signatures = new Set(voices.map(kind => synthesizePaper(rate, kind).reduce((sum, v) => sum + v * v, 0)));
+    expect(signatures.size).toBe(voices.length);
+    const partial = synthesizePaper(rate, 'partial');
+    // The snip is the first thing heard, the tear comes a quarter second later, and the
+    // coda is done before the hold's slide at the fastest tempo.
+    expect(energy(partial, 0, 0.03)).toBeGreaterThan(energy(partial, 0.15, 0.22) * 3);
+    expect(energy(partial, 0.3, 0.55)).toBeGreaterThan(energy(partial, 0.15, 0.22) * 3);
+    expect(partial.length / rate).toBeLessThan(PAPER_MOTION.revealSec);
+    // A stand-in context is enough to build the buffers, and the middle one is there.
+    const context = {
+      sampleRate: rate,
+      createBuffer: (_channels: number, length: number) => { const data = new Float32Array(length); return { length, getChannelData: () => data }; },
+    } as unknown as AudioContext;
+    expect(createPaperSounds(context).partial).toBeDefined();
   });
 });

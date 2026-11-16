@@ -12,7 +12,7 @@ All rounds share the seven-stem composition at its measured 120 BPM. Each stem i
 
 ## Endless level progression
 
-The game is an endless road of levels (`src/game/levels.ts`, tuned in `src/config/progression.ts`), reached from a scrollable map (`MapScene`) grouped into ten-level areas: Grass, Pavement, Sand, Snow, Dusk, Garden, Swamp, Village, Castle, then Grass II and so on forever. A level is one round of one vignette (Hammer, Window, Bug, Saw, Tomato, Curl, Cucumber, Banana rotating by level, in registry order), several tasks long. Clearing a level unlocks the next; stars record how far above the bar the player finished. Progress is saved locally.
+The game is an endless road of levels (`src/game/levels.ts`, tuned in `src/config/progression.ts`), reached from a scrollable map (`MapScene`) grouped into ten-level areas: fourteen of them — Grass, Pavement, Sand, Snow, Dusk, Garden, Swamp, Village, Castle, Space, Candy, Haunted, Hollywood and Art Deco — then Grass II from level 141 and so on forever. A level is one round of one vignette, several tasks long; which of the thirty-six acts plays a level is the debut schedule in `src/vignettes/registry.ts` (`docs/ACT_SCHEDULE.md`). Clearing a level unlocks the next; stars record how far above the bar the player finished. Progress is saved locally.
 
 One curve drives every difficulty knob so they move together and never contradict each other: `d(level) = 1 − e^(−(level−1)/25)`, which rises fast through the first two areas and flattens past level 60: tasks and tempo reach their ceilings around levels 50–90, and the clear bar keeps creeping up to 80% at level 111. From `d`:
 

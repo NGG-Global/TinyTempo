@@ -5,6 +5,7 @@ import { shade } from './colour';
 import { drawHeart, fillHeart, strokeHeart } from './icons';
 import { faces } from './light';
 import { BRASS, drawDisc } from './panel';
+import { STAR_PRIZE } from './star';
 
 /**
  * Shared chrome: the hanging-sign ropes, the utility pucks, the coral action block.
@@ -89,6 +90,8 @@ export interface HeartRowSpec {
   readonly fullOutline?: number;
   /** Fill alpha of an empty heart. Low over a dimmed act, so the row reads as glass. */
   readonly emptyAlpha?: number;
+  /** Spare hearts above the bar (`HEALTH.spareMax`): drawn after the row in prize brass, since they are a reward, not stamina. */
+  readonly spare?: number;
 }
 
 /**
@@ -109,5 +112,11 @@ export function drawHeartRow(g: Phaser.GameObjects.Graphics, spec: HeartRowSpec)
     // The waterline cuts the silhouette, so the outline goes back on over it: without
     // this the rising level reads as a red wedge floating inside an empty heart.
     strokeHeart(g, x, spec.y, spec.radius, spec.emptyOutline ?? spec.empty);
+  }
+  // A spare stands past the row's end at the same pitch, in the brass an earned star wears:
+  // the one heart on the screen that is a prize rather than stamina.
+  for (let i = 0; i < (spec.spare ?? 0); i++) {
+    const x = spec.centreX + (spec.count + i - (spec.count - 1) / 2) * spec.gap;
+    drawHeart(g, x, spec.y, spec.radius, STAR_PRIZE, 1, shade(STAR_PRIZE, -0.55));
   }
 }

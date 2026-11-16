@@ -18,6 +18,7 @@ import {
 } from './tomatoMotion';
 import { handoverAt } from '@/game/beatTrack';
 import { tomatoLook, type TomatoLook } from './tomatoLooks';
+import { TOMATO_SEED } from './earlyCodas';
 import { isPlayerTurn, turnOpen } from './motion';
 
 /** A white-tiled kitchen. The tomato is the only saturated thing in it, so it is the subject. */
@@ -507,7 +508,7 @@ export class TomatoKnifeVignette implements Vignette {
     }
     if (this.finished && this.successful && this.finishAt !== null) {
       // One late seed, after everything else has settled.
-      const p = clamp01((now - this.finishAt - 0.9) / 0.32);
+      const p = clamp01((now - this.finishAt - TOMATO_SEED.atSec) / TOMATO_SEED.sec);
       if (p > 0 && p < 1) {
         g.fillStyle(this.fruit.seed, 1 - p * 0.5);
         g.fillEllipse(this.cutFor(1) + 22, -70 + p * 68, 5, 10, 6);

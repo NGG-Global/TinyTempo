@@ -17,6 +17,7 @@ import { floorSpan } from './floorSpan';
 import { contactGive } from '@/ui/spring';
 import { anticipation, clamp01, easeOut, HAMMER_MOTION, KNOCK, knockDepth, nailHeight, recoil } from './hammerMotion';
 import { hammerLook, type HammerLook } from './hammerLooks';
+import { HAMMER_CODA_SEC } from './earlyCodas';
 import { handoverAt } from '@/game/beatTrack';
 import { isPlayerTurn, turnOpen } from './motion';
 
@@ -368,7 +369,7 @@ export class HammerNailVignette implements Vignette {
     g.fillStyle(ink.lit).fillEllipse(tipX, -h - 10, 76, 13);
     g.lineStyle(2, WORKSHOP.cream, 0.8).lineBetween(x + bentX - 20, -h - 13, x + bentX + 11, -h - 13);
     if (this.finishDone && this.successful) {
-      const p = clamp01((now - this.finishAt!) / 0.7);
+      const p = clamp01((now - this.finishAt!) / HAMMER_CODA_SEC);
       g.lineStyle(2, WORKSHOP.cream, 1 - p);
       g.lineBetween(x + 42, -25 - p * 20, x + 42, -9 - p * 20);
       g.lineBetween(x + 34, -17 - p * 20, x + 50, -17 - p * 20);

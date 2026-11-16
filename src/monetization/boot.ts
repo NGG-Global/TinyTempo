@@ -2,7 +2,8 @@ import { Capacitor } from '@capacitor/core';
 
 import { reportError } from '@/core/errors';
 import { redeemFill } from '@/game/health';
-import { redeemTimer } from '@/game/replayTimer';
+import { redeemHeldTimer, timerLeftMs } from '@/game/replayTimer';
+import { queueCloudSave } from '@/playgames/cloudSync';
 import { track } from './analytics';
 import { createAdMobAds } from './admob';
 import { createPlayBilling } from './playBilling';
@@ -10,6 +11,7 @@ import type { PlayBilling } from './playBilling';
 import { createMonetization, installMonetization } from './service';
 import { stubAds, stubBilling } from './stub';
 import type { Billing, RewardedAds } from './types';
+import { createPartnerPrivacy } from './usOptOut';
 
 /**
  * Native-only: AdMob consent/preload and the Play Billing catalogue.
@@ -27,8 +29,12 @@ export async function bootMonetization(): Promise<void> {
     let ads: RewardedAds = stubAds;
     let billing: Billing = stubBilling;
     try {
-      const { nativeAdMobClient } = await import('./native');
-      const adapter = createAdMobAds(nativeAdMobClient());
+      const { nativeAdMobClient, nativePartnerPrivacyClient } = await import('./native');
+      const adapter = createAdMobAds(nativeAdMobClient(), {
+        partnerPrivacy: createPartnerPrivacy(nativePartnerPrivacyClient(), error => {
+          reportError(error, { kind: 'handled', context: { stage: 'ads-partner-privacy' } });
+        }),
+      });
       ads = adapter;
       await adapter.boot();
     } catch { /* ads stay stub */ }
@@ -39,11 +45,16 @@ export async function bootMonetization(): Promise<void> {
         // between granting and consuming safe to replay.
         fulfilRefill: claimId => { redeemFill(claimId); },
         // The same shape: `game/replayTimer.ts` persists the claim ids, so a replayed
-        // purchase adds its minutes once. Reported with what the timer now holds, since a
-        // purchase can stack on one still running.
+        // purchase holds once. Holding rather than starting is what lets the player choose
+        // when a paid timer runs; the one place a purchase starts at once is the restart
+        // sheet's Buy & restart, which starts the held item itself. Reported with what the
+        // running timer holds, since a start can stack on one still running.
         fulfilTimer: (product, claimId) => {
-          const grant = redeemTimer(product, claimId);
-          if (grant.granted) track('replay_timer_granted', { product, minutes_left: Math.ceil(Math.max(0, grant.timer.expiresAt - Date.now()) / 60_000) });
+          const grant = redeemHeldTimer(product, claimId);
+          if (!grant.held) return;
+          track('replay_timer_granted', { product, minutes_left: Math.ceil(timerLeftMs(grant.timer, Date.now()) / 60_000), held: 1 });
+          // The shelf is the one owned thing the cloud carries: a bought timer must survive a reinstall.
+          queueCloudSave();
         },
       });
       billing = adapter;

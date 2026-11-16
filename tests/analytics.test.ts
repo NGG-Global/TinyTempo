@@ -28,7 +28,10 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   purchase_completed: ['product'],
   purchase_cancelled: ['product'],
   purchase_failed: ['product', 'reason'],
-  replay_timer_granted: ['product', 'minutes_left'],
+  replay_timer_granted: ['product', 'minutes_left', 'held'],
+  store_opened: ['source', 'timer', 'hearts', 'premium'],
+  interstitial_shown: ['level'],
+  interstitial_failed: ['level', 'reason'],
   tutorial_started: ['source', 'repeat', 'since_launch_ms'],
   tutorial_step_started: ['step', 'attempt', 'resumed', 'elapsed_ms', 'repeat'],
   tutorial_step_ended: ['step', 'attempt', 'verdict', 'hits', 'elapsed_ms', 'repeat'],
@@ -85,6 +88,11 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   endless_abandoned: ['elapsed_sec', 'vignettes', 'reason'],
   endless_score_posted: ['duration_ms', 'new_best', 'retry', 'rules_version'],
   endless_score_failed: ['reason', 'retry'],
+  daily_opened: ['band', 'runs', 'paid', 'source'],
+  daily_started: ['band', 'tasks', 'peak_bpm', 'replay'],
+  daily_finished: ['band', 'stars', 'accuracy', 'paid', 'replay'],
+  daily_reward_paid: ['band', 'tier', 'hearts', 'restart', 'timer_minutes'],
+  daily_abandoned: ['reason', 'tasks_done'],
   endless_board_opened: ['result', 'sign_in'],
 };
 

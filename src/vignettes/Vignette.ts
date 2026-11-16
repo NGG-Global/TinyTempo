@@ -44,8 +44,12 @@ export interface Vignette {
   onGroove?(level: GrooveLevel, now: number): void;
   destroy(): void;
 }
-/** The words an act's look may replace: the name on the map, the intro and the two endings. */
-export type LookCopy = Partial<Pick<VignetteDefinition, 'title' | 'intro' | 'success' | 'rough'>>;
+/**
+ * The words an act's look may replace: the name on the map, the intro and the endings, the
+ * middle one included for an act that has one. Words only: a look can never add or remove
+ * an ending, since the scene reads `partial !== undefined` to decide how many there are.
+ */
+export type LookCopy = Partial<Pick<VignetteDefinition, 'title' | 'intro' | 'success' | 'rough' | 'partial'>>;
 
 export interface VignetteDefinition {
   readonly id: string;
@@ -92,8 +96,11 @@ export function definitionForLap(definition: VignetteDefinition, lap: number): V
   const looks = definition.looks;
   if (!looks?.length) return definition;
   const index = Number.isFinite(lap) ? Math.max(0, Math.floor(lap)) % looks.length : 0;
-  if (Object.keys(looks[index] ?? {}).length === 0) return definition;
+  // Only the words a look actually gives: a `partial: undefined` spread over the act's own
+  // would take its third ending away, and a look changes wording, never the ending count.
+  const given = Object.fromEntries(Object.entries(looks[index] ?? {}).filter(([, value]) => value !== undefined)) as LookCopy;
+  if (Object.keys(given).length === 0) return definition;
   let cache = withLooks.get(definition);
   if (!cache) withLooks.set(definition, cache = []);
-  return cache[index] ??= { ...definition, ...looks[index] };
+  return cache[index] ??= { ...definition, ...given };
 }

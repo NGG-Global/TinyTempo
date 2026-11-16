@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { APPLE_LOOKS, appleLook } from '../src/vignettes/appleLooks';
 import { SLUSHY_LOOKS, slushyLook } from '../src/vignettes/slushyLooks';
-import { definitionForLap } from '../src/vignettes/Vignette';
+import { definitionForLap, type LookCopy, type VignetteDefinition } from '../src/vignettes/Vignette';
 import { VIGNETTES } from '../src/vignettes/registry';
 import { actLevel, levelSpec } from '../src/game/levels';
 
@@ -82,6 +82,26 @@ describe('picnic looks', () => {
     const slushy = VIGNETTES.find(v => v.id === 'slushy')!;
     expect(definitionForLap(slushy, 3)).toBe(slushy);
     for (const bad of [-1, Number.NaN]) expect(definitionForLap(apple, bad)).toBe(apple);
+  });
+
+  it('lets a look word the middle ending, and never lets one take an ending away', () => {
+    const paper = VIGNETTES.find(v => v.id === 'paper')!;
+    expect(paper.partial).toBeDefined();
+    const worded: VignetteDefinition = {
+      ...paper,
+      // The type forbids an explicit `undefined`; the guard is for a look built outside it.
+      looks: [{}, { partial: { copy: ['Nearly\nthere.', 'One more snip.'] } }, { partial: undefined, title: 'Paper II' } as unknown as LookCopy],
+    };
+    expect(definitionForLap(worded, 0)).toBe(worded);
+    const second = definitionForLap(worded, 1);
+    expect(second.partial?.copy).toEqual(['Nearly\nthere.', 'One more snip.']);
+    expect(second.success).toBe(paper.success);
+    expect(second.title).toBe(paper.title);
+    // An explicit `undefined` is no words at all: the act keeps its own three endings.
+    const third = definitionForLap(worded, 2);
+    expect(third.title).toBe('Paper II');
+    expect(third.partial).toBe(paper.partial);
+    expect(definitionForLap({ ...paper, looks: [{}, { partial: undefined } as unknown as LookCopy] }, 1).partial).toBe(paper.partial);
   });
 
   it('pours a different flavour on each lap and starts with the berry', () => {

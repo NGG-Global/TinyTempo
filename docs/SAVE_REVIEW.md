@@ -26,6 +26,11 @@ disagree with the first.
 | `tiny-tempo.objectives.v1`, `.review.v1`, `.daily-tempo-best.v1` | Daily objectives, review record, daily best | Auto Backup only |
 | `tiny-tempo.cloud.v1` | Which Play Games player this device's progress belongs to | Auto Backup only |
 
+The three `small-acts.*` keys carry the project's working name from before Tiny Tempo, and
+are frozen: renaming one would orphan every installed save, and a migration would be a second
+read path on every launch forever, for nothing a player would see. Every key added since is
+`tiny-tempo.*`; the comment at `KEY` in `game/progress.ts` says the same where the name is typed.
+
 **When it is written.** Once per finished level, in `PlayScene.recordOutcome`, as one
 `setItem` of the whole progress object. The write is checked: if storage refuses it the result
 reads *Couldn't save*, the failure is reported to crash reporting, and the keepsake, objectives,
