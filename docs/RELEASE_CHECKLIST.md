@@ -322,7 +322,12 @@ these is a blocker — but none has been run on a device.
       price returns no offer, and the game leaves a product with no localized price out of
       the catalogue rather than showing a guessed one — the button simply reports the
       store as unavailable.
-- [ ] Link the AdMob app to the Play listing.
+- [ ] **Link the AdMob app the build uses to the Play listing**: `…~3245294136`, the one
+      holding the rewarded unit. A second AdMob app (`…~2309485949`, "Tiny Tempo: Rhythm…")
+      was created and linked to `com.tinytempo.app` instead; no build references it and it
+      has no ad units. A package can be linked to one AdMob app at a time, so clear that
+      app's store details first (App settings → App store details → Clear store details),
+      then Add store on `…~3245294136`, and hide the other under App visibility.
 - [ ] Publish `app-ads.txt` at the root of your developer-website domain. The live
       site is `tinytempo.games`, and the Pages workflow serves `legal/app-ads.txt` at
       `https://tinytempo.games/app-ads.txt`.
