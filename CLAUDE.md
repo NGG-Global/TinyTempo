@@ -416,6 +416,17 @@ and every act's and area's ink self-shaded to a near-black border at under 2:1, 
 as a thicker, muddier stem and closes Fredoka's counters. A new act's ink is covered by
 `tests/ui.test.ts` without anyone remembering this.
 
+**One interstitial, on a cleared level's Continue, and only when it is due**
+(`game/interstitialPacing.ts`, `INTERSTITIAL` in `config/ads.ts`, `docs/INTERSTITIAL.md`): from
+level 11, at most one per three counted clears and three minutes after any full-screen ad, never
+for Premium or while a replay timer runs, never on the Continue that launched the review flow, and
+never in Daily Tempo or Endless. The count is session memory. It plays from
+`continueFromSummary` after the review flow, is **never waited for** — the map warms one between
+levels and a Continue with none loaded goes straight on — and settles only when the ad has
+**closed**, because the plugin's `showInterstitial` resolves when it opens. One full-screen ad at
+a time, both behind the same consent gate. The pacing values are business knobs to tune from
+`interstitial_shown`/`interstitial_failed` and retention.
+
 Commerce analytics is `monetization/analytics.ts` (a typed bus, no vendor) behind
 `analytics/` (the Firebase adapter), and the provider **wraps the installed sink rather
 than replacing it** — `diagnostics/boot.ts` has already put a crash-breadcrumb wrapper
@@ -1266,6 +1277,7 @@ src/
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
     calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
+    interstitialPacing.ts  When a cleared level's Continue shows the interstitial: the rules and the session count; pure
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
     replayTimer.ts     Replay timers: the four consumables, the shelf of held timers (won and bought), one stacking expiry, idempotent holds, what is left; expiry device-local, the shelf in the cloud save

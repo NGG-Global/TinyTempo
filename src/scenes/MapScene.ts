@@ -21,6 +21,7 @@ import { readStoreFacts } from '@/game/storeFacts';
 import { startHeldTimerSynced } from '@/playgames/cloudSync';
 import { startRefusalCopy, storePuckBadge, storeRows, type StoreFacts } from '@/game/store';
 import { StoreCard } from '@/ui/storeCard';
+import { interstitialReachable } from '@/game/interstitialPacing';
 import { loadProgress, markPuckSeen, markReplayTipSeen, seenPuck, seenReplayTip, seenScreenHint, type Progress } from '@/game/progress';
 import { PuckLabel } from '@/ui/puckLabel';
 import { playAnalytics } from '@/game/playAnalytics';
@@ -456,6 +457,9 @@ export class MapScene extends BaseScene {
     this.muted = outputSilent(this);
     this.progress = loadProgress();
     this.health = loadHealth();
+    // Between levels, not during one: a level's Continue may show the interstitial, and the
+    // load is network and SDK work best kept off a rhythm. Premium and the stub load nothing.
+    if (interstitialReachable(this.progress.unlocked)) monetization().warmInterstitial();
     // Against the saved stars, not the shown count: a flight in progress is presentation,
     // and the gate either holds the frontier or does not.
     playAnalytics.gateOnMap(this.progress);

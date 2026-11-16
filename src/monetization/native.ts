@@ -54,6 +54,11 @@ export function nativeAdMobClient(): AdMobClient {
     showPrivacyOptionsForm: () => AdMob.showPrivacyOptionsForm(),
     prepareRewardVideoAd: adId => AdMob.prepareRewardVideoAd({ adId, isTesting: ADMOB.testAds }),
     showRewardVideoAd: () => AdMob.showRewardVideoAd(),
+    // `isTesting` makes the plugin load Google's demo interstitial in place of the live unit.
+    // `showInterstitial` takes no id: the plugin shows the one it last prepared, which under
+    // `isTesting` is filed under the demo id rather than the one passed here.
+    prepareInterstitial: adId => AdMob.prepareInterstitial({ adId, isTesting: ADMOB.testAds }),
+    showInterstitial: () => AdMob.showInterstitial(),
     addListener: (event, listener) => (
       AdMob.addListener as (name: string, fn: (payload?: unknown) => void) => Promise<{ remove: () => Promise<void> }>
     )(event, listener),

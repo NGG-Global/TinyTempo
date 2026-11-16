@@ -27,6 +27,8 @@ export const COMMERCE_EVENTS = [
   'purchase_failed',
   'replay_timer_granted',
   'store_opened',
+  'interstitial_shown',
+  'interstitial_failed',
 ] as const;
 
 export const GAMEPLAY_EVENTS = [
@@ -224,6 +226,10 @@ export interface AnalyticsPayloads {
   readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number; readonly held: Flag };
   /** The Workshop store's card opened from the map: whether a timer was running, the hearts held, and the legacy Premium. */
   readonly store_opened: { readonly source: 'map' | 'settings'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
+  /** An interstitial opened on a cleared level's Continue and closed again; `level` is the level cleared. */
+  readonly interstitial_shown: { readonly level: number };
+  /** One was due on that Continue and did not play: no consent or SDK, none loaded in time, or the show failed. */
+  readonly interstitial_failed: { readonly level: number; readonly reason: 'unavailable' | 'not_ready' | 'failed' };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';
