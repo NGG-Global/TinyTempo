@@ -323,8 +323,15 @@ these is a blocker — but none has been run on a device.
       the catalogue rather than showing a guessed one — the button simply reports the
       store as unavailable.
 - [ ] Link the AdMob app to the Play listing.
-- [ ] Publish `app-ads.txt` at the root of your developer-website domain and
-      declare that domain in AdMob. The live site is `tinytempo.games`.
+- [ ] Publish `app-ads.txt` at the root of your developer-website domain. The live
+      site is `tinytempo.games`, and the Pages workflow serves `legal/app-ads.txt` at
+      `https://tinytempo.games/app-ads.txt`.
+- [ ] **Set the Play listing's Website to `https://tinytempo.games`** (Store settings →
+      Store listing contact details). AdMob takes no domain of its own: it crawls
+      `/app-ads.txt` on the *hostname* of this field. A `ngg-global.github.io/TinyTempo/`
+      URL there sends the crawler to `ngg-global.github.io/app-ads.txt`, which does not
+      exist — the 301 to `tinytempo.games` is on the path, not the root — and the app
+      stays unverified. AdMob can take up to 24 hours to see a changed listing.
 - [ ] **Add Unity's app-ads.txt lines.** `legal/app-ads.txt` holds Google's line only. Copy
       Unity's full list from its dashboard and add `OWNERDOMAIN` as
       `docs/UNITY_MEDIATION.md` describes; never a guessed or placeholder line.
