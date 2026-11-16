@@ -30,6 +30,8 @@ const PAYLOAD_KEYS: Record<AnalyticsEvent, readonly string[]> = {
   purchase_failed: ['product', 'reason'],
   replay_timer_granted: ['product', 'minutes_left', 'held'],
   store_opened: ['source', 'timer', 'hearts', 'premium'],
+  interstitial_shown: ['level'],
+  interstitial_failed: ['level', 'reason'],
   tutorial_started: ['source', 'repeat', 'since_launch_ms'],
   tutorial_step_started: ['step', 'attempt', 'resumed', 'elapsed_ms', 'repeat'],
   tutorial_step_ended: ['step', 'attempt', 'verdict', 'hits', 'elapsed_ms', 'repeat'],

@@ -36,6 +36,7 @@ import {
 } from '@/game/restart';
 import { RESTART_COPY, RestartSheet, type RestartSheetTap } from '@/ui/restartSheet';
 import { loadDailyRestarts, restartsLeft, useDailyRestart } from '@/game/dailyRestarts';
+import { interstitialPacer, interstitialVerdict } from '@/game/interstitialPacing';
 import { loadReplayTimer, redeemHeldTimer, replayTimerActive, shelfView, shortTimerLeft, timerLeftMs, type TimerProductId } from '@/game/replayTimer';
 import { startRefusalCopy } from '@/game/store';
 import { syncReminders } from '@/reminders/sync';
@@ -2240,6 +2241,9 @@ export class PlayScene extends BaseScene {
     const accuracy = meanAccuracy(this.results);
     this.recordOutcome();
     const outcome = this.outcome!;
+    // Counted when the result opens rather than on Continue, so a clear left by the map puck
+    // still counts toward the next Continue's interstitial (`game/interstitialPacing.ts`).
+    if (outcome.cleared && !this.previewResult) interstitialPacer.noteClear(this.spec.level);
     // A cleared finale names the area it closed, and the ribbon over the plaque says so.
     this.finaleCleared = this.finale !== null && outcome.cleared && !this.saveFailed;
     // The mastery payoff waits for the medals, and on a finale for the ribbon and its card:
@@ -2903,8 +2907,9 @@ export class PlayScene extends BaseScene {
   }
   /**
    * The cleared result's Continue. Not `leaveForMap`, which the map puck and the mid-run
-   * sheet also use: only this exit is where a review milestone's flow is launched, and
-   * it goes to the map on every branch — unavailable, refused, failed or slow included.
+   * sheet also use: only this exit is where a review milestone's flow is launched, or else
+   * an interstitial the pacing says is due, and it goes to the map on every branch —
+   * unavailable, refused, failed or slow included.
    */
   private continueFromSummary(): void {
     if (this.curtain.active) return;
@@ -2912,10 +2917,35 @@ export class PlayScene extends BaseScene {
       async () => {
         const result = await appReview().launch();
         if (result !== 'skipped') breadcrumb('review launched', { result });
+        await this.playInterstitial(result !== 'skipped');
       },
       () => { if (!this.disposed) this.leaveForMap(); },
     );
     void this.continuation.run();
+  }
+  /**
+   * The level is over and the player has asked to move on, which is the break Google allows
+   * an interstitial at. Never waited for: one that is not loaded is skipped, and the map warms
+   * the next. `commerceBusy` holds the result still behind it, as a rewarded ad does.
+   */
+  private async playInterstitial(reviewLaunched: boolean): Promise<void> {
+    if (this.previewResult || this.disposed) return;
+    const ads = monetization();
+    const level = this.spec.level;
+    const now = Date.now();
+    const verdict = interstitialVerdict({
+      level, clears: interstitialPacer.clears, premium: ads.premium(), timerRunning: replayTimerActive(now),
+      reviewLaunched, now, lastAdClosedAt: ads.lastAdClosedAt(),
+    });
+    if (verdict !== 'show') return;
+    this.commerceBusy = true;
+    try {
+      const result = await ads.showInterstitial({ level });
+      if (result.shown) interstitialPacer.noteShown();
+      else breadcrumb('interstitial skipped', { reason: result.reason });
+    } finally {
+      this.commerceBusy = false;
+    }
   }
   private leaveForMap(): void {
     if (this.curtain.active) return;

@@ -1,11 +1,12 @@
 # Unity Ads through AdMob mediation
 
-Unity Ads is a second bidder for the one rewarded ad, behind Google AdMob. It is not a
-second ad SDK the game drives: AdMob initialises it, asks it to bid, and presents the ad it
-wins with, through the same `prepareRewardVideoAd` / `showRewardVideoAd` calls the game
-already makes. Nothing about rewards changed — a heart is still granted from one verified
-`Rewarded` event, once (`monetization/admob.ts`) — and there is still no banner, no
-interstitial and no second placement.
+Unity Ads is a second bidder behind Google AdMob, for the rewarded ad and — once its
+mediation group is set up — for the interstitial a cleared level's Continue may show
+(`docs/INTERSTITIAL.md`). It is not a second ad SDK the game drives: AdMob initialises it,
+asks it to bid, and presents the ad it wins with, through the same `prepareRewardVideoAd` /
+`showRewardVideoAd` and `prepareInterstitial` / `showInterstitial` calls the game already
+makes. Nothing about rewards changed — a heart is still granted from one verified `Rewarded`
+event, once (`monetization/admob.ts`) — and there is still no banner.
 
 There is no Unity game id or placement id anywhere in this repository. They belong to the
 AdMob mediation mapping, which is where the adapter reads them.
@@ -114,11 +115,15 @@ already brings. Nothing is removed by the app.
 
 `legal/app-ads.txt` is published at `https://tinytempo.games/app-ads.txt` by the Pages
 workflow (`.github/workflows/pages.yml` uploads `legal/` as the site root; GitHub Pages serves
-it as `text/plain`). It holds Google's line only. **Unity's lines are not in it**: they are
-specific to the Unity organisation and come only from its dashboard, and none were supplied.
-Do not add guessed or placeholder lines — `tests/unityMediation.test.ts` refuses placeholders.
+it as `text/plain`). It holds Google's line first, then **Unity's list as its dashboard
+generated it** (163 lines, added as delivered — `unity.com, 161555041, DIRECT` among them),
+under a comment naming it. One line, `dauup.com`, carries a 15-character certification id
+where the rest carry 16; it is Unity's to correct, and a buyer ignores a field it cannot
+read, so it stays as delivered. **`OWNERDOMAIN` is still missing**: step 4 below waits on the
+owner naming the business domain. Do not add guessed or placeholder lines —
+`tests/unityMediation.test.ts` refuses placeholders.
 
-To finish it:
+How it was done, and how to redo it when Unity's list changes:
 
 1. Unity Dashboard → **Setup** → **Organization Settings** → **Organization info**: set
    **Developer Website** to `https://tinytempo.games` (the root domain the Play listing names).
@@ -136,7 +141,8 @@ To finish it:
 
 **Unity Dashboard**
 
-- Create the Tiny Tempo Android project and its **Rewarded** ad unit/placement for bidding.
+- Create the Tiny Tempo Android project and its **Rewarded** ad unit/placement for bidding,
+  and an **Interstitial** placement for the interstitial's group.
 - **Child-directed ad network settings**: choose the designation that matches the Play target
   audience and the privacy policy (not directed at under-13s). See *Age* above for what each
   choice does to the `user.nonbehavioral` flag the adapter sends.
@@ -147,6 +153,9 @@ To finish it:
 
 - Mediation → the rewarded unit `ca-app-pub-6818267616933452/9892619657`: add **Unity Ads
   (bidding)** with the Unity game id and placement id. The ids live here and nowhere else.
+- Mediation → a group for the interstitial unit `ca-app-pub-6818267616933452/6246850626`,
+  with **Unity Ads (bidding)** and the Unity interstitial placement. Without it the
+  interstitial is filled by AdMob alone, which works and earns less.
 - Privacy & messaging → GDPR message: confirm Unity Ads is among the selected ad partners, or
   the adapter has no consent to pass on for it.
 - Privacy & messaging → **US states** message: decide whether to publish one. It is what gives

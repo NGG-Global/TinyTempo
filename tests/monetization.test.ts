@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   ANALYTICS_EVENTS, COMMERCE_EVENTS, PRODUCT, createMonetization, installAnalytics, installMonetization,
   monetization, purchaseFeedback, restoreFeedback, rewardedFeedback, stubAds, stubBilling, track,
-  type AnalyticsEvent, type Billing, type RewardedAds,
+  type AnalyticsEvent, type Billing, type InterstitialAds, type InterstitialResult, type RewardedAds,
 } from '../src/monetization';
 
 const events: { event: AnalyticsEvent; payload: unknown }[] = [];
@@ -178,7 +178,7 @@ describe('successful adapters still report through the facade', () => {
 describe('analytics boundary', () => {
   it('names every prepared commerce event', () => {
     // Gameplay events share the bus (see game/playAnalytics.ts); the commerce funnel is
-    // still exactly these twelve, and still first.
+    // exactly these fourteen, and still first.
     expect([...ANALYTICS_EVENTS].slice(0, COMMERCE_EVENTS.length)).toEqual([...COMMERCE_EVENTS]);
     expect([...COMMERCE_EVENTS]).toEqual([
       'health_empty',
@@ -193,6 +193,8 @@ describe('analytics boundary', () => {
       'purchase_failed',
       'replay_timer_granted',
       'store_opened',
+      'interstitial_shown',
+      'interstitial_failed',
     ]);
   });
 
@@ -274,5 +276,73 @@ describe('restore copy', () => {
     expect(restoreFeedback({ ok: true, premium: false })).toBe('No purchases to restore.');
     expect(restoreFeedback({ ok: false, reason: 'unavailable' })).toBe("The store isn't available.");
     expect(restoreFeedback({ ok: false, reason: 'failed' })).toBe("Couldn't restore just now.");
+  });
+});
+
+describe('interstitial through the facade', () => {
+  function interstitialAds(result: InterstitialResult, ready = true): RewardedAds & InterstitialAds & { warms: number } {
+    const ads = {
+      warms: 0,
+      available: () => true,
+      show: async () => ({ ok: true }) as const,
+      interstitialReady: () => ready,
+      prepareInterstitial: async () => { ads.warms += 1; },
+      showInterstitial: async () => result,
+    };
+    return ads;
+  }
+  const premium: Billing = { ...stubBilling, premium: () => true };
+
+  it('is never ready, never warmed and never shown on the stub', async () => {
+    const commerce = createMonetization();
+    commerce.warmInterstitial();
+    expect(commerce.interstitialReady()).toBe(false);
+    await expect(commerce.showInterstitial({ level: 12 })).resolves.toEqual({ shown: false, reason: 'unavailable' });
+    expect(commerce.lastAdClosedAt()).toBeNull();
+  });
+
+  it('never shows Premium an interstitial, and never loads one for them', async () => {
+    const ads = interstitialAds({ shown: true });
+    const commerce = createMonetization({ ads, billing: premium });
+    commerce.warmInterstitial();
+    await Promise.resolve();
+    expect(ads.warms).toBe(0);
+    expect(commerce.interstitialReady()).toBe(false);
+    await expect(commerce.showInterstitial({ level: 12 })).resolves.toEqual({ shown: false, reason: 'unavailable' });
+  });
+
+  it('reports a shown interstitial with its level and starts the gap when it closes', async () => {
+    let clock = 5_000;
+    const ads = interstitialAds({ shown: true });
+    const commerce = createMonetization({ ads, now: () => clock });
+    commerce.warmInterstitial();
+    await Promise.resolve();
+    expect(ads.warms).toBe(1);
+    expect(commerce.interstitialReady()).toBe(true);
+    clock = 9_000;
+    await expect(commerce.showInterstitial({ level: 14 })).resolves.toEqual({ shown: true });
+    expect(commerce.lastAdClosedAt()).toBe(9_000);
+    expect(events).toEqual([{ event: 'interstitial_shown', payload: { level: 14 } }]);
+  });
+
+  it('reports why one did not play, and leaves the gap where it was', async () => {
+    const commerce = createMonetization({ ads: interstitialAds({ shown: false, reason: 'not_ready' }, false) });
+    await expect(commerce.showInterstitial({ level: 20 })).resolves.toEqual({ shown: false, reason: 'not_ready' });
+    expect(commerce.lastAdClosedAt()).toBeNull();
+    expect(events).toEqual([{ event: 'interstitial_failed', payload: { level: 20, reason: 'not_ready' } }]);
+  });
+
+  it('starts the gap from a rewarded ad the player watched or skipped, not one that never opened', async () => {
+    let clock = 1_000;
+    const watched = createMonetization({ ads: { available: () => true, show: async () => ({ ok: true }) }, now: () => clock });
+    await watched.showRewarded();
+    expect(watched.lastAdClosedAt()).toBe(1_000);
+    clock = 2_000;
+    const skipped = createMonetization({ ads: { available: () => true, show: async () => ({ ok: false, reason: 'cancelled' }) }, now: () => clock });
+    await skipped.showRewarded();
+    expect(skipped.lastAdClosedAt()).toBe(2_000);
+    const failed = createMonetization({ ads: { available: () => true, show: async () => ({ ok: false, reason: 'failed' }) }, now: () => clock });
+    await failed.showRewarded();
+    expect(failed.lastAdClosedAt()).toBeNull();
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { ADMOB } from '../src/config/ads';
 import {
-  createAdMobAds, createMonetization, REWARD_EVENTS, type AdMobClient, type ConsentSnapshot,
+  createAdMobAds, createMonetization, INTERSTITIAL_EVENTS, REWARD_EVENTS, type AdMobClient, type ConsentSnapshot,
 } from '../src/monetization';
 import { claimHeart, type Health } from '../src/game/health';
 import { createConsentRegionSignal, type ConsentRegion } from '../src/monetization/consentRegion';
@@ -18,6 +18,9 @@ interface FakeOptions {
   readonly privacyFormThrows?: boolean;
   readonly prepare?: 'ok' | 'fail';
   readonly show?: 'reward' | 'dismiss' | 'fail' | 'reward-twice' | 'hang' | 'resolve-zero' | 'dismiss-then-reward';
+  readonly interstitialPrepare?: 'ok' | 'fail';
+  /** `dismiss` closes on the next tick; `open` stays up until the test emits a close. */
+  readonly interstitialShow?: 'dismiss' | 'fail-to-show' | 'reject' | 'open';
 }
 
 function fakeClient(options: FakeOptions = {}): AdMobClient & {
@@ -25,22 +28,29 @@ function fakeClient(options: FakeOptions = {}): AdMobClient & {
   readonly consentRequests: number;
   readonly privacyForms: number;
   readonly prepares: string[];
+  readonly interstitialPrepares: string[];
+  readonly interstitialShows: number;
   emit(event: string, payload?: unknown): void;
 } {
   const listeners = new Map<string, ((payload?: unknown) => void)[]>();
   const prepares: string[] = [];
+  const interstitialPrepares: string[] = [];
+  let interstitialShows = 0;
   let initializes = 0;
   let consentRequests = 0;
   let privacyForms = 0;
   let privacyShown = false;
   const client: AdMobClient & {
     initializes: number; consentRequests: number; privacyForms: number; prepares: string[];
+    interstitialPrepares: string[]; interstitialShows: number;
     emit: (event: string, payload?: unknown) => void;
   } = {
     get initializes() { return initializes; },
     get consentRequests() { return consentRequests; },
     get privacyForms() { return privacyForms; },
     get prepares() { return prepares; },
+    get interstitialPrepares() { return interstitialPrepares; },
+    get interstitialShows() { return interstitialShows; },
     emit(event, payload) {
       for (const listener of listeners.get(event) ?? []) listener(payload);
     },
@@ -83,6 +93,19 @@ function fakeClient(options: FakeOptions = {}): AdMobClient & {
       }
       client.emit(REWARD_EVENTS.rewarded, { type: 'heart', amount: 1 });
       return { type: 'heart', amount: 1 };
+    },
+    async prepareInterstitial(adId) {
+      interstitialPrepares.push(adId);
+      if (options.interstitialPrepare === 'fail') throw new Error('no fill');
+      return { adUnitId: adId };
+    },
+    async showInterstitial() {
+      interstitialShows += 1;
+      const mode = options.interstitialShow ?? 'dismiss';
+      if (mode === 'reject') throw new Error('not prepared');
+      // The plugin resolves once the ad is asked to show; the close arrives later as an event.
+      if (mode === 'dismiss') setTimeout(() => client.emit(INTERSTITIAL_EVENTS.dismissed), 0);
+      if (mode === 'fail-to-show') setTimeout(() => client.emit(INTERSTITIAL_EVENTS.failedToShow), 0);
     },
     async addListener(event, listener) {
       const list = listeners.get(event) ?? [];
@@ -405,5 +428,85 @@ describe('consent before the Mobile Ads SDK', () => {
     // Tests are not `build:release`, so they see what a debug APK sees.
     expect(ADMOB.testAds).toBe(true);
     expect(ADMOB.testDevices).toEqual([]);
+  });
+});
+
+describe('AdMob interstitial adapter', () => {
+  it('loads nothing at boot, and loads the interstitial unit only when asked', async () => {
+    const client = fakeClient();
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    expect(client.interstitialPrepares).toEqual([]);
+    expect(ads.interstitialReady()).toBe(false);
+    await Promise.all([ads.prepareInterstitial(), ads.prepareInterstitial()]);
+    await ads.prepareInterstitial();
+    expect(client.interstitialPrepares).toEqual([ADMOB.interstitialUnitId]);
+    expect(ads.interstitialReady()).toBe(true);
+  });
+
+  it('settles shown only when the ad has closed, and is spent after it', async () => {
+    const client = fakeClient({ interstitialShow: 'open' });
+    const ads = createAdMobAds(client);
+    await ads.prepareInterstitial();
+    let settled: unknown = null;
+    const showing = ads.showInterstitial().then(result => { settled = result; });
+    await new Promise(resolve => setTimeout(resolve, 5));
+    expect(settled).toBeNull();
+    expect(ads.interstitialReady()).toBe(false);
+    // The rewarded ad never opens over it.
+    await expect(ads.show()).resolves.toEqual({ ok: false, reason: 'failed' });
+    client.emit(INTERSTITIAL_EVENTS.dismissed);
+    await showing;
+    expect(settled).toEqual({ shown: true });
+    expect(ads.interstitialReady()).toBe(false);
+  });
+
+  it('never waits for a load: no ad loaded is not_ready, and the next one starts loading', async () => {
+    const client = fakeClient();
+    const ads = createAdMobAds(client);
+    await ads.boot();
+    await expect(ads.showInterstitial()).resolves.toEqual({ shown: false, reason: 'not_ready' });
+    expect(client.interstitialShows).toBe(0);
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(client.interstitialPrepares).toEqual([ADMOB.interstitialUnitId]);
+  });
+
+  it('reports a failed show, whether the call rejects or the ad cannot open', async () => {
+    for (const mode of ['reject', 'fail-to-show'] as const) {
+      const client = fakeClient({ interstitialShow: mode });
+      const ads = createAdMobAds(client);
+      await ads.prepareInterstitial();
+      await expect(ads.showInterstitial()).resolves.toEqual({ shown: false, reason: 'failed' });
+    }
+  });
+
+  it('gives up on an ad that never closes, so Continue is never held', async () => {
+    const client = fakeClient({ interstitialShow: 'open' });
+    const ads = createAdMobAds(client, { interstitialLimitMs: 10 });
+    await ads.prepareInterstitial();
+    await expect(ads.showInterstitial()).resolves.toEqual({ shown: false, reason: 'failed' });
+  });
+
+  it('requests nothing without consent, and nothing with an empty unit id', async () => {
+    const blocked = fakeClient({ consent: BLOCKED, form: BLOCKED });
+    const denied = createAdMobAds(blocked);
+    await denied.prepareInterstitial();
+    expect(blocked.interstitialPrepares).toEqual([]);
+    await expect(denied.showInterstitial()).resolves.toEqual({ shown: false, reason: 'unavailable' });
+
+    const client = fakeClient();
+    const off = createAdMobAds(client, { interstitialUnitId: '' });
+    await off.prepareInterstitial();
+    expect(client.interstitialPrepares).toEqual([]);
+    await expect(off.showInterstitial()).resolves.toEqual({ shown: false, reason: 'unavailable' });
+  });
+
+  it('keeps a failed load unready, and loads again on the next warm', async () => {
+    const client = fakeClient({ interstitialPrepare: 'fail' });
+    const ads = createAdMobAds(client);
+    await ads.prepareInterstitial();
+    expect(ads.interstitialReady()).toBe(false);
+    await ads.prepareInterstitial();
+    expect(client.interstitialPrepares).toHaveLength(2);
   });
 });

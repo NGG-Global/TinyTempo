@@ -322,12 +322,32 @@ these is a blocker — but none has been run on a device.
       price returns no offer, and the game leaves a product with no localized price out of
       the catalogue rather than showing a guessed one — the button simply reports the
       store as unavailable.
-- [ ] Link the AdMob app to the Play listing.
-- [ ] Publish `app-ads.txt` at the root of your developer-website domain and
-      declare that domain in AdMob. The live site is `tinytempo.games`.
-- [ ] **Add Unity's app-ads.txt lines.** `legal/app-ads.txt` holds Google's line only. Copy
-      Unity's full list from its dashboard and add `OWNERDOMAIN` as
-      `docs/UNITY_MEDIATION.md` describes; never a guessed or placeholder line.
+- [ ] **Link the AdMob app the build uses to the Play listing**: `…~3245294136`, the one
+      holding the rewarded unit. A second AdMob app (`…~2309485949`, "Tiny Tempo: Rhythm…")
+      was created and linked to `com.tinytempo.app` instead; no build references it and it
+      has no ad units. A package can be linked to one AdMob app at a time, so clear that
+      app's store details first (App settings → App store details → Clear store details),
+      then Add store on `…~3245294136`, and hide the other under App visibility.
+- [ ] Publish `app-ads.txt` at the root of your developer-website domain. The live
+      site is `tinytempo.games`, and the Pages workflow serves `legal/app-ads.txt` at
+      `https://tinytempo.games/app-ads.txt`.
+- [ ] **Set the Play listing's Website to `https://tinytempo.games`** (Store settings →
+      Store listing contact details). AdMob takes no domain of its own: it crawls
+      `/app-ads.txt` on the *hostname* of this field. A `ngg-global.github.io/TinyTempo/`
+      URL there sends the crawler to `ngg-global.github.io/app-ads.txt`, which does not
+      exist — the 301 to `tinytempo.games` is on the path, not the root — and the app
+      stays unverified. AdMob can take up to 24 hours to see a changed listing.
+- [x] ~~**Add Unity's app-ads.txt lines.**~~ Done — Unity's list is in `legal/app-ads.txt`
+      under Google's line, as its dashboard generated it.
+- [ ] **Add `OWNERDOMAIN` to `legal/app-ads.txt`**, which Unity requires: the owner's business
+      domain, matching the seller domain in sellers.json (`docs/UNITY_MEDIATION.md`). Never a
+      guessed one.
+- [ ] **Interstitial**: confirm the unit `ca-app-pub-6818267616933452/6246850626` is an
+      *Interstitial* unit under the app `…~3245294136`, set its frequency cap on the unit (not
+      the app — an app cap counts rewarded ads too), and add Unity Ads (bidding) to its
+      mediation group. On a release build from Play, clear three levels past 10 and check
+      that one plays on the third Continue and that the map follows when it closes
+      (`docs/INTERSTITIAL.md`).
 - [ ] Set up a merchant account for paid distribution.
 - [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
       APK never sees an update; that is Play's rule, not a bug. Ship a higher
