@@ -339,9 +339,9 @@ these is a blocker — but none has been run on a device.
       stays unverified. AdMob can take up to 24 hours to see a changed listing.
 - [x] ~~**Add Unity's app-ads.txt lines.**~~ Done — Unity's list is in `legal/app-ads.txt`
       under Google's line, as its dashboard generated it.
-- [ ] **Add `OWNERDOMAIN` to `legal/app-ads.txt`**, which Unity requires: the owner's business
-      domain, matching the seller domain in sellers.json (`docs/UNITY_MEDIATION.md`). Never a
-      guessed one.
+- [x] ~~**Add `OWNERDOMAIN` to `legal/app-ads.txt`**~~. Done — `OWNERDOMAIN=tinytempo.games`,
+      the owner's choice. If AdMob or Unity later shows seller information under another
+      domain, this line must name that one (`docs/UNITY_MEDIATION.md`).
 - [ ] **Interstitial**: confirm the unit `ca-app-pub-6818267616933452/6246850626` is an
       *Interstitial* unit under the app `…~3245294136`, set its frequency cap on the unit (not
       the app — an app cap counts rewarded ads too), and add Unity Ads (bidding) to its

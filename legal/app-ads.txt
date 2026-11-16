@@ -1,5 +1,9 @@
 google.com, pub-6818267616933452, DIRECT, f08c47fec0942fa0
 
+# The business domain of the app's owner, which Unity requires; the site's own domain, as
+# Unity allows where there is no separate one.
+OWNERDOMAIN=tinytempo.games
+
 # Unity Ads, bidding through AdMob mediation: the list from the Unity dashboard, as delivered.
 playdigo.com, 1965, RESELLER
 smartclip.net, 14679, RESELLER
