@@ -997,6 +997,9 @@ redrawn only when the minute moves, the shelf's running token reads *1 hr 12 min
 Settings' chip reads *1 RUNNING · 1 ON YOUR SHELF*; every surface reads `StoreFacts` from one
 place (`readStoreFacts`), so none can disagree. A Premium account sees its entitlement, no
 rows and no badge.
+Every Console field for the products is in `docs/PLAY_PRODUCTS.md`, and their icons are
+drawn by `ui/productArt.ts` into `store/products/` (`scripts/product-icons.mjs`, which
+`tests/productArt.test.ts` holds to Google's format).
 **Premium (`tinytempo_premium`) is no longer sold and still honoured**: nothing offers or
 prices it, `purchase` refuses it as unavailable, and an account that owns it keeps unlimited
 hearts, no ads and free restarts through `queryPurchases`, Restore included — a paid
@@ -1369,6 +1372,7 @@ src/
     gateCeremony.ts    A ready gate's idle and the tap-to-open unlock, as pure f(t)
     areaBadge.ts       An area's badge medallion and the springing padlock
     achievementArt.ts  The Play Console achievement icons, drawn and rasterised; not imported by the game
+    productArt.ts      The Play Console in-app product icons, the same way; written to store/products/ by scripts/product-icons.mjs
     calibrationLane.ts The calibration screen's lane: where each tap landed against the beat; poses pure
     strikeCue.ts       The calibration screen's strike cue: a ball landing on a ring every click, and the count-in's word; poses pure
     restartSheet.ts    The restart puck's sheet over a running level: what a restart takes, layout, hit test and tap guard
