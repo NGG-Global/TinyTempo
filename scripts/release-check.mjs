@@ -68,6 +68,7 @@ export const RELEASE_MARKERS = Object.freeze([
   { feature: 'Timer shelf: bought timers are held and started by the player', text: 'Your timers', source: 'src/monetization/copy.ts' },
   { feature: 'Daily Tempo', text: 'Free to play. No heart needed.', source: 'src/scenes/DailyScene.ts' },
   { feature: 'Interstitial on a cleared level\'s Continue, paced', text: 'interstitial_shown', source: 'src/monetization/service.ts' },
+  { feature: 'Interstitial on every played level exit, cleared, failed or quit', text: 'unplayed', source: 'src/game/interstitialPacing.ts' },
 ]);
 
 /** Which markers a built bundle is missing. */

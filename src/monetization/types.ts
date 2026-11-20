@@ -3,6 +3,7 @@
  * Native SDKs implement the same contracts; the stub keeps the browser and
  * every failed native call on the safe path.
  */
+import type { LevelExit } from '../game/interstitialPacing';
 
 /**
  * The Play one-time products. `premium` is **legacy**: non-consumable, sold before the
@@ -88,8 +89,8 @@ export interface Monetization {
   warmInterstitial(): void;
   /** A loaded interstitial, for a player who could be shown one. */
   interstitialReady(): boolean;
-  /** `level` is the level just cleared, for the analytics event. */
-  showInterstitial(context: { readonly level: number }): Promise<InterstitialResult>;
+  /** `level` is the level being left and `exit` how it was left, for the analytics event. */
+  showInterstitial(context: { readonly level: number; readonly exit: LevelExit }): Promise<InterstitialResult>;
   /**
    * Wall-clock ms at which the last full-screen ad this session closed — rewarded or
    * interstitial — or null when none has. What `INTERSTITIAL.minGapMs` is measured from.

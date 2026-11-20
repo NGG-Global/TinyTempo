@@ -343,11 +343,13 @@ these is a blocker — but none has been run on a device.
       the owner's choice. If AdMob or Unity later shows seller information under another
       domain, this line must name that one (`docs/UNITY_MEDIATION.md`).
 - [ ] **Interstitial**: confirm the unit `ca-app-pub-6818267616933452/6246850626` is an
-      *Interstitial* unit under the app `…~3245294136`, set its frequency cap on the unit (not
-      the app — an app cap counts rewarded ads too), and add Unity Ads (bidding) to its
-      mediation group. On a release build from Play, clear three levels past 10 and check
-      that one plays on the third Continue and that the map follows when it closes
-      (`docs/INTERSTITIAL.md`).
+      *Interstitial* unit under the app `…~3245294136`, that no frequency cap on the unit is
+      tighter than the game's own pacing (a unit cap overrides it; never set an app cap, which
+      counts rewarded ads too), and add Unity Ads (bidding) to its mediation group. On a
+      release build from Play, play a level past 5 and Continue, fail one and leave by the map
+      puck, and pause one part-way and leave: one plays on each exit at least 30 seconds after
+      the last, the map follows when it closes, and levels 1–5 and an out-of-hearts arrival
+      show none (`docs/INTERSTITIAL.md`).
 - [ ] Set up a merchant account for paid distribution.
 - [ ] **Confirm in-app updates on a Play-installed build.** A Studio-sideloaded
       APK never sees an update; that is Play's rule, not a bug. Ship a higher

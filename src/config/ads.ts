@@ -1,6 +1,6 @@
 /**
  * The live AdMob app and its two units for Tiny Tempo: the rewarded unit the player opts
- * into, and the interstitial a cleared level's Continue may show (`INTERSTITIAL`).
+ * into, and the interstitial shown when the player leaves a level they played (`INTERSTITIAL`).
  *
  * `appId` is duplicated in `android/app/src/main/res/values/strings.xml`, because the
  * manifest needs it before any JavaScript runs and the two files share no source. They
@@ -18,8 +18,9 @@ export const ADMOB = {
   appId: 'ca-app-pub-6818267616933452~3245294136',
   rewardedUnitId: 'ca-app-pub-6818267616933452/9892619657',
   /**
-   * The interstitial shown on a cleared level's Continue, paced by `INTERSTITIAL`. An empty
-   * string turns the format off: nothing is loaded and nothing is shown.
+   * The interstitial shown on the way out of a level the player played, cleared, failed or
+   * quit, paced by `INTERSTITIAL`. An empty string turns the format off: nothing is loaded and
+   * nothing is shown.
    */
   interstitialUnitId: 'ca-app-pub-6818267616933452/6246850626',
   /**
@@ -44,26 +45,30 @@ export const ADMOB = {
 } as const;
 
 /**
- * When the interstitial may play. Google allows one only at a break between levels and never
- * after every action (docs/INTERSTITIAL.md), and every rule here is a business knob rather than
- * a fact — tune them from the analytics, not by feel. The counts are session memory: nothing is
- * stored, so a fresh launch starts the count again and a short session may see none.
+ * When the interstitial may play: on the way out of a level, whether the player cleared it,
+ * failed it or quit it, once an attempt has begun. Google allows one at a break between levels
+ * and forbids one straight after another or after every action (docs/INTERSTITIAL.md); the
+ * level itself, never a single tap, is the unit here, and `minGapMs` is the floor between ads.
+ * Every value is a business knob rather than a fact — tune them from the analytics, not by
+ * feel. The counts are session memory: nothing is stored.
  */
 export const INTERSTITIAL = {
   /**
-   * The first level whose clear can count. The first area (1–10) is where the game asks
-   * nothing of a new player — its hearts are free too (`HEALTH.protectedThrough`) — so an ad
-   * there would be the first thing about money a new player meets.
+   * The first level whose exit can show one. Levels 1–5 are a new player's first minutes, at
+   * 14–18 seconds of play each, so an ad there would be the first thing about money they meet.
    */
-  fromLevel: 11,
-  /** At most one interstitial per this many cleared levels from `fromLevel` on. */
-  everyClears: 3,
+  fromLevel: 6,
+  /** At most one interstitial per this many played level exits from `fromLevel` on: every exit. */
+  everyLevels: 1,
   /**
    * The least time after any full-screen ad has closed, the player's own rewarded ads
-   * included, before an interstitial may open. Google forbids one straight after another;
-   * this keeps one off the heels of a rewarded ad as well.
+   * included, before an interstitial may open. Google forbids one straight after another, and
+   * this keeps one off the heels of a rewarded ad or a level entered and left at once. Thirty
+   * seconds is about one level's round trip on levels 6–14 (18–23 s of play, then the result
+   * and the map) and well under it later, so a brisk player may skip one early on and ordinary
+   * play sees one on nearly every exit.
    */
-  minGapMs: 3 * 60_000,
+  minGapMs: 30_000,
 } as const;
 
 function testDeviceIds(raw: unknown): readonly string[] {

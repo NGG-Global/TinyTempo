@@ -19,10 +19,11 @@ purchase event is now one of the four `replay_timer_*` ids or `heart_refill_full
 `timer` was running, the `hearts` held and `premium` — and every offer the card makes fires
 `purchase_offer_shown`, as the restart sheet's picker does. The Daily Tempo's five events
 are `DAILY_EVENTS`, listed in `docs/DAILY_TEMPO.md`. The thirteenth and fourteenth are the
-interstitial's: `interstitial_shown` with the `level` cleared, once one has opened and closed,
-and `interstitial_failed` with `level` and a `reason` — `unavailable`, `not_ready` (none
-loaded when one was due) or `failed` — fired only when the pacing said one was due, so their
-ratio is the fill the dashboard cannot see. See `docs/INTERSTITIAL.md`.)
+interstitial's: `interstitial_shown` with the `level` left and how it was left (`exit`:
+`cleared`, `failed` or `quit`), once one has opened and closed, and `interstitial_failed` with
+`level`, `exit` and a `reason` — `unavailable`, `not_ready` (none loaded when one was due) or
+`failed` — fired only when the pacing said one was due, so their ratio is the fill the
+dashboard cannot see. See `docs/INTERSTITIAL.md`.)
 `monetization/analytics.ts` was a typed bus with a default
 sink that logs in DEV and does nothing in a production build, so the game would have
 shipped a monetization funnel that nobody could see.
