@@ -416,16 +416,21 @@ and every act's and area's ink self-shaded to a near-black border at under 2:1, 
 as a thicker, muddier stem and closes Fredoka's counters. A new act's ink is covered by
 `tests/ui.test.ts` without anyone remembering this.
 
-**One interstitial, on a cleared level's Continue, and only when it is due**
+**An interstitial on the way out of every level the player played** — cleared, failed or quit
 (`game/interstitialPacing.ts`, `INTERSTITIAL` in `config/ads.ts`, `docs/INTERSTITIAL.md`): from
-level 11, at most one per three counted clears and three minutes after any full-screen ad, never
-for Premium or while a replay timer runs, never on the Continue that launched the review flow, and
-never in Daily Tempo or Endless. The count is session memory. It plays from
-`continueFromSummary` after the review flow, is **never waited for** — the map warms one between
-levels and a Continue with none loaded goes straight on — and settles only when the ad has
-**closed**, because the plugin's `showInterstitial` resolves when it opens. One full-screen ad at
-a time, both behind the same consent gate. The pacing values are business knobs to tune from
-`interstitial_shown`/`interstitial_failed` and retention.
+level 6, once an attempt has begun in the visit (`PlayScene.played`), and 30 seconds after any
+full-screen ad; never for Premium, never on the Continue that launched the review flow, never on
+Try again, a replay or a restart, which do not leave, and never in Daily Tempo or Endless. A
+running replay timer does not hold it back. **Every way out goes through one of two exits** —
+`continueFromSummary` after the review flow, `exitLevel` for the puck, back, the restart sheet
+and the out-of-hearts Map — and `tests/interstitialPacing.test.ts` reads PlayScene so nothing
+leaves around them; a running level is paused before it can be left, so the ad never lands on a
+beat. The count is session memory. It is **never waited for** — the map warms one between levels
+and an exit with none loaded goes straight on — and settles only when the ad has **closed**,
+because the plugin's `showInterstitial` resolves when it opens. One full-screen ad at a time, both
+behind the same consent gate. The pacing values are business knobs to tune from
+`interstitial_shown`/`interstitial_failed` (`level`, `exit`) and retention, and a frequency cap on
+the AdMob unit overrides them.
 
 Commerce analytics is `monetization/analytics.ts` (a typed bus, no vendor) behind
 `analytics/` (the Firebase adapter), and the provider **wraps the installed sink rather
@@ -1280,7 +1285,7 @@ src/
     resultCopy.ts      The result's words: thresholds, the next star, replay, the next gate
     timingReport.ts    The result's timing details: counts, the median lean, spread, one line of advice; pure
     calibrationCopy.ts The Tap offset's words: the number, and the result's reason; pure
-    interstitialPacing.ts  When a cleared level's Continue shows the interstitial: the rules and the session count; pure
+    interstitialPacing.ts  When leaving a played level shows the interstitial: the rules and the session count; pure
     restart.ts         The restart puck: free, a daily restart or out of them; start modes, the handover, the rewarded restart; pure
     dailyRestarts.ts   Two restarts a day: today's count, spending one, validated storage; device-local
     replayTimer.ts     Replay timers: the four consumables, the shelf of held timers (won and bought), one stacking expiry, idempotent holds, what is left; expiry device-local, the shelf in the cloud save

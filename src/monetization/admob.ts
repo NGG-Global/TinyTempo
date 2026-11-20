@@ -74,7 +74,7 @@ interface ShowSession {
 
 /**
  * Native adapter for the two full-screen formats: the rewarded video the player opts into,
- * and the interstitial a cleared level's Continue may show (`game/interstitialPacing.ts`
+ * and the interstitial shown on the way out of a level (`game/interstitialPacing.ts`
  * decides when). Never a banner. Hearts are granted by the caller from a single
  * `{ ok: true }` — this class only settles each show once per presentation. One full-screen
  * ad at a time: neither format opens while the other is up.
@@ -84,7 +84,7 @@ export function createAdMobAds(client: AdMobClient, options: {
   /** The interstitial unit; empty turns the format off. */
   readonly interstitialUnitId?: string;
   readonly showLimitMs?: number;
-  /** An interstitial still open after this long settles as failed, so Continue is never held. */
+  /** An interstitial still open after this long settles as failed, so leaving is never held. */
   readonly interstitialLimitMs?: number;
   /** Wait this long after a dismiss/empty resolve for a late Rewarded event. */
   readonly dismissGraceMs?: number;

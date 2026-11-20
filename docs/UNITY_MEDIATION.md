@@ -1,7 +1,7 @@
 # Unity Ads through AdMob mediation
 
 Unity Ads is a second bidder behind Google AdMob, for the rewarded ad and — once its
-mediation group is set up — for the interstitial a cleared level's Continue may show
+mediation group is set up — for the interstitial shown on the way out of a level
 (`docs/INTERSTITIAL.md`). It is not a second ad SDK the game drives: AdMob initialises it,
 asks it to bid, and presents the ad it wins with, through the same `prepareRewardVideoAd` /
 `showRewardVideoAd` and `prepareInterstitial` / `showInterstitial` calls the game already

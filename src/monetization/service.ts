@@ -1,3 +1,4 @@
+import type { LevelExit } from '../game/interstitialPacing';
 import { track } from './analytics';
 import { stubAds, stubBilling } from './stub';
 import type {
@@ -74,8 +75,8 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
   const now = options.now ?? Date.now;
   /** When the last full-screen ad closed, this session. Session memory, stored nowhere. */
   let lastClosed: number | null = null;
-  const interstitialFailed = (level: number, reason: InterstitialReason): InterstitialResult => {
-    track('interstitial_failed', { level, reason });
+  const interstitialFailed = (level: number, exit: LevelExit, reason: InterstitialReason): InterstitialResult => {
+    track('interstitial_failed', { level, exit, reason });
     return { shown: false, reason };
   };
 
@@ -125,21 +126,21 @@ export function createMonetization(options: MonetizationOptions = {}): Monetizat
      * none to show. Premium never sees one, whatever asks. Pacing is the caller's
      * (`game/interstitialPacing.ts`): this decides only whether one can play now.
      */
-    async showInterstitial(context: { readonly level: number }): Promise<InterstitialResult> {
-      const { level } = context;
-      if (asBoolean(() => billing.premium()) || !hasInterstitial(ads)) return interstitialFailed(level, 'unavailable');
+    async showInterstitial(context: { readonly level: number; readonly exit: LevelExit }): Promise<InterstitialResult> {
+      const { level, exit } = context;
+      if (asBoolean(() => billing.premium()) || !hasInterstitial(ads)) return interstitialFailed(level, exit, 'unavailable');
       try {
         const result = await withTimeout(
           Promise.resolve().then(() => ads.showInterstitial()),
           showTimeoutMs,
           { shown: false, reason: 'failed' } satisfies InterstitialResult,
         );
-        if (!result.shown) return interstitialFailed(level, result.reason);
+        if (!result.shown) return interstitialFailed(level, exit, result.reason);
         lastClosed = now();
-        track('interstitial_shown', { level });
+        track('interstitial_shown', { level, exit });
         return result;
       } catch {
-        return interstitialFailed(level, 'failed');
+        return interstitialFailed(level, exit, 'failed');
       }
     },
 

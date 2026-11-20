@@ -11,6 +11,7 @@
 
 import type { DailyBand as DailyBandName } from '../config/dailyTempo';
 import type { Concept } from '../game/conceptIntro';
+import type { LevelExit } from '../game/interstitialPacing';
 import type { LevelRole } from '../game/levels';
 import type { AudioRoute } from '../game/routeCalibration';
 
@@ -226,10 +227,13 @@ export interface AnalyticsPayloads {
   readonly replay_timer_granted: { readonly product: string; readonly minutes_left: number; readonly held: Flag };
   /** The Workshop store's card opened from the map: whether a timer was running, the hearts held, and the legacy Premium. */
   readonly store_opened: { readonly source: 'map' | 'settings'; readonly timer: Flag; readonly hearts: number; readonly premium: Flag };
-  /** An interstitial opened on a cleared level's Continue and closed again; `level` is the level cleared. */
-  readonly interstitial_shown: { readonly level: number };
-  /** One was due on that Continue and did not play: no consent or SDK, none loaded in time, or the show failed. */
-  readonly interstitial_failed: { readonly level: number; readonly reason: 'unavailable' | 'not_ready' | 'failed' };
+  /**
+   * An interstitial opened on the way out of a level and closed again; `level` is the level
+   * left, `exit` whether its result was cleared, failed, or the player quit before a result.
+   */
+  readonly interstitial_shown: { readonly level: number; readonly exit: LevelExit };
+  /** One was due on that exit and did not play: no consent or SDK, none loaded in time, or the show failed. */
+  readonly interstitial_failed: { readonly level: number; readonly exit: LevelExit; readonly reason: 'unavailable' | 'not_ready' | 'failed' };
 
   readonly tutorial_started: {
     readonly source: 'first_play' | 'menu' | 'settings';
